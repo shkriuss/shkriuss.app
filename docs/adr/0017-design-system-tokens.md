@@ -6,7 +6,9 @@
   the owner's review of
   [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4), and
   Phase 1, step 1 in [PROMPTS.md](../development/PROMPTS.md), which
-  completed points 8 to 12
+  completed points 8 to 12, and the owner's decision on
+  [pull request 13](https://github.com/shkriuss/shkriuss.app/pull/13),
+  which completed point 3
 
 ## Context
 
@@ -38,6 +40,12 @@
 2. Checked contrast: every text pair is at least 5.1:1. Outlines are at
    least 3.3:1. Light text on accent, `#FFFFFF` on `#00695C`, is 6.61:1.
 3. Shape: pill buttons, 12dp fields, 16dp cards, 28dp sheets and dialogs.
+   - A pill has fully rounded ends at the height of one line of text.
+     For buttons that is a 20dp corner radius, and for chips 16dp.
+   - When large text wraps a button or a chip onto more lines, its
+     corners keep that radius. They do not grow with the height. Fully
+     rounded ends on a taller button would cut off the corners of the
+     text, which breaks "no clipped text at font scale 2.0".
 4. Density: compact, on a 4dp grid.
    - Margins: 16dp on phones, 24dp on tablets.
    - Body text: 14sp.

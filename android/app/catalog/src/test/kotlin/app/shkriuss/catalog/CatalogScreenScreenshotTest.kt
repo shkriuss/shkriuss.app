@@ -12,8 +12,8 @@ import org.robolectric.ParameterizedRobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Screenshots of the Catalog start screen and of every page, in the eight
- * standard configurations. The reference images are in
+ * Screenshots of the Catalog start screen and of every page, token pages
+ * and component pages, in the eight standard configurations. The reference images are in
  * `src/test/screenshots/`. A page taller than the window gets one image
  * per window, to its end ([captureWholeScreen]).
  *
@@ -53,6 +53,21 @@ class CatalogScreenScreenshotTest(private val config: ScreenshotConfig) {
     @Test
     fun spacingPage() {
         captureWholePage(CatalogPage.Spacing, "SpacingPage")
+    }
+
+    @Test
+    fun buttonsPage() {
+        captureWholePage(CatalogPage.Buttons, "ButtonsPage")
+    }
+
+    @Test
+    fun floatingActionButtonsPage() {
+        captureWholePage(CatalogPage.FloatingActionButtons, "FloatingActionButtonsPage")
+    }
+
+    @Test
+    fun chipsPage() {
+        captureWholePage(CatalogPage.Chips, "ChipsPage")
     }
 
     private fun captureWholePage(page: CatalogPage, name: String) {

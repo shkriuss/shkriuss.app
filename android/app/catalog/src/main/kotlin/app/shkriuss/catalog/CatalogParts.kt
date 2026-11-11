@@ -1,5 +1,6 @@
 package app.shkriuss.catalog
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -49,6 +51,42 @@ fun SectionHeading(text: String) {
             .padding(top = ShkSpacing.ExtraLarge, bottom = ShkSpacing.Small)
             .semantics { heading() },
     )
+}
+
+/**
+ * The heading of a component's section on a component page, with the
+ * line on when to use it under it.
+ */
+@Composable
+fun ComponentHeading(title: String, use: String) {
+    SectionHeading(title)
+    ShkText(text = use, color = ShkTheme.colors.textSecondary)
+    Spacer(Modifier.height(ShkSpacing.Medium))
+}
+
+/** One state of a component: the caption that names it, and the component drawn in it. */
+class ComponentState(
+    @param:StringRes val caption: Int,
+    val content: @Composable () -> Unit,
+)
+
+/**
+ * The states of one component, each under its caption: one under the
+ * other in a narrow window, three to a row in a wide one. Each component
+ * keeps its own width, so long labels wrap the way they would in an app.
+ */
+@Composable
+fun ComponentStates(states: List<ComponentState>) {
+    AdaptiveGrid(items = states, wideColumns = 3, spacing = ShkSpacing.Large) { state, itemModifier ->
+        Column(itemModifier, verticalArrangement = Arrangement.spacedBy(ShkSpacing.ExtraSmall)) {
+            ShkText(
+                text = stringResource(state.caption),
+                style = ShkTextStyle.Caption,
+                color = ShkTheme.colors.textSecondary,
+            )
+            state.content()
+        }
+    }
 }
 
 /** A token's name, and under it a detail such as its value, in the caption style. */

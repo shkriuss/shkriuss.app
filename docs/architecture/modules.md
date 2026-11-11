@@ -12,8 +12,8 @@ module. Feature modules never depend on each other.
 
 | Module | Kind | What it holds | Depends on |
 |---|---|---|---|
-| `core/design` | Library | The design system: `ShkTheme`, the colour, type, shape and spacing tokens, `ShkText`, the stub `ShkScreen`, and the window theme `Theme.Shk`. See [design-system.md](../development/design-system.md). | Compose UI, Foundation, Material 3 |
-| `app/catalog` | App, `app.shkriuss.catalog` | The design gallery: a start screen and one page each for colours, type, shape and spacing. | `core/design`, Activity Compose |
+| `core/design` | Library | The design system: `ShkTheme`, the colour, type, shape and spacing tokens, `ShkText`, the stub `ShkScreen`, the window theme `Theme.Shk`, and the `Shk*` components: buttons, floating action buttons and chips. See [design-system.md](../development/design-system.md). | Compose UI, Foundation, Material 3 |
+| `app/catalog` | App, `app.shkriuss.catalog` | The design gallery: a start screen, one page each for colours, type, shape and spacing, and one page each for buttons, floating action buttons and chips. | `core/design`, Activity Compose |
 
 - Only `core/design` uses Material 3. It is an `implementation`
   dependency, so other modules cannot import it by accident.
