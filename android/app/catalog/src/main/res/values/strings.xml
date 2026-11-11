@@ -2,6 +2,98 @@
 <resources>
     <!-- The app's name under its icon. -->
     <string name="app_name">Catalog</string>
+
+    <!-- Start screen. -->
     <!-- The title at the top of the Catalog screen. -->
     <string name="catalog_title">Catalog</string>
+    <!-- The line under the title of the Catalog screen. -->
+    <string name="catalog_intro">The design tokens of the suite. Tap a group to open it. Go back with the back gesture.</string>
+    <!-- TalkBack says "double tap to open" on each group. -->
+    <string name="catalog_open_page">open</string>
+
+    <!-- The pages, with the line under each name on the start screen. -->
+    <string name="page_colors_title">Colours</string>
+    <string name="page_colors_summary">The fixed palette, and the contrast of every pair.</string>
+    <string name="page_type_title">Type</string>
+    <string name="page_type_summary">The six text styles.</string>
+    <string name="page_shape_title">Shape</string>
+    <string name="page_shape_summary">The four corner shapes.</string>
+    <string name="page_spacing_title">Spacing</string>
+    <string name="page_spacing_summary">The 4\u00A0dp grid, screen margins and touch targets.</string>
+
+    <!-- Colours page. -->
+    <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
+    <string name="colors_tokens_heading">Tokens</string>
+    <string name="colors_pairs_heading">Text on backgrounds</string>
+    <string name="colors_pairs_intro">Every text colour needs at least 4.5:1 on every background. The outline needs at least 3:1.</string>
+    <string name="colors_accent_heading">Text on accent</string>
+    <!-- A token's code name and its value, for example "accent · #00695C". -->
+    <string name="colors_token_value">%1$s · %2$s</string>
+    <!-- A colour's name and its contrast with the background, for example "Text 18.34:1". -->
+    <string name="colors_contrast">%1$s %2$.2f:1</string>
+    <!-- What TalkBack says for colors_contrast. -->
+    <string name="colors_contrast_description">%1$s, contrast %2$.2f to 1</string>
+    <string name="color_background">Background</string>
+    <string name="color_surface">Surface</string>
+    <string name="color_surface_high">Surface high</string>
+    <string name="color_text">Text</string>
+    <string name="color_text_secondary">Secondary text</string>
+    <string name="color_outline">Outline</string>
+    <string name="color_accent">Accent</string>
+    <string name="color_text_on_accent">Text on accent</string>
+    <string name="color_error">Error</string>
+    <string name="color_success">Success</string>
+    <string name="color_warning">Warning</string>
+
+    <!-- Type page. -->
+    <string name="type_intro">Six styles in the system font. Text grows with the font size setting.</string>
+    <!-- For example "24 sp, line height 32 sp, regular". -->
+    <string name="type_spec">%1$d\u00A0sp, line height %2$d\u00A0sp, %3$s</string>
+    <string name="type_weight_regular">regular</string>
+    <string name="type_weight_medium">medium</string>
+    <string name="type_headline">Headline</string>
+    <string name="type_headline_use">The title at the top of a screen.</string>
+    <string name="type_title">Title</string>
+    <string name="type_title_use">The title of a dialog, a sheet or a large section.</string>
+    <string name="type_subtitle">Subtitle</string>
+    <string name="type_subtitle_use">The heading of a group, or the main line of a list item.</string>
+    <string name="type_body">Body</string>
+    <string name="type_body_use">Normal text.</string>
+    <string name="type_label">Label</string>
+    <string name="type_label_use">Text on buttons, chips and tabs.</string>
+    <string name="type_caption">Caption</string>
+    <string name="type_caption_use">Small notes, such as a time or a count.</string>
+
+    <!-- Shape page. -->
+    <string name="shape_intro">Every rounded corner is one of these. Raised surfaces use a surface colour and an outline, not a shadow.</string>
+    <string name="shape_pill">Pill</string>
+    <string name="shape_pill_use">Buttons and chips. Fully rounded ends.</string>
+    <string name="shape_field">Field</string>
+    <string name="shape_field_use">Text fields and other inputs. %1$d\u00A0dp corners.</string>
+    <string name="shape_card">Card</string>
+    <string name="shape_card_use">Cards and other raised surfaces. %1$d\u00A0dp corners.</string>
+    <string name="shape_sheet">Sheet</string>
+    <string name="shape_sheet_use">Bottom sheets and dialogs. %1$d\u00A0dp corners.</string>
+
+    <!-- Spacing page. -->
+    <string name="spacing_intro">Compact density on a 4\u00A0dp grid. Space stays the same at every font size.</string>
+    <string name="spacing_steps_heading">Steps</string>
+    <!-- A step's name and size, for example "Small, 8 dp". -->
+    <string name="spacing_step">%1$s, %2$d\u00A0dp</string>
+    <string name="spacing_extra_small">Extra small</string>
+    <string name="spacing_extra_small_use">Between an icon and its label, or lines that belong together.</string>
+    <string name="spacing_small">Small</string>
+    <string name="spacing_small_use">Between items in a group.</string>
+    <string name="spacing_medium">Medium</string>
+    <string name="spacing_medium_use">Inside small controls, and between related groups.</string>
+    <string name="spacing_large">Large</string>
+    <string name="spacing_large_use">Inside cards and list items.</string>
+    <string name="spacing_extra_large">Extra large</string>
+    <string name="spacing_extra_large_use">Between sections of a screen.</string>
+    <string name="spacing_margins_heading">Screen margins</string>
+    <!-- For example "16 dp in a narrow window. 24 dp in a window at least 600 dp wide, …". -->
+    <string name="spacing_margins_body">%1$d\u00A0dp in a narrow window. %2$d\u00A0dp in a window at least %3$d\u00A0dp wide, such as a tablet or a phone held sideways.</string>
+    <string name="spacing_touch_heading">Touch targets</string>
+    <!-- For example "Anything that can be touched is at least 48 by 48 dp, like this square." -->
+    <string name="spacing_touch_body">Anything that can be touched is at least %1$d by %1$d\u00A0dp, like this square.</string>
 </resources>

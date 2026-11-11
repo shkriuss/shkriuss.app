@@ -3,6 +3,19 @@
 Catalog (`app.shkriuss.catalog`) is the design gallery used during
 development.
 
+## Unreleased
+
+- The start screen lists four pages: Colours, Type, Shape and Spacing.
+  Tap one to open it. Back returns to the start screen.
+- Colours shows every colour token with its value, and the contrast of
+  every text colour and the outline on each background.
+- Type shows the six text styles with their sizes and uses.
+- Shape shows the four corner shapes. Spacing shows the spacing steps,
+  the screen margins and the 48 dp touch target.
+- In a window at least 600 dp wide, pages use two or three columns.
+- Colours, text and margins now come from the design tokens in
+  `core/design`.
+
 ## 0.1.0 (2026-11-11)
 
 Released as `catalog-v0.1.0`.
