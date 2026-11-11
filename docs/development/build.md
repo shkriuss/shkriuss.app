@@ -178,14 +178,23 @@ second build must write the same mapping file, or the release stops. See
 - They run for the `debug` build type only. `release` and `preview` compile
   the same Kotlin code, and R8 does not run for unit tests, so running them
   again would test nothing new.
-- `core/design` has two, `ShkColorsContrastTest` and
-  `ShkThemeMaterialTest`. They check the contrast of every colour pair and
-  how Material 3 is set up
+- `core/design` has three, `ShkColorsContrastTest`,
+  `ShkThemeMaterialTest` and `ShkComponentsTest`. They check the contrast
+  of every colour pair, how Material 3 is set up, and every `Shk*`
+  component at font scale 1.0 and 2.0: its touch target, what TalkBack
+  hears, and that long text wraps inside its shape
   ([design-system.md](design-system.md#tests)).
+  - `ShkComponentsTest` draws each component in a plain
+    `ComponentActivity`. No manifest of the library declares one, so the
+    test registers it with Robolectric's package manager first. That needs
+    no extra test library.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
   and what TalkBack hears for a contrast.
+- Catalog also has `ComponentPagesTest`. It opens each component page and
+  checks the components where they sit: labels and roles, touch targets
+  that do not overlap, the disabled states, and the chips to try.
 
 ### Screenshot tests
 

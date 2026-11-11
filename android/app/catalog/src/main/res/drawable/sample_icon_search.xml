@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A magnifying glass, for the Catalog's samples only. Drawn for the suite
+    as a circle and a handle on the 24 dp grid; not taken from an icon set.
+    The colour is replaced by the component's icon colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M10.5,4A6.5,6.5 0,1 1,10.5 17A6.5,6.5 0,1 1,10.5 4ZM15.5,15.5L20,20"
+        android:strokeWidth="2"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round" />
+</vector>

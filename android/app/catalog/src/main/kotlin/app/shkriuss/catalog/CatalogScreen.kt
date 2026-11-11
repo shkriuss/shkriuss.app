@@ -5,9 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -25,16 +23,19 @@ import app.shkriuss.core.design.ShkTheme
 
 /**
  * The start screen of the design gallery: its title and one button for
- * each page. Tapping a button calls [onOpenPage].
+ * each page, under the heading of its group. Tapping a button calls
+ * [onOpenPage].
  */
 @Composable
 fun CatalogScreen(onOpenPage: (CatalogPage) -> Unit, modifier: Modifier = Modifier) {
     ShkScreen(modifier = modifier, scrollable = true) {
         PageTitle(stringResource(R.string.catalog_title))
         PageIntro(stringResource(R.string.catalog_intro))
-        Spacer(Modifier.height(ShkSpacing.ExtraLarge))
-        AdaptiveGrid(items = CatalogPage.entries, wideColumns = 2) { page, itemModifier ->
-            PageButton(page = page, onClick = { onOpenPage(page) }, modifier = itemModifier)
+        CatalogGroup.entries.forEach { group ->
+            SectionHeading(stringResource(group.title))
+            AdaptiveGrid(items = CatalogPage.entries.filter { it.group == group }, wideColumns = 2) { page, itemModifier ->
+                PageButton(page = page, onClick = { onOpenPage(page) }, modifier = itemModifier)
+            }
         }
     }
 }

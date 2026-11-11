@@ -15,6 +15,13 @@ development.
 - In a window at least 600 dp wide, pages use two or three columns.
 - Colours, text and margins now come from the design tokens in
   `core/design`.
+- The start screen lists its pages in two groups: Tokens and Components.
+- New page Buttons: filled, tonal, text and icon buttons, enabled, with
+  an icon, disabled and with a long label.
+- New page Floating action buttons: the floating action button, and the
+  extended one expanded, collapsed and with a long label.
+- New page Chips: filter chips and assist chips in every state, and three
+  filter chips to try.
 
 ## 0.1.0 (2026-11-11)
 

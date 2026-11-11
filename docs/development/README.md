@@ -19,8 +19,8 @@ Pages:
   and deployed to Cloudflare, its security headers, and how to set up
   Cloudflare from a phone.
 - [Design system](design-system.md): the colour, type, shape and spacing
-  tokens in `core/design`, how Material 3 is set up from them, and the
-  contrast tests.
+  tokens in `core/design`, how Material 3 is set up from them, the `Shk*`
+  components and when to use each, and their tests.
 - [Emulator tests](emulator-tests.md): the plan for instrumented tests on
   an emulator. Not set up yet.
 - [Working with Claude](working-with-claude.md): who can do what, and how a
@@ -31,5 +31,5 @@ Pages:
 
 What else belongs here, as each part is built:
 
-- The `Shk*` components, added to [design-system.md](design-system.md) in
-  Phase 1, step 2.
+- The other `Shk*` component batches of Phase 1, step 2, added to
+  [design-system.md](design-system.md#components) as each is built.
