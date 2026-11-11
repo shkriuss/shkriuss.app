@@ -24,6 +24,16 @@ development.
   filter chips to try.
 - At larger font sizes, icons next to text in buttons, chips and the
   extended floating action button grow with the text.
+- New page Text fields: the text field empty, with text, with help, in
+  error, disabled, with several lines and with a long label, and one to
+  try that shows its error past 20 characters.
+- New page Selection controls: checkboxes, switches and radio buttons,
+  off, on, disabled and with a long label, and a few of each to try.
+- New page Sliders: the slider without steps, with steps, disabled and
+  with a long label, and one to try. TalkBack reads its value in words,
+  such as "8 glasses".
+- At larger font sizes, checkboxes and radio buttons grow with the text.
+  Switches keep their size.
 
 ## 0.1.0 (2026-11-11)
 

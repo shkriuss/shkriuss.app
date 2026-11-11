@@ -1,16 +1,25 @@
 package app.shkriuss.catalog
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasParent
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isNotEnabled
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.toSize
 import app.shkriuss.core.design.ShkSpacing
 import org.junit.Assert.assertEquals
@@ -25,9 +34,9 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * Opens each component page the way a user does and checks the components
  * on it as they are laid out there: what TalkBack hears, that touch
- * targets do not overlap, that every state is shown, and that the filter
- * chips to try respond. Graphics run natively, so text is measured with
- * the real font.
+ * targets do not overlap, that every state is shown, and that the
+ * components under "Try it" respond. Graphics run natively, so text is
+ * measured with the real font.
  *
  * How each component behaves on its own is checked in `core/design`, by
  * `ShkComponentsTest`.
@@ -42,16 +51,18 @@ class ComponentPagesTest {
     fun everyComponentHasALabelARoleAndATouchTargetOfItsOwn() {
         COMPONENT_PAGES.forEach { page ->
             open(page)
-            val components = compose.onAllNodes(hasClickAction()).fetchSemanticsNodes()
+            val components = compose.onAllNodes(IS_COMPONENT).fetchSemanticsNodes()
             assertTrue("${page.name} shows no components", components.size > 1)
             components.forEach { node ->
                 val label = node.config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() } +
                     node.config.getOrElse(SemanticsProperties.Text) { emptyList() }.map { it.text }
                 assertTrue("${page.name}: a component has no label for TalkBack", label.any { it.isNotBlank() })
-                assertTrue(
-                    "${page.name}: ${label.joinToString()} has no role for TalkBack",
-                    SemanticsProperties.Role in node.config,
-                )
+                // TalkBack calls a text field an edit box and a slider a
+                // slider from what they are; everything else needs a role.
+                val kind = SemanticsProperties.Role in node.config ||
+                    SemanticsProperties.EditableText in node.config ||
+                    SemanticsProperties.ProgressBarRangeInfo in node.config
+                assertTrue("${page.name}: ${label.joinToString()} has no role for TalkBack", kind)
             }
             val targets = components.map { touchTarget(it) }
             targets.forEachIndexed { index, target ->
@@ -67,14 +78,20 @@ class ComponentPagesTest {
     fun everyComponentThatCanBeTurnedOffIsShownTurnedOff() {
         // Buttons: filled, tonal, text and icon. Chips: two filter chips and
         // one assist chip. Floating action buttons have no disabled state.
+        // Selection controls: two each of checkbox, switch and radio button,
+        // off and on.
         val expected = mapOf(
             CatalogPage.Buttons to 4,
             CatalogPage.FloatingActionButtons to 0,
             CatalogPage.Chips to 3,
+            CatalogPage.TextFields to 1,
+            CatalogPage.SelectionControls to 6,
+            CatalogPage.Sliders to 1,
         )
+        assertEquals("every component page is checked", COMPONENT_PAGES.toSet(), expected.keys)
         expected.forEach { (page, count) ->
             open(page)
-            val disabled = compose.onAllNodes(hasClickAction() and isNotEnabled()).fetchSemanticsNodes()
+            val disabled = compose.onAllNodes(IS_COMPONENT and isNotEnabled()).fetchSemanticsNodes()
             assertEquals("disabled components on ${page.name}", count, disabled.size)
             back()
         }
@@ -92,6 +109,59 @@ class ComponentPagesTest {
             .performClick()
             .assertIsNotSelected()
     }
+
+    @Test
+    fun checkboxesAndSwitchesToTryTurnOnAndOff() {
+        open(CatalogPage.SelectionControls)
+        // "Repeat every week" and "Sound" are only under "Try it".
+        listOf(R.string.sample_repeat_weekly, R.string.sample_sound).forEach { id ->
+            compose.onNode(hasText(text(id)) and hasClickAction())
+                .performScrollTo()
+                .assertIsOff()
+                .performClick()
+                .assertIsOn()
+                .performClick()
+                .assertIsOff()
+        }
+    }
+
+    @Test
+    fun radioButtonsToTrySelectOneAndClearTheOthers() {
+        open(CatalogPage.SelectionControls)
+        fun option(id: Int) = compose.onNode(hasText(text(id)) and hasClickAction() and hasParent(IS_GROUP))
+
+        option(R.string.sample_millilitres).performScrollTo().assertIsSelected()
+        option(R.string.sample_cups).performScrollTo().assertIsNotSelected().performClick().assertIsSelected()
+        option(R.string.sample_millilitres).assertIsNotSelected()
+        option(R.string.sample_ounces).assertIsNotSelected()
+    }
+
+    @Test
+    fun textFieldToTryTakesTypingAndShowsItsError() {
+        open(CatalogPage.TextFields)
+        // Only the field to try has this help, and no other field holds "Tamar".
+        compose.onNode(IS_TEXT_FIELD and hasText(text(R.string.sample_name_limit)))
+            .performScrollTo()
+            .performTextInput("Tamar")
+        val field = compose.onNode(IS_TEXT_FIELD and hasText("Tamar", substring = true))
+        field.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
+
+        field.performTextInput(" and a name that is too long")
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, text(R.string.sample_name_too_long)))
+    }
+
+    @Test
+    fun sliderToTryMovesAndSaysItsValue() {
+        open(CatalogPage.Sliders)
+        // The slider to try is the last one on the page.
+        val slider = compose.onAllNodes(IS_SLIDER).onLast().performScrollTo()
+        slider.performSemanticsAction(SemanticsActions.SetProgress) { setProgress -> setProgress(3f) }
+
+        val three = compose.activity.resources.getQuantityString(R.plurals.sample_glasses, 3, 3)
+        slider.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, three))
+    }
+
+    private fun text(id: Int): String = compose.activity.getString(id)
 
     private fun open(page: CatalogPage) {
         compose.onNode(hasText(compose.activity.getString(page.title))).performScrollTo().performClick()
@@ -122,5 +192,15 @@ class ComponentPagesTest {
 
     private companion object {
         val COMPONENT_PAGES = CatalogPage.entries.filter { it.group == CatalogGroup.Components }
+
+        val IS_TEXT_FIELD = SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText)
+        val IS_SLIDER = SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress)
+        val IS_GROUP = SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)
+
+        /**
+         * Anything the user acts on: what is tapped (buttons, chips and the
+         * rows of selection controls), text fields and sliders.
+         */
+        val IS_COMPONENT = hasClickAction() or IS_TEXT_FIELD or IS_SLIDER
     }
 }

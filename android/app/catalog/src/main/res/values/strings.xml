@@ -29,6 +29,12 @@
     <string name="page_fab_summary">The one main action of a screen, with or without text.</string>
     <string name="page_chips_title">Chips</string>
     <string name="page_chips_summary">Filter chips and assist chips.</string>
+    <string name="page_text_fields_title">Text fields</string>
+    <string name="page_text_fields_summary">Typing text, with a label, help and errors.</string>
+    <string name="page_selection_title">Selection controls</string>
+    <string name="page_selection_summary">Checkboxes, switches and radio buttons.</string>
+    <string name="page_sliders_title">Sliders</string>
+    <string name="page_sliders_summary">Picking a value in a range.</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
@@ -118,6 +124,25 @@
     <string name="state_selected">Selected</string>
     <string name="state_selected_disabled">Selected and disabled</string>
     <string name="state_try_it">Try it: tap a chip to select or clear it</string>
+    <string name="state_field_empty">Empty</string>
+    <string name="state_with_text">With text</string>
+    <string name="state_with_help">With help text</string>
+    <string name="state_error">Error</string>
+    <string name="state_several_lines">Several lines</string>
+    <string name="state_long_label_help">Long label and help text</string>
+    <string name="state_not_checked">Not checked</string>
+    <string name="state_checked">Checked</string>
+    <string name="state_checked_disabled">Checked and disabled</string>
+    <string name="state_switch_off">Off</string>
+    <string name="state_switch_on">On</string>
+    <string name="state_switch_on_disabled">On and disabled</string>
+    <string name="state_without_steps">Without steps</string>
+    <string name="state_with_steps">With steps</string>
+    <string name="state_try_text_field">Try it: type in the field. More than 20 characters shows the error.</string>
+    <string name="state_try_checkbox">Try it: tap a row to check or clear it</string>
+    <string name="state_try_switch">Try it: tap a row to turn it on or off</string>
+    <string name="state_try_radio">Try it: tap a row to choose it</string>
+    <string name="state_try_slider">Try it: drag the slider</string>
 
     <!-- Component pages: the words on the sample components. -->
     <string name="sample_save">Save</string>
@@ -131,6 +156,36 @@
     <string name="sample_long_button">Save the changes and go back to the list</string>
     <string name="sample_long_fab">Write a new note for later today</string>
     <string name="sample_long_chip">Only the tasks that are due this week</string>
+    <string name="sample_name">Name</string>
+    <string name="sample_name_value">Ana</string>
+    <string name="sample_name_help">Shown at the top of your notes.</string>
+    <string name="sample_name_error">Enter a name.</string>
+    <string name="sample_name_limit">At most 20 characters.</string>
+    <string name="sample_name_too_long">Too long. Use at most 20 characters.</string>
+    <string name="sample_note">Note</string>
+    <string name="sample_note_value">Buy bread.\nCall the dentist at ten.</string>
+    <string name="sample_long_field_label">The name that shows at the top of every note you write</string>
+    <string name="sample_long_field_help">Only you see it. It stays on this phone and is never sent anywhere.</string>
+    <string name="sample_remind_me">Remind me</string>
+    <string name="sample_repeat_weekly">Repeat every week</string>
+    <string name="sample_long_checkbox">Remind me about this task an hour before it is due</string>
+    <string name="sample_daily_reminder">Daily reminder</string>
+    <string name="sample_sound">Sound</string>
+    <string name="sample_long_switch">Remind me every morning about the tasks that are due today</string>
+    <string name="sample_millilitres">Millilitres</string>
+    <string name="sample_ounces">Ounces</string>
+    <string name="sample_cups">Cups</string>
+    <string name="sample_long_radio">Millilitres, the unit used in most of the world</string>
+    <string name="sample_volume">Volume</string>
+    <!-- A percentage, for example "40%". -->
+    <string name="sample_percent">%1$d%%</string>
+    <string name="sample_daily_goal">Daily goal</string>
+    <!-- The daily goal, for example "8 glasses". -->
+    <plurals name="sample_glasses">
+        <item quantity="one">%d glass</item>
+        <item quantity="other">%d glasses</item>
+    </plurals>
+    <string name="sample_long_slider">How many glasses of water you want to drink every day</string>
 
     <!-- Buttons page. -->
     <string name="buttons_intro">Touch and hold a button to see it pressed. The buttons on this page do nothing when tapped.</string>
@@ -156,4 +211,23 @@
     <string name="chips_filter_use">Turns a filter on or off, such as Done above a list of tasks. A selected chip is filled and shows a check mark.</string>
     <string name="chips_assist_title">Assist chip</string>
     <string name="chips_assist_use">Starts a small, optional action related to the content near it, such as adding a reminder to a task.</string>
+
+    <!-- Text fields page. -->
+    <string name="text_fields_intro">Tap a field to focus it: its border and label turn the accent colour. Only the field under Try it takes typing.</string>
+    <string name="text_field_title">Text field</string>
+    <string name="text_field_use">Typing text, such as a name or an amount. The label sits above the field and TalkBack reads it with the field.</string>
+
+    <!-- Selection controls page. -->
+    <string name="selection_intro">The whole row is the touch target, text included. Only the rows under Try it change when tapped.</string>
+    <string name="selection_checkbox_title">Checkbox</string>
+    <string name="selection_checkbox_use">An option in a form that is saved later, such as Remind me in a new task. Several can be checked.</string>
+    <string name="selection_switch_title">Switch</string>
+    <string name="selection_switch_use">A setting that takes effect at once. When on, it is filled and its thumb shows a check mark.</string>
+    <string name="selection_radio_title">Radio button</string>
+    <string name="selection_radio_use">One choice out of a few, all shown. Exactly one is selected. TalkBack reads its place in the group.</string>
+
+    <!-- Sliders page. -->
+    <string name="sliders_intro">TalkBack reads the label and the value in words, not a percentage. Only the slider under Try it moves.</string>
+    <string name="slider_title">Slider</string>
+    <string name="slider_use">Picking a value in a range, such as a daily goal. With steps, it snaps to whole values.</string>
 </resources>
