@@ -11,7 +11,11 @@ import org.junit.Test
  *
  * - every text colour on every background: at least 4.5:1,
  * - text on accent on the accent: at least 4.5:1,
- * - the outline on every background: at least 3:1.
+ * - the outline on every background: at least 3:1,
+ * - the divider on every background: at least 1.5:1, and less than the
+ *   outline. A divider is decorative, so WCAG asks no contrast of it; the
+ *   floor keeps it visible on every surface, and the ceiling keeps it
+ *   quieter than the outline of a control (ADR 0017, point 13).
  *
  * A new colour token fails [everyColourTokenIsInAGroup] until it is put
  * in one of the groups below, so it can never skip the check.
@@ -43,8 +47,33 @@ class ShkColorsContrastTest {
     }
 
     @Test
+    fun everyDividerPairIsAtLeast1_5To1() {
+        assertEveryPairIsAtLeast(MIN_DIVIDER, BACKGROUNDS.map { background -> DIVIDER to background })
+    }
+
+    @Test
+    fun theDividerIsQuieterThanTheOutlineOnEveryBackground() {
+        val failures = THEMES.flatMap { (theme, colors) ->
+            BACKGROUNDS.mapNotNull { background ->
+                val divider = contrastRatio(DIVIDER.of(colors), background.of(colors))
+                val outline = contrastRatio(OUTLINE.of(colors), background.of(colors))
+                if (divider < outline) {
+                    null
+                } else {
+                    "$theme theme: on ${background.name}, divider ${"%.2f".format(divider)}:1, " +
+                        "outline ${"%.2f".format(outline)}:1"
+                }
+            }
+        }
+        assertTrue(
+            "The divider should have less contrast than the outline:\n" + failures.joinToString("\n"),
+            failures.isEmpty(),
+        )
+    }
+
+    @Test
     fun everyColourTokenIsInAGroup() {
-        val grouped = (TEXT + BACKGROUNDS + OUTLINE + TEXT_ON_ACCENT + ACCENT).map { it.name }.toSet()
+        val grouped = (TEXT + BACKGROUNDS + OUTLINE + DIVIDER + TEXT_ON_ACCENT + ACCENT).map { it.name }.toSet()
         assertEquals(
             "Put every colour token in a group in ShkColorsContrastTest, so its contrast is checked.",
             colourTokenNames(),
@@ -78,6 +107,9 @@ class ShkColorsContrastTest {
         const val MIN_TEXT = 4.5
         const val MIN_OUTLINE = 3.0
 
+        /** The floor for a decorative line, which WCAG asks no contrast of (ADR 0017, point 13). */
+        const val MIN_DIVIDER = 1.5
+
         val THEMES = mapOf("light" to LightShkColors, "dark" to DarkShkColors)
 
         /** Colours used for text and icons on any background. */
@@ -98,6 +130,7 @@ class ShkColorsContrastTest {
         )
 
         val OUTLINE = Token("outline") { it.outline }
+        val DIVIDER = Token("divider") { it.divider }
         val TEXT_ON_ACCENT = Token("textOnAccent") { it.textOnAccent }
         val ACCENT = Token("accent") { it.accent }
 

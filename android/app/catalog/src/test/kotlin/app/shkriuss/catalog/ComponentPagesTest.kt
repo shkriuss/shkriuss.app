@@ -1,11 +1,14 @@
 package app.shkriuss.catalog
 
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
@@ -13,6 +16,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasParent
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.isNotEnabled
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onLast
@@ -79,7 +83,8 @@ class ComponentPagesTest {
         // Buttons: filled, tonal, text and icon. Chips: two filter chips and
         // one assist chip. Floating action buttons have no disabled state.
         // Selection controls: two each of checkbox, switch and radio button,
-        // off and on.
+        // off and on. Lists: one list item. Cards, and the buttons of the
+        // empty and error states, have no disabled state.
         val expected = mapOf(
             CatalogPage.Buttons to 4,
             CatalogPage.FloatingActionButtons to 0,
@@ -87,6 +92,9 @@ class ComponentPagesTest {
             CatalogPage.TextFields to 1,
             CatalogPage.SelectionControls to 6,
             CatalogPage.Sliders to 1,
+            CatalogPage.Cards to 0,
+            CatalogPage.Lists to 1,
+            CatalogPage.ContentStates to 0,
         )
         assertEquals("every component page is checked", COMPONENT_PAGES.toSet(), expected.keys)
         expected.forEach { (page, count) ->
@@ -159,6 +167,58 @@ class ComponentPagesTest {
 
         val three = compose.activity.resources.getQuantityString(R.plurals.sample_glasses, 3, 3)
         slider.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, three))
+    }
+
+    @Test
+    fun sectionHeadersAreHeadingsAndTheLoadingStateIsReadWithItsText() {
+        open(CatalogPage.Lists)
+        // "Tomorrow" is only a section header.
+        compose.onNode(hasText(text(R.string.sample_tomorrow))).performScrollTo().assert(isHeading())
+        back()
+
+        open(CatalogPage.ContentStates)
+        val inProgress = SemanticsMatcher.expectValue(
+            SemanticsProperties.ProgressBarRangeInfo,
+            ProgressBarRangeInfo.Indeterminate,
+        )
+        compose.onNode(hasText(text(R.string.sample_loading_notes))).performScrollTo().assert(inProgress)
+    }
+
+    @Test
+    fun onlyTheEmptyStateThatAnswersASearchIsAnnounced() {
+        open(CatalogPage.ContentStates)
+        // "No results" answers a search, so it is announced. "No notes yet"
+        // is what a screen shows when it opens, so it is not.
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.onNode(hasText(text(R.string.sample_no_results))).performScrollTo().assert(polite)
+        compose.onNode(hasText(text(R.string.sample_no_notes)))
+            .performScrollTo()
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.LiveRegion))
+    }
+
+    @Test
+    fun statesToTrySwapAndAreAnnouncedPolitely() {
+        open(CatalogPage.ContentStates)
+        // These words are only under "Try it".
+        val error = hasText(text(R.string.sample_try_error))
+        val loading = hasText(text(R.string.sample_try_loading))
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.onNode(error).performScrollTo().assert(polite)
+        compose.onAllNodes(loading).assertCountEquals(0)
+
+        // "Try again" is on three error states; the one to try is the last.
+        compose.onAllNodes(hasText(text(R.string.sample_try_again)) and hasClickAction())
+            .onLast()
+            .performScrollTo()
+            .performClick()
+        compose.onNode(loading).assert(polite)
+        compose.onAllNodes(error).assertCountEquals(0)
+
+        compose.onNode(hasText(text(R.string.sample_show_loading)) and hasClickAction())
+            .performScrollTo()
+            .assertIsOn()
+            .performClick()
+        compose.onNode(error).assert(polite)
     }
 
     private fun text(id: Int): String = compose.activity.getString(id)

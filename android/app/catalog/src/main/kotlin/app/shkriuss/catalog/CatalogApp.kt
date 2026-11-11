@@ -39,6 +39,9 @@ enum class CatalogPage(
     TextFields(R.string.page_text_fields_title, R.string.page_text_fields_summary, CatalogGroup.Components),
     SelectionControls(R.string.page_selection_title, R.string.page_selection_summary, CatalogGroup.Components),
     Sliders(R.string.page_sliders_title, R.string.page_sliders_summary, CatalogGroup.Components),
+    Cards(R.string.page_cards_title, R.string.page_cards_summary, CatalogGroup.Components),
+    Lists(R.string.page_lists_title, R.string.page_lists_summary, CatalogGroup.Components),
+    ContentStates(R.string.page_states_title, R.string.page_states_summary, CatalogGroup.Components),
 }
 
 /**
@@ -65,5 +68,8 @@ fun CatalogApp() {
         CatalogPage.TextFields -> TextFieldsPage()
         CatalogPage.SelectionControls -> SelectionControlsPage()
         CatalogPage.Sliders -> SlidersPage()
+        CatalogPage.Cards -> CardsPage()
+        CatalogPage.Lists -> ListsPage()
+        CatalogPage.ContentStates -> ContentStatesPage()
     }
 }

@@ -35,12 +35,18 @@
     <string name="page_selection_summary">Checkboxes, switches and radio buttons.</string>
     <string name="page_sliders_title">Sliders</string>
     <string name="page_sliders_summary">Picking a value in a range.</string>
+    <string name="page_cards_title">Cards</string>
+    <string name="page_cards_summary">Raised surfaces that set one item apart.</string>
+    <string name="page_lists_title">Lists</string>
+    <string name="page_lists_summary">List items, section headers and dividers.</string>
+    <string name="page_states_title">Empty, loading and error</string>
+    <string name="page_states_summary">What shows in place of content that is missing, on its way or failed.</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
     <string name="colors_tokens_heading">Tokens</string>
     <string name="colors_pairs_heading">Text on backgrounds</string>
-    <string name="colors_pairs_intro">Every text colour needs at least 4.5:1 on every background. The outline needs at least 3:1.</string>
+    <string name="colors_pairs_intro">Every text colour needs at least 4.5:1 on every background. The outline needs at least 3:1. The divider, a decorative line, needs at least 1.5:1 and less than the outline.</string>
     <string name="colors_accent_heading">Text on accent</string>
     <!-- A token's code name and its value, for example "accent · #00695C". -->
     <string name="colors_token_value">%1$s · %2$s</string>
@@ -54,6 +60,7 @@
     <string name="color_text">Text</string>
     <string name="color_text_secondary">Secondary text</string>
     <string name="color_outline">Outline</string>
+    <string name="color_divider">Divider</string>
     <string name="color_accent">Accent</string>
     <string name="color_text_on_accent">Text on accent</string>
     <string name="color_error">Error</string>
@@ -143,6 +150,22 @@
     <string name="state_try_switch">Try it: tap a row to turn it on or off</string>
     <string name="state_try_radio">Try it: tap a row to choose it</string>
     <string name="state_try_slider">Try it: drag the slider</string>
+    <string name="state_long_text">Long text</string>
+    <string name="state_not_tappable">Not tappable</string>
+    <string name="state_not_tappable_button">Not tappable, with a button</string>
+    <string name="state_tappable">Tappable</string>
+    <string name="state_one_line">One line</string>
+    <string name="state_with_supporting_text">With supporting text</string>
+    <string name="state_with_trailing_text">With trailing text</string>
+    <string name="state_above_list_items">Above list items</string>
+    <string name="state_between_list_items">Between list items</string>
+    <string name="state_with_icon_button">With an icon and a button</string>
+    <string name="state_with_button">With a button</string>
+    <string name="state_without_button">Without a button</string>
+    <string name="state_answers_search">Answering a search, announced by TalkBack</string>
+    <string name="state_title_only">Title only</string>
+    <string name="state_loading">Loading</string>
+    <string name="state_try_states">Try it: tap Try again, or turn the switch on and off. With TalkBack on, each state is announced as it appears.</string>
 
     <!-- Component pages: the words on the sample components. -->
     <string name="sample_save">Save</string>
@@ -186,6 +209,42 @@
         <item quantity="other">%d glasses</item>
     </plurals>
     <string name="sample_long_slider">How many glasses of water you want to drink every day</string>
+    <string name="sample_card_title">Shopping list</string>
+    <string name="sample_card_text">Bread, milk, apples and coffee.</string>
+    <string name="sample_edit">Edit</string>
+    <string name="sample_long_card_title">Ideas for the week in the mountains next summer</string>
+    <string name="sample_long_card_text">Book the train early, pack warm clothes for the evenings, and check whether the hut is open in June.</string>
+    <string name="sample_buy_bread">Buy bread</string>
+    <string name="sample_corner_shop">From the shop on the corner</string>
+    <string name="sample_every_day">Every day at 9:00</string>
+    <string name="sample_call_dentist">Call the dentist</string>
+    <!-- A time of day, at the end of a list item. -->
+    <string name="sample_time">9:30</string>
+    <string name="sample_water_plants">Water the plants</string>
+    <string name="sample_tomorrow">Tomorrow</string>
+    <string name="sample_long_list_headline">Call the dentist about the appointment next week</string>
+    <string name="sample_long_list_supporting">Ask whether Thursday morning is still free, or else Friday</string>
+    <string name="sample_long_header">Tasks that are due later this week</string>
+    <string name="sample_no_notes">No notes yet</string>
+    <string name="sample_no_notes_body">Notes you write show here.</string>
+    <string name="sample_no_results">No results</string>
+    <string name="sample_no_results_body">Try other words.</string>
+    <string name="sample_nothing_due">Nothing is due today</string>
+    <string name="sample_long_empty_title">There are no notes in this folder yet</string>
+    <string name="sample_long_empty_body">Notes you write or move here show in this list. Tap New note to write the first one.</string>
+    <string name="sample_loading_notes">Loading notes</string>
+    <string name="sample_long_loading">Reading your notes from the backup. This can take a minute.</string>
+    <string name="sample_backup_error">Could not open the backup</string>
+    <string name="sample_backup_error_body">The file is damaged, or it is not a backup.</string>
+    <string name="sample_try_again">Try again</string>
+    <string name="sample_load_error">Could not show the notes</string>
+    <string name="sample_load_error_body">Close the app and open it again.</string>
+    <string name="sample_long_error_title">Could not open the backup file you chose</string>
+    <string name="sample_show_loading">Show loading</string>
+    <string name="sample_try_loading">Loading the list</string>
+    <string name="sample_try_error">Could not load the list</string>
+    <string name="sample_try_error_body">Check that the file is still there.</string>
+    <string name="sample_long_error_body">The file is damaged, or it is not a backup made by this app. Choose another file.</string>
 
     <!-- Buttons page. -->
     <string name="buttons_intro">Touch and hold a button to see it pressed. The buttons on this page do nothing when tapped.</string>
@@ -230,4 +289,27 @@
     <string name="sliders_intro">TalkBack reads the label and the value in words, not a percentage. Only the slider under Try it moves.</string>
     <string name="slider_title">Slider</string>
     <string name="slider_use">Picking a value in a range, such as a daily goal. With steps, it snaps to whole values.</string>
+
+    <!-- Cards page. -->
+    <string name="cards_intro">Touch and hold a tappable card to see it pressed. The cards and buttons on this page do nothing when tapped.</string>
+    <string name="card_title">Card</string>
+    <string name="card_use">One item set apart from the things around it, such as a note. A tappable card is one button, so it holds no buttons of its own.</string>
+
+    <!-- Lists page. -->
+    <string name="lists_intro">Touch and hold a tappable list item to see it pressed. Nothing on this page does anything when tapped.</string>
+    <string name="list_item_title">List item</string>
+    <string name="list_item_use">One row in a list of things that look alike, such as tasks. A tappable row is one touch target, text included.</string>
+    <string name="section_header_title">Section header</string>
+    <string name="section_header_use">The heading of a group, such as Today above a list of tasks. TalkBack reads it as a heading.</string>
+    <string name="divider_title">Divider</string>
+    <string name="divider_use">A thin line between groups, where space alone does not show where one ends. TalkBack skips it.</string>
+
+    <!-- Empty, loading and error page. -->
+    <string name="states_intro">What a screen or a list shows in place of its content. In an app it fills that space; here it sits in the page. Only the switch and the button under Try it do something when tapped.</string>
+    <string name="empty_state_title">Empty state</string>
+    <string name="empty_state_use">When there is nothing yet, such as before the first note. It says what is missing and what to do.</string>
+    <string name="loading_state_title">Loading state</string>
+    <string name="loading_state_use">While content is on its way, when the wait is long enough to notice. TalkBack reads its text.</string>
+    <string name="error_state_title">Error state</string>
+    <string name="error_state_use">When content could not be shown. It says what went wrong in plain words, and how to try again.</string>
 </resources>

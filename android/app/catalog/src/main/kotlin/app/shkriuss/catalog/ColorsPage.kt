@@ -34,7 +34,8 @@ import java.util.Locale
 
 /**
  * The colour tokens of the theme in use, and the contrast of every text
- * colour on every background, as the contrast test checks them.
+ * colour, the outline and the divider on every background, as the
+ * contrast test checks them.
  */
 @Composable
 fun ColorsPage(modifier: Modifier = Modifier) {
@@ -77,6 +78,7 @@ private class ColorToken(
 private fun allTokens(colors: ShkColors): List<ColorToken> =
     backgroundTokens(colors) + textTokens(colors) + listOf(
         ColorToken(R.string.color_outline, R.string.token_outline, colors.outline),
+        ColorToken(R.string.color_divider, R.string.token_divider, colors.divider),
         ColorToken(R.string.color_text_on_accent, R.string.token_text_on_accent, colors.textOnAccent),
     )
 
@@ -118,7 +120,7 @@ private fun TokenRow(token: ColorToken, modifier: Modifier = Modifier) {
     }
 }
 
-/** A background with every text colour on it, and the outline, each with its contrast. */
+/** A background with every text colour on it, the outline and the divider, each with its contrast. */
 @Composable
 private fun PairsCard(
     background: ColorToken,
@@ -144,13 +146,25 @@ private fun PairsCard(
             Spacer(Modifier.width(ShkSpacing.Small))
             ContrastLine(R.string.color_outline, colors.text, background.color, contrastOf = colors.outline)
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 40.dp, height = 20.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(colors.divider),
+                )
+            }
+            Spacer(Modifier.width(ShkSpacing.Small))
+            ContrastLine(R.string.color_divider, colors.text, background.color, contrastOf = colors.divider)
+        }
     }
 }
 
 /**
  * A colour's name and its contrast with [background], drawn in [color].
- * For the outline, the text is drawn in the text colour and [contrastOf]
- * names the colour whose contrast is shown.
+ * For the outline and the divider, the text is drawn in the text colour
+ * and [contrastOf] names the colour whose contrast is shown.
  */
 @Composable
 private fun ContrastLine(

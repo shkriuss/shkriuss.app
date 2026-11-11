@@ -85,6 +85,21 @@ class CatalogScreenScreenshotTest(private val config: ScreenshotConfig) {
         captureWholePage(CatalogPage.Sliders, "SlidersPage")
     }
 
+    @Test
+    fun cardsPage() {
+        captureWholePage(CatalogPage.Cards, "CardsPage")
+    }
+
+    @Test
+    fun listsPage() {
+        captureWholePage(CatalogPage.Lists, "ListsPage")
+    }
+
+    @Test
+    fun contentStatesPage() {
+        captureWholePage(CatalogPage.ContentStates, "ContentStatesPage")
+    }
+
     private fun captureWholePage(page: CatalogPage, name: String) {
         compose.onNode(hasText(compose.activity.getString(page.title))).performScrollTo().performClick()
         compose.captureWholeScreen(name, config)

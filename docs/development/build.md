@@ -178,26 +178,33 @@ second build must write the same mapping file, or the release stops. See
 - They run for the `debug` build type only. `release` and `preview` compile
   the same Kotlin code, and R8 does not run for unit tests, so running them
   again would test nothing new.
-- `core/design` has eight: `ShkColorsContrastTest`,
+- `core/design` has ten: `ShkColorsContrastTest`,
   `ShkThemeMaterialTest`, `ShkComponentsTest`, `ShkIconSizeTest`,
-  `ShkTextFieldTest`, `ShkSliderTest`, `ShkSelectionControlSizeTest` and
-  `ShkRadioGroupTest`. They check the contrast of every colour pair, how
-  Material 3 is set up, and every `Shk*` component at font scale 1.0 and
-  2.0: its touch target, what TalkBack hears, that long text wraps inside
-  its shape, and that an icon, a checkbox or a radio button next to text
-  grows with it
-  ([design-system.md](design-system.md#tests)).
+  `ShkTextFieldTest`, `ShkSliderTest`, `ShkSelectionControlSizeTest`,
+  `ShkRadioGroupTest`, `ShkContentComponentsTest` and `ShkRowEdgeTest`.
+  They check the contrast of every colour pair, how Material 3 is set
+  up, and every `Shk*` component at font scale 1.0 and 2.0: its touch
+  target, what TalkBack hears and announces, that long text wraps inside
+  its shape, that the text of rows lines up with the rest of the screen,
+  and that an icon, a checkbox or a radio button next to text grows with
+  it ([design-system.md](design-system.md#tests)).
   - The tests that draw components use a plain `ComponentActivity`. No
     manifest of the library declares one, so the test registers it with
     Robolectric's package manager first. That needs no extra test
     library.
+  - `ShkContentComponentsTest` sets Robolectric's screen to the phone of
+    the screenshot tests, 411 by 914 dp, with `@Config(qualifiers)`. On
+    Robolectric's own smaller screen its long samples at font scale 2.0
+    would not fit, and their text would be squeezed.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
   and what TalkBack hears for a contrast.
 - Catalog also has `ComponentPagesTest`. It opens each component page and
   checks the components where they sit: labels and roles, touch targets
-  that do not overlap, the disabled states, and the components to try.
+  that do not overlap, the disabled states, the components to try, the
+  section headers as headings, the loading state as "in progress", and
+  the loading and error states to try as polite live regions.
 
 ### Screenshot tests
 

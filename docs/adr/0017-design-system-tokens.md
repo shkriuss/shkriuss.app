@@ -8,7 +8,9 @@
   Phase 1, step 1 in [PROMPTS.md](../development/PROMPTS.md), which
   completed points 8 to 12, and the owner's decision on
   [pull request 13](https://github.com/shkriuss/shkriuss.app/pull/13),
-  which completed point 3
+  which completed point 3, and on
+  [pull request 15](https://github.com/shkriuss/shkriuss.app/pull/15),
+  which added the divider colour (point 13)
 
 ## Context
 
@@ -31,6 +33,7 @@
    | Text | `#131514` | `#ECEEEC` |
    | Secondary text | `#4A4F4C` | `#A9AEAA` |
    | Outline | `#7A807C` | `#6F7571` |
+   | Divider | `#B8BCB9` | `#3B3F3D` |
    | Accent | `#00695C` | `#5FD6C2` |
    | Text on accent | `#FFFFFF` | `#00201B` |
    | Error | `#B3261E` | `#FFB4AB` |
@@ -38,7 +41,8 @@
    | Warning | `#7A5800` | `#F2C24B` |
 
 2. Checked contrast: every text pair is at least 5.1:1. Outlines are at
-   least 3.3:1. Light text on accent, `#FFFFFF` on `#00695C`, is 6.61:1.
+   least 3.3:1. Dividers are at least 1.57:1. Light text on accent,
+   `#FFFFFF` on `#00695C`, is 6.61:1.
 3. Shape: pill buttons, 12dp fields, 16dp cards, 28dp sheets and dialogs.
    - A pill has fully rounded ends at the height of one line of text.
      For buttons that is a 20dp corner radius, and for chips 16dp.
@@ -73,7 +77,7 @@
 
    | Kind | Names |
    |---|---|
-   | Colour (`ShkTheme.colors`) | `background`, `surface`, `surfaceHigh`, `text`, `textSecondary`, `outline`, `accent`, `textOnAccent`, `error`, `success`, `warning`, in the order of the table in point 1 |
+   | Colour (`ShkTheme.colors`) | `background`, `surface`, `surfaceHigh`, `text`, `textSecondary`, `outline`, `divider`, `accent`, `textOnAccent`, `error`, `success`, `warning`, in the order of the table in point 1 |
    | Type (`ShkTextStyle`) | `Headline`, `Title`, `Subtitle`, `Body`, `Label`, `Caption` |
    | Shape (`ShkShapes`) | `Pill`, `Field` (12dp), `Card` (16dp), `Sheet` (28dp, sheets and dialogs) |
    | Spacing (`ShkSpacing`) | `ExtraSmall` 4dp, `Small` 8dp, `Medium` 12dp, `Large` 16dp, `ExtraLarge` 24dp |
@@ -95,8 +99,30 @@
     - every text colour on every background, and text on accent: at
       least 4.5:1,
     - the outline on every background: at least 3:1,
+    - the divider on every background: at least 1.5:1, and less than the
+      outline (point 13),
     - every Material 3 colour is a token, and Material 3's own text and
       outline pairs keep the same limits.
+13. Divider (owner decision on pull request 15). Lines that only separate
+    content, such as a line between list items, use their own colour,
+    `divider`, lighter than the outline.
+    - A divider is decorative. The space and the content around it already
+      show where one thing ends, so the line carries no meaning of its
+      own. WCAG 2.2 asks 3:1 only of the parts of controls and graphics
+      that are needed to understand them (success criterion 1.4.11), so it
+      asks nothing of a divider. With the outline's 3:1, every divider
+      would be as strong as the border of a control.
+    - It must still stay visible on the background and on both surfaces.
+      So the contrast test gives it its own floor, 1.5:1. Material 3's own
+      baseline divider colour goes down to 1.31:1 on its highest surface.
+      The suite's values are at least 1.57:1, `#B8BCB9` on `#E7E9E6` in
+      the light theme. In the dark theme the lowest is 1.62:1.
+    - It must stay quieter than the outline. The test also fails if the
+      divider reaches the outline's contrast on any background.
+    - Material 3's "outline variant" role stays the outline. Material 3
+      draws the borders of chips, outlined buttons and outlined icon
+      buttons in that role, and those need 3:1. Only `ShkDivider` uses the
+      divider colour.
 
 ## Options rejected
 
@@ -111,9 +137,10 @@
 
 - Every screen has a light theme and a true-black dark theme
   ([CLAUDE.md](../../CLAUDE.md)).
-- A unit test checks contrast. It fails a text pair under 4.5:1 and an
+- A unit test checks contrast. It fails a text pair under 4.5:1, an
   outline pair under 3:1 (step 1.1 in
-  [PROMPTS.md](../development/PROMPTS.md)). A new colour token fails it
+  [PROMPTS.md](../development/PROMPTS.md)), and a divider pair under
+  1.5:1 or as strong as the outline. A new colour token fails it
   until the token is put in a group, so no colour can skip the check.
 - A Material 3 update that adds a colour role stops the build until the
   role is mapped to a token.
