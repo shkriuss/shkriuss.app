@@ -57,12 +57,24 @@ jobs:
       apk_sha256: ${{ steps.collect.outputs.apk_sha256 }}
       mapping_sha256: ${{ steps.collect.outputs.mapping_sha256 }}
     steps:
-      # The same in every job. Nothing from the inputs is printed before it
-      # has passed these checks.
+      # The same in every job, so a re-run of any one job is checked too.
+      # Nothing from the inputs is printed before it has passed these
+      # checks.
       - name: Check the inputs
         id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::Start the release on the branch main."
             exit 1
@@ -324,8 +336,19 @@ jobs:
     steps:
       - name: Check the inputs
         id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::Start the release on the branch main."
             exit 1
@@ -484,8 +507,19 @@ jobs:
     steps:
       - name: Check the inputs
         id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::Start the release on the branch main."
             exit 1
@@ -710,8 +744,19 @@ jobs:
     steps:
       - name: Check the inputs
         id: inputs
+        env:
+          # github.actor started the run. github.triggering_actor started
+          # this attempt, which differs after someone else's re-run.
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           set -u
+          # Only the owner starts or re-runs a release (ADR 0014).
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may start or re-run a release."
+            exit 1
+          fi
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::Start the release on the branch main."
             exit 1

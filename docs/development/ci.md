@@ -305,8 +305,9 @@ Not used, and why:
    (comments and a label) run none of that code.
 3. Release has no pull request trigger. A pull request can change its own
    copy of `release.yml`, and the **Run workflow** form can pick any
-   branch. But every job stops unless the branch is `main`, and the
-   `release` environment lets only `main` use its secrets. So a change to
+   branch. But every job stops unless the branch is `main` and the owner
+   both started the run and started this attempt, and the `release`
+   environment lets only `main` use its secrets. So a change to
    `release.yml` reaches the key only after the owner merges it.
 4. In CI and PR preview, pull requests from forks get a read-only token
    from GitHub anyway. The repository settings decide whether a first-time

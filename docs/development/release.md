@@ -86,6 +86,11 @@ with another certificate.
 
 ## Run a release
 
+Only you, the repository owner, can start or re-run a release. A run that
+anyone else starts, or a job that anyone else re-runs, fails at once in
+its first step, "Check the inputs", before it builds or signs anything.
+That includes Claude's machine account.
+
 Before you start:
 
 1. The version is set in `android/app/<app>/build.gradle.kts`, and the
@@ -146,6 +151,7 @@ asked to approve.
 
 | Message | What to do |
 |---|---|
+| Only the repository owner may start or re-run a release. | Someone other than you started the run, or re-ran a job in it. Start a new run yourself. |
 | Start the release on the branch main. | Run it again with the branch `main`. |
 | Unknown app. | Pick an app from the list. A new app is added to the list in a pull request (prompt 2.6). |
 | The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 ... | Type a version in one of those forms. No `v` in front. |

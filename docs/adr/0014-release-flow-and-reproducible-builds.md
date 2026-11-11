@@ -7,8 +7,9 @@
   [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4), the
   owner's decision on
   [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5) (the
-  R8 mapping file), and the owner's design review for Phase 0, step 6 (the
-  release workflow) on 2026-11-11
+  R8 mapping file), the owner's design review for Phase 0, step 6 (the
+  release workflow) on 2026-11-11, and the owner's review of
+  [pull request 9](https://github.com/shkriuss/shkriuss.app/pull/9)
 
 ## Context
 
@@ -76,6 +77,12 @@
      `1.0.0-rc.1`.
    - Inputs reach shell steps only through `env`. Nothing from an input is
      printed before it has passed the checks.
+   - Only the owner starts or re-runs a release. The first step of every
+     job, "Check the inputs", stops unless both `github.actor` (who started
+     the run) and `github.triggering_actor` (who started this attempt) are
+     `github.repository_owner`. All three reach the step through `env`.
+     Checking every job also covers a re-run of a single job, such as
+     "Sign".
 9. Before it builds, the job "Build" stops unless:
    - the run is on `main`,
    - CI passed on that exact commit. Only the newest run that GitHub
@@ -165,6 +172,9 @@
   wait for the owner's approval.
 - Right after a merge, the owner waits until CI on `main` is green before
   starting a release.
+- Claude's machine account can still start any workflow on `main`
+  (section 15), but a release run it starts or re-runs fails at once, before
+  any build. The owner's approval of "Sign" stays the guard for the key.
 - The owner publishes only the draft that the release workflow just made
   (section 15).
 - Release workflows are owner-only. Claude changes them only when the owner
