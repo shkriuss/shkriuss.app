@@ -1,0 +1,218 @@
+# Continuous integration for every pull request and every push to main.
+# What each job checks, and why, is in docs/development/ci.md.
+
+name: CI
+
+# Read-only token. No job in this workflow needs more.
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+defaults:
+  run:
+    # Stops a step at the first failing command, also inside a pipe.
+    shell: bash
+
+jobs:
+  wrapper:
+    # A required check on main, by this name. A pull request that renames
+    # it must say so, because the owner must update the repository rules.
+    name: Gradle wrapper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: ci-wrapper-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Runs no project code. Compares the wrapper with what Gradle published
+      # for the version named in gradle-wrapper.properties.
+      - name: Check the wrapper against Gradle's published checksums
+        run: |
+          set -u
+          props=android/gradle/wrapper/gradle-wrapper.properties
+          jar=android/gradle/wrapper/gradle-wrapper.jar
+
+          # 1. The wrapper jar is the only jar in the repository, so a second
+          #    wrapper cannot hide under another name.
+          mapfile -d '' jars < <(git ls-files -z -- ':(icase)*.jar')
+          if [ "${#jars[@]}" -ne 1 ] || [ "${jars[0]}" != "$jar" ]; then
+            echo "::error::The only .jar file allowed in the repository is $jar."
+            for found in "${jars[@]}"; do printf 'Found: %q\n' "$found"; done
+            exit 1
+          fi
+
+          # 2. Read the download address and its checksum. Each must appear
+          #    exactly once and have the expected form.
+          read_property() {
+            local values
+            mapfile -t values < <(sed -n "s/^$1=//p" "$props")
+            if [ "${#values[@]}" -ne 1 ]; then
+              echo "::error file=$props::Expected exactly one $1 line."
+              exit 1
+            fi
+            # The properties format writes ':' as '\:'.
+            property="${values[0]//\\:/:}"
+          }
+          read_property distributionUrl
+          url="$property"
+          read_property distributionSha256Sum
+          sum="$property"
+          url_pattern='^https://services\.gradle\.org/distributions/gradle-([0-9]+\.[0-9]+(\.[0-9]+)?)-bin\.zip$'
+          if ! [[ "$url" =~ $url_pattern ]]; then
+            echo "::error file=$props::distributionUrl must be a -bin.zip release on services.gradle.org."
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          if ! [[ "$sum" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error file=$props::distributionSha256Sum must be 64 lower-case hex digits."
+            exit 1
+          fi
+
+          # 3. Gradle's list of releases holds the official checksums of
+          #    every release and its wrapper jar.
+          list="$RUNNER_TEMP/gradle-versions.json"
+          curl -fsSL --retry 3 --max-time 120 -o "$list" https://services.gradle.org/versions/all
+          mapfile -t official < <(jq -r --arg v "$version" '
+            [.[] | select(.version == $v and .final and (.snapshot | not) and (.broken | not))]
+            | if length == 1 then .[0] | .downloadUrl, .checksum, .wrapperChecksum else empty end
+          ' "$list")
+          if [ "${#official[@]}" -ne 3 ]; then
+            echo "::error file=$props::Gradle $version is not a final, unbroken Gradle release."
+            exit 1
+          fi
+
+          # 4. Compare all three.
+          if [ "$url" != "${official[0]}" ]; then
+            echo "::error file=$props::distributionUrl is not Gradle's address for $version."
+            exit 1
+          fi
+          if [ "$sum" != "${official[1]}" ]; then
+            echo "::error file=$props::distributionSha256Sum is not Gradle's checksum for $version."
+            exit 1
+          fi
+          jar_sum="$(sha256sum "$jar" | cut -d ' ' -f 1)"
+          if [ "$jar_sum" != "${official[2]}" ]; then
+            echo "::error file=$jar::The wrapper jar is not the one Gradle $version ships. After changing the version, run the wrapper task a second time."
+            exit 1
+          fi
+          echo "Gradle $version: the wrapper jar, the download address and its checksum match Gradle's published values."
+
+  check:
+    # A required check on main, by this name. A pull request that renames
+    # it must say so, because the owner must update the repository rules.
+    name: Check
+    # The build runs ./gradlew, so it waits until the wrapper is checked.
+    needs: wrapper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: ci-check-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Use JDK 21
+        run: |
+          # GitHub's Ubuntu runners come with JDK 21 installed.
+          if [ -z "${JAVA_HOME_21_X64:-}" ]; then
+            echo "::error::This runner has no JDK 21."
+            exit 1
+          fi
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+
+      # Keep these in step with build-logic (ShkBuild.kt) and the cloud setup
+      # script in docs/development/cloud-environment.md.
+      - name: Install the Android SDK packages the build pins
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          log="$RUNNER_TEMP/sdkmanager.log"
+          set +o pipefail
+          if ! yes | "$sdkmanager" --licenses > "$log" 2>&1; then cat "$log"; exit 1; fi
+          set -o pipefail
+          if ! "$sdkmanager" "platforms;android-37.0" "build-tools;36.0.0" >> "$log" 2>&1; then cat "$log"; exit 1; fi
+
+      # Gradle's downloads. Only pushes to main save them (the last step), so
+      # a pull request can never change what another run restores. Gradle
+      # still checks every file against verification-metadata.xml.
+      - name: Restore Gradle downloads
+        id: gradle-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml') }}
+
+      # The release checks are named one by one, for every app. If either
+      # check is removed from the build, Gradle cannot find its task and this
+      # step fails. If one is turned off, its report is missing and this step
+      # fails too.
+      - name: Unit tests, lint, screenshots and release checks
+        working-directory: android
+        run: |
+          set -u
+          apps=()
+          for build_file in app/*/build.gradle.kts; do
+            [ -e "$build_file" ] || continue
+            name="${build_file#app/}"
+            name="${name%/build.gradle.kts}"
+            if ! [[ "$name" =~ ^[a-z][a-z0-9]*$ ]]; then
+              echo "::error::Folder names in android/app/ must be lower-case letters and digits."
+              exit 1
+            fi
+            apps+=("$name")
+          done
+          if [ "${#apps[@]}" -eq 0 ]; then
+            echo "::error::No app found in android/app/."
+            exit 1
+          fi
+
+          release_checks=()
+          for app in "${apps[@]}"; do
+            release_checks+=(":app:$app:checkReleaseApkRules" ":app:$app:checkReleaseGraphicsPathUse")
+          done
+
+          ./gradlew --no-daemon --console=plain check verifyRoborazziDebug "${release_checks[@]}"
+
+          for app in "${apps[@]}"; do
+            for report in "app/$app/build/reports/apk-rules/release.txt" \
+                          "app/$app/build/reports/graphics-path-use/release.txt"; do
+              if [ ! -s "$report" ]; then
+                echo "::error::android/$report was not written. A release check was skipped."
+                exit 1
+              fi
+            done
+            echo "Release checks ran for $app."
+          done
+
+      # When a screenshot differs, Roborazzi writes the new image and a
+      # comparison image. Download them from the run's summary page.
+      - name: Upload screenshot differences
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshot-differences
+          path: android/**/build/outputs/roborazzi/
+          if-no-files-found: ignore
+          overwrite: true
+
+      - name: Save Gradle downloads
+        if: github.event_name == 'push' && steps.gradle-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: ${{ steps.gradle-cache.outputs.cache-primary-key }}

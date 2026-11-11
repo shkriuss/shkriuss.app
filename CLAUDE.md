@@ -58,6 +58,7 @@ Run from `android/`. Keep this list correct when tasks change.
 - `./gradlew :app:<name>:assembleDebug` build one app.
 - `./gradlew verifyRoborazziDebug` compare screenshots with the committed ones.
 - `./gradlew recordRoborazziDebug` re-record screenshots after an intended UI change.
+- `./gradlew --no-daemon --console=plain check verifyRoborazziDebug :app:<name>:checkReleaseApkRules :app:<name>:checkReleaseGraphicsPathUse`, with both release checks for every app, is what CI runs. See `docs/development/ci.md`.
 - After a dependency change: `./gradlew clean`, then
   `./gradlew --write-verification-metadata sha256,pgp --export-keys help check verifyRoborazziDebug assembleDebug assembleRelease assemblePreview`.
   Then follow the checks in `docs/development/build.md`.

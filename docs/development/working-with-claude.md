@@ -82,9 +82,10 @@ cannot update an installed app.
    `main`, never force-pushes and never creates tags.
 3. Claude opens a pull request. The description answers the four questions
    in the pull request template.
-4. GitHub Actions runs the checks.
-5. The owner reviews the change, checks it on a phone, and then approves and
-   merges it, or writes what to change.
+4. GitHub Actions runs the checks ([ci.md](ci.md)).
+5. The owner reviews the change, checks it on a phone
+   ([test-a-pull-request.md](test-a-pull-request.md)), and then approves
+   and merges it, or writes what to change.
 
 ## How a release happens
 

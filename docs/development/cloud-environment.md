@@ -79,6 +79,9 @@ script for the mirror.
 This is a copy of the script in the environment's settings. Keep the two
 identical.
 
+The CI workflows install the same SDK platform and build tools on GitHub's
+runners ([ci.md](ci.md#job-check)). Change them together.
+
 <!-- SETUP SCRIPT START: keep this copy identical to the environment's setup script. -->
 
 ```bash

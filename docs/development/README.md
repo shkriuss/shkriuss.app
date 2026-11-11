@@ -8,6 +8,13 @@ Pages:
 - [Build](build.md): how the Gradle project is set up and built,
   dependency verification, reproducible builds, and the unit and screenshot
   tests.
+- [Continuous integration](ci.md): the GitHub Actions workflows that check
+  every pull request, and what to do when one fails.
+- [Test a pull request on a phone](test-a-pull-request.md): how to install
+  a pull request's preview APK and look at its screenshots, with only a
+  browser.
+- [Emulator tests](emulator-tests.md): the plan for instrumented tests on
+  an emulator. Not set up yet.
 - [Working with Claude](working-with-claude.md): who can do what, and how a
   change gets from a session to `main`.
 - [Cloud environment](cloud-environment.md): the Claude Code cloud
@@ -16,6 +23,5 @@ Pages:
 
 What else belongs here, as each part is built:
 
-- Test: emulator tests, and how to test a pull request on a phone.
 - Release: how a release is run from a phone.
 - Design system: the tokens and the `Shk*` components.
