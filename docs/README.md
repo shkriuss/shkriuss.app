@@ -7,6 +7,7 @@ from these files ([site.md](development/site.md)).
 |---|---|
 | [plan/](plan/README.md) | The project plan agreed at the start. |
 | [user/](user/README.md) | Guides for people who use the apps. |
+| [apps/](apps/README.md) | One folder per app: its specification and the release checklist of each version. |
 | [self-hosting/](self-hosting/README.md) | Running your own sync backend. |
 | [security/](security/README.md) | Threat model, cryptography, permissions, fingerprints. |
 | [architecture/](architecture/README.md) | How the code and the data formats fit together. |

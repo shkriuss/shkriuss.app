@@ -15,6 +15,9 @@ Pages:
   browser.
 - [Release](release.md): how to run a release from a phone, check and
   publish the draft, and the rehearsal with Catalog.
+- [Release checklist](release-checklist.md): what you check for every
+  release, with the GrapheneOS checklist. Claude copies it for each
+  version.
 - [Hub site](site.md): how the website is built from the docs, checked
   and deployed to Cloudflare, its security headers, and how to set up
   Cloudflare from a phone.

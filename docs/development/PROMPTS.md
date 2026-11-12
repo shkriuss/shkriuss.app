@@ -504,8 +504,10 @@ Prepare Water 1.0.0 for release. Do not start the release workflow.
 - User guide in `docs/user/water.md`, written for a phone screen.
 - `docs/security/permissions.md` and the data inventory are complete.
 - `CHANGELOG.md` for the app.
-- `docs/apps/water/release-checklist.md`: the GrapheneOS checklist from
-  PLAN.md section 16 as tick boxes with exact steps for each item.
+- The reminder steps of `docs/development/release-checklist.md` (part 1,
+  step 10), which are Open until now, as exact steps.
+- `docs/apps/water/release-checklist-1.0.0.md`: a copy of
+  `docs/development/release-checklist.md`, filled in for Water 1.0.0.
 - Add Water to the hub site and to the release workflow's list of apps:
   the `app` options and the "Check the inputs" step of every job (I am the
   owner and I ask for exactly that change).
@@ -680,8 +682,9 @@ Model: `sonnet`. Effort: `medium`.
 Prepare <app> <version>. Bump versionName, and set versionCode by the rule
 in docs/adr/0021-version-names-and-version-codes.md. Finish the changelog
 from the merged pull requests since the last release, update the user guide, and copy
-the release checklist for this version. Do not start the release workflow
-and do not create a tag.
+docs/development/release-checklist.md to
+docs/apps/<app>/release-checklist-<version>.md, filled in for this version.
+Do not start the release workflow and do not create a tag.
 ```
 
 ### R7 Explain a pull request
