@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The two receivers of core/notify. Every app that uses core/notify gets
+    them. See docs/architecture/notifications.md and
+    docs/security/permissions.md.
+
+    This manifest declares no permission. An app that uses core/notify
+    declares the three it needs in its own manifest, where a reviewer sees
+    them (ADR 0010, ADR 0030). Notify.start() fails if one is missing.
+
+    Neither receiver is exported, so no other app can reach them. Android
+    itself still can. Neither is directBootAware: nothing here runs between
+    a reboot and the first unlock (ADR 0010).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!-- Android starts it when an alarm of this app is due. Only this app's own AlarmManager entry names it. -->
+        <receiver
+            android:name="app.shkriuss.core.notify.AlarmReceiver"
+            android:exported="false" />
+
+        <!--
+            The moments after which the alarms must be registered again:
+            Android forgets them at a reboot and at an app update, and a
+            new time or time zone moves the reminders. Only Android can
+            send these four.
+        -->
+        <receiver
+            android:name="app.shkriuss.core.notify.SystemEventReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>
