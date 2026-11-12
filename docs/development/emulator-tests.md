@@ -111,7 +111,86 @@ How the tests reach what an app cannot:
 
 ### What the tests showed
 
-Not written yet. The first runs on the emulators are in progress.
+First run on 2026-11-12, in
+[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24), on
+AOSP emulators with Android 13, 14, 15 and 17. Each run has 68 tests. A
+test that does not apply to a version is skipped: five on Android 13 and
+14, one from Android 15.
+
+Android behaved as
+[crypto-design.md](../security/crypto-design.md) says, on every version.
+Nothing in the design had to change.
+
+| What | Result |
+|---|---|
+| Making and using each kind of key | Works. The Background key and, from Android 15, the Unlocked key wrap and open. The Lock key and the Recovery guard do so through the prompt. |
+| The layout of kind 5 | As the page says: a 12-byte IV that the Keystore picks, new each time, then the ciphertext and a 16-byte tag. For a key that needs the prompt, the IV is read from the cipher after encrypting. |
+| "Does this key exist" | `KeyStore.getKey` answers "not found" for a key that was never made, that was deleted, and that Android deleted with the screen lock. Deleting a key that does not exist is not an error. |
+| The list of keys | `KeyStore.aliases` shows each key from when it is made until it is gone. |
+| Which failure is which | A changed blob, other associated data and another key's blob arrive as "damaged or changed", also after the prompt. A key that does not exist is "gone". The Unlocked key on a locked emulator is "not usable now", and still exists. |
+| A key that needs the prompt, with no screen lock | Cannot be made. Android refuses. |
+| A key that needs the prompt, with no fingerprint | Can be made. The prompt asks for the PIN. |
+| Screen lock set | Nothing changes for the keys that exist. |
+| Screen lock changed | Every key stays. A Recovery guard made before the change opens its keyset after it, with the new PIN. |
+| Screen lock removed | The Lock key and the Recovery guard are deleted at once. The Background key and the Unlocked key stay and open their blobs. |
+| Screen lock set again | The deleted keys do not come back. New ones can be made. |
+| The Unlocked key, from Android 15 | Made and used with no screen lock. Refused while the emulator is locked, and usable again after it is unlocked. The Background key works while the emulator is locked. |
+| Android 13 and 14 | The app makes no Unlocked key. The Background key wraps `backup` and `file-key`. |
+| An update to Android 15 | An app that ran "as on Android 14" moves `backup` and `file-key` under a new Unlocked key at its next start. `record` stays under the Background key. |
+| The order of calls for the prompt | Works as the page says: start the cipher, show the prompt, then give the associated data and finish. |
+| Without the prompt | The last step fails. Nothing is stored, and the new key is deleted. |
+| Associated data before the prompt | Android does not complain at that call. The operation is lost all the same: it fails at its last step, also after a prompt that succeeded. |
+| One prompt, one use | A second cipher of the same key is not opened by the first prompt. |
+| The app lock | Turned on with one prompt of the new Lock key. The old key that wrapped `file-key` is deleted. After a new start the app is locked: records work, files do not. One prompt unlocks. Turning it off needs no prompt and deletes the Lock key. |
+| Screen lock removed, app lock off | Files, records and backup go on. The app no longer keeps the recovery key. With a new screen lock and the words, it keeps it again. |
+| Screen lock removed, app lock on | The app lock is reset and the files are closed. Records and backup go on. The recovery words open the files again. |
+| Screen lock removed while the app is unlocked | The app stores `file-key` under a key that needs no prompt at once. The files stay open with no words. |
+| A key that no keyset file names | Deleted at the app's next start. The keys that files name stay. |
+| The security level | `KeyInfo` says software on every emulator. The app shows that as "not protected by hardware". |
+| Tink on Android | Every vector passes. Java's vendor name is "The Android Project", Android's own provider `AndroidOpenSSL` is there, and no Play services provider. |
+| The word list | Loads from inside the test APK, with the right hash. |
+| Keyset files | Written, flushed, renamed and the folder flushed, on Android's own file system. |
+
+Not met in any test: `KeyPermanentlyInvalidatedException`. After the
+screen lock was removed, the keys were simply not found.
+
+The emulators start in about half a minute, and the tests take about one
+minute. A whole job takes four to five minutes.
+
+### What the job and the tests had to learn
+
+Four things did not work at first. None of them is about the Keystore.
+
+1. **Where the emulator's files are.** On GitHub's runner `avdmanager`
+   and `emulator` look in different folders. The job names one folder to
+   both, with `ANDROID_AVD_HOME`.
+2. **The emulator's program with a window** needs a sound library,
+   `libpulse`, which the runner does not have. The job starts only the
+   windowless program, with `-no-window`. Even asking the emulator for
+   its version starts the other one.
+3. **Android 17 crashes when a screen of the tests closes.** Android
+   saves a picture of a task for the recent-apps view when the task is
+   hidden or closed. On the Android 17 image, saving it aborts Android's
+   system process, inside the emulator's graphics driver:
+   `mapper.ranchu.so`, "Assertion failed:
+   !rcEnc->featureInfo()->hasReadColorBufferDma". Four other graphics
+   settings of the emulator were tried: `-gpu lavapipe`,
+   `-gpu swangle_indirect`, `-gpu auto` and `-feature -GLDMA`. The run
+   got no further with any of them. With `-gpu lavapipe` the same crash
+   came, and with `-feature -GLDMA` the emulator itself died at the
+   same moment. Android 13, 14 and 15 do not have this fault.
+   - What the tests do about it: `SystemPrompt` opens its one empty
+     screen at the first prompt and leaves it open until the run ends.
+     It is never closed and never hidden.
+   - So the emulator may be locked only before the first prompt.
+     `ScreenLock.lockPhone` checks this, and the suite runs
+     `UnlockedKeyTest` before the prompt tests.
+   - No test was left out or weakened for it. All 68 run on Android 17.
+   - It is a fault of the emulator image, revision 6 of
+     `system-images;android-37.0;default;x86_64`, with emulator 37.2.13.
+     A later revision may fix it. The tests can stay as they are.
+4. **Android 17 asks for the PIN on a number pad**, not in a text
+   field. `SystemPrompt` waits for either before it types.
 
 ## What an emulator cannot check
 
@@ -242,7 +321,11 @@ loss of power, and the time before the first unlock.
   or `ci.yml` changes.
 - Whether the emulator and the system images should be pinned to a
   revision. Today `sdkmanager` takes the newest, and the job writes the
-  revisions into its log (ADR 0028).
+  revisions into its log (ADR 0028). A new revision can fix a fault,
+  such as the one of the Android 17 image above, or bring a new one.
+- A restart of the emulator, and clearing the app's data, could be
+  tested in a job with two runs of the tests and a step between them.
+  Not built. Today both are steps for the three devices.
 - The other first instrumented tests the plan names: `core/notify`, for
   alarms that fire and are registered again after a restart or a time
   change (the Phase 1 gate in the [plan](../plan/PLAN.md), section 16),

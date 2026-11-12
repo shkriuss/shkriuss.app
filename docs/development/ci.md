@@ -162,9 +162,10 @@ Each job waits for "Gradle wrapper". Then:
    `./gradlew :<module>:assembleDebugAndroidTest`. Gradle does nothing
    else in this job. It does not start the emulator.
 7. It makes an emulator with `avdmanager` and starts it with `emulator`,
-   with no window, no sound and no saved state. It waits until Android
-   has started, turns the animations off, keeps the screen on and
-   unlocks it.
+   with no window, no sound and no saved state. Both tools are told the
+   same folder for the emulator's files. It waits until Android has
+   started, turns the animations off, keeps the screen on and unlocks
+   it.
 8. It installs each test APK with `adb` and runs it with
    `am instrument -w`. The project's own runner writes one line per test
    ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
@@ -172,14 +173,19 @@ Each job waits for "Gradle wrapper". Then:
    the runner's last line counts: `INSTRUMENTED_TESTS_PASSED`. The job
    fails without it. It also fails if an installed test APK does not use
    the project's runner.
-10. If anything failed, it uploads `emulator-logs-android-<version>`: the
-    test output, the emulator's own log, Android's log and a picture of
-    the screen.
+10. If anything failed, it prints the crashes from Android's log and the
+    warnings from the emulator's own log, to read in the browser. It
+    also uploads `emulator-logs-android-<version>`: the test output, the
+    emulator's own log, Android's whole log and a picture of the screen.
 
 No action starts the emulator. The usual one,
 `reactivecircus/android-emulator-runner`, is not one of GitHub's own
 actions. The Android Gradle Plugin's Managed Devices are not used either:
 they need artifacts that are not in the verification metadata (ADR 0028).
+
+A job takes four to five minutes: about one minute to install the SDK
+packages, two to build the test APK, half a minute to start the emulator
+and one for the tests. Measured on 2026-11-12.
 
 ### When CI fails
 
@@ -194,7 +200,9 @@ they need artifacts that are not in the verification metadata (ADR 0028).
 4. An emulator failure names the Android version in the check's name.
    Open the step **Run the instrumented tests**. Each test has a line
    that starts with `OK`, `FAIL` or `SKIP`. A failed test has its stack
-   trace above its `FAIL` line. More is in the run's **Summary**, under
+   trace above its `FAIL` line. If the run stops with "System has
+   crashed", open the step **Collect the logs**: it shows the crash.
+   More is in the run's **Summary**, under
    **emulator-logs-android-&lt;version&gt;**.
 5. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). Never weaken a
    check to make it pass (hard rule 9).

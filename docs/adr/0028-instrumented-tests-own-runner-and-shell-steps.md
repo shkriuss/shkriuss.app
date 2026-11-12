@@ -108,8 +108,8 @@
 
 - No dependency, no version catalog entry and no verification metadata
   changed for the emulator tests.
-- The project owns about 150 lines of test runner. They are test code
-  only, and never part of an app.
+- The project owns under 200 lines of test runner, in two files. They
+  are test code only, and never part of an app.
 - The runner gives no test report file, only text. The job shows that
   text and keeps Android's log and a picture of the screen when a test
   fails.
@@ -127,5 +127,8 @@
   for the verification metadata. Switching is small: the runner's name
   in the convention plugin, the dependency, and one annotation per test
   class.
+- It works: the first runs passed on Android 13, 14, 15 and 17, in four
+  to five minutes for each version
+  ([emulator-tests.md](../development/emulator-tests.md#what-the-tests-showed)).
 - [emulator-tests.md](../development/emulator-tests.md) and
   [ci.md](../development/ci.md) describe the job.

@@ -196,6 +196,11 @@ proof that a key is gone. See
   13, 14, 15 and the newest. They are the step after session B (step
   1.4, session C), because they need the emulator job in the CI
   workflow. StrongBox is checked on the owner's three devices.
+  - Session C built the job and the tests
+    ([0028](0028-instrumented-tests-own-runner-and-shell-steps.md)). They
+    pass on Android 13, 14, 15 and 17, and Android behaved as
+    crypto-design.md says
+    ([emulator-tests.md](../development/emulator-tests.md#what-the-tests-showed)).
 - Showing the system prompt needs the permission `USE_BIOMETRIC`. The
   step that first shows a prompt writes its decision record.
 - The backup format (0008) and the sync protocol (0009) build on the

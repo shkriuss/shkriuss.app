@@ -1647,9 +1647,23 @@ owner. Each one is a place to object.
     in the reference of `KeyGenParameterSpec.Builder`. The binding of a
     prompt key to the device credential, and the deletion of an app's
     keys when its data is cleared, were also read in Android 16's source.
-    Session C and the three devices must confirm all of it.
+    - Session C, on AOSP emulators with Android 13, 14, 15 and 17: confirmed for
+      the screen lock. A key that needs the prompt stays when the PIN is
+      changed, and still works after it. It is deleted at once when the
+      screen lock is removed, and does not come back when a lock is set
+      again. A key that needs no prompt stays through all of it. From
+      Android 15 the Unlocked key is made and used with no screen lock,
+      stays when the lock is removed, and is refused while the emulator
+      is locked.
+    - Still to confirm on the three devices: a fingerprint added or
+      removed, GrapheneOS, a second profile, Private Space, and app data
+      cleared
+      ([the steps](../development/emulator-tests.md#steps-for-the-three-devices)).
 12. A key that accepts fingerprint and device credential can be made with
-    no fingerprint enrolled. Read in Android 16's source.
+    no fingerprint enrolled. Read in Android 16's source. Session C
+    confirmed it on emulators with Android 13, 14, 15 and 17: they have no
+    fingerprint, and the Lock key and the Recovery guard were made. With
+    no screen lock, making them fails, as the page says.
 13. `setInvalidatedByBiometricEnrollment(false)` is set although the
     device credential already makes it unnecessary. It makes the intent
     plain.
@@ -1674,12 +1688,23 @@ owner. Each one is a place to object.
 23. Android's own `BiometricPrompt` takes a cipher together with
     fingerprint or device credential on Android 13 and later, also when
     no fingerprint is enrolled. Read in the source of Android 13 and
-    Android 16. Session C or the first prompt on a device must confirm
-    it, also for a key in StrongBox.
+    Android 16. Session C confirmed it on emulators with Android
+    13, 14, 15 and 17: the prompt took the cipher of a Lock key and of a Recovery
+    guard and was answered with the PIN, to encrypt and to decrypt. A
+    fingerprint as the answer, and a key in StrongBox, are still to
+    confirm on the three devices.
 24. For a key that needs the prompt, the cipher can be started before the
     prompt, and associated data must wait until after it. An encrypt
     operation gives its IV when it is done. Read in Android's source by
-    the independent review. Session C must confirm it.
+    the independent review. Session C confirmed it on emulators with
+    Android 13, 14, 15 and 17:
+    - In the page's order every step works, and the IV read after
+      encrypting is 12 bytes.
+    - Without the prompt, the last step fails and nothing is stored. One
+      prompt serves one operation: a second cipher is not opened by it.
+    - With associated data given before the prompt, Android does not
+      complain at that call. The operation is lost all the same: it
+      fails at its last step, also after a prompt that succeeded.
 25. No part of an app runs before the first unlock after a restart, and
     the keyset files are in credential-encrypted storage.
 26. `RecordWriter` can get a function that seals file keys again without
@@ -1689,21 +1714,35 @@ owner. Each one is a place to object.
     to survive a power loss on the supported phones.
 28. `KeyStore.getKey` on the Android Keystore answers "no key" only for
     "not found", and throws for every other failure. Read in the source
-    of Android 13 and 14. Session C must confirm it on every version.
+    of Android 13 and 14. Session C confirmed the first half on
+    emulators with Android 13, 14, 15 and 17: "no key" for an alias that was
+    never made, that was deleted, and that Android deleted with the
+    screen lock. The second half cannot be tested: a test cannot make
+    the real Keystore fail.
 29. `KeyStore.aliases` comes back empty or short when the Keystore
     fails. Read in Android 14's source. The code never depends on the
-    list being complete.
+    list being complete. Session C confirmed on emulators that the list
+    shows each key from when it is made until it is gone. A list from a
+    failing Keystore cannot be tested.
 30. `KeyPermanentlyInvalidatedException` reaches the app from the cipher.
     When a key is loaded, Android reports the same state as a key that
     cannot be recovered, which the code counts as "not usable now". Read
-    in Android's source. Session C must confirm it.
+    in Android's source. Session C could not confirm it: no test met
+    this state. On emulators with Android 13, 14, 15 and 17, a key that Android
+    deleted with the screen lock is simply "not found", which the code
+    counts as gone. Starting a cipher for it also answers "gone".
 31. A folder can be flushed to storage through a `FileChannel` opened on
-    it. That is how the code flushes `shk-keys/`. Session C must confirm
-    it on a device.
+    it. That is how the code flushes `shk-keys/`. Session C confirmed on
+    emulators with Android 13, 14, 15 and 17 that the call works on Android's
+    file system: every keyset file in the tests is replaced this way.
+    That the file survives a loss of power (assumption 27) cannot be
+    tested.
 32. Tink's code path for Android is the same construction as the one a
     JVM test runs. A JVM test never runs the Android path, because Tink
-    tells Android from a desktop by Java's vendor name. Session C runs
-    the vectors on the emulator.
+    tells Android from a desktop by Java's vendor name. Session C ran
+    every vector of this page and the published ones on emulators with
+    Android 13, 14, 15 and 17. All pass. Android's own provider is there, and no
+    Play services provider.
 
 ## Decided on pull request 22
 
