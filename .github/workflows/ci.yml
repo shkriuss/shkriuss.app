@@ -448,6 +448,10 @@ jobs:
           cp "$RUNNER_TEMP"/emulator.log "$RUNNER_TEMP"/tests-*.txt "$RUNNER_TEMP/emulator-logs/" 2> /dev/null || true
           timeout 60 "$adb" logcat -d > "$RUNNER_TEMP/emulator-logs/logcat.txt" 2> /dev/null || true
           timeout 60 "$adb" exec-out screencap -p > "$RUNNER_TEMP/emulator-logs/screen.png" 2> /dev/null || true
+          # The crashes and the test runner's own lines, to read without a download.
+          echo "::group::Crashes and test lines in Android's log"
+          grep -a -E ' (AndroidRuntime|InstrumentedTests|DEBUG|libc) *:' "$RUNNER_TEMP/emulator-logs/logcat.txt" | tail -n 250 || true
+          echo "::endgroup::"
 
       # The test output, the emulator's own log, Android's log and a picture
       # of the screen. Download them from the run's summary page.

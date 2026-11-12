@@ -1,5 +1,6 @@
 package app.shkriuss.core.crypto
 
+import app.shkriuss.core.testing.TestDevice
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -128,12 +129,14 @@ class SystemPromptTest {
         // Android may refuse it now or at the end. Either way nothing comes out.
         try {
             cipher.updateAAD(associatedData)
-        } catch (_: Exception) {
+        } catch (refused: Exception) {
+            TestDevice.note("Associated data before the prompt: refused at once, ${refused.javaClass.simpleName}")
             return
         }
         SystemPrompt.answer(step.cryptoObject)
 
         assertThrows(HardwareKeyNotUsable::class.java) { step.finish("a keyset".toByteArray(), ByteArray(0)) }
+        TestDevice.note("Associated data before the prompt: refused when the operation ends, after the prompt")
     }
 
     @Test
