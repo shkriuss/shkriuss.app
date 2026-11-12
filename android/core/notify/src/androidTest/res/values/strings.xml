@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown only in the settings of the emulator in CI. -->
+    <string name="notify_test_channel_name">Reminders</string>
+    <string name="notify_test_channel_description">Reminders of the tests of core/notify</string>
+</resources>

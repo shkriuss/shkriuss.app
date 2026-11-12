@@ -5,6 +5,8 @@ import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.ComponentName
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Looper
 import android.provider.Settings
@@ -60,18 +62,12 @@ class NotifyTest {
 
     @Before
     fun anAppSetUpForNotify() {
-        declareInManifest(Notify.MANIFEST_PERMISSIONS)
         shownBy.setNotificationsEnabled(true)
         context.notify = newNotify()
     }
 
     /** What the app class builds when the app starts. The worker runs each piece at once, so a test needs no waiting. */
     private fun newNotify() = Notify(context, listOf(reminders, summaries), app, handler, clock, worker = Executor { it.run() })
-
-    private fun declareInManifest(permissions: Set<String>) {
-        shadowOf(context.packageManager).getInternalMutablePackageInfo(context.packageName).requestedPermissions =
-            permissions.toTypedArray()
-    }
 
     private fun waiting() = alarmManager.waiting()
 
@@ -116,27 +112,21 @@ class NotifyTest {
     }
 
     @Test
-    fun startFailsWhenTheManifestLacksAPermission() {
-        Notify.MANIFEST_PERMISSIONS.forEach { left ->
-            declareInManifest(Notify.MANIFEST_PERMISSIONS - left)
-
-            val failed = assertThrows(IllegalStateException::class.java) { context.notify.start() }
-
-            assertTrue(failed.message, failed.message!!.endsWith(left))
+    fun startFailsWhenTheAppClassIsNoNotifyHost() {
+        // An app whose app class is some other class.
+        val otherApp = object : ContextWrapper(context) {
+            override fun getApplicationContext(): Context = this
         }
+        val notify = Notify(otherApp, listOf(reminders), app, handler, clock, FakeAlarmScheduler(), Executor { it.run() })
+
+        assertThrows(IllegalStateException::class.java) { notify.start() }
+        assertEquals(0, notificationManager.notificationChannels.size)
     }
 
     @Test
-    fun theThreePermissionsAreTheOnesTheDocsName() {
-        assertEquals(
-            setOf(
-                "android.permission.POST_NOTIFICATIONS",
-                "android.permission.USE_EXACT_ALARM",
-                "android.permission.RECEIVE_BOOT_COMPLETED",
-            ),
-            Notify.MANIFEST_PERMISSIONS,
-        )
+    fun thePermissionAScreenAsksForIsTheNotificationPermission() {
         assertEquals(Manifest.permission.POST_NOTIFICATIONS, Notify.PERMISSION)
+        assertEquals("android.permission.POST_NOTIFICATIONS", Notify.PERMISSION)
     }
 
     // An alarm fires.

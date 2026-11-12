@@ -3,7 +3,6 @@ package app.shkriuss.core.notify
 import android.Manifest
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.provider.Settings
 import app.shkriuss.core.data.Clock
 import java.util.concurrent.Executor
@@ -61,14 +60,11 @@ class Notify(
      * registers the alarms. The alarms are read on [worker], so this
      * returns at once.
      *
-     * It fails if the app is not set up for `core/notify`: the app class
-     * is no [NotifyHost], or the app's manifest lacks a permission of
-     * [MANIFEST_PERMISSIONS].
+     * It fails if the app class is no [NotifyHost]: the receivers could
+     * not find this object then.
      */
     fun start() {
         check(app is NotifyHost) { "The app class must implement NotifyHost" }
-        val missing = MANIFEST_PERMISSIONS - declaredPermissions()
-        check(missing.isEmpty()) { "The app's manifest must declare: ${missing.joinToString()}" }
         notifications.createChannels(channels)
         sync()
     }
@@ -124,24 +120,13 @@ class Notify(
         }
     }
 
-    private fun declaredPermissions(): Set<String> = app.packageManager
-        .getPackageInfo(app.packageName, PackageManager.PackageInfoFlags.of(PackageManager.GET_PERMISSIONS.toLong()))
-        .requestedPermissions.orEmpty().toSet()
-
     companion object {
-        /** The permission a screen asks the user for before reminders can show. */
-        const val PERMISSION: String = Manifest.permission.POST_NOTIFICATIONS
-
         /**
-         * What the manifest of an app that uses `core/notify` declares:
-         * show notifications, set exact alarms, and be told when the
-         * device has started. docs/security/permissions.md says why.
+         * The permission a screen asks the user for before reminders can
+         * show. It is the only one of this module's three that Android
+         * asks the user about (docs/security/permissions.md).
          */
-        val MANIFEST_PERMISSIONS: Set<String> = setOf(
-            Manifest.permission.POST_NOTIFICATIONS,
-            Manifest.permission.USE_EXACT_ALARM,
-            Manifest.permission.RECEIVE_BOOT_COMPLETED,
-        )
+        const val PERMISSION: String = Manifest.permission.POST_NOTIFICATIONS
 
         /** The file of `core/notify` in the app's private storage. */
         private const val STORE = "app.shkriuss.core.notify"

@@ -24,7 +24,8 @@ interface AlarmScheduler {
  * [AlarmScheduler] on Android's `AlarmManager`.
  *
  * - `setExactAndAllowWhileIdle` with `RTC_WAKEUP`: at the exact time on
- *   the wall clock, also when the device sleeps deeply (ADR 0010).
+ *   the wall clock, also when the device sleeps deeply (ADR 0010). The
+ *   permission for it, `USE_EXACT_ALARM`, is in this module's manifest.
  * - Each alarm is one broadcast to [AlarmReceiver] of this app, and no
  *   other app can send it. Android tells two alarms apart by the id in
  *   the intent's identifier.

@@ -10,8 +10,9 @@ import org.w3c.dom.Element
 
 /**
  * What this module's manifest adds to every app that uses it, as
- * docs/security/permissions.md says: two receivers that no other app can
- * reach and that never run before the first unlock, and no permission.
+ * docs/security/permissions.md says: three permissions, and two
+ * receivers that no other app can reach and that never run before the
+ * first unlock.
  *
  * The test reads `src/main/AndroidManifest.xml` itself. `NotifyTest`
  * shows that Android finds the receivers through it.
@@ -34,10 +35,25 @@ class ManifestTest {
     private val receivers = elements("receiver").associateBy { it.android("name") }
 
     @Test
-    fun theModuleDeclaresNoPermission() {
-        val tags = listOf("uses-permission", "uses-permission-sdk-23", "permission", "permission-group", "permission-tree")
+    fun theModuleAsksForThreePermissionsAndNoOther() {
+        assertEquals(
+            listOf(
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.USE_EXACT_ALARM",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
+            ),
+            elements("uses-permission").map { it.android("name") },
+        )
+        // No limit to some Android versions, and nothing else on the three entries.
+        elements("uses-permission").forEach { assertEquals(1, it.attributes.length) }
+        val otherTags = listOf("uses-permission-sdk-23", "permission", "permission-group", "permission-tree")
+        assertEquals(emptyList<String>(), otherTags.filter { elements(it).isNotEmpty() })
+    }
 
-        assertEquals(emptyList<String>(), tags.filter { elements(it).isNotEmpty() })
+    @Test
+    fun exactAlarmsNeedNoQuestionToTheUser() {
+        // SCHEDULE_EXACT_ALARM is the other permission for exact alarms. It is denied until the user allows it (ADR 0010).
+        assertFalse("android.permission.SCHEDULE_EXACT_ALARM" in elements("uses-permission").map { it.android("name") })
     }
 
     @Test
