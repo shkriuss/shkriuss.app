@@ -4,13 +4,21 @@ Every key the apps use, where it lives, what it protects, and the exact
 bytes of everything the apps encrypt. All cryptography in the suite
 follows this page.
 
-- Status: design, written on 2026-11-12 in Phase 1, step 4, session A
-  ([PROMPTS.md](../development/PROMPTS.md)). No code exists yet. The
-  owner decided most of its open questions on
+- Status: built. The design was written on 2026-11-12 in Phase 1, step
+  4, session A ([PROMPTS.md](../development/PROMPTS.md)). The owner
+  decided most of its open questions on
   [pull request 22](https://github.com/shkriuss/shkriuss.app/pull/22).
-- The code will be `android/core/crypto`. It must follow this page
-  exactly. If this page is wrong or unclear, the fix is a change to this
-  page first, agreed with the owner.
+  Session B built the code and its unit tests from this page on the same
+  day. The owner decided three more points then, and the page was made
+  exact where it was silent
+  ([Decided in session B](#decided-in-session-b)).
+- Not built yet: the emulator tests of the hardware keys (session C), the
+  screens (step 1.7), the handover between apps (step 3.0), sealing file
+  keys again in the database (the first app that stores files), and a
+  new recovery key (Phase 5).
+- The code is `android/core/crypto`. It must follow this page exactly.
+  If this page is wrong or unclear, the fix is a change to this page
+  first, agreed with the owner.
 - Decisions: [ADR 0006](../adr/0006-tink-and-key-hierarchy.md) (Tink and
   the key hierarchy) and
   [ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md) (the
@@ -25,7 +33,8 @@ follows this page.
   [CLAUDE.md](../../CLAUDE.md)).
 
 The page ends with every [assumption](#assumptions), the owner's
-[decisions on pull request 22](#decided-on-pull-request-22) and every
+[decisions on pull request 22](#decided-on-pull-request-22) and
+[in session B](#decided-in-session-b), and every
 [open question](#open-questions) that is left.
 
 ## At a glance
@@ -112,8 +121,9 @@ Not protected, by decision or by nature:
 
 1. The only cryptography library is Tink for Java: the Maven artifact
    `com.google.crypto.tink:tink-android`, version 1.24.0, released on
-   2026-10-16. Session B adds it to the version catalog and to the
-   dependency verification file.
+   2026-10-16. Session B added it to the version catalog and to the
+   dependency verification file
+   ([build.md](../development/build.md#where-trust-comes-from)).
 2. Why `tink-android` and not `tink`: the plain `tink` artifact depends
    on an HTTP client and on `conscrypt-openjdk-uber`, which holds native
    libraries (hard rules 2 and 4). `tink-android` has neither. It holds
@@ -146,24 +156,31 @@ only if the app ships that library. The apps do neither, so both cannot
 exist. Two checks make sure it stays so:
 
 1. `core/crypto` refuses to work if a provider named `GmsCore_OpenSSL`
-   is installed. A unit test installs a fake one and expects the refusal.
-2. The APK rules check ([build.md](../development/build.md#apk-rules-check))
+   is installed. It looks for that provider at every way into the module,
+   every time, because a provider can be installed at any moment. Only
+   this name is refused. A unit test installs a fake one and expects the
+   refusal.
+2. The APK rules check
+   ([build.md](../development/build.md#the-play-services-class-rule))
    fails if an APK holds a class under `com.google.android.gms`. The
-   check is an owner-only file. The owner asks for this rule in
-   session B.
+   check is an owner-only file. The owner asked for this rule in
+   session B. It reads the class names in the APK's dex files. That works
+   because the build never renames classes.
 
 ### Where Android does the work, not Tink
 
 A hardware key cannot leave the Keystore, so the Keystore itself must do
 every operation with it. Tink has a helper for that,
 `AndroidKeystore`. `core/crypto` uses the helper where it can, and calls
-Android directly in three places:
+Android directly in five places:
 
 | Task | How |
 |---|---|
 | Make a hardware key | Tink: `AndroidKeystore.generateNewKeyWithSpec` |
 | Use a hardware key that needs no prompt | Tink: `AndroidKeystore.getAead(alias)` |
-| Delete a hardware key, or ask whether it exists | Tink: `AndroidKeystore.deleteKey`, `hasKey` |
+| Delete a hardware key | Tink: `AndroidKeystore.deleteKey` |
+| Ask whether one hardware key exists | Direct: `KeyStore.getKey` on the `AndroidKeyStore` key store, for that exact alias. It answers "no" only for "not found", and throws for every other failure. |
+| List the app's hardware keys | Direct: `KeyStore.aliases` on the same key store. Tink has no call for it. |
 | Use a hardware key that needs the system prompt | Direct: `javax.crypto.Cipher`, `AES/GCM/NoPadding`, on the key from the `AndroidKeyStore` key store. The prompt must be given the cipher object, and Tink's helper keeps its cipher to itself. |
 | Read whether a key is in StrongBox | Direct: `SecretKeyFactory` and `KeyInfo` |
 | The checksum of the recovery words | Direct: `java.security.MessageDigest`, SHA-256. Tink has no public plain hash. It is a checksum, not a secret. |
@@ -187,6 +204,34 @@ key that needs the prompt:
 
 A unit test with a software key cannot find a mistake here. Session C
 tests it on an emulator.
+
+#### Asking which keys exist
+
+The owner decided this in session B. Tink's `hasKey` is not used. In the
+source of Android 13 and 14 it also answers "no" when the Keystore only
+failed for a moment. A living key would then count as gone, and its
+keyset file could be written over.
+
+1. "Does this key exist" is asked with `KeyStore.getKey` for the exact
+   alias. Only "not found" means no. If `getKey` throws, the answer is
+   "the Keystore cannot say", and the key counts as not usable now.
+2. The list from `KeyStore.aliases` has the same weakness as `hasKey`:
+   in Android 14's source it comes back empty when the Keystore fails.
+   So an empty or short list is never proof that a key is gone.
+3. The list is used for two things only: to pick the next number of a
+   new key (rule 4 below), and to find keys that no keyset file names
+   (rule 8 below).
+4. Before a key is made under an alias, that exact alias is asked for
+   with `getKey`. If a key is there, the next number is taken. If
+   `getKey` throws, the code stops: no key is made and nothing is
+   written.
+5. Rule 8 deletes only keys that the list shows. So a list that failed
+   deletes nothing.
+6. Session C tests all of this on the emulator.
+
+Whether the phone has a screen lock is asked from Android's
+`KeyguardManager.isDeviceSecure`. That is not cryptography, so it is not
+in the table.
 
 ### The system prompt
 
@@ -285,8 +330,9 @@ Notes:
 2. The alias of a hardware key is `shk.<kind>.<number>`, for example
    `shk.lock.3`. `<kind>` is `background`, `unlocked`, `lock` or
    `recovery`. `<number>` starts at 1 and goes up by one each time a new
-   key of that kind is made. Every wrapped keyset names the kind and the
-   number of the key that wrapped it.
+   key of that kind is made. Rule 4 below says exactly which number a
+   new key gets. Every wrapped keyset names the kind and the number of
+   the key that wrapped it.
 3. The two prompt keys do not also ask for an unlocked phone. A prompt
    for every use is the stronger rule, and fewer settings mean fewer
    differences between Android versions.
@@ -302,13 +348,29 @@ destroying it.
    means "not usable now": the phone is locked, the prompt was not
    answered, or the Keystore is busy. Then nothing is deleted and nothing
    is made again.
+   - "Does not exist" is the answer of `KeyStore.getKey` for that exact
+     alias, never a list that does not show it
+     ([Asking which keys exist](#asking-which-keys-exist)).
+   - `KeyPermanentlyInvalidatedException` counts when it comes from the
+     cipher. A key that fails to load is "not usable now".
+   - A tag that the Keystore refuses is neither: the blob is "damaged or
+     changed".
 2. A keyset file that cannot be opened is never deleted or written over,
-   unless rule 1 says its hardware key is gone.
-3. A keyset is made only when its file does not exist.
+   unless rule 1 says its hardware key is gone. This holds without
+   exception. So a keyset file that is damaged under a living hardware
+   key can never be replaced, not even with the right recovery words.
+3. A keyset is made only when its file does not exist. Two cases are not
+   "made" in this sense: a keyset whose hardware key is gone is stored
+   again from the recovery words (rule 2), and the random `file-key` is
+   replaced by the derived one
+   ([The file-key keyset without a recovery key](#the-file-key-keyset-without-a-recovery-key)).
 4. A new hardware key gets the number that is one above the highest
    number of its kind, counted over the aliases that exist and the
    numbers that keyset files name. A key is never made under an alias
    that exists. Tink's helper would replace the old key without a word.
+   So the exact alias is asked for first, and the next number is taken
+   if a key is there. If the Keystore cannot say, nothing is made. A
+   number can come back after its key was deleted and no file names it.
 5. Making, replacing and deleting hardware keys and keyset files happens
    one step at a time, under one lock in the app. A prompt that waits for
    the user does not hold that lock, so sync goes on behind it.
@@ -320,7 +382,9 @@ destroying it.
    safely stored under another key.
 8. At start, the app deletes hardware keys of its own that no keyset
    file names. It does this only if it could read the header of every
-   keyset file.
+   keyset file. It deletes only keys that the Keystore's list shows. A
+   file in `shk-keys/` that the code does not know counts as "could not
+   read every header".
 
 #### Why four keys
 
@@ -359,7 +423,9 @@ on every version.
 
 When a phone is updated to Android 15, the app makes an Unlocked key at
 its next start. It moves under it each keyset that the Background key
-holds in its place: `backup`, and `file-key` if the app lock is off.
+holds in its place: `backup`, `file-key-old` if it exists, and `file-key`
+if the app lock is off. If the phone is locked at that start, the
+Unlocked key cannot be used yet, and the move waits for a later start.
 
 ### Keysets
 
@@ -499,7 +565,11 @@ When the app gets its recovery-key-derived keys:
 5. The app makes a backup, sends file records to sync and can turn the
    app lock on only when both are true: `record` exists, and
    `file-key-old` does not. A file key sealed by a key that exists only
-   on this phone must never leave it.
+   on this phone must never leave it. `core/crypto` itself refuses to
+   encrypt a backup and to turn the app lock on before that. It cannot
+   tell which sealed record is a file's record, so the code that hands
+   records to sync asks `core/crypto` for this state and holds file
+   records back.
 6. Sealing a file key again is not an edit by the user. It needs its own
    `RecordWriter` function, as restoring a backup and importing from sync
    get theirs ([ADR 0027](../adr/0027-record-fields-and-stamping.md),
@@ -524,6 +594,10 @@ When the app gets its recovery-key-derived keys:
    Catalog does (`android:allowBackup="false"` and data extraction rules
    that exclude everything).
 2. A keyset file is replaced as rule 6 under "Hardware keys" says.
+   - A file has the name of its keyset, with no ending: `record`,
+     `backup`, `file-key`, `file-key-old`, `recovery`.
+   - While a file is replaced, the new one is written as `<name>.tmp`. A
+     `.tmp` file that a stop left behind is deleted at start.
 3. The app's storage is credential-encrypted. No part of an app runs
    before the first unlock after a restart.
 
@@ -617,7 +691,8 @@ associated data = the blob's own bytes before the ciphertext part
 | 5 | Header, hardware key kind and number (10) | Keyset name, ASCII |
 
 1. An ID is the 16 bytes of the UUID, in the order of its 32 hex digits.
-   `00112233-4455-4677-8899-aabbccddeeff` is `00 11 22 ... EE FF`.
+   `00112233-4455-4677-8899-aabbccddeeff` is `00 11 22 ... EE FF`. Only
+   the 36-character form is taken, with hex digits in either case.
 2. The context is either 16 bytes or the last and only part of variable
    length. So two different inputs never give the same associated data.
 3. The kind byte is inside the associated data. A blob of one kind never
@@ -772,6 +847,32 @@ A reader answers with one of these, and nothing more detailed:
 
 No answer contains plaintext or key bytes.
 
+How a reader gets to its answer:
+
+1. It checks the magic first, then the kind, then the version. The
+   version is the version of that kind's layout, so it is read only when
+   the kind is the expected one. A version byte `00` is "damaged or
+   changed".
+2. Fewer than three bytes, or other bytes than `SHK`, is "not one of
+   ours". `SHK` on a blob that is shorter than the smallest blob of its
+   kind is "damaged or changed".
+3. Whatever a reader refuses for its content is "damaged or changed": a
+   keyset with another key type or other parameters, a hardware key kind
+   that may not wrap this keyset, a hardware key kind outside 1 to 4,
+   and a hardware key number 0.
+4. "Needs keys this app does not have now" is also the answer when the
+   keyset file does not exist, when its hardware key is not usable now,
+   when a kind 5 blob names a hardware key that does not exist, and when
+   a blob is to be made but its keys are not there.
+5. For a wrapped file key, `file-key` is tried first and then
+   `file-key-old`. If neither opens it, the answer is "damaged or
+   changed" when one of them holds the key ID the blob names, and "needs
+   another recovery key" when none does.
+6. A record ID or a file ID that is not a UUID is a mistake of the code
+   that calls, not an answer about a blob.
+7. A read of the storage that fails while a stream is decrypted stays a
+   failed read. It is not turned into "damaged or changed".
+
 ## The app lock
 
 The app lock is optional and is set per app. Its screens are step 1.7.
@@ -813,6 +914,8 @@ with no files. So the prompt always unlocks a real hardware key.
 6. If the file names a Lock key that no longer exists, or Android says
    the key is permanently invalidated, the app lock is off and the app
    says that it was reset. See "When things change".
+7. So the code knows three states: on (the file names a Lock key that
+   exists), reset (it names one that is gone), and off.
 
 ### Turning it on, unlocking, turning it off
 
@@ -820,16 +923,35 @@ Turn on:
 
 1. Check four of the recovery words. In a keeper app this reads the kept
    recovery key, so it is one prompt of the Recovery guard.
-2. Make a new Lock key.
-3. Show the system prompt for an encrypt operation with that key.
-4. Wrap the `file-key` keyset with it and replace the keyset file.
-5. Make a new key of the kind that wrapped `file-key` until now (the
-   Unlocked key, or the Background key on Android 13 and 14). Move the
-   other keysets of the old one to it. Delete the old one. Without this
-   step, an old copy of the keyset file that is still somewhere on the
-   phone's storage could be opened without the prompt.
+2. Make a new key of the kind that wraps `file-key` now (the Unlocked
+   key, or the Background key on Android 13 and 14). Move the other
+   keysets of the old one to it. `file-key` stays under the old key for
+   now.
+3. Make a new Lock key.
+4. Show the system prompt for an encrypt operation with that key.
+5. Wrap the `file-key` keyset with it and replace the keyset file. The
+   app lock is now on.
+6. Delete the old key of step 2. Without steps 2 and 6, an old copy of
+   the keyset file that is still somewhere on the phone's storage could
+   be opened without the prompt.
 
 So turning the lock on shows two prompts in a keeper app.
+
+The order is the owner's decision in session B. The page first made the
+Lock key and wrapped `file-key`, and only then replaced the old key. A
+stop right after that left the old key in place for good, because nothing
+recorded that the last step was still due. In this order a stop at any
+point is harmless:
+
+- Before step 5 the app lock is off and every keyset opens. A key that
+  was made and that no file names yet is deleted at the next start
+  (rule 8).
+- After step 5 no file names the old key. If step 6 did not happen, the
+  next start deletes it (rule 8).
+- If the prompt is cancelled, the app lock stays off and the new Lock
+  key is deleted. The other keysets already sit under the new key of
+  step 2. The next try has nothing to move.
+- No two operations with hardware keys are open at the same time.
 
 Unlock:
 
@@ -899,6 +1021,26 @@ when the phone is lost. The paper copy is the backup.
    app has its derived keys when `record` exists. If the app stops before
    that, the user enters the words again and the steps run again. Each
    step can be done twice without harm.
+   - Before anything is stored, the app looks at every derived keyset
+     that is stored already and opens. `backup` and `record` must be the
+     ones this recovery key derives. `file-key` must be the one it
+     derives, or the old keyset: the one `file-key-old` holds, or, if
+     there is no `file-key-old` yet, any other keyset, which then becomes
+     `file-key-old`.
+   - If that check fails, nothing is stored and the answer is "a
+     different recovery key". So after a stop, only the same words can
+     finish a setup that already stored a derived keyset. Other words
+     would leave keysets of two recovery keys, or lose the keys of files
+     that were added in between. The owner decided this in session B.
+     How a user who cannot give the same words starts over is an
+     [open question](#open-questions).
+   - A stored keyset that cannot be opened now stops the setup, and
+     nothing is written: "not usable now" if its hardware key cannot be
+     used, "damaged or changed" if the file is damaged.
+   - A stored keyset is left as it is when it is the right one. It is
+     stored again only when its file is missing or its hardware key is
+     gone. `file-key` under a Lock key cannot be opened without the
+     prompt. It is left as it is.
 5. If the phone has a screen lock, the app keeps the recovery key: it
    makes a Recovery guard, shows the system prompt, and stores the
    `recovery` keyset. The app is now a keeper. If the user cancels the
@@ -925,13 +1067,15 @@ gone. Starting again makes a new one.
      checked on 2026-11-12.
    - Licence: MIT, "Copyright (c) 2013-2016 Pavol Rusnak". The MIT licence
      asks that this notice and the licence text go with every copy.
-   - Session B commits the list and puts the MIT licence text next to
-     it in the module. It also creates the page
-     `docs/development/third-party.md`, with the word list, and with Tink
-     and the four libraries it brings: each with its source, its licence
-     and its notice. Listing everything else that ships in an app, and
-     showing the notices inside the apps, comes in Phase 2, before
-     Water's first release.
+   - Session B committed the list as
+     `android/core/crypto/src/main/resources/app/shkriuss/core/crypto/words/english.txt`,
+     with the MIT licence text next to it as `LICENSE.txt`. Both are
+     packed into the app together. It also created the page
+     [third-party.md](../development/third-party.md), with the word list,
+     and with Tink and the four libraries it brings: each with its
+     source, its licence and its notice. Listing everything else that
+     ships in an app, and showing the notices inside the apps, comes in
+     Phase 2, before Water's first release.
 2. Encoding: take the 32 bytes. Add one byte: the first byte of their
    SHA-256. Cut the 264 bits into 24 groups of 11 bits. Each group is the
    number of a word, 0 to 2047.
@@ -960,15 +1104,25 @@ alphanumeric mode and is at most 228 characters.
 1. The user types 24 words. The field offers words from the list. The
    first four letters of a word are enough to know it.
 2. The app trims spaces, makes the text lower case, and splits it at
-   spaces.
+   spaces. Any run of white space counts as one space. Lower case is made
+   the same way in every app language. Only whole words count: the first
+   four letters are for the entry field, not for this check.
 3. It checks: 24 words, each in the list, and the checksum byte.
 4. Messages: "Word 7 is not in the word list." or "These words do not
-   belong together. Check each word." Nothing more.
+   belong together. Check each word." Nothing more. A word that is not in
+   the list is reported first, the first such word by its position. A
+   wrong number of words gets the second message.
 5. If the app already has derived keys, it derives the `record` key from
    the entered words and compares it with the one it has. They must be
    equal. The key ID alone is a name, not a proof: other words with the
    same four bytes can be found. A different recovery key is taken only
    through "new recovery key" (see [Key rotation](#key-rotation)).
+   - The code gives one of three results: the current recovery key, an
+     older recovery key of the keyset, or a different one. For the last
+     two nothing is stored. What the screen says then belongs to step
+     1.7.
+   - Entered words whose key ID is 0 are accepted. Only a new recovery
+     key with that ID is made again.
 6. Then as "Creating it" from step 4. The app stores each derived keyset
    whose file is missing or whose hardware key is gone. It leaves the
    others as they are. An app where the words were entered is a keeper,
@@ -1148,7 +1302,7 @@ There is no rotation by calendar. Keys change on these events.
 | Key | Changes when | How |
 |---|---|---|
 | Lock key | The app lock is turned on. A new key each time. | See "Turning it on". It is deleted when the lock is turned off. |
-| Background or Unlocked key | The app lock is turned on, so that the old no-prompt copy of `file-key` can never be opened | Make the key with the next number. Wrap its keysets with it. Replace the keyset files. Then delete the old key. A stop in the middle leaves the old key and old files in use. |
+| Background or Unlocked key | The app lock is turned on, so that the old no-prompt copy of `file-key` can never be opened | Make the key with the next number. Wrap its other keysets with it. Replace their files. Delete the old key last, after `file-key` is under the Lock key. A stop in the middle leaves the old key in use, or named by no file and deleted at the next start. See "Turning it on". |
 | Unlocked key | The phone moves to Android 15 | A first Unlocked key is made. `backup`, and `file-key` if the app lock is off, move to it. The Background key stays and keeps `record`. |
 | Any hardware key | It was lost | A new key with the next number. There is nothing to wrap again: the keysets it held are gone and are derived again from the words, or handed over again. See "When things change". |
 | File key | The file's content changes | A new key and a new stream. The old stream and key are dropped with the old content. |
@@ -1406,10 +1560,13 @@ de01854b108f58a9ff8768fca193f7fce8d937f5dc0b2efa4402b2edb7
 
 ## What the tests must cover
 
-Items 1 to 8 are for session B. Item 9 is not. It is the next step, in
-its own pull request, because it needs the emulator job in the CI
-workflow (step 1.4, session C in
-[PROMPTS.md](../development/PROMPTS.md)).
+Items 1 to 8 are for session B, which built them
+([build.md](../development/build.md#unit-tests)). Item 9 is not. It is
+the next step, in its own pull request, because it needs the emulator job
+in the CI workflow (step 1.4, session C in
+[PROMPTS.md](../development/PROMPTS.md)). What session B could not test
+is listed in
+[emulator-tests.md](../development/emulator-tests.md#what-the-hardware-key-tests-must-cover).
 
 Unit tests run on the JVM with Robolectric, where no Keystore exists. So
 `core/crypto` takes its hardware keys through an interface passed in by
@@ -1517,6 +1674,23 @@ owner. Each one is a place to object.
     import.
 27. Flushing a file and its folder to storage, then renaming, is enough
     to survive a power loss on the supported phones.
+28. `KeyStore.getKey` on the Android Keystore answers "no key" only for
+    "not found", and throws for every other failure. Read in the source
+    of Android 13 and 14. Session C must confirm it on every version.
+29. `KeyStore.aliases` comes back empty or short when the Keystore
+    fails. Read in Android 14's source. The code never depends on the
+    list being complete.
+30. `KeyPermanentlyInvalidatedException` reaches the app from the cipher.
+    When a key is loaded, Android reports the same state as a key that
+    cannot be recovered, which the code counts as "not usable now". Read
+    in Android's source. Session C must confirm it.
+31. A folder can be flushed to storage through a `FileChannel` opened on
+    it. That is how the code flushes `shk-keys/`. Session C must confirm
+    it on a device.
+32. Tink's code path for Android is the same construction as the one a
+    JVM test runs. A JVM test never runs the Android path, because Tink
+    tells Android from a desktop by Java's vendor name. Session C runs
+    the vectors on the emulator.
 
 ## Decided on pull request 22
 
@@ -1542,6 +1716,43 @@ left open. Each is built into the page above.
 | The system prompt | Android's own `BiometricPrompt`. No AndroidX Biometric in `core/crypto`. |
 | Where third-party material is listed | Session B creates `docs/development/third-party.md` with the word list, and with Tink and its four libraries, and puts the MIT text next to the list. Everything else that ships in an app, and the notices inside the apps, come in Phase 2 before Water's first release. |
 | Sealing file keys again in the database | Its own `RecordWriter` function, built with the first app that stores files. |
+
+## Decided in session B
+
+The owner's decisions of 2026-11-12 in step 1.4, session B, when the code
+was built. Each is built into the page above.
+
+| Question | Decision |
+|---|---|
+| How the code asks whether a hardware key exists, and how it lists keys | Two more direct calls: `KeyStore.getKey` for "exists" and `KeyStore.aliases` for the list. Tink's `hasKey` is not used. A list is never proof that a key is gone, a key is made only after its exact alias was asked for, and rule 8 deletes only keys the list shows. Session C tests it. |
+| A setup that stopped half way, then a different recovery key | The owner had no preference. The safe reading was taken: nothing is stored unless every derived keyset that is stored already fits the given recovery key. How a user who cannot give the same words starts over is an open question, and nothing is built for it yet. |
+| The order of steps when the app lock is turned on | Move first: the new key and the other keysets first, then the Lock key and the prompt, then `file-key`, and the old key is deleted last. |
+
+Where the page was silent, session B wrote down how the code reads it.
+The owner approved these readings with the plan of session B:
+
+1. A reader checks the magic, then the kind, then the version. The
+   answers for short input, for a version `00` and for refused content
+   are fixed ([Reading a blob](#reading-a-blob)).
+2. "Needs keys this app does not have now" also covers a missing keyset
+   file and a hardware key that is not usable now.
+3. Which failure of a hardware key is "gone", which is "not usable now"
+   and which is "damaged or changed" (rule 1).
+4. The names of the keyset files and of the file that is written while
+   one is replaced ([Where keys are stored](#where-keys-are-stored)).
+5. Rule 4 decides the number of a new hardware key. A number can come
+   back.
+6. What "a keyset is made" means in rule 3. Rule 2 has no exception.
+7. `file-key-old` moves to the Unlocked key too, and the move waits
+   while the phone is locked.
+8. The three states of the app lock.
+9. How typed words are read, and the three results for entered words
+   ([Entering it](#entering-it)).
+10. Record and file IDs come only in the 36-character form.
+11. `core/crypto` itself refuses a backup and the app lock while
+    `file-key-old` exists.
+12. The screen lock is asked from `KeyguardManager`. The provider check
+    runs at every way into the module.
 
 ## Open questions
 
@@ -1582,3 +1793,14 @@ What is left, with the step that decides it.
    hash of the ciphertext? Phase 5.
 10. **The threat model page** does not exist. A step of its own: step
     1.8.
+11. **Starting over after a setup that stopped half way.** A setup that
+    already stored a derived keyset can be finished only with the same
+    recovery words ("Creating it", step 4). A user who cannot give those
+    words is stuck: the app has no derived keys, and every other
+    recovery key is refused. The files still open on this phone, but
+    backup, sync and the app lock stay off. How does such a user start
+    over without losing files? The file keys that were sealed in
+    between would have to be sealed again under the keys of the new
+    recovery key first, as in the move from a random `file-key`.
+    Nothing is built for this. Open: the owner names the step that
+    decides it.

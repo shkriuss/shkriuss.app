@@ -15,6 +15,7 @@ build. Set up in Phase 0, step 3.
 | Compose BOM | 2026.09.00 | `android/gradle/libs.versions.toml` |
 | Room | 3.0.3 | `android/gradle/libs.versions.toml` |
 | KSP (runs Room's compiler) | 2.3.13 | `android/gradle/libs.versions.toml` |
+| Tink (`tink-android`) | 1.24.0 | `android/gradle/libs.versions.toml` |
 | Min SDK | 33 (Android 13) | `build-logic`, `ShkBuild.kt` |
 | Compile and target SDK | 37 (Android 17), platform `android-37.0` | `build-logic`, `ShkBuild.kt` |
 | SDK build tools | 36.0.0 | `build-logic`, `ShkBuild.kt` |
@@ -37,6 +38,10 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
 - `android/core/data/`: the base for every app database, and the
   committed schemas of its example database in `schemas/`. See
   [architecture/data.md](../architecture/data.md).
+- `android/core/crypto/`: all cryptography, with Tink. See
+  [crypto-design.md](../security/crypto-design.md). The recovery word
+  list and its licence are in its resources
+  ([third-party.md](third-party.md)).
 - `android/core/testing/`: test helpers that other modules use in their
   tests only.
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
@@ -223,6 +228,51 @@ second build must write the same mapping file, or the release stops. See
   since" query, the example migration and the migration test helpers,
   on the system SQLite driver under Robolectric
   ([architecture/data.md](../architecture/data.md#tests)).
+- `core/crypto` has 19 test classes with 148 tests. They are the items 1
+  to 8 of "What the tests must cover" in
+  [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
+  and the rules for hardware keys.
+  - No Android Keystore exists on the JVM. So the tests pass a software
+    stand-in for the hardware keys, `SoftwareHardwareKeys`, with the same
+    byte layout. It can act like a phone that is locked, a Keystore that
+    fails for a moment, a key that is gone and a screen lock that was
+    removed. `StoppingStore` lets a test stop the app before any change
+    to a keyset file, and start it again.
+  - `DesignVectorsTest` and `PublishedVectorsTest` run every vector of
+    the page and the published ones. Tink cannot be told which salt and
+    nonce to use, so `ReferenceStream` builds the stream blobs a second
+    time from HMAC and AES-GCM alone, and the module must open them.
+  - `LargeStreamTest` encrypts and decrypts one stream that is longer
+    than all the memory the test JVM may use, a little over 2 GiB,
+    without ever holding it. It takes about 10 seconds.
+  - `CryptoBoundaryTest` reads the source of every other module under
+    `android/`, and fails if a file names `com.google.crypto.tink`,
+    `javax.crypto`, `java.security.KeyStore` or
+    `android.security.keystore`, imports `java.security.*` with a star,
+    takes the cipher out of a `CryptoObject`, or uses the Tink entry of
+    the version catalog.
+    - It reads the whole text of a file. A comment that names one of
+      them fails too: word it differently.
+    - Its limit: it reads source, not compiled classes. And Gradle does
+      not know that this test reads other modules. In a cloud session it
+      may skip the test when only another module changed. CI starts from
+      a clean checkout and always runs it.
+    - How it was tested: with a temporary `import javax.crypto.Cipher`
+      in `core/data`, the test failed and named the file.
+  - `NoSecretsTest` runs every flow with its failures, collects every
+    text form, every error with its stack trace, Android's log and the
+    standard output, and searches all of it for the keys, the recovery
+    words and the plaintext. With a temporary `toString` that showed two
+    recovery words, it failed.
+  - `ShkCryptoTest` builds the module the way an app does, with the real
+    `AndroidHardwareKeys`. Robolectric has no Android Keystore, so it
+    checks the other half: where the Keystore gives no answer, nothing is
+    made, stored or deleted, and no key counts as lost. The Keystore
+    itself is for the emulator tests
+    ([emulator-tests.md](emulator-tests.md#what-the-hardware-key-tests-must-cover)).
+  - Most of these tests need no Robolectric. Those that build the object
+    for the system prompt, read Android's log or build a key's settings
+    run under it.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
@@ -430,12 +480,24 @@ The decision is recorded in
   `keyserver.ubuntu.com`, checked with `gpg` that it made the POM's
   signature, and added it to the keyring. Gradle then recorded the
   signature itself.
-- 59 keys are trusted. Google signs most AndroidX and AGP files, Room 3
+- Tink was added on 2026-11-12, in Phase 1, step 4, session B, the same
+  way. It needed one new key,
+  `73976C9C39C1479B84E2641A5A68A2249128E2C6`, "Tink Developers (Signing
+  key for Maven artifacts)". It is trusted for `tink-android` 1.24.0
+  only. Claude checked with `gpg` that the key in the keyring made the
+  signatures of the jar and of the POM. The four libraries Tink brings
+  needed no new entry: Gson and Error Prone are signed by keys that were
+  already trusted for their groups, the key of JSR-305 3.0.2 was already
+  trusted for exactly that version, and Google's key covers
+  `androidx.annotation`. The file already trusted another key for `tink`
+  1.7.0, an older artifact that the Android Gradle Plugin uses. That
+  entry was not touched.
+- 60 keys are trusted. Google signs most AndroidX and AGP files, Room 3
   and `androidx.sqlite` included, so those are checked by signature.
 - 64 components are listed one by one. 48 are checked by checksum only,
   because they are not signed: mostly older AndroidX releases, and parent
   POM files. 16 are checked by a key trusted for that one file.
-- The keyring holds 67 keys.
+- The keyring holds 68 keys.
 - Gradle groups a trusted key by Maven group where it can. A new version in
   that group, signed by the same key, is then trusted without a new entry.
 
@@ -565,10 +627,62 @@ and fails the build if:
 1. it contains a native library (hard rule 2),
 2. its manifest declares or requests any permission (hard rule 4, and no
    app needs a permission yet),
-3. its manifest still starts the emoji font loader (hard rule 3, see below).
+3. its manifest still starts the emoji font loader (hard rule 3, see below),
+4. one of its dex files names a class under `com.google.android.gms`, the
+   package of Google Play services (hard rule 3), or it has no dex file
+   at all.
 
 The report is written to `build/reports/apk-rules/`. A library can add any
 of these without anyone noticing. The check makes sure someone does.
+
+### The Play services class rule
+
+The owner asked for rule 4 in Phase 1, step 4, session B. Tink would use
+a security provider of Play services if an app had one
+([crypto-design.md](../security/crypto-design.md#no-play-services-provider)).
+An app has one only if it holds Play services code.
+
+1. A dex file names every class the APK holds, and every class its code
+   refers to, by a descriptor such as `Lcom/google/android/gms/Foo;`. The
+   rule searches the bytes of every dex file for
+   `Lcom/google/android/gms/` and names each class it finds.
+2. It does not search for the dotted form. AndroidX Activity holds the
+   plain text `com.google.android.gms.provider.action.PICK_IMAGES`, the
+   name of a system action. That is a string, not a class.
+3. An APK with no dex file fails. So the rule never passes by reading
+   nothing.
+
+How it still finds a class after R8:
+
+1. This build never renames. `-dontobfuscate` is set for `release` and
+   `preview` ([R8](#r8)). A class that stays in the APK keeps its real
+   name.
+2. R8 can only rename a class that is inside the APK. A class the code
+   only refers to always keeps its name.
+3. The same rule runs on the preview APK of every pull request, and on a
+   debug APK whenever one is built. R8 never touches a debug APK. CI
+   itself builds only `release` and `preview`.
+
+Its limits:
+
+- It depends on `-dontobfuscate`. A comment next to that line in
+  `build-logic/r8/app-rules.pro` says so. If renaming is ever turned on,
+  the rule must read the classes before R8 instead, as the
+  [graphics-path check](#the-graphics-path-check) does. That needs
+  `AndroidApplicationConventionPlugin.kt`, which is owner-only.
+- R8 removes code that nothing uses. A Play services library that is
+  added but never called leaves no class in a release APK. Then the APK
+  holds none, which is what the rule asks. The debug APK still holds it.
+
+How it was tested, on 2026-11-12 in the cloud environment:
+
+1. Catalog got a temporary class `com.google.android.gms.Probe`, used by
+   its activity.
+2. `assembleDebug`, `assembleRelease` and `assemblePreview` each failed in
+   their APK rules check and named the class: in `classes4.dex` and
+   `classes5.dex` of the debug APK, and in `classes.dex` of the release
+   and the preview APK, which R8 had shrunk.
+3. With the class removed, all three passed.
 
 CI runs `checkReleaseApkRules` by name for every app, and checks that its
 report was written. So removing the check from the build, or turning it

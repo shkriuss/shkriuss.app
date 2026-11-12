@@ -25,7 +25,11 @@ Pages:
   tokens in `core/design`, how Material 3 is set up from them, the `Shk*`
   components and when to use each, and their tests.
 - [Emulator tests](emulator-tests.md): the plan for instrumented tests on
-  an emulator. Not set up yet.
+  an emulator, and what the tests of the hardware keys must cover. Not
+  set up yet.
+- [Third-party material](third-party.md): what others made and the apps
+  contain, with the source, the licence and the notice of each. Today the
+  recovery word list, and Tink with the libraries it brings.
 - [Working with Claude](working-with-claude.md): who can do what, and how a
   change gets from a session to `main`.
 - [Cloud environment](cloud-environment.md): the Claude Code cloud

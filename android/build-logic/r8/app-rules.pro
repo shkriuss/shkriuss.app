@@ -7,6 +7,10 @@
 #   class and method names, a pasted trace says where it failed.
 
 # Keep the names of classes, methods and fields.
+# The APK rules check depends on this: it finds classes of Google Play
+# services in a release APK by their real names (CheckApkRulesTask.kt, and
+# docs/development/build.md, "APK rules check"). Never remove it without
+# changing that check.
 -dontobfuscate
 
 # Keep the source file and line number attributes. While R8 optimises,
