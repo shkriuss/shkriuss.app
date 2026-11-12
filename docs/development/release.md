@@ -100,6 +100,10 @@ Before you start:
 2. CI is green on the newest commit of `main`. Open the **Actions** tab and
    tap **CI**. The top run on `main` must have a green tick. Right after a
    merge, wait for it.
+3. Parts 1 and 2 of the version's release checklist are done. Claude
+   copies the [release checklist](release-checklist.md) to
+   `docs/apps/<app>/release-checklist-<version>.md` in the same pull
+   request as the version. Parts 3 and 4 follow these steps.
 
 Then:
 
