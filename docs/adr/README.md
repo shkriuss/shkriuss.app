@@ -18,7 +18,10 @@ the owner's prompt for Phase 0, step 7. Record 0024 covers the adaptive
 layouts of the design system, from the owner's decisions on pull request
 16; it replaces part of 0003. Record 0025 adds secure app spawning to the
 GrapheneOS checklist of 0002, from the owner's decision on pull request
-19.
+19. Records 0026 and 0027 come from Phase 1, step 3: Room's build tools,
+which the owner asked for, and how the record fields of 0004 are stored
+and stamped, with the change number from the owner's decisions on pull
+request 21.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -28,7 +31,7 @@ How a record may be edited or replaced is in point 7 of
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
 | 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025 |
 | 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024 |
-| 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted |
+| 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted |
 | 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted |
@@ -50,3 +53,5 @@ How a record may be edited or replaced is in point 7 of
 | 0023 | [Hub site hosting and deploy](0023-hub-site-hosting-and-deploy.md) | Accepted |
 | 0024 | [Own adaptive layouts, no Material 3 adaptive libraries](0024-own-adaptive-layouts.md) | Accepted |
 | 0025 | [Secure app spawning in the GrapheneOS checklist](0025-secure-app-spawning-in-grapheneos-checklist.md) | Accepted |
+| 0026 | [Room's build tools and committed schemas](0026-room-build-tools.md) | Accepted |
+| 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |

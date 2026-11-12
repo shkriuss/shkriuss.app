@@ -55,12 +55,15 @@ If a task seems to need it, stop and say so in the PR description.
 
 Run from `android/`. Keep this list correct when tasks change.
 
-- `./gradlew check` unit tests and Android Lint for all modules.
+- `./gradlew check` unit tests, Android Lint, and the schema and DAO rule checks, for all modules.
 - `./gradlew :app:<name>:assembleDebug` build one app.
 - `./gradlew verifyRoborazziDebug` compare screenshots with the committed ones.
 - `./gradlew recordRoborazziDebug` re-record screenshots after an intended UI change.
+- `./gradlew recordRoomSchemas` write the database schema files after an intended schema change. Commit them.
 - `./gradlew --no-daemon --console=plain check verifyRoborazziDebug :app:<name>:checkReleaseApkRules :app:<name>:checkReleaseGraphicsPathUse`, with both release checks for every app, is what CI runs. See `docs/development/ci.md`.
-- After a dependency change: `./gradlew clean`, then
+- After a dependency change: delete the build folders (`build/` in
+  `android/`, in `build-logic/` and in every module, and
+  `android/.gradle/configuration-cache/`), then
   `./gradlew --write-verification-metadata sha256,pgp --export-keys help check verifyRoborazziDebug assembleDebug assembleRelease assemblePreview`.
   Then follow the checks in `docs/development/build.md`.
 
@@ -82,7 +85,9 @@ Emulator tests, signing and releases run only in GitHub Actions.
 - Dependencies are passed through constructors. No DI framework, no service
   locators, no global mutable state.
 - Every stored record has `id` (random UUID), `createdAt`, `updatedAt` and
-  `deletedAt` (deletion marker). Never hard-delete synced records.
+  `deletedAt` (deletion marker), plus a local `changeNumber` that every
+  write sets and that never goes into a backup or sync. Never hard-delete
+  synced records.
 - Cryptography only through `core/crypto`. No `javax.crypto` or Tink calls
   anywhere else. Never invent a construction; use the ones documented in
   `docs/security/crypto-design.md`.

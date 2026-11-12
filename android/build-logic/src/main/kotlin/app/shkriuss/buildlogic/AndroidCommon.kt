@@ -1,6 +1,7 @@
 package app.shkriuss.buildlogic
 
 import com.android.build.api.dsl.CommonExtension
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.findByType
 import org.gradle.kotlin.dsl.withType
@@ -41,7 +42,32 @@ internal fun Project.configureAndroidCommon(android: CommonExtension) {
     dependencies.constraints.add("implementation", libs.library("lifecycle-runtime")) {
         because("the lint checks in Lifecycle 2.9 do not load in this lint version")
     }
+
+    refuseBundledSqlite()
 }
+
+/**
+ * Fails dependency resolution if anything asks for the bundled SQLite
+ * driver. It ships its own SQLite as a native library (hard rule 2,
+ * ADR 0004). Databases use `AndroidSQLiteDriver`, the system SQLite. The
+ * APK rules check would also catch its native library, but only when an APK
+ * is built, and never in a library's unit tests.
+ */
+private fun Project.refuseBundledSqlite() {
+    configurations.configureEach {
+        resolutionStrategy.eachDependency {
+            if (requested.group == SQLITE_GROUP && requested.name.startsWith(BUNDLED_SQLITE_PREFIX)) {
+                throw GradleException(
+                    "${requested.group}:${requested.name} is the bundled SQLite driver, which ships " +
+                        "native code (hard rule 2, ADR 0004). Use AndroidSQLiteDriver, the system SQLite.",
+                )
+            }
+        }
+    }
+}
+
+private const val SQLITE_GROUP = "androidx.sqlite"
+private const val BUNDLED_SQLITE_PREFIX = "sqlite-bundled"
 
 /**
  * The Android extension of this module. The application or library plugin

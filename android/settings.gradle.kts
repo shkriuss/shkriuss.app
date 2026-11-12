@@ -34,4 +34,6 @@ dependencyResolutionManagement {
 rootProject.name = "shkriuss"
 
 include(":core:design")
+include(":core:data")
+include(":core:testing")
 include(":app:catalog")

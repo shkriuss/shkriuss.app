@@ -45,5 +45,11 @@
 - A schema change bumps the version, adds a migration and a migration test,
   and commits the exported schema JSON ("Changing formats" in
   [CLAUDE.md](../../CLAUDE.md)).
-- Open: Room 3 transactions with `AndroidSQLiteDriver` are to be confirmed
-  in Phase 0 (section 17).
+- Room 3 transactions with `AndroidSQLiteDriver`, open in section 17, were
+  confirmed in Phase 1, step 3: DAO calls inside a write transaction run
+  in it, and a failure rolls all of them back (`RecordWriterTest` in
+  `core/data`).
+- Room's build tools and the committed schema files are in
+  [0026](0026-room-build-tools.md). How the four record fields are stored
+  and stamped is in [0027](0027-record-fields-and-stamping.md). Both are
+  described in [data.md](../architecture/data.md).
