@@ -150,10 +150,11 @@ internal class TimeFields(val hour: String, val minute: String, val pm: Boolean,
         /**
          * What a field keeps of what was typed: [typed] if it is at most two
          * digits, else the [current] text. So letters, signs and a third
-         * digit are refused as they are typed.
+         * digit are refused as they are typed. Digits of every script
+         * count, such as the Arabic-Indic digits an Arabic keyboard types.
          */
         fun accept(current: String, typed: String): String =
-            if (typed.length <= 2 && typed.all { it in '0'..'9' }) typed else current
+            if (typed.length <= 2 && typed.all { it.isDigit() }) typed else current
     }
 }
 
