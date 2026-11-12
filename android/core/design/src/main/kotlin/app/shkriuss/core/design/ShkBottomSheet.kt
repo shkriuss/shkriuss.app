@@ -22,7 +22,12 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,14 +56,18 @@ import kotlinx.coroutines.launch
  * [ShkMenu] gives them, such as a second line of text, or for a short
  * form. For a question that needs an answer, use a [ShkDialog].
  *
+ * Keep it in the screen, and show it with [visible], as a [ShkMenu] is
+ * shown with `expanded`. It slides up when [visible] turns true, and
+ * slides down when it turns false, however it was closed: a tap on one
+ * of its rows that sets [visible] to false, a swipe down, a tap on the
+ * dimmed screen above it, Back, or something else the screen's state
+ * says (owner decision on pull request 17). A swipe, a tap above it and
+ * Back call [onDismissRequest]; set [visible] to false there.
+ *
  * [title] is optional. TalkBack reads it as a heading. [content] goes
  * under it, one item under the other. Put [ShkListItem]s with `onClick`
  * in it for actions: their text lines up with the title, at the screen
- * margin, and only their pressed state reaches past it. To close the
- * sheet after an action, stop showing it.
- *
- * A swipe down, a tap on the dimmed screen above it and Back close it
- * too, and call [onDismissRequest]. Stop showing it there. TalkBack reads
+ * margin, and only their pressed state reaches past it. TalkBack reads
  * the handle at its top as "Drag handle", and offers "Dismiss" on it.
  *
  * It opens to the height of its content, up to the whole window, and its
@@ -72,6 +81,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShkBottomSheet(
+    visible: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     title: String? = null,
@@ -82,6 +92,29 @@ fun ShkBottomSheet(
     // would hide part of a short list of actions.
     val state = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    // Material 3's sheet is in its window for as long as it is composed,
+    // and leaves at once when it is no longer. So it stays composed after
+    // [visible] turns false, until it has slid down.
+    var inWindow by remember { mutableStateOf(visible) }
+    // True from the start of a slide down until it ends. If [visible]
+    // turns true again before then, the slide is cut short and the sheet
+    // slides back up.
+    var sliding by remember { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        if (visible) {
+            inWindow = true
+            if (sliding) {
+                sliding = false
+                state.show()
+            }
+        } else if (inWindow) {
+            sliding = true
+            state.hide()
+            sliding = false
+            inWindow = false
+        }
+    }
+    if (!visible && !inWindow) return
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,

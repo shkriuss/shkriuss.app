@@ -358,16 +358,14 @@ animating between panes, and panes the user can resize. They are built
 when the first app needs them. The menu of more actions it left out came
 with batch 5, as `menuItems` of `ShkTopBar`. Where the floating action
 button goes in these layouts was left to batch 5, together with the
-snackbar (owner decision on pull request 16). Batch 5 proposes an answer;
-see [Floating action button and snackbar](#floating-action-button-and-snackbar).
+snackbar (owner decision on pull request 16). Batch 5 answers it; see
+[Floating action button and snackbar](#floating-action-button-and-snackbar).
 
 Batch 5 leaves out, until an app needs them: Material 3's full-screen
 dialog, the date range picker, a sheet with a half-open step or one that
 stays on the screen without dimming it, a snackbar that stays until it is
 closed or has a close button, and menus with sub-menus, rows that can be
-checked, dividers or text at the end of a row. A sheet closed by one of
-its rows disappears at once; a swipe, a tap above it, Back and
-TalkBack's "Dismiss" slide it down.
+checked, dividers or text at the end of a row.
 
 Batch 5 builds the time picker from the suite's own parts, not from
 Material 3's (owner decision while batch 5 was built). Material 3's AM
@@ -376,7 +374,8 @@ targets of the numbers on its clock face lie on top of each other, most
 of all in the two rings of the 24-hour clock. The suite's time picker has
 a field for the hour and one for the minute, with large numbers and the
 number keyboard, and AM and PM as radio buttons, only with the 12-hour
-clock. It has no clock face.
+clock. It has no clock face. This record is enough; the decision needs no
+ADR (owner decision on pull request 17).
 
 Batch 4 adds one state to a component of batch 3: a list item can be
 selected (owner decision on pull request 16). See
@@ -553,10 +552,10 @@ The parts of batch 5:
   cannot be turned off. It is drawn in the inverse colours that
   `ShkTheme` already maps for snackbars: the text colour as its fill, so
   it stands out on every surface in both themes without an outline
-  (proposal, for the owner to confirm).
+  (owner decision on pull request 17).
 - A menu has the `Card` corners of a raised surface, 16 dp. Material 3
   gives menus its smallest corners, which this theme maps to `Field`,
-  12 dp (proposal, for the owner to confirm).
+  12 dp (owner decision on pull request 17).
 - A row of a menu uses `Label`, as Material 3 does, because each row is
   an action.
 - The date picker is Material 3's, in the suite's panel, with the suite's
@@ -592,14 +591,19 @@ columns are 16 dp apart.
 ### Windows of their own
 
 The dialog, the sheet, the menu and the two pickers open in a window of
-their own, over the screen. An app shows one while its state says so,
-and stops showing it in `onDismissRequest`.
+their own, over the screen. An app shows a dialog or a picker while its
+state says so, and stops showing it in `onDismissRequest`. A menu and a
+sheet stay in the screen, and are shown by their state: `expanded` and
+`visible`.
 
 1. A tap on an action of a dialog, a picker or a menu calls it, then
    `onDismissRequest`. A tap outside it and Back call only
    `onDismissRequest`. So the app writes one line to close it.
 2. A sheet's content is the app's own, so a tap on a row only calls the
-   row. The app closes the sheet by no longer showing it.
+   row. The row closes the sheet by setting `visible` to false. The sheet
+   then slides down before it goes, as it does for a swipe, a tap above
+   it, Back and TalkBack's "Dismiss" (owner decision on pull request 17).
+   Set `visible` to true again while it slides, and it slides back up.
 3. The dialog and the pickers keep 16 dp from the edges of the window.
    When they are taller than the window, as at font scale 2.0 on a phone
    held sideways, everything above their buttons scrolls, and the buttons
@@ -622,7 +626,9 @@ TalkBack does not announce every sample on a page.
 Material 3 marks its date picker, its bottom sheet and parts of them as
 experimental. `core/design` opts in where it uses them, and only there.
 An update of Material 3 may change them; the tests and screenshots show
-it if so.
+it if so. The owner accepted this, and the date picker offering typing
+only in a window narrower than 360 dp (owner decision on pull request
+17).
 
 ### Floating action button and snackbar
 
@@ -639,10 +645,10 @@ it if so.
    screen's corner, not in the rail. In a list and detail it belongs to
    the screen of its pane.
 
-This is a proposal, for the owner to confirm. Pull request 16 left the
-place of the button to this batch. Material 3 puts it in the rail on
-wide windows; keeping it in the screen keeps one rule for every width
-and keeps the rail unchanged.
+Pull request 16 left the place of the button to this batch, and the
+owner accepted this answer (owner decision on pull request 17). Material
+3 puts it in the rail on wide windows; keeping it in the screen keeps one
+rule for every width and keeps the rail unchanged.
 
 ### States
 
@@ -667,6 +673,7 @@ and keeps the rail unchanged.
 | With text, with content | Dialog. The content is the app's, such as a radio group or a text field. |
 | Turned off (`enabled = false`) | A dialog's action, a menu row. |
 | Deletes (`destructive = true`) | A dialog's action, a menu row: in the error colour. |
+| Shown (`visible = true`) | Bottom sheet. It slides up, and slides down when it turns false. |
 | With a title | Bottom sheet. |
 | With an action (`actionText`) | Snackbar. A long message puts the action under it. |
 | With icons | Menu rows. |
@@ -1129,7 +1136,10 @@ screenshot phone:
 - `ShkBottomSheetTest`: the title is a heading. The handle is read as
   "Drag handle", is 48 dp tall, and its "Dismiss" closes the sheet. The
   title and a row's text start at the screen margin. Content taller than
-  the window scrolls to its last row.
+  the window scrolls to its last row. When a row sets it not visible, it
+  is seen part of the way down before it goes; with a sheet that simply
+  leaves, this check fails. Shown again on the way down, it comes back
+  up.
 - `ShkSnackbarTest`: a snackbar is a polite live region, goes away by
   itself and says it was dismissed. A tap on its action says it was
   performed. The action sits beside a short message and under a long
@@ -1393,7 +1403,8 @@ before the capture.
     are one above the other, Delete on top.
 21. On Bottom sheets, under "Try it", tap "Show the actions". The sheet
     slides up; its title and rows start where the page title does. Tap a
-    row: the sheet closes and the line under the button names the row.
+    row: the sheet slides down and the line under the button names the
+    row.
     Open it again and swipe it down. With TalkBack on, find "Drag handle"
     and use "Dismiss" from TalkBack's actions.
 22. On Snackbars, under "Try it", tap the plus. "Note added" shows above
@@ -1433,15 +1444,8 @@ before the capture.
   built.
 - What batch 4 leaves out (see [Components](#components)), until an app
   needs it.
-- Where the floating action button goes: proposed in batch 5, in the
-  screen at every width, not in the rail. See
-  [Floating action button and snackbar](#floating-action-button-and-snackbar).
-  The owner confirms or changes it.
-- The look of batch 5 that is proposed, not yet confirmed: the snackbar
-  in the inverse colours, and the menu's 16 dp corners.
-- Material 3's date picker and bottom sheet are experimental APIs. An
-  update of Material 3 may change them.
-- In a window narrower than 360 dp, the date picker offers typing only.
-  A month that fits there would need the suite's own date picker.
+- A month that fits a window narrower than 360 dp would need the
+  suite's own date picker. Until then the date picker offers typing
+  there (accepted by the owner on pull request 17).
 - What batch 5 leaves out (see [Components](#components)), until an app
   needs it.

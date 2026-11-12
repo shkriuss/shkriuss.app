@@ -2,8 +2,10 @@ package app.shkriuss.core.design
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
@@ -19,6 +21,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.Dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -38,6 +41,9 @@ import org.robolectric.annotation.GraphicsMode
  * - A row in it is tapped as anywhere else.
  * - Content taller than the window scrolls, so the last row can be
  *   reached at font scale 2.0.
+ * - When a row sets it not visible, it slides down before it goes, as for
+ *   a swipe (owner decision on pull request 17). Shown again on the way
+ *   down, it comes back up.
  *
  * The screen is the screenshot phone. Graphics run natively, so text is
  * measured with the real font.
@@ -55,7 +61,7 @@ class ShkBottomSheetTest(private val fontScale: Float) {
     fun theTitleIsAHeadingAndTheHandleOffersDismiss() {
         var dismissed = 0
         show {
-            ShkBottomSheet(title = TITLE, onDismissRequest = { dismissed++ }) {
+            ShkBottomSheet(visible = true, title = TITLE, onDismissRequest = { dismissed++ }) {
                 ShkListItem(headline = DUPLICATE, onClick = {})
             }
         }
@@ -73,7 +79,7 @@ class ShkBottomSheetTest(private val fontScale: Float) {
     fun theTitleAndTheRowsLineUpAtTheScreenMargin() {
         var taps = 0
         show {
-            ShkBottomSheet(title = TITLE, onDismissRequest = {}) {
+            ShkBottomSheet(visible = true, title = TITLE, onDismissRequest = {}) {
                 ShkListItem(headline = DUPLICATE, onClick = { taps++ })
             }
         }
@@ -92,7 +98,7 @@ class ShkBottomSheetTest(private val fontScale: Float) {
     @Test
     fun contentTallerThanTheWindowScrolls() {
         show {
-            ShkBottomSheet(title = TITLE, onDismissRequest = {}) {
+            ShkBottomSheet(visible = true, title = TITLE, onDismissRequest = {}) {
                 repeat(ROWS) { index -> ShkListItem(headline = "$ROW ${index + 1}", supportingText = DUPLICATE, onClick = {}) }
             }
         }
@@ -100,6 +106,56 @@ class ShkBottomSheetTest(private val fontScale: Float) {
         compose.onNode(hasScrollAction()).assertExists()
         compose.onNode(hasText("$ROW $ROWS")).performScrollTo().assertIsDisplayed()
     }
+
+    @Test
+    fun aRowThatClosesTheSheetSlidesItDown() {
+        var visible by mutableStateOf(true)
+        var dismissed = 0
+        show {
+            ShkBottomSheet(visible = visible, title = TITLE, onDismissRequest = { dismissed++ }) {
+                ShkListItem(headline = DUPLICATE, onClick = { visible = false })
+            }
+        }
+        val open = handleTop()
+
+        // The clock stands still, so the slide can be seen part of the way.
+        compose.mainClock.autoAdvance = false
+        compose.onNode(hasText(DUPLICATE)).performSemanticsAction(SemanticsActions.OnClick)
+        // Where the handle is, frame by frame, for as long as it is there.
+        val tops = mutableListOf<Float>()
+        repeat(SLIDE_FRAMES) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.onAllNodes(hasContentDescription(HANDLE)).fetchSemanticsNodes().forEach { tops += it.boundsInRoot.top }
+        }
+        assertTrue("The sheet should be seen part of the way down, not just gone: $tops", tops.any { it > open + 1f })
+
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        compose.onAllNodes(hasContentDescription(HANDLE)).assertCountEquals(0)
+        assertEquals("Closing it from its state is not a dismiss request", 0, dismissed)
+    }
+
+    @Test
+    fun aSheetShownAgainWhileItSlidesDownComesBack() {
+        var visible by mutableStateOf(true)
+        show {
+            ShkBottomSheet(visible = visible, title = TITLE, onDismissRequest = {}) {
+                ShkListItem(headline = DUPLICATE, onClick = {})
+            }
+        }
+        val open = handleTop()
+
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { visible = false }
+        compose.mainClock.advanceTimeBy(PART_OF_THE_SLIDE_MILLIS)
+        compose.runOnIdle { visible = true }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
+        assertEquals("The sheet should be open again", open, handleTop(), 1f)
+    }
+
+    private fun handleTop(): Float =
+        compose.onNode(hasContentDescription(HANDLE)).fetchSemanticsNode().boundsInRoot.top
 
     /** Draws [content] in the theme. A test calls it once. */
     private fun show(content: @Composable () -> Unit) {
@@ -120,5 +176,11 @@ class ShkBottomSheetTest(private val fontScale: Float) {
 
         /** More rows than fit in the window at any font scale. */
         private const val ROWS = 30
+
+        /** Long enough for the sheet to start sliding, shorter than the whole slide. */
+        private const val PART_OF_THE_SLIDE_MILLIS = 100L
+
+        /** About half a second of frames, longer than Material 3's slide. */
+        private const val SLIDE_FRAMES = 30
     }
 }

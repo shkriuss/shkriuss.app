@@ -77,23 +77,22 @@ private fun SheetToTry() {
         else -> stringResource(R.string.sample_no_choice)
     }
     ShkText(text = result, color = ShkTheme.colors.textSecondary)
-    if (open) {
-        ShkBottomSheet(
-            title = stringResource(R.string.sample_card_title),
-            onDismissRequest = {
+    ShkBottomSheet(
+        visible = open,
+        title = stringResource(R.string.sample_card_title),
+        onDismissRequest = {
+            open = false
+            closedWithoutChoosing = true
+        },
+    ) {
+        // A row closes the sheet by setting it not visible. It slides down.
+        SheetActions(
+            onChoose = { choice ->
+                chosen = choice
+                closedWithoutChoosing = false
                 open = false
-                closedWithoutChoosing = true
             },
-        ) {
-            // A row closes the sheet by no longer showing it.
-            SheetActions(
-                onChoose = { choice ->
-                    chosen = choice
-                    closedWithoutChoosing = false
-                    open = false
-                },
-            )
-        }
+        )
     }
 }
 

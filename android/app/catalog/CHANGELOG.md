@@ -67,7 +67,8 @@ development.
   button, with a choice, with its confirm button turned off and with long
   text, and one to try that opens over the page.
 - New page Bottom sheets: the sheet with and without a title and with
-  long text, and one to try that slides up from the bottom.
+  long text, and one to try that slides up from the bottom, and slides
+  down again when a row is tapped.
 - New page Snackbars: the snackbar with a message only, with an action
   and with long text, and a screen to try whose floating action button
   shows "Note added" with Undo above itself.
