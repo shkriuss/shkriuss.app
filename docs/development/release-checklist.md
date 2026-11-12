@@ -2,7 +2,8 @@
 
 The checklist for every release of every app. It holds the GrapheneOS
 checklist that every release passes
-([ADR 0002](../adr/0002-grapheneos-first-minimum-android-13.md), point 4),
+([ADR 0002](../adr/0002-grapheneos-first-minimum-android-13.md), point 4,
+and [ADR 0025](../adr/0025-secure-app-spawning-in-grapheneos-checklist.md)),
 and the steps of [release.md](release.md) in the order you do them.
 
 ## How it is used
@@ -34,21 +35,24 @@ screenshots the owner sent on 2026-11-12. A value may start with
 "Default", for example "Default (Blocked)". That counts as the same
 value.
 
-Open: the way from **Users** and from **Private space** to the page
-**Choose apps to install** (part 1, steps 8 and 9). Write down what your
-phone shows, so Claude can fix this page.
+Open: the way from **Private space** to the page **Choose apps to
+install** (part 1, step 9). Write down what your phone shows, so Claude
+can fix this page.
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
 
 1. [ ] Install the pull request's preview
    ([Install a preview](test-a-pull-request.md#install-a-preview)).
-2. [ ] Hardened memory allocator on, memory tagging on.
+2. [ ] Hardened memory allocator on, memory tagging on, secure app
+   spawning on.
    1. Long-press the preview's icon and tap **App info**. Scroll down to
       **Exploit protection**.
    2. **Exploit protection compatibility mode** is off. When on, it turns
       some of these protections off.
    3. **Hardened memory allocator** says Enabled.
    4. **Memory tagging** says Enabled.
+   5. **Secure app spawning** says Enabled
+      ([ADR 0025](../adr/0025-secure-app-spawning-in-grapheneos-checklist.md)).
 3. [ ] Dynamic code loading via memory restricted, and via storage
    restricted. In the same section, **Dynamic code loading via memory**
    and **Dynamic code loading via storage** both say Restricted.
@@ -67,11 +71,12 @@ phone shows, so Claude can fix this page.
    2. Open the app and use every screen. Nothing crashes, and nothing is
       missing.
 8. [ ] Works in a secondary user profile.
-   1. In the Owner user, open Settings and search for **Users**.
-   2. Tap the secondary user and open GrapheneOS's install available
-      apps. The page **Choose apps to install** opens.
+   1. In the Owner user, open Settings, tap **System**, then **Users**.
+   2. Tap the secondary user, then **Install available apps**. The page
+      **Choose apps to install** opens.
    3. Turn on the switch next to the preview.
-   4. Switch to that user, open the app and use every screen.
+   4. Go back and tap **Switch to user**. Open the app and use every
+      screen.
 9. [ ] Works in Private Space.
    1. In Settings, search for **Private space** and open it.
    2. Add the preview on **Choose apps to install**, as in step 8.

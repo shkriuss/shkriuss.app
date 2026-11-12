@@ -33,8 +33,13 @@ Done. Catalog 0.2.0 was published as `catalog-v0.2.0` on 2026-11-12.
   **Allowed** "No permissions allowed", **Sensors** under **Not
   allowed**. And the page **Choose apps to install**, with a switch for
   Catalog. Part 1, steps 5 to 9, now use these names.
-- Still Open: the way from **Users** and from **Private space** to
-  **Choose apps to install** (part 1, steps 8 and 9).
+- The owner sent the way to it for a secondary user: Settings, **System**,
+  **Users**, the user, **Install available apps**. That page also has
+  **Switch to user**. Part 1, step 8, now follows it.
+- On the owner's decision, secure app spawning joined part 1, step 2
+  ([ADR 0025](../../adr/0025-secure-app-spawning-in-grapheneos-checklist.md)).
+- Still Open: the way from **Private space** to **Choose apps to
+  install** (part 1, step 9).
 
 | | |
 |---|---|
@@ -50,8 +55,8 @@ page to open it, and Back to return. On each page, also try the samples
 under "Try it".
 
 The names in part 1 are the ones GrapheneOS shows. A value may start
-with "Default", for example "Default (Blocked)". Open: the way to
-**Choose apps to install** in steps 8 and 9, as in the
+with "Default", for example "Default (Blocked)". Open: the way from
+**Private space** to **Choose apps to install** in step 9, as in the
 [release checklist](../../development/release-checklist.md#how-it-is-used).
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
@@ -62,13 +67,18 @@ Before you merge the pull request that added this page.
    ([Install a preview](../../development/test-a-pull-request.md#install-a-preview)).
    It installs next to the real Catalog. Leave Catalog 0.1.0 as it is on
    every device, for part 4.
-2. [x] Hardened memory allocator on, memory tagging on.
+2. [x] Hardened memory allocator on, memory tagging on, secure app
+   spawning on.
    1. Long-press the Catalog preview icon and tap **App info**. Scroll
       down to **Exploit protection**.
    2. **Exploit protection compatibility mode** is off. When on, it turns
       some of these protections off.
    3. **Hardened memory allocator** says Enabled.
    4. **Memory tagging** says Enabled.
+   5. **Secure app spawning** says Enabled. Added after this release by
+      [ADR 0025](../../adr/0025-secure-app-spawning-in-grapheneos-checklist.md).
+      The owner's screenshot shows it "Default (Enabled)" for Catalog
+      0.2.0.
 3. [x] Dynamic code loading via memory restricted, and via storage
    restricted. In the same section, **Dynamic code loading via memory**
    and **Dynamic code loading via storage** both say Restricted.
@@ -88,11 +98,12 @@ Before you merge the pull request that added this page.
    2. Open Catalog preview and use every screen. Nothing crashes, and no
       page is empty.
 8. [x] Works in a secondary user profile.
-   1. In the Owner user, open Settings and search for **Users**.
-   2. Tap the secondary user and open GrapheneOS's install available
-      apps. The page **Choose apps to install** opens.
+   1. In the Owner user, open Settings, tap **System**, then **Users**.
+   2. Tap the secondary user, then **Install available apps**. The page
+      **Choose apps to install** opens.
    3. Turn on the switch next to Catalog preview.
-   4. Switch to that user, open Catalog preview and use every screen.
+   4. Go back and tap **Switch to user**. Open Catalog preview and use
+      every screen.
 9. [x] Works in Private Space.
    1. In Settings, search for **Private space** and open it.
    2. Add Catalog preview on **Choose apps to install**, as in step 8.
