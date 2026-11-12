@@ -65,9 +65,9 @@
    is the same in both themes. In the true-black theme, the surface is a
    lighter grey.
 6. Type: the system font, six text styles, no bundled fonts. The Catalog
-   has shown them since Phase 1, step 1. The owner confirmed them as they are,
-   with Catalog 0.2.0 on the Pixel 9 Pro, the Pixel Tablet and the Pixel
-   6a on 2026-11-12, at the Phase 1 gate:
+   has shown them since Phase 1, step 1. The owner confirmed them as they
+   are, with Catalog 0.2.0 on the Pixel 9 Pro, the Pixel Tablet and the
+   Pixel 6a on 2026-11-12, at the Phase 1 gate:
 
    | Style | Size (sp) | Line height (sp) |
    |---|---|---|
