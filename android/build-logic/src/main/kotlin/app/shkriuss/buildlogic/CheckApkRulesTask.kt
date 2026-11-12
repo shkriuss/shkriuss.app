@@ -24,8 +24,9 @@ import org.w3c.dom.Element
  * could break without anyone noticing:
  *
  * - Rule 2: no native libraries (`.so` files).
- * - Rule 3: no use of Google Play services. Today this checks for the emoji
- *   font loader, which asks a system font provider for a font.
+ * - Rule 3: no use of Google Play services. This checks for the emoji font
+ *   loader, which asks a system font provider for a font, and for any class
+ *   under `com.google.android.gms` in the APK's dex files.
  * - Rule 4, and "no permissions" for every app so far: no permission is
  *   declared or requested.
  *
@@ -54,7 +55,8 @@ abstract class CheckApkRulesTask : DefaultTask() {
 
     @TaskAction
     fun check() {
-        val problems = manifestProblems(mergedManifest.get().asFile) + nativeLibraryProblems()
+        val problems = manifestProblems(mergedManifest.get().asFile) + nativeLibraryProblems() +
+            playServicesClassProblems()
         if (problems.isNotEmpty()) {
             throw GradleException(
                 buildString {
@@ -65,7 +67,9 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 },
             )
         }
-        report.get().asFile.writeText("No permissions, no native libraries, no emoji font loader.\n")
+        report.get().asFile.writeText(
+            "No permissions, no native libraries, no emoji font loader, no Play services classes.\n",
+        )
     }
 
     private fun nativeLibraryProblems(): List<String> {
@@ -79,6 +83,53 @@ abstract class CheckApkRulesTask : DefaultTask() {
                     .filter { it.endsWith(".so") }
                     .map { "native library $it in ${apk.name} (rule 2)" }
                     .toList()
+            }
+        }
+    }
+
+    /**
+     * Rule 3: no class under `com.google.android.gms`, the package of
+     * Google Play services, in any dex file of the APK.
+     *
+     * A dex file names every class the APK holds, and every class its code
+     * refers to, by a descriptor such as `Lcom/google/android/gms/Foo;`.
+     * This searches the bytes of every dex file for the start of such a
+     * descriptor. It does not search for the dotted form: AndroidX holds
+     * plain text such as `com.google.android.gms.provider.action.PICK_IMAGES`,
+     * the name of a system action, which is no class.
+     *
+     * How it still finds a class after R8:
+     * - This build never renames. `-dontobfuscate` is set for `release`
+     *   and `preview` in `build-logic/r8/app-rules.pro`, so a class that
+     *   stays in the APK keeps its real name. If that setting is ever
+     *   removed, this rule must read the classes before R8 instead, as
+     *   [CheckGraphicsPathUseTask] does.
+     * - R8 can only rename a class that is inside the APK. A class the
+     *   code only refers to always keeps its name.
+     * - The same rule runs on a debug APK, which R8 never touches.
+     *
+     * An APK with no dex file fails too, so the rule never passes by
+     * reading nothing.
+     */
+    private fun playServicesClassProblems(): List<String> {
+        val artifacts = builtArtifactsLoader.get().load(apkFolder.get())
+            ?: throw GradleException("No APK found in ${apkFolder.get().asFile}")
+        return artifacts.elements.flatMap { element ->
+            val apk = File(element.outputFile)
+            ZipFile(apk).use { zip ->
+                val dexFiles = zip.entries().asSequence().filter { it.name.endsWith(".dex") }.toList()
+                if (dexFiles.isEmpty()) {
+                    listOf("no dex file in ${apk.name}, so its classes cannot be checked (rule 3)")
+                } else {
+                    dexFiles.flatMap { dexFile ->
+                        val classes = playServicesClasses(zip.getInputStream(dexFile).use { it.readBytes() })
+                        val shown = classes.take(MOST_CLASSES_SHOWN).map { name ->
+                            "class $name in ${dexFile.name} of ${apk.name} (rule 3: no Google Play services)"
+                        }
+                        val more = classes.size - MOST_CLASSES_SHOWN
+                        if (more > 0) shown + "and $more more such classes in ${dexFile.name} of ${apk.name}" else shown
+                    }
+                }
             }
         }
     }
@@ -110,6 +161,43 @@ abstract class CheckApkRulesTask : DefaultTask() {
     }
 
     private companion object {
+        /** How a dex file starts the name of every class of Google Play services. */
+        const val PLAY_SERVICES_DESCRIPTOR = "Lcom/google/android/gms/"
+
+        /** A failing build names this many classes for each dex file, and counts the rest. */
+        const val MOST_CLASSES_SHOWN = 20
+
+        /** A class name longer than this is cut. No real name comes close. */
+        const val LONGEST_CLASS_NAME = 300
+
+        /**
+         * The names of the Play services classes that the bytes of one dex
+         * file name, in dotted form, sorted, each once.
+         */
+        fun playServicesClasses(dex: ByteArray): List<String> {
+            val pattern = PLAY_SERVICES_DESCRIPTOR.toByteArray(Charsets.US_ASCII)
+            val found = sortedSetOf<String>()
+            var start = 0
+            while (start <= dex.size - pattern.size) {
+                if (pattern.indices.all { dex[start + it] == pattern[it] }) {
+                    var end = start + pattern.size
+                    while (end < dex.size && end - start < LONGEST_CLASS_NAME && isDescriptorByte(dex[end])) end++
+                    // Without the leading "L". The ";" that ends a descriptor is not part of the name.
+                    found += String(dex, start + 1, end - start - 1, Charsets.US_ASCII).replace('/', '.')
+                    start = end
+                } else {
+                    start++
+                }
+            }
+            return found.toList()
+        }
+
+        /** True for a byte that can be part of a class name inside a descriptor. */
+        private fun isDescriptorByte(byte: Byte): Boolean {
+            val char = byte.toInt().toChar()
+            return char.isLetterOrDigit() || char == '/' || char == '$' || char == '_' || char == '-'
+        }
+
         const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
         const val EMOJI_INITIALIZER = "androidx.emoji2.text.EmojiCompatInitializer"
         val PERMISSION_TAGS = listOf(
