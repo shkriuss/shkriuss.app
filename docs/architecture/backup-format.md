@@ -3,14 +3,17 @@
 The exact bytes of a backup file, what an app puts into it, and how a
 backup is written, checked and restored.
 
-- Status: design, being built. Written on 2026-11-12 in Phase 1, step 5
+- Status: built. The design was written on 2026-11-12 in Phase 1, step 5
   ([PROMPTS.md](../development/PROMPTS.md)). The owner read it on the
   same day, added one point and accepted the rest
-  ([Decided by the owner](#decided-by-the-owner)). The code is built in
-  the same pull request.
-- The code will be `android/core/backup`. It must follow this page
-  exactly. If this page is wrong or unclear, the fix is a change to this
-  page first, agreed with the owner.
+  ([Decided by the owner](#decided-by-the-owner)). The code and its
+  tests were built from this page on the same day, in the same pull
+  request.
+- Not built yet: the screens (step 2.5), and the backup of a real app.
+  The first is Water (step 2.1).
+- The code is `android/core/backup`. It must follow this page exactly.
+  If this page is wrong or unclear, the fix is a change to this page
+  first, agreed with the owner.
 - Decision: [ADR 0008](../adr/0008-backup-file-format.md). The encryption
   is in [crypto-design.md](../security/crypto-design.md#kind-3-backup-stream).
   The record fields are in [data.md](data.md) and
@@ -319,7 +322,9 @@ own pages. The first is Water (step 2.1 in
    written.
 2. Take the key ID of the current recovery key. If the `backup` keyset
    cannot be used now, the answer is "needs keys this app does not have
-   now", and nothing is written.
+   now", and nothing is written. If the keys stop being usable in the
+   moment after that, the answer is the same, and the app removes the
+   document it had just opened.
 3. Open the document for writing so that old content is cut off. Write
    the backup header.
 4. Open the stream with the backup header as its context.
@@ -339,7 +344,7 @@ End, so it never passes a check or a restore.
 Mistakes of the calling code stop the backup at once: a record after a
 file, an ID that is not a UUID, a type name or a content outside the
 limits, a file whose bytes are not as many as the length given for it,
-and a number of files left out that is below 0.
+a number of files left out that is below 0, and a data version below 1.
 
 ### Files that are left out
 
@@ -472,7 +477,8 @@ a backup can be larger than memory. So what is read is first put aside.
    next to `shk-keys/`.
 2. Each restore gets a folder of its own inside it.
 3. Records go into one file there. Each file stream goes into a file of
-   its own, as it is: still encrypted with the file's key.
+   its own, as it is: still encrypted with the file's key. A third file
+   lists the file streams, with their IDs and lengths.
 4. Staged records are plaintext, like the database rows they come from
    and go to. They have the protection the database has: the app's
    private storage and Android's file-based encryption
@@ -563,16 +569,16 @@ For sync, later:
 
 ## The interface each app implements
 
-The names are the plan for the code. This page is updated if the code
-needs other names.
-
 | What | Who writes it | What it does |
 |---|---|---|
-| `BackupContent` | Each app, once | Says the app's data version. Lists every record and file into a backup, and says how many files it left out. Takes a checked backup into the app. |
+| `BackupContent` | Each app, once | `dataVersion`: the app's data version. `list(into)`: lists every record and then every file into a `BackupSink`, and says how many files it left out. `restore(from)`: takes a `CheckedBackup` into the app. |
+| `BackupSink` | `core/backup` | Where an app lists: `record(...)`, `file(id, length, content)` and `filesLeftOut(count)` |
 | `BackupRecord` | `core/backup` | One record on its way: type name, the four fields (`RecordFields` of `core/data`), content |
-| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto` and its app name. Writes a backup to a URI and says how many records, files and left-out files there were. Checks one. Restores one. Empties the staging folder at app start. |
-| `BackupDocuments` | `core/backup` | The two intents for the system file picker and the suggested file name |
-| `RecordWriter.takeFromBackup` | `core/data` | The only way a record of a backup is written ([ADR 0027](../adr/0027-record-fields-and-stamping.md), point 8) |
+| `CheckedBackup`, `CheckedFile` | `core/backup` | A backup that passed every check, as the app gets it: its data version, when it was made, the counts, every record, and every file. A file can be opened or moved into the app's file store. |
+| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto`, its app name, its staging folder and a clock. `export(to)` writes a backup to a URI and says how many records, files and left-out files there were. `check(from)` checks one. `restore(from)` restores one. `start()` empties the staging folder at app start. |
+| `ExportResult`, `CheckResult`, `RestoreResult`, `BackupAnswer` | `core/backup` | What the three functions give back: a result, or one of the answers of this page |
+| `BackupDocuments` | `core/backup` | The two intents for the system file picker, the result of the picker, and the suggested file name |
+| `RecordWriter.takeFromBackup` | `core/data` | The only way a record of a backup is written ([ADR 0027](../adr/0027-record-fields-and-stamping.md), point 8). It answers with a `BackupTake`. |
 
 1. An app's code is called for a restore only with a backup that passed
    every check.
@@ -698,10 +704,45 @@ End: 3 records, 1 file
 
 The body is 312 bytes. The file is 390 bytes: 17 + 5 + 40 + 312 + 16.
 
-The whole encrypted file, made with a fixed salt and nonce prefix, is
-added to this page when the code is built, in the same pull request. It
-is built by the independent AES-GCM code in the tests of `core/crypto`
-(`ReferenceStream`) and opened by the real code.
+The whole file, encrypted. Tink cannot be told which salt and nonce
+prefix to use, so this file is a test for reading. Writing is tested by
+round trips.
+
+```text
+backup key     the backup key for water, from the vectors in
+               crypto-design.md
+salt           505152535455565758595a5b5c5d5e5f
+               606162636465666768696a6b6c6d6e6f
+nonce prefix   f0f1f2f3f4f5f6
+
+file, 390 bytes
+53484b42414b01b19d376f05776174657253484b010328505152535455565758
+595a5b5c5d5e5f606162636465666768696a6b6c6d6e6ff0f1f2f3f4f5f654bf
+5afdd024a27da06faf28e79405d2d1f5e525868e2b70286a5e7254ec1d435d10
+bac2edf4e76756382f3ad3cee77a933c3899a20b996ee737ad101333fe825b61
+e6dc37ca14b88d0e8f7cf7f904652d82e223b8facd0d855e71b0f2418c453041
+5e32c2d65b27a3e44cd6f7429b2f3a2e681ddac04cc80bcff9de0f170d382af6
+152f94342eddae83e6a8aa5cccbf8628c6e44fb670400e91100fa706d75097dc
+4dadcdbcf95ba25f735fb39515cd8a1bd7cffdf331b729b27eb65f03171ef7c1
+15e348425c6ae05c4c8314e59e8e339ef5c152a5fd0238a4f11bc5ad7bc9d3e8
+6b20c0e961128d775dc4395bbee7001cda7f075a04b386dffd9099976b23247e
+14d19c5565ebff33f0440bf5c46fefeb054829bafcb68f68ddbc3d8e7610a8d3
+0d3c96c510af78397016a35b216e7e2873b07f44070eac5f118c3d1c2e9b89dc
+899b22808e26
+```
+
+How it was made, and how it is checked:
+
+1. `BackupExampleFileTest` in `core/crypto` builds the stream from the
+   values above with a second, separate build of the stream layout, from
+   HMAC and AES-GCM alone (`ReferenceStream`, the code behind the
+   vectors of crypto-design.md). The result must be these bytes. Tink
+   must open them and give back the body above.
+2. `ExampleFileTest` in `core/backup` reads the same bytes as a backup,
+   in an app with the recovery words of the vectors. It must be a good
+   backup with three records and one file, and a restore must give
+   exactly the records and the file stream described above.
+3. No tool outside the Gradle build made any of these bytes.
 
 ## What the tests must cover
 
@@ -746,17 +787,25 @@ calls in one transaction roll back together.
 The very large file. The first plan was one file longer than all the
 memory the test may use, 2 GiB, restored through staging. That needs a
 little over 2 GiB of disk in every run. The check needs no disk, so the
-proof is split in two, and both are cheap:
+proof is split in three, and all are cheap (`LargeFileTest`):
 
-1. A file longer than all the memory of the test goes into a backup and
-   through the check, by a pipe. Nothing is stored. Neither the writer
-   nor the reader can have held it.
-2. A restore of a file of 64 MiB, where the test watches how far the
-   bytes read from the backup run ahead of the bytes written to staging.
-   The gap never passes a few megabytes.
+1. A file longer than all the memory of the test, a little over 2 GiB,
+   goes into a backup and through the check. A writer and a reader run
+   at the same time, joined by a pipe that holds a few megabytes at
+   most. Nothing is stored. Neither the writer nor the reader can have
+   held the file.
+2. While a backup with a file of 64 MiB is written, the test watches how
+   far the bytes taken from the file run ahead of the bytes written to
+   the document. The gap never passes 4 MiB.
+3. While that backup is restored, the test watches how far the bytes
+   read from the document run ahead of the bytes put into staging. The
+   gap never passes 4 MiB.
 
-How long both take, in the cloud environment and in CI, is added here
-when they exist. The owner's limit is about a minute in CI.
+Measured on 2026-11-12 in the cloud environment: the first takes about 3
+seconds and needs no disk. The other two together take under 1 second,
+and the third needs 64 MiB in a temporary folder for that time. All 68
+tests of `core/backup` together take about 11 seconds. The time
+in CI is added here from its first run.
 
 No test in this step runs on an emulator, and none opens the picker
 itself. The picker is checked by hand with the first app.

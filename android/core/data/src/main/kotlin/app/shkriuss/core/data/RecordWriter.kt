@@ -5,6 +5,18 @@ import androidx.room3.RoomDatabase
 import androidx.room3.executeSQL
 import androidx.room3.withWriteTransaction
 
+/** What [RecordWriter.takeFromBackup] did with one record of a backup. */
+enum class BackupTake {
+    /** The record of the backup is stored now: no record with its ID was stored, or the stored one was older. */
+    TAKEN,
+
+    /** The stored record has the same `updatedAt`. Nothing was written. */
+    SAME,
+
+    /** The stored record has a later `updatedAt`, so it stays. Nothing was written. */
+    STORED_IS_NEWER,
+}
+
 /**
  * The only way to write records of one table. Every write stamps the
  * [RecordFields] and gives the record a new change number, so no caller
@@ -16,6 +28,8 @@ import androidx.room3.withWriteTransaction
  * - Deleting only marks: [markDeleted] sets `deletedAt`, and the row stays.
  * - Every one of them takes the next change number from [ChangeCounter],
  *   in the same write transaction as the write itself.
+ * - [takeFromBackup] is the one write that keeps the [RecordFields] it is
+ *   given: a record of a backup was stamped when it was first written.
  *
  * `updatedAt` always moves forward, even when the device's clock was set
  * back: a write sets it to now, or to one millisecond after the record's
@@ -89,6 +103,44 @@ class RecordWriter<T : Record<T>>(
         if (current == null || !current.record.isDeleted) return@withWriteTransaction null
         val fields = current.record.copy(updatedAt = nextUpdatedAt(current.record), deletedAt = null)
         write(current.withRecord(fields, nextChangeNumber()))
+    }
+
+    /**
+     * Takes one record of a backup, by the rule "the newest edit wins"
+     * (ADR 0008, docs/architecture/backup-format.md). It is the only way
+     * a record of a backup is written.
+     *
+     * [record] keeps its own ID, `createdAt`, `updatedAt` and `deletedAt`:
+     * they are the ones it had when the backup was made. Its change
+     * number is ignored. It gets a new one here, and only when it is
+     * written.
+     *
+     * - No record with its ID is stored: it is stored.
+     * - The stored record has an older `updatedAt`: it is replaced.
+     * - The stored record has the same `updatedAt`, or a later one:
+     *   nothing is written.
+     *
+     * So restoring the same backup twice writes nothing the second time,
+     * and a record that was changed or deleted after the backup stays as
+     * it is. A deleted record is taken like any other.
+     *
+     * This is the function for backups. It is not the function for sync,
+     * where the same `updatedAt` must end the same on every device.
+     */
+    suspend fun takeFromBackup(record: T): BackupTake = database.withWriteTransaction {
+        val stored = dao.find(record.record.id)
+        when {
+            stored == null -> {
+                dao.rawInsert(record.withRecord(record.record, nextChangeNumber()))
+                BackupTake.TAKEN
+            }
+            stored.record.updatedAt < record.record.updatedAt -> {
+                write(record.withRecord(record.record, nextChangeNumber()))
+                BackupTake.TAKEN
+            }
+            stored.record.updatedAt == record.record.updatedAt -> BackupTake.SAME
+            else -> BackupTake.STORED_IS_NEWER
+        }
     }
 
     private suspend fun write(record: T): T {

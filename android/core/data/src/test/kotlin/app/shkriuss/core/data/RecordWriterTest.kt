@@ -215,6 +215,103 @@ class RecordWriterTest {
         assertEquals("Numbers of writes that never happened are free", 2L, createNote("Next").changeNumber)
     }
 
+    @Test
+    fun takeFromBackupStoresARecordThatIsNotStoredWithItsOwnFieldsAndANewChangeNumber() = runBlocking {
+        createNote("Already here")
+        val fields = RecordFields(id = TestIdSource.idNumber(77), createdAt = 1_000, updatedAt = 2_000, deletedAt = null)
+        val fromBackup = SampleNote(fields, changeNumber = 999, title = "From the backup", pinned = true)
+
+        val take = notes.takeFromBackup(fromBackup)
+
+        assertEquals(BackupTake.TAKEN, take)
+        val stored = database.notes().find(fields.id)
+        assertEquals("the fields are the ones of the backup, not now", fields, stored?.record)
+        assertEquals("the change number is the next one, not the one that came along", 2L, stored?.changeNumber)
+        assertEquals(fromBackup.copy(changeNumber = 2), stored)
+    }
+
+    @Test
+    fun takeFromBackupReplacesAStoredRecordThatIsOlder() = runBlocking {
+        val note = createNote("Milk")
+        val newer = note.record.copy(createdAt = note.record.createdAt - 10, updatedAt = note.record.updatedAt + 5_000)
+        val fromBackup = SampleNote(newer, changeNumber = 0, title = "Oat milk", pinned = true)
+
+        val take = notes.takeFromBackup(fromBackup)
+
+        assertEquals(BackupTake.TAKEN, take)
+        assertEquals(listOf(fromBackup.copy(changeNumber = 2)), database.notes().all())
+    }
+
+    @Test
+    fun takeFromBackupWritesNothingWhenTheStoredRecordIsAsNewOrNewer() = runBlocking {
+        val note = createNote("Milk")
+        val same = SampleNote(note.record, changeNumber = 0, title = "Other words, same time", pinned = true)
+        val older = SampleNote(note.record.copy(updatedAt = note.record.updatedAt - 1), changeNumber = 0, title = "Older", pinned = true)
+
+        assertEquals(BackupTake.SAME, notes.takeFromBackup(same))
+        assertEquals(BackupTake.STORED_IS_NEWER, notes.takeFromBackup(older))
+
+        assertEquals(listOf(note), database.notes().all())
+        assertEquals("no change number was taken", 2L, createNote("Bread").changeNumber)
+    }
+
+    @Test
+    fun takeFromBackupTreatsADeletionAsAnEditLikeAnyOther() = runBlocking {
+        val deletedLater = createNote("Deleted after the backup")
+        val deletedInBackup = createNote("Deleted in the backup")
+        val before = deletedLater.record
+        clock.advanceBy(10_000)
+        val stillDeleted = notes.markDeleted(deletedLater.record.id)
+
+        // The backup holds the first note as it was before its deletion, and the second one deleted later still.
+        val live = SampleNote(before, changeNumber = 0, title = "Deleted after the backup", pinned = false)
+        val newerDeletion = deletedInBackup.record.copy(updatedAt = clock.nowMillis + 1, deletedAt = clock.nowMillis + 1)
+        val deleted = SampleNote(newerDeletion, changeNumber = 0, title = "Deleted in the backup", pinned = false)
+
+        assertEquals("a restore cannot undo a later deletion", BackupTake.STORED_IS_NEWER, notes.takeFromBackup(live))
+        assertEquals(BackupTake.TAKEN, notes.takeFromBackup(deleted))
+
+        assertEquals(stillDeleted, database.notes().find(deletedLater.record.id))
+        assertEquals(newerDeletion, database.notes().find(deletedInBackup.record.id)?.record)
+        assertEquals(emptyList<SampleNote>(), database.notes().live())
+    }
+
+    @Test
+    fun takingTheSameRecordsTwiceWritesNothingTheSecondTime() = runBlocking {
+        val records = List(3) { index ->
+            val fields = RecordFields(TestIdSource.idNumber(50L + index), createdAt = 1_000, updatedAt = 2_000, deletedAt = null)
+            SampleNote(fields, changeNumber = 0, title = "Note $index", pinned = false)
+        }
+
+        val first = records.map { notes.takeFromBackup(it) }
+        val stored = database.notes().all()
+        val second = records.map { notes.takeFromBackup(it) }
+
+        assertEquals(List(3) { BackupTake.TAKEN }, first)
+        assertEquals(List(3) { BackupTake.SAME }, second)
+        assertEquals(stored, database.notes().all())
+        assertEquals(listOf(1L, 2L, 3L), stored.map { it.changeNumber })
+    }
+
+    @Test
+    fun recordsTakenInOneTransactionRollBackTogether() = runBlocking {
+        val kept = createNote("Kept")
+        val fields = RecordFields(TestIdSource.idNumber(60), createdAt = 1_000, updatedAt = 2_000, deletedAt = null)
+        val newer = kept.record.copy(updatedAt = kept.record.updatedAt + 1)
+
+        val failure = runCatching {
+            database.withWriteTransaction {
+                notes.takeFromBackup(SampleNote(fields, changeNumber = 0, title = "New", pinned = false))
+                notes.takeFromBackup(SampleNote(newer, changeNumber = 0, title = "Replaced", pinned = false))
+                error("Stop the transaction")
+            }
+        }
+
+        assertTrue(failure.isFailure)
+        assertEquals(listOf(kept), database.notes().all())
+        assertEquals("the numbers of writes that never happened are free", 2L, createNote("Next").changeNumber)
+    }
+
     private suspend fun createNote(title: String): SampleNote =
         notes.create { fields, number -> SampleNote(fields, number, title = title, pinned = false) }
 }
