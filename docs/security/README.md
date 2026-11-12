@@ -9,7 +9,8 @@ Pages:
   layout of every encrypted blob, the app lock, the recovery key, key
   rotation, and test vectors. All cryptography follows it.
 - [Permissions](permissions.md): every permission each app declares, and
-  why.
+  why, and the permissions and receivers that `core/notify` adds to an
+  app with reminders.
 - [Protected-paths flag](protected-paths.md): how a pull request that
   changes an owner-only path is flagged, what that protects against and
   what it does not.

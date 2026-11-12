@@ -345,11 +345,32 @@ second build must write the same mapping file, or the release stops. See
   section headers as headings, the loading state as "in progress", and
   the loading and error states to try as polite live regions.
 
+- `core/notify` has five test classes with 62 tests
+  ([notifications.md](../architecture/notifications.md#tests)).
+  - `AlarmSyncTest` runs the rules for alarms with `TestClock` of
+    `core/testing` and a stand-in for Android's alarms. No test waits
+    for real time.
+  - `AlarmManagerSchedulerTest` and `NotifyTest` use Robolectric's
+    `AlarmManager` and `NotificationManager`. Robolectric offers the
+    broadcast of a waiting alarm only as a field it marks as
+    deprecated. Two small helpers of the tests read it, and silence
+    that one compiler warning there.
+  - `NotifyTest` runs with the app class `TestApp`, a `NotifyHost`, set
+    with `@Config(application = ...)`.
+  - `ManifestTest` reads the module's `AndroidManifest.xml`.
+  - `NotifyBoundaryTest` reads the source of every other module under
+    `android/`, and fails if a file names `android.app.AlarmManager`,
+    a class that starts with `android.app.Notification` or
+    `androidx.core.app.Notification`, `androidx.core.app.AlarmManagerCompat`,
+    imports `android.app.*` or `androidx.core.app.*` with a star, or
+    names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
+    of `CryptoBoundaryTest` above.
+
 ### Instrumented tests
 
 Tests that need a real Android run on an emulator, in the job "Emulator"
-of CI. Today those are the tests of the hardware keys in `core/crypto`.
-They cannot run in a cloud session, which has no emulator. What they
+of CI. Today those are the tests of the hardware keys in `core/crypto`
+and the tests of the alarms in `core/notify`. They cannot run in a cloud session, which has no emulator. What they
 are, how they run and what they found is in
 [emulator-tests.md](emulator-tests.md).
 
@@ -606,6 +627,14 @@ How it was tested, on 2026-11-12, in `core/crypto`:
      another one needs the owner's decision too (hard rule 9).
    - The setting, with the same reason, is in `build-logic`,
      `AndroidCommon.kt`.
+
+5. Open: lint 32.5.1 does not know the permission `USE_EXACT_ALARM`.
+   Its check `MissingPermission` fails the one call in `core/notify`
+   that sets an exact alarm, although the module's manifest declares
+   the permission that Android asks for. Until the owner decides,
+   `./gradlew check` fails for `core/notify` at `lintDebug`. The facts
+   and the two options are in
+   [ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md#open).
 
 ## Dependency verification
 

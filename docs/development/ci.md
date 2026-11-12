@@ -142,7 +142,8 @@ environment.
 Four jobs side by side, one for each Android version: "Emulator (Android
 13)", "(Android 14)", "(Android 15)" and "(Android 17)". Each runs the
 instrumented tests of every module that has a folder `src/androidTest/`.
-Today that is `core/crypto`, with the tests of the hardware keys
+Today that is `core/crypto`, with the tests of the hardware keys, and
+`core/notify`, with the tests of the alarms
 ([emulator-tests.md](emulator-tests.md)). One version that fails does not
 stop the others.
 

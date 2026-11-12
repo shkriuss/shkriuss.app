@@ -632,7 +632,20 @@ Steps:
   you to add the include lines for the new modules to
   android/settings.gradle.kts, and nothing else in that file.
 - 2.3 Screens: all screens from the spec with the `Shk*` components.
-- 2.4 Reminders: through `core/notify`, with the permission flow.
+- 2.4 Reminders: through `core/notify`, with the permission flow. Follow
+  docs/architecture/notifications.md: the app class is a `NotifyHost`
+  and calls `Notify.start()`, the app names its alarms in an
+  `AlarmSource`, shows the notification in an `AlarmHandler`, and calls
+  `Notify.sync()` after every change. The reminder screen shows what
+  `Notify.state` says. Water gets three permissions from `core/notify`.
+  List them under Water in docs/security/permissions.md. Write the
+  reminder steps of docs/development/emulator-tests.md with the app's
+  real button names.
+  - Before you paste this step: the APK rules check allows no permission
+    today, and its files are owner-only. Add a sentence of your own
+    here that asks Claude to allow the three permissions for Water in
+    `CheckApkRulesTask.kt`, as the sentence in step 2.2 does for the
+    include lines. Without it, Claude stops at the failing check.
 - 2.5 Backup, restore, app lock and settings. The settings get a screen
   that shows the notices of all third-party material in the app. Complete
   `docs/development/third-party.md` with everything that ships in the app.

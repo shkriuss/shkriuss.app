@@ -2,7 +2,8 @@
 
 Tests that need a real Android run on an emulator in GitHub Actions. They
 are called instrumented tests. Set up in Phase 1, step 4, session C, with
-the tests of the hardware keys in `core/crypto`.
+the tests of the hardware keys in `core/crypto`. Phase 1, step 6 added
+the tests of the alarms in `core/notify`.
 
 Emulator tests run only in GitHub Actions. The cloud environment has no
 KVM, so it cannot run an emulator ([cloud-environment.md](cloud-environment.md)).
@@ -48,7 +49,8 @@ the tests compile.
 6. The job finds the module by its folder `src/androidTest/`. Nothing in
    `ci.yml` changes.
 
-Today only library modules have instrumented tests. A library's test APK
+Today only library modules have instrumented tests: `core/crypto` and
+`core/notify`. A library's test APK
 holds the library and its tests, and is its own app on the emulator. An
 app module would need its app APK installed too. The job does not do that
 yet.
@@ -195,6 +197,44 @@ Four things did not work at first. None of them is about the Keystore.
 4. **Android 17 asks for the PIN on a number pad**, not in a text
    field. `SystemPrompt` waits for either before it types.
 
+## The tests of `core/notify`
+
+Phase 1, step 6 built `core/notify` with unit tests on the JVM. There
+the clock is the test's own, and Robolectric stands in for Android's
+alarms ([notifications.md](../architecture/notifications.md#tests)).
+The tests below use the real `AlarmManager` and `NotificationManager`,
+and the emulator's own clock.
+
+The test APK is set up as an app with reminders is. Its app class,
+`DeviceApp`, is a `NotifyHost` and starts `Notify`. The three
+permissions and the two receivers come from the module's manifest.
+
+| Test class | What it checks |
+|---|---|
+| `PermissionOnAndroidTest` | A newly installed app shows no notifications, and the state is "never asked". After the answer "no" it is "denied". After the permission is granted it is "ready". The app has the three permissions of the module's manifest and no other. `Notify.start` made the channel, with its name, description and importance. |
+| `AlarmsOnAndroidTest` | Android allows exact alarms with `USE_EXACT_ALARM`, without asking the user. An alarm set three seconds ahead fires, not before its time, through the receiver that is not exported, and the app's notification is shown. Two alarms with two ids both fire. An alarm that is no longer wanted does not fire. An alarm whose time has passed fires at once. |
+| `ClockChangesOnAndroidTest` | The time zone is changed: Android tells the receiver, and the app is asked for its alarms again. The clock is set eleven minutes ahead: an alarm that is now due fires, and the app is asked again. |
+
+How the tests reach what an app cannot:
+
+- **The permission.** The test grants `POST_NOTIFICATIONS` through
+  Android's `UiAutomation`, as the user's "Allow" would. It never takes
+  it back: Android stops an app whose permission is taken away.
+- **The clock and the time zone.** An app cannot set them. The test
+  asks Android as the shell user. The commands differ between Android
+  versions. So the test tries the ones it knows, checks the effect, and
+  writes a `NOTE` with the one that worked. Where none works, the test
+  is skipped, and the run says `SKIP`. Afterwards the test puts the
+  clock and the time zone back.
+- **The order.** `PermissionOnAndroidTest` runs first, because it needs
+  an app that was never asked. `ClockChangesOnAndroidTest` runs last,
+  because it moves the clock.
+
+### What the notify tests showed
+
+Open: filled in after the first run in
+[pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26).
+
 ## What an emulator cannot check
 
 The emulator has a software Keystore, no fingerprint and no GrapheneOS.
@@ -213,6 +253,20 @@ These points stay unproven until they are checked on a device:
 | A Keystore that fails for a moment | A test cannot make the real Keystore fail. What `getKey` and `aliases` answer then stays read from Android's source. The rules for it are tested with the stand-in (`HardwareKeyRulesTest`). |
 | A loss of power while a keyset file is replaced | A test cannot cut the power. |
 | The time before the first unlock after a restart | No test runs then. |
+
+For `core/notify`, these points stay unproven until they are checked on
+a device:
+
+| What | Why the emulator cannot check it |
+|---|---|
+| A restart, and the time before the first unlock | The tests run inside one start of the emulator. That `BOOT_COMPLETED` reaches the receiver, and that nothing fires before the unlock, is not tested there. The unit tests send the broadcast themselves. |
+| An app update | Installing the test APK again ends the test. |
+| "Force stop" | It ends the test. |
+| A secondary user profile and Private Space | The images are plain AOSP with one user. |
+| Deep sleep with the screen off for a long time | The job keeps the emulator awake, and a run takes minutes. |
+| A channel the user turned off, Do Not Disturb, an app with restricted battery use | No test changes these settings on the emulator. The state for a channel that is off is tested with Robolectric. |
+| The dialog for the notification permission | No screen asks yet. The test answers through `UiAutomation`. |
+| GrapheneOS | The images are plain AOSP. |
 
 ### Steps for the three devices
 
@@ -316,6 +370,93 @@ update from Android 14 to 15 (your devices are past it), a screen lock
 reset by a device administrator, a Keystore that fails for a moment, a
 loss of power, and the time before the first unlock.
 
+### Steps for the three devices: reminders
+
+For the Pixel 9 Pro. Parts 1 and 2 also on the Pixel Tablet and the
+Pixel 6a.
+
+These steps cannot be done today. They need an app with reminders.
+Water is the first (Phase 2, step 4). The steps name what a screen
+does, not its final title. Step 10 of part 1 of the
+[release checklist](release-checklist.md) will point here.
+
+Before you start: use the preview build of a pull request
+([test-a-pull-request.md](test-a-pull-request.md)), and allow its
+notifications.
+
+Part 1, on time with the screen off:
+
+1. Set a reminder for a time 30 minutes from now.
+2. Turn the screen off, unplug the phone and leave it alone.
+3. Check: the reminder comes in the minute it was set for.
+
+Part 2, a restart and the first unlock:
+
+4. Set one reminder for 5 minutes from now and one for 30 minutes from
+   now.
+5. Restart the phone. Do not unlock it. Wait until the first time has
+   passed.
+6. Check: nothing showed on the lock screen and nothing made a sound.
+7. Unlock the phone. Do not open the app.
+8. Check: the first reminder shows now, late. The second one comes at
+   its time.
+
+Part 3, an app update:
+
+9. Set a reminder for 15 minutes from now.
+10. Install a newer preview build over the app. Do not open it.
+11. Check: the reminder comes at its time.
+
+Part 4, a new time zone:
+
+12. Set a reminder that repeats every day at a time one hour from now.
+13. In Settings, search for **Time zone**. Turn off the automatic time
+    zone and choose a zone that is one hour ahead.
+14. Check: the reminder comes within a minute, because its time on the
+    wall clock is now. Choose a zone that is one hour behind your own.
+    Check tomorrow: it comes at its time on the wall clock of that zone.
+15. Turn the automatic time zone on again.
+
+Part 5, a secondary user profile:
+
+16. Install the app in a secondary user, as in step 8 of part 1 of the
+    release checklist. In that user, allow notifications and set a
+    reminder for 10 minutes from now.
+17. Switch back to the Owner without ending the session.
+18. Check: with **Send notifications to current user** off, nothing
+    shows in the Owner. After a switch to the secondary user, the
+    reminder is there, with its time.
+19. Turn **Send notifications to current user** on in the secondary
+    user. Set another reminder and switch to the Owner. Check: the
+    reminder shows in the Owner at its time.
+20. Set a reminder for 10 minutes from now, then end the session of
+    the secondary user. Check: nothing shows. Switch to the secondary
+    user after the time has passed and unlock it. Check: the reminder
+    shows now, late.
+
+Part 6, Private Space:
+
+21. Install the app in the Private Space, as in step 9 of part 1 of the
+    release checklist. Allow notifications and set a reminder for 10
+    minutes from now.
+22. Lock the Private Space. Wait until the time has passed.
+23. Check: nothing showed.
+24. Unlock the Private Space. Do not open the app.
+25. Check: the reminder shows now, late.
+
+Part 7, "Force stop" and notifications turned off:
+
+26. Set a reminder for 10 minutes from now. On **App info**, tap
+    **Force stop**. Check: the reminder does not come. Open the app.
+    Check: it shows now, late.
+27. On **App info**, tap **Notifications** and turn the switch off.
+    Open the app. Check: it says that reminders will not appear, and
+    its button opens that same page.
+
+Tell Claude in a session what did not match. Claude records the result
+in this page, in [notifications.md](../architecture/notifications.md)
+and in the user page [reminders.md](../user/reminders.md).
+
 ## Decided
 
 The owner's decisions on
@@ -339,9 +480,12 @@ The owner's decisions on
 - A restart of the emulator, and clearing the app's data, could be
   tested in a job with two runs of the tests and a step between them.
   Not built. Today both are steps for the three devices.
-- The other first instrumented tests the plan names: `core/notify`, for
-  alarms that fire and are registered again after a restart or a time
-  change (the Phase 1 gate in the [plan](../plan/PLAN.md), section 16),
-  and Compose accessibility checks (plan section 11). Compose's test rule
-  for instrumented tests expects the AndroidX runner, so that step
-  decides about the runner again (ADR 0028).
+- `core/notify`: alarms that are registered again after a restart (the
+  Phase 1 gate in the [plan](../plan/PLAN.md), section 16) need the
+  job with two runs above. Today the restart is tested with Robolectric
+  and is a step for the three devices. Alarms that fire, and a change of
+  the time and the time zone, are tested on the emulator.
+- The other first instrumented tests the plan names: Compose
+  accessibility checks (plan section 11). Compose's test rule for
+  instrumented tests expects the AndroidX runner, so that step decides
+  about the runner again (ADR 0028).
