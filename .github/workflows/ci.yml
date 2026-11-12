@@ -228,3 +228,228 @@ jobs:
             ~/.gradle/caches/modules-2
             ~/.gradle/wrapper/dists
           key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
+
+  emulator:
+    # Runs the instrumented tests on an emulator, once for each Android
+    # version. Not a required check: the owner decides that
+    # (docs/development/emulator-tests.md). No action starts the emulator.
+    # The steps below call the SDK's own tools.
+    name: Emulator (Android ${{ matrix.android }})
+    # The build runs ./gradlew, so it waits until the wrapper is checked.
+    needs: wrapper
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      # One Android version that fails must not hide what the others say.
+      fail-fast: false
+      matrix:
+        include:
+          # AOSP images only: "default" has no Google apps and no Play
+          # services (hard rule 3). Android 13 is the minimum, 17 the newest.
+          - android: "13"
+            image: "system-images;android-33;default;x86_64"
+          - android: "14"
+            image: "system-images;android-34;default;x86_64"
+          - android: "15"
+            image: "system-images;android-35;default;x86_64"
+          - android: "17"
+            image: "system-images;android-37.0;default;x86_64"
+    concurrency:
+      group: ci-emulator-${{ matrix.android }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    env:
+      IMAGE: ${{ matrix.image }}
+      ANDROID_VERSION: ${{ matrix.android }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Use JDK 21
+        run: |
+          # GitHub's Ubuntu runners come with JDK 21 installed.
+          if [ -z "${JAVA_HOME_21_X64:-}" ]; then
+            echo "::error::This runner has no JDK 21."
+            exit 1
+          fi
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+
+      # The first two packages are the ones the build pins, as in "Check".
+      # The others are the emulator, adb and this job's system image.
+      - name: Install the Android SDK packages, the emulator and the system image
+        run: |
+          set -u
+          if ! [[ "$IMAGE" =~ ^system-images\;android-[0-9.]+\;default\;x86_64$ ]]; then
+            echo "::error::Only AOSP images are allowed: system-images;android-<level>;default;x86_64."
+            exit 1
+          fi
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          log="$RUNNER_TEMP/sdkmanager.log"
+          set +o pipefail
+          if ! yes | "$sdkmanager" --licenses > "$log" 2>&1; then cat "$log"; exit 1; fi
+          set -o pipefail
+          if ! "$sdkmanager" "platforms;android-37.0" "build-tools;36.0.0" "platform-tools" "emulator" "$IMAGE" >> "$log" 2>&1; then
+            cat "$log"
+            exit 1
+          fi
+          # Written down in the log: the emulator and the image have no
+          # version in their package names.
+          "$sdkmanager" --list_installed 2>/dev/null | grep -E '^ *(emulator|platform-tools|system-images)' || true
+
+      # GitHub's Linux runners have KVM, but the runner's user may not use
+      # it until this rule is added.
+      - name: Let the runner use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules > /dev/null
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Restored only, never saved here. See the job "Check".
+      - name: Restore Gradle downloads
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle/verification-metadata.xml') }}
+
+      # A module has instrumented tests if it has a folder src/androidTest.
+      # Folder names come from the pull request, so they are matched
+      # against a fixed pattern before they become a task name.
+      - name: Build the test APKs
+        working-directory: android
+        run: |
+          set -u
+          tasks=()
+          while IFS= read -r -d '' folder; do
+            module="${folder#./}"
+            module="${module%/src/androidTest}"
+            if ! [[ "$module" =~ ^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*$ ]]; then
+              echo "::error::A module with instrumented tests has an unexpected path."
+              exit 1
+            fi
+            tasks+=(":${module//\//:}:assembleDebugAndroidTest")
+          done < <(find . -type d -path '*/src/androidTest' -not -path '*/build/*' -print0 | sort -z)
+          if [ "${#tasks[@]}" -eq 0 ]; then
+            echo "::error::No module has instrumented tests."
+            exit 1
+          fi
+
+          ./gradlew --no-daemon --console=plain "${tasks[@]}"
+
+          mkdir "$RUNNER_TEMP/test-apks"
+          number=0
+          while IFS= read -r -d '' apk; do
+            number=$((number + 1))
+            cp "$apk" "$RUNNER_TEMP/test-apks/$number.apk"
+          done < <(find . -type f -path '*/build/outputs/apk/androidTest/debug/*.apk' -print0 | sort -z)
+          if [ "$number" -ne "${#tasks[@]}" ]; then
+            echo "::error::Expected ${#tasks[@]} test APKs and found $number."
+            exit 1
+          fi
+          echo "Built $number test APKs."
+
+      # The emulator keeps running after this step, until the job ends.
+      - name: Start the emulator
+        run: |
+          set -u
+          adb="$ANDROID_HOME/platform-tools/adb"
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name test --package "$IMAGE" > /dev/null
+          # More memory than the default, and a hardware keyboard, so that no
+          # on-screen keyboard covers what the tests type into.
+          printf 'hw.ramSize=4096\nhw.keyboard=yes\n' >> "$HOME/.android/avd/test.avd/config.ini"
+
+          "$ANDROID_HOME/emulator/emulator" -version | head -n 1
+          nohup "$ANDROID_HOME/emulator/emulator" -avd test \
+            -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
+            -gpu swiftshader_indirect -camera-back none -camera-front none \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+
+          if ! timeout 300 "$adb" wait-for-device; then
+            echo "::error::The emulator did not appear in 5 minutes."
+            exit 1
+          fi
+          deadline=$((SECONDS + 900))
+          until [ "$("$adb" shell getprop sys.boot_completed 2> /dev/null | tr -d '\r')" = "1" ]; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Android $ANDROID_VERSION did not start in 15 minutes."
+              exit 1
+            fi
+            sleep 5
+          done
+          # The package manager answers a little after the start is reported.
+          until "$adb" shell pm path android > /dev/null 2>&1; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::The package manager did not answer."
+              exit 1
+            fi
+            sleep 5
+          done
+
+          # No animations, the screen stays on, and the emulator is unlocked.
+          for scale in window_animation_scale transition_animation_scale animator_duration_scale; do
+            "$adb" shell settings put global "$scale" 0
+          done
+          "$adb" shell svc power stayon true
+          "$adb" shell input keyevent KEYCODE_WAKEUP
+          "$adb" shell wm dismiss-keyguard
+          echo "Android $("$adb" shell getprop ro.build.version.release | tr -d '\r'), API $("$adb" shell getprop ro.build.version.sdk | tr -d '\r'), $("$adb" shell getprop ro.build.fingerprint | tr -d '\r')"
+
+      # "am instrument" ends without an error also when a test fails. So
+      # the runner in core/testing writes one last line, and only that line
+      # counts.
+      - name: Run the instrumented tests
+        run: |
+          set -u
+          adb="$ANDROID_HOME/platform-tools/adb"
+          for apk in "$RUNNER_TEMP"/test-apks/*.apk; do
+            "$adb" install -r -t "$apk" > /dev/null
+          done
+
+          runner_pattern='^instrumentation:(app\.shkriuss\.[a-z0-9.]+\.test/app\.shkriuss\.core\.testing\.InstrumentedTestRunner) '
+          runs=0
+          failed=0
+          while IFS= read -r line; do
+            if ! [[ "$line" =~ $runner_pattern ]]; then continue; fi
+            component="${BASH_REMATCH[1]}"
+            runs=$((runs + 1))
+            output="$RUNNER_TEMP/tests-$runs.txt"
+            echo "::group::$component"
+            timeout 1500 "$adb" shell am instrument -w "$component" < /dev/null | tr -d '\r' | tee "$output" || true
+            echo "::endgroup::"
+            if [ "$(grep -c -x 'INSTRUMENTED_TESTS_PASSED' "$output")" -ne 1 ]; then
+              echo "::error::Instrumented tests failed on Android $ANDROID_VERSION: $component"
+              grep -E '^(FAIL|NOTE) ' "$output" || true
+              failed=1
+            else
+              grep -E '^(SKIP|NOTE) ' "$output" || true
+            fi
+          done < <("$adb" shell pm list instrumentation | tr -d '\r' | sort)
+
+          apks=("$RUNNER_TEMP"/test-apks/*.apk)
+          if [ "$runs" -ne "${#apks[@]}" ]; then
+            echo "::error::Installed ${#apks[@]} test APKs, but $runs of them use the project's test runner."
+            exit 1
+          fi
+          exit "$failed"
+
+      - name: Collect the logs
+        if: failure()
+        run: |
+          adb="$ANDROID_HOME/platform-tools/adb"
+          mkdir -p "$RUNNER_TEMP/emulator-logs"
+          cp "$RUNNER_TEMP"/emulator.log "$RUNNER_TEMP"/tests-*.txt "$RUNNER_TEMP/emulator-logs/" 2> /dev/null || true
+          timeout 60 "$adb" logcat -d > "$RUNNER_TEMP/emulator-logs/logcat.txt" 2> /dev/null || true
+          timeout 60 "$adb" exec-out screencap -p > "$RUNNER_TEMP/emulator-logs/screen.png" 2> /dev/null || true
+
+      # The test output, the emulator's own log, Android's log and a picture
+      # of the screen. Download them from the run's summary page.
+      - name: Upload the logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: emulator-logs-android-${{ matrix.android }}
+          path: ${{ runner.temp }}/emulator-logs/
+          if-no-files-found: ignore
+          overwrite: true

@@ -1,6 +1,7 @@
 plugins {
     id("shkriuss.android.library")
     id("shkriuss.android.unit-test")
+    id("shkriuss.android.instrumented-test")
 }
 
 android {
