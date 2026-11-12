@@ -45,7 +45,8 @@ import androidx.compose.ui.unit.dp
  * In two panes [detail] is always shown. While [detailOpen] is false, show
  * a [ShkEmptyState] in it that says what to do, such as "Choose a note".
  * Key the detail of each item by the item, with `key`, so each item opens
- * at its top.
+ * at its top. Mark the open item in the list with `selected` on its
+ * [ShkListItem], so people see which item the detail belongs to.
  *
  * The list keeps its scroll position and other saved state while the
  * detail covers it. Both panes keep their state when the window changes

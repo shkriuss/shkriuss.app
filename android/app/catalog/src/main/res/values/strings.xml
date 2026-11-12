@@ -136,6 +136,7 @@
     <string name="state_not_selected">Not selected</string>
     <string name="state_selected">Selected</string>
     <string name="state_selected_disabled">Selected and disabled</string>
+    <string name="state_selected_open">Selected: open beside the list</string>
     <string name="state_try_it">Try it: tap a chip to select or clear it</string>
     <string name="state_field_empty">Empty</string>
     <string name="state_with_text">With text</string>
@@ -323,7 +324,7 @@
     <!-- Lists page. -->
     <string name="lists_intro">Touch and hold a tappable list item to see it pressed. Nothing on this page does anything when tapped.</string>
     <string name="list_item_title">List item</string>
-    <string name="list_item_use">One row in a list of things that look alike, such as tasks. A tappable row is one touch target, text included.</string>
+    <string name="list_item_use">One row in a list of things that look alike, such as tasks. A tappable row is one touch target, text included. A selected row is the one open beside the list; TalkBack reads it as selected.</string>
     <string name="section_header_title">Section header</string>
     <string name="section_header_use">The heading of a group, such as Today above a list of tasks. TalkBack reads it as a heading.</string>
     <string name="divider_title">Divider</string>

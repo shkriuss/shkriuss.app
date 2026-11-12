@@ -203,13 +203,13 @@ counts.
   inside the navigation, and the list and the open detail. The list also
   keeps its scroll position while the detail covers it in one pane.
 
-Material 3 has adaptive libraries for these layouts:
-`material3-adaptive`, `material3-adaptive-navigation-suite` and
-`material3-window-size-class`. ADR 0003 allows them, but they are not in
-the build. Adding them would change the version catalog and the
-dependency verification metadata, which only the owner changes. Batch 4
-builds the same layouts from Material 3's own parts and Compose instead.
-See [Open](#open).
+The suite builds these layouts itself, from Material 3's own parts and
+Compose. It does not use Material 3's adaptive libraries
+(`material3-adaptive`, `material3-adaptive-navigation-suite` and
+`material3-window-size-class`), because fewer dependencies is a goal of
+the project (owner decision on pull request 16). Why, what that leaves
+out, such as support for the hinge of a foldable, and when to look again
+are in [ADR 0024](../adr/0024-own-adaptive-layouts.md).
 
 ## How Material 3 is set up
 
@@ -309,7 +309,7 @@ icon rule asks, and the rail grows with its labels.
 | `ShkRadioButton` | One choice out of a few that are all shown, such as the unit "Millilitres" or "Ounces". Put them in a `ShkRadioGroup`. | More than about six options, or options that change. Use a list. |
 | `ShkSlider` | A value in a range where the exact number matters less than where it sits, such as a daily goal. | A value that must be exact. Use a text field. |
 | `ShkCard` | One item set apart from the things around it, such as a note in a list of notes. Give it `onClick` when tapping it opens the item. | Rows of things that look alike. Use list items. |
-| `ShkListItem` | One row in a list of things that look alike, such as tasks, settings or files. Give it `onClick` when tapping it opens or changes something. | A setting that turns on and off. Use a switch. |
+| `ShkListItem` | One row in a list of things that look alike, such as tasks, settings or files. Give it `onClick` when tapping it opens or changes something, and `selected` when it is the item open beside the list. | A setting that turns on and off. Use a switch. |
 | `ShkSectionHeader` | The heading of a group on a screen, such as "Today" above a list of tasks. | The title of a screen. Each screen has one title. |
 | `ShkDivider` | A line between groups, where space alone does not show where one ends. | Between every two list items. Most lists need no line. |
 | `ShkEmptyState` | What a screen or list shows when it has nothing yet, such as "No notes yet", or no results. | Content that is still loading. |
@@ -338,10 +338,15 @@ A row with a switch at its end is a `ShkSwitch`.
 Batch 4 leaves out: Material 3's medium and large top bars, a top bar
 that shrinks or changes colour while the content scrolls, a menu of more
 actions (menus come in batch 5), badges on destinations, a disabled
-destination, the navigation drawer, a floating action button placed by
-the scaffold, a list item that shows it is open in the detail pane,
-moving or animating between panes, and panes the user can resize. These
-are open: see [Open](#open).
+destination, the navigation drawer, moving or animating between panes,
+and panes the user can resize. They are built when the first app needs
+them. Where the floating action button goes in these layouts is decided
+in batch 5, together with the snackbar (owner decision on pull request
+16).
+
+Batch 4 adds one state to a component of batch 3: a list item can be
+selected (owner decision on pull request 16). See
+[How they look](#how-they-look).
 
 ### How they look
 
@@ -372,7 +377,7 @@ The parts of batch 3:
 | Component | Fill | Text and icon | Outline | Shape | Size |
 |---|---|---|---|---|---|
 | Card | `surface` | `text`, unless the content picks another | `outline`, 1 dp | `Card`, 16 dp | Fills the width. Content 16 dp in from the edges. |
-| List item | None | Main line `text` in `Subtitle`. Second line `textSecondary` in `Body`. Text at the end `textSecondary` in `Caption`. Icon `textSecondary`. | None | Pressed: `Field`, 12 dp | Fills the width, at least 48 dp tall. Content at the edges; touch target and pressed state 8 dp past them. See [Rows](#rows). |
+| List item | None. Selected: `surfaceHigh`, with a bar in `accent` at its start edge. | Main line `text` in `Subtitle`. Second line `textSecondary` in `Body`. Text at the end `textSecondary` in `Caption`. Icon `textSecondary`. | None | Pressed and selected: `Field`, 12 dp. The bar: 4 dp wide, rounded ends. | Fills the width, at least 48 dp tall. Content at the edges; touch target, pressed state and selected mark 8 dp past them. See [Rows](#rows). |
 | Section header | None | `accent`, in `Subtitle` | None | None | Fills the width. 24 dp above, 8 dp below. Text at the start edge. |
 | Divider | `divider` | None | None | None | 1 dp tall, fills the width. |
 | Empty state | None | Title `text` in `Title`, centred. Body `textSecondary` in `Body`, centred. Icon `textSecondary`. A tonal button. | None | None | Fills the width, 24 dp above and below. Icon 48 dp. |
@@ -443,8 +448,9 @@ The parts of batch 4:
 - The text of the states is centred, because it stands alone in the
   middle of a screen. Text everywhere else starts at the start edge.
 - The title of a top bar is in `Headline`, because the type table makes
-  that the style of a screen's title. Material 3's small top app bar uses
-  its "title large" style, which this theme maps to `Title`.
+  that the style of a screen's title (owner decision on pull request 16).
+  Material 3's small top app bar uses its "title large" style, which
+  this theme maps to `Title`.
 - A top bar's title starts at the screen margin, where the content under
   it starts. The icons of the Back button and of the last action sit on
   the margins; only their touch targets reach past them, as those of
@@ -453,19 +459,28 @@ The parts of batch 4:
   item's icon and its text.
 - The selected destination's icon sits on a pill in the accent colour,
   because the accent is the colour of selection, as on a selected filter
-  chip (owner decision on pull request 13). Material 3's default, the
+  chip (owner decisions on pull requests 13 and 16). Material 3's default, the
   higher surface colour, is 1.11:1 on the bar's surface in the light
   theme, and hard to tell from not selected. The accent pill is 5.99:1
   there, and 10.94:1 in the dark theme. The pill is there or not, so the
   choice does not rely on colour alone.
 - The bar and the rail are the surface colour, with a line in the
-  divider colour on the side of the content. In the dark theme the
-  surface is close to black, so the line is what sets them apart. The
-  line only separates, so it is the divider colour, as between two
-  panes.
+  divider colour on the side of the content (owner decision on pull
+  request 16). In the dark theme the surface is close to black, so the
+  line is what sets them apart. The line only separates, so it is the
+  divider colour, as between two panes.
 - The list pane is 360 dp wide, as in Material 3's list and detail. That
   is about the width of a phone, so a list looks the same in a pane as on
   a phone.
+- A selected list item marks the item that is open beside the list, in
+  two panes. It must show with more than a change of colour (owner
+  decision on pull request 16). So besides the higher surface colour
+  over its pressed area, it has a bar in the accent colour along its
+  start edge: 4 dp wide, in the 8 dp before the text, so the text does
+  not move, and 12 dp short of the top and the bottom, clear of the
+  rounded corners. The bar is accent on the higher surface, which the
+  contrast tests already check, 4.5:1 or more. The fill alone is 1.22:1
+  on the background, too little to show a state by itself.
 - Text on buttons, chips and floating action buttons uses the `Label`
   style. The text of a checkbox, switch, radio button or slider uses
   `Body`, and so does the text typed in a field. The label above a text
@@ -484,9 +499,10 @@ radio button follow one rule (owner decision on pull request 15):
 1. Their content starts and ends at the edges of the space they are
    given. That is where the page title and all other text start, so the
    text of rows lines up with everything else on the screen.
-2. Only the touch target and the pressed state of a row, a rounded
-   `Field`, reach 8 dp (`ShkSpacing.Small`) past those edges, on both
-   sides. TalkBack's focus box covers the same area. So the highlight
+2. Only the touch target, the pressed state and the selected mark of a
+   row, a rounded `Field`, reach 8 dp (`ShkSpacing.Small`) past those
+   edges, on both sides. The bar of a selected list item sits in that
+   space before the text. TalkBack's focus box covers the same area. So the highlight
    never touches the text.
 3. A section header cannot be touched, so nothing of it reaches past
    the edges.
@@ -507,7 +523,7 @@ columns are 16 dp apart.
 | Enabled | All. |
 | Disabled (`enabled = false`) | All but the floating action buttons. When the action of a floating action button is not possible, leave the button out. |
 | Pressed and focused | All. Material 3 draws a light layer of the component's text colour over it. Touch and hold to see it. A checkbox, switch or radio button shows it on its whole row. A focused text field is the one being typed in: its box and label turn `accent`. |
-| Selected (`selected = true`) | Filter chip, radio button. |
+| Selected (`selected = true`) | Filter chip, radio button, list item. A list item is selected when it is the item open beside the list. |
 | On (`checked = true`) | Checkbox, switch. |
 | Error (`errorText` given) | Text field. |
 | With steps (`steps` more than 0) | Slider. |
@@ -628,7 +644,9 @@ has no touch targets of its own.
   read as buttons.
 - A list item is read as one item: its main line, its second line and
   the text at the end, in that order. With `onClick` it is also read as
-  "button". Its icon is decorative.
+  "button". Its icon is decorative. A selected list item is also read as
+  "selected". Rows that are not selected say nothing about it, so a list
+  where nothing can be open sounds as before.
 - A section header is read as a heading, so TalkBack users can jump from
   group to group.
 - A divider is not read.
@@ -672,7 +690,8 @@ has no touch targets of its own.
 - `ShkListDetailScaffold` uses AndroidX Activity's `BackHandler` for the
   back gesture. `core/design` declares Activity Compose for this. It is
   the version the apps already use; Material 3 brings an older one at run
-  time anyway.
+  time anyway. Activity Compose is already part of the stack, so this
+  needs no ADR of its own (owner decision on pull request 16).
 
 ### Icons
 
@@ -825,7 +844,9 @@ screen. It checks:
 
 1. A list item is at least 48 dp tall. TalkBack reads it as one item, with
    all its text in order, and as a button when it can be tapped. Turned
-   off, it is read as disabled. Its icon is not read.
+   off, it is read as disabled. Its icon is not read. Selected, it is
+   read as selected, and still as a button; a row that is not selected
+   says nothing about it.
 2. A section header is read as a heading. A divider is 1 dp tall, fills
    the width and is not read.
 3. A card without `onClick` holds a button that is its own touch target,
@@ -854,6 +875,13 @@ The touch target of a list item that can be tapped, and of the row of a
 checkbox, switch and radio button, starts 8 dp before the space and ends
 8 dp after it. With rows that do not reach past their edges, the second
 check fails.
+
+`ShkSelectedMarkTest` draws the mark of a selected list item onto an
+image and checks its pixels: the accent bar along the start edge, the
+fill after it and under the text, the fill above and below the bar where
+the corners round, and the bar on the right in right-to-left languages.
+Without the bar, the mark would be a change of colour only, and the test
+fails.
 
 `ShkWindowWidthTest` checks that window widths split at 600 and 840 dp,
 and that `ShkWindowWidth.current` follows the window: compact on the
@@ -915,8 +943,9 @@ the components under "Try it": the filter
 chips select and clear, the checkboxes and switches turn on and off, a
 radio button clears the others in its group, the text field takes typing
 and shows its error past 20 characters, and the slider moves and says its
-new value. On Navigation, a tap selects a destination and shows its
-name as the title. On List and detail, a tap on a note opens it in
+new value. On Lists, exactly one list item, the selected sample, is
+read as selected. On Navigation, a tap selects a destination and shows
+its name as the title. On List and detail, a tap on a note opens it in
 place of the list, and the back gesture, then Back in its top bar, closes
 it and leaves the page open. Every page is also opened and closed with
 the back gesture by `CatalogScreenTest`, so no sample on a page takes
@@ -960,7 +989,8 @@ Components:
 11. **Cards**: the card that cannot be tapped, alone and with a button,
     and the card that can be tapped, with short and long text.
 12. **Lists**: the list item with one line, with supporting text, with an
-    icon, with trailing text, tappable, disabled and with long text; the
+    icon, with trailing text, tappable, disabled, selected and with long
+    text; the
     section header with one line, with long text and above list items;
     the divider between list items.
 13. **Empty, loading and error**: the empty state with an icon and a
@@ -978,8 +1008,9 @@ Components:
     and the rail show on every device. The one to try follows the window.
 16. **List and detail**: one pane showing the list, and showing a note
     with Back. In a window at least 840 dp wide, also two panes with
-    nothing open and with a note open; in a narrower one, a line says
-    where to see them. Then one to try, which follows the window.
+    nothing open and with a note open, which is selected in the list; in
+    a narrower one, a line says where to see them. Then one to try, which
+    follows the window.
 
 The sample of one pane with a note open draws the note's screen as the
 scaffold shows it, without the scaffold. In one pane the scaffold takes
@@ -1054,9 +1085,11 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
     the left edge of the page title. Touch and hold the tappable list
     items: only the highlight reaches past that edge. The dividers are a
     lighter grey than the outlines of the cards. With TalkBack on,
-    each list item is read as one item with all its text, and the
-    disabled one as "disabled". Set TalkBack's reading control to
-    "Headings": moving by heading then stops at each section header.
+    each list item is read as one item with all its text, the disabled
+    one as "disabled", and the selected one as "selected". The selected
+    one has a short bar in the accent colour before its text. Set
+    TalkBack's reading control to "Headings": moving by heading then
+    stops at each section header.
 13. On Empty, loading and error, check that the loading circles turn.
     With TalkBack on, a loading state is read as its text and "in
     progress", and the title and body of each empty and error state as
@@ -1084,8 +1117,9 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
     shows.
 19. Turn the phone sideways, or open List and detail on the tablet held
     sideways. The two-pane samples show, and under "Try it" a tapped note
-    opens beside the list, with no arrow in its top bar. On the tablet
-    held upright there is still one pane.
+    opens beside the list, with no arrow in its top bar. The open note is
+    marked in the list, with a bar before its text, and TalkBack reads it
+    as "selected". On the tablet held upright there is still one pane.
 
 ## Open
 
@@ -1099,15 +1133,14 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
-- Material 3's adaptive libraries (`material3-adaptive`,
-  `material3-adaptive-navigation-suite`, `material3-window-size-class`).
-  ADR 0003 allows them; they are not in the build. Batch 4 builds the
-  same layouts without them. Adding them is the owner's call, because the
-  dependency verification metadata is owner-only.
-- In two panes, the list does not yet show which item is open in the
-  detail. That needs a selected state on `ShkListItem`.
 - Where a floating action button goes in the navigation and in the list
-  and detail: Material 3 puts it in the rail on wide windows.
+  and detail. It is decided in batch 5, together with the snackbar (owner
+  decision on pull request 16). Material 3 puts it in the rail on wide
+  windows.
+- When to look again at the suite's own adaptive layouts, for example for
+  foldable devices: see [ADR 0024](../adr/0024-own-adaptive-layouts.md).
+  Whether the apps use Navigation 3 is decided when the first app is
+  built.
 - What batch 4 leaves out (see [Components](#components)), until an app
   needs it.
 - The space under a top bar is the screen margin, 16 or 24 dp, as on

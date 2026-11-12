@@ -62,6 +62,14 @@ fun ListsPage(modifier: Modifier = Modifier) {
                         enabled = false,
                     )
                 },
+                ComponentState(R.string.state_selected_open) {
+                    ShkListItem(
+                        headline = stringResource(R.string.sample_buy_bread),
+                        supportingText = stringResource(R.string.sample_corner_shop),
+                        onClick = {},
+                        selected = true,
+                    )
+                },
                 ComponentState(R.string.state_long_text) {
                     ShkListItem(
                         headline = stringResource(R.string.sample_long_list_headline),

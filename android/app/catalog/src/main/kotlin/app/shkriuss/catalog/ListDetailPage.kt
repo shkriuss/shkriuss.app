@@ -47,7 +47,7 @@ fun ListDetailPage(modifier: Modifier = Modifier) {
                         ShkListDetailScaffold(
                             detailOpen = false,
                             onCloseDetail = {},
-                            list = { NotesList(onOpen = {}) },
+                            list = { NotesList(open = null, onOpen = {}) },
                             detail = {},
                             windowWidth = ShkWindowWidth.Compact,
                         )
@@ -90,7 +90,7 @@ private fun TwoPanesSample(open: SampleNote?) {
         ShkListDetailScaffold(
             detailOpen = open != null,
             onCloseDetail = {},
-            list = { NotesList(onOpen = {}) },
+            list = { NotesList(open = open, onOpen = {}) },
             detail = { onBack -> if (open == null) ChooseANote() else NoteDetail(open, onBack) },
             windowWidth = ShkWindowWidth.Expanded,
         )
@@ -109,7 +109,7 @@ private fun ListDetailToTry() {
         ShkListDetailScaffold(
             detailOpen = open != null,
             onCloseDetail = { open = null },
-            list = { NotesList(onOpen = { open = it }) },
+            list = { NotesList(open = open, onOpen = { open = it }) },
             detail = { onBack ->
                 val note = open
                 if (note == null) {
@@ -123,15 +123,20 @@ private fun ListDetailToTry() {
     }
 }
 
-/** The list pane: a top bar and one list item for each note. */
+/**
+ * The list pane: a top bar and one list item for each note. The [open]
+ * note is marked as selected. In one pane the list is not shown while a
+ * note is open, so the mark shows in two panes.
+ */
 @Composable
-private fun NotesList(onOpen: (SampleNote) -> Unit) {
+private fun NotesList(open: SampleNote?, onOpen: (SampleNote) -> Unit) {
     ShkScreen(topBar = { ShkTopBar(title = stringResource(R.string.sample_notes)) }, scrollable = true) {
         SampleNote.entries.forEach { note ->
             ShkListItem(
                 headline = stringResource(note.title),
                 supportingText = stringResource(note.text),
                 onClick = { onOpen(note) },
+                selected = note == open,
             )
         }
     }

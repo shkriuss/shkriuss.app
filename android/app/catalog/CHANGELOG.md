@@ -59,7 +59,10 @@ development.
   on a tablet or a phone held sideways.
 - New page List and detail: one pane with the list or a note, two panes
   in a window at least 840 dp wide, and one to try. On a phone, Back and
-  the back gesture return from a note to the list.
+  the back gesture return from a note to the list. In two panes, the open
+  note is selected in the list.
+- Lists shows a selected list item: a short bar in the accent colour
+  before its text, on a light fill. TalkBack reads it as selected.
 
 ## 0.1.0 (2026-11-11)
 
