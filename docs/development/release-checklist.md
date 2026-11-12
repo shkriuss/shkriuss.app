@@ -17,7 +17,11 @@ and the steps of [release.md](release.md) in the order you do them.
    after the merge.
 3. Tell Claude in a session what you checked and anything that did not
    match. Claude ticks the boxes in the copy, and fixes this page, in the
-   pull request that records the release.
+   pull request that records the release. No issue is needed.
+
+One shared checklist with a copy per version, results told to Claude
+in a session, and the checks on the preview are owner decisions on
+[pull request 18](https://github.com/shkriuss/shkriuss.app/pull/18).
 
 Why the preview: it is the release build with another app ID
 ([build.md](build.md#build-types)). It installs next to the real app, so
