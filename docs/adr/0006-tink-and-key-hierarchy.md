@@ -7,8 +7,9 @@
   [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4).
   Completed on 2026-11-12 in Phase 1, step 4
   ([PROMPTS.md](../development/PROMPTS.md)) with the owner's decisions in
-  the planning session of that step. The detail is in
-  [crypto-design.md](../security/crypto-design.md).
+  the planning session of that step and on
+  [pull request 22](https://github.com/shkriuss/shkriuss.app/pull/22).
+  The detail is in [crypto-design.md](../security/crypto-design.md).
 
 ## Context
 
@@ -38,7 +39,8 @@
 
 1. Tink for Java is the only cryptography library. The artifact is
    `com.google.crypto.tink:tink-android`, version 1.24.0. It brings Gson,
-   JSR-305, Error Prone annotations and `annotation-jvm` with it.
+   JSR-305, Error Prone annotations and `annotation-jvm` with it. They
+   are accepted as they come.
 2. All cryptography lives in `core/crypto`. It is documented in
    [crypto-design.md](../security/crypto-design.md), and the code follows
    that page exactly.
@@ -57,9 +59,10 @@
      app lock on or off. It wraps the kept recovery key.
 4. The optional app lock ties the file keys to user authentication: one
    prompt, one Keystore operation, one unlock. The prompt accepts a
-   fingerprint or the device credential. The record keyset and the backup
-   keyset are not behind the prompt, so sync and reminders go on while
-   the app is locked.
+   fingerprint or the device credential. It is Android's own
+   `BiometricPrompt`, not the AndroidX Biometric library. The record
+   keyset and the backup keyset are not behind the prompt, so sync and
+   reminders go on while the app is locked.
 5. The app lock can be turned on only after the app has keys derived
    from a recovery key. Adding files needs no recovery key.
 6. Primitives, all from Tink:
@@ -87,9 +90,11 @@
     same byte layout as Tink's Keystore helper; reading a key's security
     level; and SHA-256 for the checksum of the recovery words.
 12. No Play services provider: `core/crypto` refuses to work if a
-    provider named `GmsCore_OpenSSL` is installed, and a build check
-    refuses any class under `com.google.android.gms`.
-13. Sync identity: a non-exportable signing key per device, checked by the
+    provider named `GmsCore_OpenSSL` is installed, and the APK rules
+    check refuses any class under `com.google.android.gms`.
+13. A phone with a software-only Keystore is allowed, with a clear
+    notice.
+14. Sync identity: a non-exportable signing key per device, checked by the
     server.
 
 Point 3 first read: "kept in the Android Keystore, backed by StrongBox
@@ -135,6 +140,11 @@ in for the Unlocked key.
   user with no recovery key.
 - **A warning instead of a rule for the app lock.** The owner decided
   that a warning is not enough: no phone setting may destroy files.
+- **The AndroidX Biometric library for the prompt.** With minimum
+  Android 13, Android's own prompt takes a cipher with fingerprint or
+  device credential. The library adds support for older versions, which
+  is not needed, and needs a `FragmentActivity`, which the apps do not
+  have.
 
 ## Consequences
 
@@ -154,18 +164,24 @@ in for the Unlocked key.
   files stay closed until the recovery words are entered.
 - A user with the app lock on who removes the screen lock and has lost
   the recovery words cannot open that app's files on that phone. The
-  user guide must say so.
+  owner accepted this on pull request 22. The app-lock screen and the
+  user guide must say so plainly.
 - A file key that is sealed by a key that exists only on one phone never
   leaves that phone. Backup and sync of files start only after the file
   keys are sealed by a recovery-key-derived key.
 - Session B adds the dependency, its version catalog entry and its
-  verification metadata, and builds the tests listed in
-  crypto-design.md. The behaviour of the four keys is proven by emulator
-  tests on Android 13, 14, 15 and the newest.
+  verification metadata, the rule in the APK rules check, and the unit
+  tests listed in crypto-design.md.
+- The behaviour of the four keys is proven by emulator tests on Android
+  13, 14, 15 and the newest. They are the step after session B (step
+  1.4, session C), because they need the emulator job in the CI
+  workflow. StrongBox is checked on the owner's three devices.
+- Showing the system prompt needs the permission `USE_BIOMETRIC`. The
+  step that first shows a prompt writes its decision record.
 - The backup format (0008) and the sync protocol (0009) build on the
   blobs of crypto-design.md and add no cryptography of their own.
 - Open: the points listed under "Open questions" in
   [crypto-design.md](../security/crypto-design.md#open-questions). Those
-  that touch this record are the case of lost words above, a
-  software-only Keystore, where the Play services build check lives,
-  Tink's companion libraries, and the sync signing key (Phase 5).
+  that touch this record are the permission for the system prompt, the
+  use of AndroidX Biometric elsewhere (step 1.7), and the sync signing
+  key (Phase 5).

@@ -7,8 +7,9 @@
   [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4).
   Completed on 2026-11-12 in Phase 1, step 4
   ([PROMPTS.md](../development/PROMPTS.md)) with the owner's decisions in
-  the planning session of that step. The detail is in
-  [crypto-design.md](../security/crypto-design.md).
+  the planning session of that step and on
+  [pull request 22](https://github.com/shkriuss/shkriuss.app/pull/22).
+  The detail is in [crypto-design.md](../security/crypto-design.md).
 
 ## Context
 
@@ -24,13 +25,14 @@
 ## Decision
 
 1. The account is a recovery key plus per-device keys.
-2. The recovery key is a random 256-bit key. It is shown as words and as a
-   QR code.
+2. The recovery key is a random 256-bit key. It is shown as words.
    - The words are the BIP-39 encoding with the English word list: 24
      words, with a checksum. Only the encoding is used, not the BIP-39
      seed.
-   - The QR code holds the text `SHKRIUSS-RK1`, a space, and the 24 words
-     in upper case.
+   - The word list is `english.txt` from Trezor's python-mnemonic, the
+     BIP-39 reference implementation. It is MIT licensed.
+   - The QR code of the plan is not built for now. It is decided when the
+     recovery key screens are built.
 3. The record keyset, the backup keyset and the file-key keyset of each
    app derive from the recovery key. A file key is random. It is sealed
    by the file-key keyset, so it is protected by the recovery key but not
@@ -43,28 +45,34 @@
    [0008](0008-backup-file-format.md).
 8. A lost recovery key cannot be recovered by anyone. There is no reset,
    because the server holds only ciphertext.
-9. Setup makes the user write the words down and confirm some of them.
+9. Setup makes the user write the words down and confirm four of them.
    Keys are derived only after that.
 10. An app where the recovery key was created or entered keeps it on the
-    device and can show it again. It is a keeper app.
+    device and can show it again. It is a keeper app. If another keeper
+    is already on the phone, the app asks first whether to keep it too.
     - The kept key is wrapped by its own Keystore key, which needs the
       system prompt for every single use, with the app lock on or off.
     - Day-to-day work uses only the derived keys.
     - The kept key is a convenience, not a backup. The paper copy is the
       backup.
 11. The recovery key is entered again by typing the 24 words. The app
-    checks the word list and the checksum.
+    checks the word list and the checksum. It offers no paste.
 12. A second app on the same phone is set up by a keeper app through a
     signature-protected screen, after the system prompt. It gets its own
-    derived keys and never the recovery key.
+    derived keys and never the recovery key. The keeper also checks the
+    caller's signing certificate itself. The keys travel with no further
+    encryption. This handover is a step of its own before Phase 3, with
+    its own decision record.
 13. The screens that show or take the words block screenshots and the
     recent-apps preview. The recovery key is never in a backup file, a
     log, the clipboard, a sealed record or Android's own backup.
 14. On a phone with no screen lock the recovery key is shown at setup and
     not kept. Backup, sync and files work with the derived keys.
 
-Point 3 first read: "All backup and sync keys derive from the recovery
-key." The owner chose one random key per file on 2026-11-12.
+Point 2 first read: "It is shown as words and as a QR code." Point 3
+first read: "All backup and sync keys derive from the recovery key." The
+owner chose words only for now, and one random key per file, on
+2026-11-12.
 
 ## Options rejected
 
@@ -110,10 +118,14 @@ key." The owner chose one random key per file on 2026-11-12.
 - Until the handover between apps is built, every app is set up by
   entering the words, so every such app is a keeper.
 - The app needs the BIP-39 English word list, 2048 words. It is data, not
-  a library.
+  a library. Its source and its MIT notice are recorded with the
+  project's third-party material.
+- A preview build makes the same keys from the same words as its app.
+  Testers never type real recovery words into a preview
+  ([test-a-pull-request.md](../development/test-a-pull-request.md#safety)).
 - Open: the points listed under "Open questions" in
   [crypto-design.md](../security/crypto-design.md#open-questions). Those
-  that touch this record are the handover interface and when it is
-  built, the licence of the word list, what draws and what scans the QR
-  code, pasting the words, how many words are confirmed, and a new
+  that touch this record are the handover interface and how an app that
+  is not a keeper checks the paper copy (the handover step), the QR
+  code (step 1.7), where third-party material is listed, and a new
   recovery key across devices (Phase 5).
