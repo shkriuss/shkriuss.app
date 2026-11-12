@@ -61,9 +61,14 @@ internal object ScreenLock {
         remove()
     }
 
-    /** Turns the screen off and waits until Android says the phone is locked. */
+    /**
+     * Turns the screen off and waits until Android says the phone is
+     * locked. Only before the first prompt of a run: the screen that
+     * [SystemPrompt] opens must not be hidden.
+     */
     fun lockPhone() {
         currentPin
+        check(!SystemPrompt.screenIsOpen) { "Tests that lock the emulator run before the tests that show the prompt" }
         TestDevice.shell("input keyevent KEYCODE_SLEEP")
         assertTrue("The emulator did not lock", TestDevice.waitUntil(TIMEOUT_MILLIS) { keyguard.isDeviceLocked })
     }

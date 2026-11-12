@@ -102,7 +102,7 @@ How the tests reach what an app cannot:
   off. To unlock, the test wakes the screen and types the PIN.
 - **The system prompt.** `SystemPrompt` opens an empty screen of the test
   APK, shows Android's `BiometricPrompt` with the step's `CryptoObject`,
-  waits until the PIN field is in front, and types the PIN. The emulator
+  waits until the PIN screen is in front, and types the PIN. The emulator
   has no fingerprint enrolled, so Android asks for the PIN at once.
 - **An older Android on a newer emulator.** `AndroidHardwareKeys` takes
   the Android version as a constructor value. The test of the move to

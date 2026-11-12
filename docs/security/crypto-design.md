@@ -12,10 +12,15 @@ follows this page.
   day. The owner decided three more points then, and the page was made
   exact where it was silent
   ([Decided in session B](#decided-in-session-b)).
-- Not built yet: the emulator tests of the hardware keys (session C), the
-  screens (step 1.7), the handover between apps (step 3.0), sealing file
-  keys again in the database (the first app that stores files), and a
-  new recovery key (Phase 5).
+- Session C tested the hardware keys on emulators with the real Android
+  Keystore, on the same day
+  ([emulator-tests.md](../development/emulator-tests.md#what-the-tests-showed)).
+  What an emulator cannot show is a list of steps for the owner's three
+  devices
+  ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+- Not built yet: the screens (step 1.7), the handover between apps
+  (step 3.0), sealing file keys again in the database (the first app
+  that stores files), and a new recovery key (Phase 5).
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -203,7 +208,8 @@ key that needs the prompt:
    the cipher is thrown away. The next try starts at step 1.
 
 A unit test with a software key cannot find a mistake here. Session C
-tests it on an emulator.
+tested it on emulators, through the real prompt
+([assumption 24](#assumptions)).
 
 #### Asking which keys exist
 
@@ -227,7 +233,12 @@ keyset file could be written over.
    written.
 5. Rule 8 deletes only keys that the list shows. So a list that failed
    deletes nothing.
-6. Session C tests all of this on the emulator.
+6. Session C tested on emulators what the real Keystore answers for a
+   key that exists and for one that does not
+   ([assumptions 28 and 29](#assumptions)). A test cannot make the real
+   Keystore fail, so what it answers then is still only read from
+   Android's source. The rules for that case are tested with the
+   stand-in (`HardwareKeyRulesTest`).
 
 Whether the phone has a screen lock is asked from Android's
 `KeyguardManager.isDeviceSecure`. That is not cryptography, so it is not
@@ -1561,12 +1572,12 @@ de01854b108f58a9ff8768fca193f7fce8d937f5dc0b2efa4402b2edb7
 ## What the tests must cover
 
 Items 1 to 8 are for session B, which built them
-([build.md](../development/build.md#unit-tests)). Item 9 is not. It is
-the next step, in its own pull request, because it needs the emulator job
-in the CI workflow (step 1.4, session C in
-[PROMPTS.md](../development/PROMPTS.md)). What session B could not test
-is listed in
-[emulator-tests.md](../development/emulator-tests.md#what-the-hardware-key-tests-must-cover).
+([build.md](../development/build.md#unit-tests)). Item 9 is session C,
+which built it in its own pull request, with the emulator job in the CI
+workflow (step 1.4, session C in
+[PROMPTS.md](../development/PROMPTS.md)). The tests and what they showed
+are in
+[emulator-tests.md](../development/emulator-tests.md#the-tests-of-the-hardware-keys).
 
 Unit tests run on the JVM with Robolectric, where no Keystore exists. So
 `core/crypto` takes its hardware keys through an interface passed in by
@@ -1597,7 +1608,9 @@ constructor, and the tests pass a software one with the same byte layout.
    lock is changed, removed and set again, each key is there or gone as
    the table in "When things change" says. What an emulator cannot do,
    such as StrongBox and a real fingerprint, becomes a list of steps for
-   the owner's three devices.
+   the owner's three devices. Built: the tests are in
+   `android/core/crypto/src/androidTest/`, and the steps are in
+   [emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices).
 
 ## Assumptions
 

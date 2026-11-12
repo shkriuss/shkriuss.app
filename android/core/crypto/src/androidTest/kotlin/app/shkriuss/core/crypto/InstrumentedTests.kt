@@ -10,6 +10,10 @@ import org.junit.runners.Suite
  *
  * The first four are in `src/sharedTest/` and also run on the JVM. The
  * others need the real Android Keystore.
+ *
+ * The order matters in one place: [UnlockedKeyTest] locks the emulator,
+ * so it comes before the tests that show the system prompt
+ * ([ScreenLock.lockPhone] says why).
  */
 @RunWith(Suite::class)
 @Suite.SuiteClasses(
