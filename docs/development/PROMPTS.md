@@ -367,7 +367,8 @@ modules to android/settings.gradle.kts, and nothing else in that file.
 
 ### 1.4 Cryptography
 
-Model: `opus` (or `fable`). Effort: `xhigh`. Mode: **Plan** first. Two sessions.
+Model: `opus` (or `fable`). Effort: `xhigh`. Mode: **Plan** first. Three
+sessions, one pull request each.
 
 Session A, design only:
 
@@ -392,13 +393,65 @@ Read CLAUDE.md and docs/security/crypto-design.md. Implement `core/crypto`
 exactly as designed. If the design is wrong or unclear, stop and tell me
 instead of changing it.
 
-Tests: known-answer vectors, round trips, tampering, truncation, wrong key,
+Tests: items 1 to 8 of "What the tests must cover" in crypto-design.md:
+known-answer vectors, round trips, tampering, truncation, wrong key,
 wrong version, empty and very large inputs. No key material in logs, errors
 or `toString`. No `javax.crypto` or Tink calls outside this module; add a
 lint or test that enforces it.
 
+Item 9 of that list, the emulator tests of the hardware keys, is not part
+of this session. It is session C. Add no emulator job and no instrumented
+test here.
+
+Also not part of this session: the handover between apps (step 3.0), and
+the recovery key screens and the QR code (step 1.7).
+
+Create `docs/development/third-party.md` as crypto-design.md says: the
+word list, and Tink and the four libraries it brings, each with its source,
+its licence and its notice. Put the MIT licence text next to the word list.
+
+I am the owner and I ask you to add Tink 1.24.0 and the four libraries it
+brings to android/gradle/verification-metadata.xml and the keyring, and
+nothing else in those files.
+
 I am the owner and I ask you to add the include lines for the new
 modules to android/settings.gradle.kts, and nothing else in that file.
+
+I am the owner and I ask you to add one rule to the APK rules check, in
+`CheckApkRulesTask.kt`, and nothing else in that file: the build fails if
+an APK holds a class under `com.google.android.gms`. R8 can rename classes
+in a release APK, so say how the rule still finds them. If the rule needs
+another owner-only file, stop and tell me.
+```
+
+Session C, after session B is merged: the hardware key tests on an
+emulator. Model: `opus`. Effort: `high`.
+
+```text
+Read CLAUDE.md, docs/security/crypto-design.md and
+docs/development/emulator-tests.md. This is item 9 of "What the tests must
+cover" in crypto-design.md: the tests of the four hardware keys on an
+emulator.
+
+I am the owner and I ask you to add the emulator job to
+`.github/workflows/ci.yml`.
+
+- The job as planned in emulator-tests.md: AOSP images only, no
+  third-party action. Android 13, 14, 15 and the newest image.
+- Instrumented tests in `core/crypto`: each kind of hardware key is made
+  and used. After the screen lock is set, changed, removed and set again,
+  each key is there or gone as the table "When things change" in
+  crypto-design.md says. Test the system prompt too, if a test on an
+  emulator can answer it.
+- List what an emulator cannot check, such as StrongBox and a real
+  fingerprint. Write those as numbered steps for my three devices.
+- New test libraries need a decision record, a version catalog entry and
+  verification metadata. If you need an owner-only file other than ci.yml,
+  list it and stop before you change it.
+- If Android does not behave as crypto-design.md says, stop and tell me.
+  Do not change the design.
+- Update emulator-tests.md, ci.md and the assumptions in crypto-design.md
+  with what the tests showed.
 ```
 
 ### 1.5 Backup
@@ -444,15 +497,51 @@ I am the owner and I ask you to add the include lines for the new
 modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
-### 1.7 App lock
+### 1.7 Recovery key screens and app lock
 
-Model: `opus`. Effort: `high`.
+Model: `opus`. Effort: `high`. Two sessions, one pull request each.
+
+Session A, the recovery key screens. Mode: **Plan** first.
+
+```text
+Read CLAUDE.md and docs/security/crypto-design.md, sections "The recovery
+key", "The system prompt" and "StrongBox and other hardware". Build the
+recovery key screens as a shared piece that every app uses.
+
+First decide with me, before any code:
+- The QR code: whether to build it now, what it holds, what draws it and
+  what scans it. crypto-design.md has a proposal and the open points.
+- The permission `USE_BIOMETRIC` for the system prompt: its decision
+  record, and which owner-only files must change for it.
+- Whether AndroidX Biometric is still needed anywhere (ADR 0003).
+
+Then build:
+- Create a recovery key: show the 24 words, ask for four of them, then
+  store the keys.
+- Enter the words, with the word list and the checksum. No paste.
+- Show the words again in a keeper app, after the system prompt.
+- The security screen: which keys exist and their hardware level, whether
+  the phone has a screen lock, and whether this app keeps the recovery key.
+- Every one of these screens blocks screenshots and the recent-apps
+  preview.
+- Catalog page, screenshot tests, user guide page.
+- Add the StrongBox check to docs/development/release-checklist.md, as
+  crypto-design.md says.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
+```
+
+Session B, the app lock:
 
 ```text
 Read CLAUDE.md and docs/security/crypto-design.md. Add the optional app lock
 as a shared piece that every app can turn on:
 
 - Unlock with the system biometric or device credential prompt.
+- Turning it on follows "The app lock" in crypto-design.md: a recovery key
+  first, four of the words again, and a plain warning about a removed
+  screen lock and lost words. The user guide says the same.
 - Lock after a time the user picks, and when the app leaves the screen if the
   user wants.
 - File keys require user authentication as designed. Database rows are behind
@@ -462,6 +551,28 @@ as a shared piece that every app can turn on:
 
 I am the owner and I ask you to add the include lines for the new
 modules to android/settings.gradle.kts, and nothing else in that file.
+```
+
+### 1.8 Threat model
+
+Model: `opus`. Effort: `high`. Mode: **Plan** first. It can run at any time
+after step 1.4, session A.
+
+```text
+Read CLAUDE.md, docs/plan/PLAN.md section 10 and
+docs/security/crypto-design.md. Write `docs/security/threat-model.md`. No
+code.
+
+Cover: what is protected; every attacker of section 10, what stops each one
+and what does not; what is out of scope and why; what the app lock protects
+and what it does not; what the sync server and the network can still learn;
+the OWASP MASVS 2.1.0 controls of profile L2 and the privacy controls, each
+with where it is met or why it does not apply; the resilience profile as
+skipped on purpose.
+
+Do not add decisions. Where something is not decided, write "Open". Update
+docs/security/README.md, and the table "What the design protects" in
+crypto-design.md if the two differ. End with every open question.
 ```
 
 ### Phase 1 gate (you)
@@ -515,7 +626,9 @@ Steps:
   android/settings.gradle.kts, and nothing else in that file.
 - 2.3 Screens: all screens from the spec with the `Shk*` components.
 - 2.4 Reminders: through `core/notify`, with the permission flow.
-- 2.5 Backup, restore, app lock and settings.
+- 2.5 Backup, restore, app lock and settings. The settings get a screen
+  that shows the notices of all third-party material in the app. Complete
+  `docs/development/third-party.md` with everything that ships in the app.
 
 ### 2.6 Release preparation
 
@@ -526,6 +639,8 @@ Prepare Water 1.0.0 for release. Do not start the release workflow.
 
 - User guide in `docs/user/water.md`, written for a phone screen.
 - `docs/security/permissions.md` and the data inventory are complete.
+- `docs/development/third-party.md` lists everything that ships in the
+  app, and the app shows those notices.
 - `CHANGELOG.md` for the app.
 - The reminder steps of `docs/development/release-checklist.md` (part 1,
   step 10), which are Open until now, as exact steps.
@@ -541,6 +656,43 @@ Prepare Water 1.0.0 for release. Do not start the release workflow.
 
 Work through the release checklist on the Pixel 9 Pro, check the layout on the
 other two devices, use the app daily for two weeks, then run the release.
+
+---
+
+## Before Phase 3: the handover between apps
+
+### 3.0 Handover
+
+Model: `opus` (or `fable`). Effort: `xhigh`. Mode: **Plan** first.
+
+```text
+Read CLAUDE.md, docs/security/crypto-design.md (sections "Keeper apps and
+other apps" and "Setting up a second app on the same phone") and ADRs 0005,
+0006 and 0007. Design and build the handover: how a keeper app gives a
+second app of the suite its own derived keys, and never the recovery key.
+
+First write its decision record and show me. No code until I agree. Cover:
+- The screen of the keeper that the asking app opens, and what the user
+  sees and allows.
+- The signature permission: which app defines it, what happens when the
+  apps are installed in any order, and its entry in
+  docs/security/permissions.md.
+- How the keeper checks the caller's signing certificate itself.
+- That the keys travel with no further encryption, and why that is enough.
+  Confirm both, or tell me why not.
+- How an app finds out which apps on the phone are keepers, for "keep it
+  here too" and for "the recovery key is kept in ...".
+- How an app that is not a keeper checks the paper copy before its app lock
+  is turned on.
+- What a preview build can and cannot do.
+- Every way another app could try to get keys, and how each one fails.
+
+Then build it with tests, update crypto-design.md and the user guide, and
+tell me how to try it on a phone with two apps.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
+```
 
 ---
 

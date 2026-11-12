@@ -111,6 +111,11 @@ jobs**.
    pull request from anyone else could put anything into the APK.
 2. A preview never gets the release key or any secret. The workflow has a
    read-only token.
+3. Never type your real recovery words into a preview. A preview is built
+   from code that is not reviewed yet, and from the same words it makes
+   the same keys as the real app. So it could read your real backups.
+   Make a new recovery key in the preview for testing
+   ([crypto-design.md](../security/crypto-design.md#decided-on-pull-request-22)).
 
 ## Why this way
 
