@@ -314,9 +314,10 @@ second build must write the same mapping file, or the release stops. See
   - `LargeFileTest` proves that a file is never held in memory. One file
     of a little over 2 GiB, longer than all the memory the test JVM may
     use, goes into a backup and through the check, with nothing stored.
-    It takes about 3 seconds. Two more tests watch that writing and
-    restoring a file of 64 MiB never run more than 4 MiB ahead of what
-    they have passed on.
+    It takes about 3 seconds in the cloud environment. In CI the whole
+    test task of `core/backup` ended 29 seconds after its code was
+    compiled. Two more tests watch that writing and restoring a file of
+    64 MiB never run more than 4 MiB ahead of what they have passed on.
   - `ExampleFileTest` reads the example file of the page as a backup.
     `BackupExampleFileTest` in `core/crypto` builds the same bytes a
     second time with `ReferenceStream`. It is there because only

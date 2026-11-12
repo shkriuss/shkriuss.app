@@ -804,8 +804,13 @@ proof is split in three, and all are cheap (`LargeFileTest`):
 Measured on 2026-11-12 in the cloud environment: the first takes about 3
 seconds and needs no disk. The other two together take under 1 second,
 and the third needs 64 MiB in a temporary folder for that time. All 68
-tests of `core/backup` together take about 11 seconds. The time
-in CI is added here from its first run.
+tests of `core/backup` together take about 11 seconds.
+
+In CI, on 2026-11-12: the whole test task of `core/backup`, all 68
+tests, ended 29 seconds after its code was compiled. That is an upper
+limit, because other tasks ran in between. The log of CI gives no time
+for a single test. So the first proof stays well under the owner's limit
+of about a minute, and it is kept.
 
 No test in this step runs on an emulator, and none opens the picker
 itself. The picker is checked by hand with the first app.
