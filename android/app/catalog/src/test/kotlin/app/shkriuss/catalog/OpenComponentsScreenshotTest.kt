@@ -1,6 +1,7 @@
 package app.shkriuss.catalog
 
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -57,8 +58,7 @@ class OpenComponentsScreenshotTest(private val config: ScreenshotConfig) {
     @Test
     fun menu() {
         open(CatalogPage.Menus)
-        compose.onNode(hasContentDescription(text(DesignR.string.shk_more_options))).performScrollTo().performClick()
-        compose.waitForIdle()
+        compose.onNode(hasContentDescription(text(DesignR.string.shk_more_options))).performScrollTo().clickWithoutRipple()
         capture("MenuOpen")
     }
 
@@ -99,7 +99,16 @@ class OpenComponentsScreenshotTest(private val config: ScreenshotConfig) {
 
     /** Taps the button with these words. Under "Try it" it is the last one on the page. */
     private fun tapButton(id: Int) {
-        compose.onAllNodes(hasText(text(id)) and hasClickAction()).onLast().performScrollTo().performClick()
+        compose.onAllNodes(hasText(text(id)) and hasClickAction()).onLast().performScrollTo().clickWithoutRipple()
+    }
+
+    /**
+     * Clicks as TalkBack does. A touch would leave the button's pressed
+     * ripple on the page behind the window, at a different stage in each
+     * run, and the screenshots would differ.
+     */
+    private fun SemanticsNodeInteraction.clickWithoutRipple() {
+        performSemanticsAction(SemanticsActions.OnClick)
         compose.waitForIdle()
     }
 

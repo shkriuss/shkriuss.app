@@ -5,13 +5,15 @@ components built from them, and how both are checked. They live in
 `android/core/design`. The tokens were built in Phase 1, step 1. The
 decision and its reasons are in
 [ADR 0017](../adr/0017-design-system-tokens.md). The components come in
-Phase 1, step 2, batch by batch. Four batches are here. Batch 1:
+Phase 1, step 2, batch by batch. Five batches are here. Batch 1:
 buttons, floating action buttons and chips. Batch 2: the text field,
 checkbox, switch, radio button and slider. Batch 3: the card, list item,
 divider and section header, and the empty, loading and error states.
 Batch 4: the top bar, the navigation bar and rail that switch by window
-size, and the list-and-detail scaffold. See [Components](#components) and
-[Window sizes](#window-sizes).
+size, and the list-and-detail scaffold. Batch 5: the dialog, the bottom
+sheet, the snackbar, the menu, and the date and time pickers. See
+[Components](#components), [Window sizes](#window-sizes) and
+[Windows of their own](#windows-of-their-own).
 
 ## Rules
 
@@ -38,26 +40,34 @@ size, and the list-and-detail scaffold. See [Components](#components) and
 | `ShkShapes.kt` | `ShkShapes`, the four shapes. |
 | `ShkSpacing.kt` | `ShkSpacing`, the spacing steps, screen margins and the touch target. |
 | `ShkContrast.kt` | `contrastRatio`, the WCAG contrast formula. |
-| `ShkScreen.kt` | `ShkScreen`, one screen: its background, its top bar, and its content in the screen margins, clear of the system bars. |
+| `ShkScreen.kt` | `ShkScreen`, one screen: its background, its top bar, its content in the screen margins, clear of the system bars, its floating action button and its snackbars. |
 | `ShkWindowWidth.kt` | `ShkWindowWidth`, the three window widths the layouts switch at, and `ShkWindowWidth.current`, the width of the app's window. |
-| `ShkTopBar.kt` | `ShkTopBar` and `ShkTopBarAction`, the bar at the top of a screen and one action in it. |
+| `ShkTopBar.kt` | `ShkTopBar` and `ShkTopBarAction`, the bar at the top of a screen and one action in it. The bar's menu of more options is a `ShkMenu`. |
 | `ShkNavigation.kt` | `ShkNavigationScaffold` and `ShkDestination`: the navigation bar or rail, by window width, and one place in it. |
 | `ShkListDetailScaffold.kt` | `ShkListDetailScaffold`, a list and the detail of one item, in one pane or two, by window width. |
 | `ShkButtons.kt` | `ShkFilledButton`, `ShkTonalButton`, `ShkTextButton` and `ShkIconButton`. |
 | `ShkFloatingActionButton.kt` | `ShkFloatingActionButton` and `ShkExtendedFloatingActionButton`. |
 | `ShkChips.kt` | `ShkFilterChip` and `ShkAssistChip`. |
-| `ShkTextField.kt` | `ShkTextField`. |
+| `ShkTextField.kt` | `ShkTextField`, and `TextFieldInStyle`, the same field with typed text in another style, for the time picker. The second is internal to `core/design`. |
 | `ShkSelectionControls.kt` | `ShkCheckbox`, `ShkSwitch`, `ShkRadioButton` and `ShkRadioGroup`. |
 | `ShkSlider.kt` | `ShkSlider`. |
 | `ShkCard.kt` | `ShkCard`, with and without `onClick`. |
 | `ShkLists.kt` | `ShkListItem`, `ShkDivider` and `ShkSectionHeader`. |
 | `ShkContentStates.kt` | `ShkEmptyState`, `ShkLoadingState`, `ShkErrorState`, and `ShkStateAction`, the button of a state. |
+| `ShkDialog.kt` | `ShkDialog` and `ShkDialogAction`, a question in a window and one of its buttons. `DialogPanel` and `DialogButtons`, the panel and the buttons of every dialog, the pickers included, are internal to `core/design`. |
+| `ShkBottomSheet.kt` | `ShkBottomSheet`. |
+| `ShkSnackbar.kt` | `ShkSnackbarHostState`, `rememberShkSnackbarHostState` and `ShkSnackbarResult`. `ShkScreen` shows the snackbars. |
+| `ShkMenu.kt` | `ShkMenu` and `ShkMenuItem`. |
+| `ShkDatePicker.kt` | `ShkDatePicker`. |
+| `ShkTimePicker.kt` | `ShkTimePicker`, and `TimeFields`, the rules of its fields, internal to `core/design`. |
+| `ShkInPlace.kt` | `ShkInPlace`, the opt-in that marks the functions that draw a dialog, a sheet, a snackbar, a menu or a picker in place on a page. Only the Catalog uses them. See [Windows of their own](#windows-of-their-own). |
 | `ShkRows.kt` | `shkRow`, the layout of every row that is one touch target: a list item and the row of a checkbox, switch or radio button. Internal to `core/design`. |
 | `ShkIconSize.kt` | `iconSizeNextToText`, the size of an icon next to text at the user's font size. Internal to `core/design`. |
 | `res/drawable/shk_icon_check.xml` | The check mark on a selected filter chip and on the thumb of a switch that is on. |
 | `res/drawable/shk_icon_error.xml` | The circle with an exclamation mark at the top of an error state. |
 | `res/drawable/shk_icon_back.xml` | The arrow of the Back button in a top bar. It points the other way in right-to-left languages. |
-| `res/values/strings.xml` | "Back", what TalkBack reads for the Back button. |
+| `res/drawable/shk_icon_more.xml` | The three dots of the "More options" button in a top bar. |
+| `res/values/strings.xml` | The words `core/design` shows or TalkBack reads: "Back", "More options", "Drag handle", the labels, help and errors of the time picker, "Cancel" and "OK" of the pickers, and "No date chosen". |
 
 ## Colour
 
@@ -276,7 +286,7 @@ list item, use `ShkShapes.Field`.
 
 ## Components
 
-Batches 1 to 4 of Phase 1, step 2. Each component is one function in
+Batches 1 to 5 of Phase 1, step 2. Each component is one function in
 `core/design`, built on Material 3. Apps call these, never Material 3.
 `ShkListItem`, `ShkSectionHeader` and the three states are laid out by
 `core/design` itself, from Material 3's text, icons, pressed state,
@@ -319,6 +329,12 @@ icon rule asks, and the rail grows with its labels.
 | `ShkTopBar` | The top of every screen: its title, Back when it was opened from another screen, and up to three actions for the whole screen, such as search. Pass it as the `topBar` of `ShkScreen`. | An action that needs words. Use a button in the content. |
 | `ShkNavigationScaffold` | Switching between the three to five main places of an app, such as Today, History and Settings. It wraps all of the app's screens. | Going deeper, from a list to one item. Use `ShkListDetailScaffold` and Back. An app with one place needs none. |
 | `ShkListDetailScaffold` | A list and one item from it, such as notes and the open note. | A list whose items do not open. Use list items on a `ShkScreen`. |
+| `ShkDialog` | A question to answer before going on, such as "Delete this note?" before something that cannot be undone. | News that needs no answer: use a snackbar. More than a few choices or fields: use a sheet or a screen. |
+| `ShkBottomSheet` | A few actions or a short form about what is on the screen, such as what to do with a note. Actions that need a second line of text. | A question that needs an answer: use a dialog. A few short actions: a menu is lighter. |
+| Snackbar (`ShkSnackbarHostState`) | A short message about something that just happened, with at most one action, such as "Note deleted" with Undo. | Something that went wrong with what a screen shows: use an error state. A question: use a dialog. Anything that must not be missed: it goes away by itself. |
+| `ShkMenu` | A short list of actions that opens from a button, such as Rename and Delete behind "More options" in a top bar (`menuItems`). | More than about six actions, or actions that need a second line: use a sheet. The main action of a screen. |
+| `ShkDatePicker` | Choosing one day, such as when a task is due. | A range of days. It picks one. |
+| `ShkTimePicker` | Choosing a time of day, such as when a reminder rings. | A length of time, such as 20 minutes: use a text field or a slider. |
 
 Material 3 also has input chips (a removable tag) and suggestion chips.
 They are built when the first app needs them, not before (owner
@@ -336,13 +352,31 @@ vertical divider, and a progress circle that shows how far it has got.
 A row with a switch at its end is a `ShkSwitch`.
 
 Batch 4 leaves out: Material 3's medium and large top bars, a top bar
-that shrinks or changes colour while the content scrolls, a menu of more
-actions (menus come in batch 5), badges on destinations, a disabled
-destination, the navigation drawer, moving or animating between panes,
-and panes the user can resize. They are built when the first app needs
-them. Where the floating action button goes in these layouts is decided
-in batch 5, together with the snackbar (owner decision on pull request
-16).
+that shrinks or changes colour while the content scrolls, badges on
+destinations, a disabled destination, the navigation drawer, moving or
+animating between panes, and panes the user can resize. They are built
+when the first app needs them. The menu of more actions it left out came
+with batch 5, as `menuItems` of `ShkTopBar`. Where the floating action
+button goes in these layouts was left to batch 5, together with the
+snackbar (owner decision on pull request 16). Batch 5 proposes an answer;
+see [Floating action button and snackbar](#floating-action-button-and-snackbar).
+
+Batch 5 leaves out, until an app needs them: Material 3's full-screen
+dialog, the date range picker, a sheet with a half-open step or one that
+stays on the screen without dimming it, a snackbar that stays until it is
+closed or has a close button, and menus with sub-menus, rows that can be
+checked, dividers or text at the end of a row. A sheet closed by one of
+its rows disappears at once; a swipe, a tap above it, Back and
+TalkBack's "Dismiss" slide it down.
+
+Batch 5 builds the time picker from the suite's own parts, not from
+Material 3's (owner decision while batch 5 was built). Material 3's AM
+and PM buttons are 40 dp tall, under the 48 dp of rule 7, and the touch
+targets of the numbers on its clock face lie on top of each other, most
+of all in the two rings of the 24-hour clock. The suite's time picker has
+a field for the hour and one for the minute, with large numbers and the
+number keyboard, and AM and PM as radio buttons, only with the 12-hour
+clock. It has no clock face.
 
 Batch 4 adds one state to a component of batch 3: a list item can be
 selected (owner decision on pull request 16). See
@@ -394,8 +428,22 @@ The parts of batch 4:
 | Selected destination | Pill in `accent` behind the icon | Label `text`. Icon `textOnAccent`. | None | Pill, 56 by 32 dp at font scale 1.0 | As the others |
 | List and detail, two panes | None: each pane is a screen | None | `divider`, 1 dp, between the panes | None | List pane 360 dp wide, the detail the rest. |
 
-- Every pair in the four tables is one the contrast tests already check,
-  except the dot at the end of a slider's track (below).
+The parts of batch 5:
+
+| Component | Fill | Text and icon | Line | Shape | Size |
+|---|---|---|---|---|---|
+| Dialog | `surfaceHigh` | Title `text` in `Title`. Text `textSecondary` in `Body`. Buttons are text buttons in `accent`, or `error` for one that deletes. | `outline`, 1 dp, all round | `Sheet`, 28 dp | 280 to 560 dp wide, 24 dp padding, at least 16 dp from the edges of the window. |
+| Bottom sheet | `surfaceHigh` | Title `text` in `Title`. The handle is a bar in `outline`, 32 by 4 dp. | `outline`, 1 dp, along the top and down the sides | `Sheet`, 28 dp, at the top only | Fills the width, at most 640 dp, in the middle. As tall as its content, at most the window. Content at the screen margin. |
+| Snackbar | `text` (Material 3's inverse surface) | Message `background` in `Body`. The action is a text button in the other theme's `accent`. | None | `Field`, 12 dp | Fills the width inside the screen margins, at most 600 dp, in the middle. At least 48 dp tall. |
+| Menu | `surfaceHigh` | Rows `text` in `Label`, icons `textSecondary`. A row that deletes is `error`. | `outline`, 1 dp | `Card`, 16 dp | As wide as its widest row, 112 to 280 dp. Rows at least 48 dp tall. |
+| Date picker | `surfaceHigh`, as a dialog | Title `textSecondary` in `Label`. The chosen date `text` in `Headline`. Days `text`; the chosen day `textOnAccent` on a circle in `accent`; today ringed in `accent`. | As a dialog, and a line in `divider` under the date | `Sheet`, 28 dp | 360 dp wide, the width Material 3's month needs. |
+| Time picker | `surfaceHigh`, as a dialog | Title `text` in `Title`. The hour and the minute `text` in `Headline`, in text fields. AM and PM are radio buttons. | As a dialog | `Sheet`, 28 dp | 280 to 560 dp wide. |
+
+- Every pair in the five tables is one the contrast tests already check,
+  except the dot at the end of a slider's track (below). The snackbar's
+  pairs are Material 3's inverse roles: "inverseOnSurface on
+  inverseSurface" and "inversePrimary on inverseSurface" in
+  `ShkThemeMaterialTest`.
 - No component has a shadow, in any state. Material 3's elevation is
   turned off, also for a mouse hovering and a chip being dragged
   (ADR 0017, point 5).
@@ -493,6 +541,28 @@ The parts of batch 4:
   12 %. The text next to a disabled checkbox, switch, radio button or
   slider dims the same way. WCAG does not ask for contrast on a control
   that is turned off.
+- The dialog, the sheet, the menu and the pickers are raised surfaces,
+  so they are the higher surface colour with a 1 dp outline and no shadow
+  (rule 5). Material 3's shadows on them are turned off. The dialog and
+  both pickers share one panel.
+- A sheet's bottom sits on the edge of the window, so its outline runs
+  along the top and down the sides only. Material 3 draws a sheet's
+  modifier where the sheet would be before it slides up, so the suite
+  draws the outline and the handle inside the sheet itself.
+- The snackbar is the suite's own. Material 3's draws a shadow that
+  cannot be turned off. It is drawn in the inverse colours that
+  `ShkTheme` already maps for snackbars: the text colour as its fill, so
+  it stands out on every surface in both themes without an outline
+  (proposal, for the owner to confirm).
+- A menu has the `Card` corners of a raised surface, 16 dp. Material 3
+  gives menus its smallest corners, which this theme maps to `Field`,
+  12 dp (proposal, for the owner to confirm).
+- A row of a menu uses `Label`, as Material 3 does, because each row is
+  an action.
+- The date picker is Material 3's, in the suite's panel, with the suite's
+  title and headline. Material 3's headline keeps the date to one line,
+  which cuts off a long date at font scale 2.0; the suite's wraps. The
+  line under the headline only separates, so it is the divider colour.
 
 #### Rows
 
@@ -519,6 +589,61 @@ columns are 16 dp apart.
 
 `shkRow` in `ShkRows.kt` does this, for every row.
 
+### Windows of their own
+
+The dialog, the sheet, the menu and the two pickers open in a window of
+their own, over the screen. An app shows one while its state says so,
+and stops showing it in `onDismissRequest`.
+
+1. A tap on an action of a dialog, a picker or a menu calls it, then
+   `onDismissRequest`. A tap outside it and Back call only
+   `onDismissRequest`. So the app writes one line to close it.
+2. A sheet's content is the app's own, so a tap on a row only calls the
+   row. The app closes the sheet by no longer showing it.
+3. The dialog and the pickers keep 16 dp from the edges of the window.
+   When they are taller than the window, as at font scale 2.0 on a phone
+   held sideways, everything above their buttons scrolls, and the buttons
+   stay in reach. A sheet's content scrolls in the same way.
+4. The date picker's month needs 360 dp. In a narrower window the 16 dp
+   beside it shrink first. In a window narrower than 360 dp, as on a
+   phone with a large display size, Material 3 would cut off the last
+   days of each week, so the picker offers typing the date only.
+
+A window cannot be drawn on a page beside others, so the Catalog could
+not show every state of these components at once. Each has a second
+function that draws the same panel in place, without the window, the
+dimmed screen or any motion: `ShkDialogInPlace`, `ShkBottomSheetInPlace`,
+`ShkSnackbarInPlace`, `ShkMenuInPlace`, `ShkDatePickerInPlace` and
+`ShkTimePickerInPlace`. They carry the `ShkInPlace` opt-in, at the error
+level: a module that calls one without `@OptIn(ShkInPlace::class)` does
+not build. Only the Catalog opts in. A panel in place is no pane, so
+TalkBack does not announce every sample on a page.
+
+Material 3 marks its date picker, its bottom sheet and parts of them as
+experimental. `core/design` opts in where it uses them, and only there.
+An update of Material 3 may change them; the tests and screenshots show
+it if so.
+
+### Floating action button and snackbar
+
+`ShkScreen` takes `floatingActionButton` and `snackbarHostState`.
+
+1. The button sits in the bottom end corner of the screen, on the screen
+   margins, above the content. It stays there while the content scrolls.
+2. A scrolling screen leaves room at the end of its content, as tall as
+   the button and the margin, so the last item can scroll clear of it.
+3. A snackbar appears at the bottom, inside the margins and 16 dp above
+   the button. The button does not move.
+4. The button belongs to the screen at every window width. With a
+   navigation bar it sits above the bar; beside a rail it sits in the
+   screen's corner, not in the rail. In a list and detail it belongs to
+   the screen of its pane.
+
+This is a proposal, for the owner to confirm. Pull request 16 left the
+place of the button to this batch. Material 3 puts it in the rail on
+wide windows; keeping it in the screen keeps one rule for every width
+and keeps the rail unchanged.
+
 ### States
 
 | State | Which components |
@@ -539,6 +664,15 @@ columns are 16 dp apart.
 | Selected (`selectedIndex`) | One destination of the navigation. A destination has no disabled state: leave out a place that is not there. |
 | Bar or rail (`windowWidth`) | Navigation. It follows the window; the Catalog passes `windowWidth` to show both. |
 | One pane or two (`windowWidth`), detail open (`detailOpen = true`) | List and detail. It follows the window; the Catalog passes `windowWidth` to show both. |
+| With text, with content | Dialog. The content is the app's, such as a radio group or a text field. |
+| Turned off (`enabled = false`) | A dialog's action, a menu row. |
+| Deletes (`destructive = true`) | A dialog's action, a menu row: in the error colour. |
+| With a title | Bottom sheet. |
+| With an action (`actionText`) | Snackbar. A long message puts the action under it. |
+| With icons | Menu rows. |
+| Nothing chosen, a date chosen, earliest and latest dates (`earliestDate`, `latestDate`), typing | Date picker. "OK" is off while nothing is chosen. |
+| 12-hour or 24-hour clock, an impossible time | Time picker. It follows the phone's setting. "OK" is off while a field is empty or wrong. |
+| With a floating action button, with snackbars | `ShkScreen`. |
 
 The states themselves cannot be turned off. Their button is a
 `ShkTonalButton` that is always enabled (owner decision on pull request
@@ -572,6 +706,16 @@ the bar or the rail is one touch target, the whole destination: as wide
 as its share of the bar or as the rail, and at least 64 dp tall. Only
 its pill shows that it is pressed, as in Material 3. The list and detail
 has no touch targets of its own.
+
+The buttons of a dialog, a snackbar and the pickers are text buttons,
+each with 48 by 48 dp of space. In a dialog they sit 8 dp apart, side by
+side or one above the other. Each row of a menu is one touch target, as
+wide as the menu and at least 48 dp tall. The handle of a sheet is a
+strip 48 dp tall across its top. Each day of the date picker, and each
+button of its month, is 48 by 48 dp, as Material 3 makes them. The time
+picker's fields are at least 56 dp tall, and AM and PM are rows of radio
+buttons, at least 48 dp tall. The "More options" button of a top bar is
+an icon button.
 
 ### Large text
 
@@ -614,6 +758,19 @@ has no touch targets of its own.
   font scale 2.0. So a label keeps the room it has at the default size.
   If its destinations are taller than the window, as on a phone held
   sideways at a large font size, the rail scrolls.
+- The text of a dialog wraps. Its buttons go one above the other when
+  they do not fit side by side, the confirm button on top, and a long
+  label wraps inside its button.
+- A dialog, a picker or a sheet taller than its window scrolls; see
+  [Windows of their own](#windows-of-their-own).
+- A snackbar's action sits beside a message of one line, and under a
+  longer message, at the end. The message wraps.
+- A menu row's text wraps once the menu is 280 dp wide. Its icon grows
+  like 24 sp text, as a list item's does.
+- The date picker's chosen date wraps. Material 3's days and their
+  numbers grow inside cells of 48 dp.
+- The hour and the minute of the time picker are in `Headline`. Their
+  help and errors wrap under each field.
 
 ### TalkBack
 
@@ -680,6 +837,24 @@ has no touch targets of its own.
   selected. The destinations are one group. Their icons are decorative.
 - The navigation and the list and detail add nothing else for TalkBack.
   Their content is read as it is.
+- A dialog and both pickers are panes. TalkBack announces their title
+  when they open, and reads it as a heading. Each button is read by its
+  text.
+- A sheet's title is a heading. Its handle is read as "Drag handle", and
+  offers TalkBack's "Dismiss", which slides the sheet down.
+- A snackbar is a polite live region, so TalkBack reads it when it
+  appears. Material 3's host gives it "Dismiss", and lets it show longer
+  when the phone's accessibility setting "Time to take action" asks for
+  more time. Without an action it shows for 4 seconds, with one for 10.
+- Each menu row is read by its text, then "button". Material 3 gives
+  menu rows no role, so `ShkMenu` sets it. Icons are decorative.
+- The date picker reads each day in full, such as "Friday, March 20,
+  2026", as Material 3 does. The chosen date is read in full and is a
+  polite live region, so TalkBack announces a new choice.
+- Each field of the time picker is read with its label, its number and
+  the range it takes, such as "Hour, 09, from 1 to 12", or its error
+  instead of the range. AM and PM are radio buttons in one group.
+- The "More options" button of a top bar is read as "More options".
 - A disabled component is read as "disabled".
 
 ### Back
@@ -702,12 +877,15 @@ has no touch targets of its own.
    `painterResource(R.drawable.<icon>)` with a vector drawable.
 2. There is no icon library in the build. Material's icon library would be
    a new dependency, which needs an ADR (hard rule 5 in CLAUDE.md).
-3. `core/design` needs three icons of its own, drawn for the suite. The
+3. `core/design` needs four icons of its own, drawn for the suite. The
    check mark on a selected filter chip and on the thumb of a switch that
    is on is one stroke (`shk_icon_check.xml`). The error icon of an error
    state is a circle and a line in one stroke, and a dot
    (`shk_icon_error.xml`). The Back arrow of a top bar is one stroke
-   (`shk_icon_back.xml`), mirrored in right-to-left languages. The
+   (`shk_icon_back.xml`), mirrored in right-to-left languages. The "More
+   options" button of a top bar is three dots, one above the other
+   (`shk_icon_more.xml`). Material 3's date picker draws its own arrows,
+   pencil and calendar. The
    Catalog's sample icons (plus, search, a clock and a note) are drawn the
    same way and live in the Catalog.
 4. An icon is a vector drawable on a 24 dp grid, drawn in black. The
@@ -743,6 +921,8 @@ has no touch targets of its own.
    - The icon of a destination has its label under it, so it grows like
      the icon of a list item. The icons of a top bar's buttons have no
      text next to them, so they keep their size.
+   - The icon of a menu row grows like 24 sp text, as a list item's
+     does.
    - `iconSizeNextToText` in `ShkIconSize.kt` does this. Use it for every
      new component that puts an icon next to text.
 
@@ -935,6 +1115,49 @@ tablet held sideways.
    With the list composed in place, without moving its state, the
    one-pane-to-two-panes check fails.
 
+The tests of batch 5 run at font scale 1.0 and 2.0, on the screen of the
+screenshot phone:
+
+- `ShkDialogTest`: the dialog is a pane announced by its title, which is
+  a heading. Each button is read once, as a button, and their 48 dp touch
+  targets do not overlap, side by side or one above the other. A tap on a
+  button calls it, then `onDismissRequest`; one turned off ignores taps.
+  Short buttons sit side by side at the end; long ones go one above the
+  other, the confirm button on top, and their text stays inside them. A
+  dialog taller than the window scrolls and keeps its buttons on the
+  screen. Drawn in place, it is no pane.
+- `ShkBottomSheetTest`: the title is a heading. The handle is read as
+  "Drag handle", is 48 dp tall, and its "Dismiss" closes the sheet. The
+  title and a row's text start at the screen margin. Content taller than
+  the window scrolls to its last row.
+- `ShkSnackbarTest`: a snackbar is a polite live region, goes away by
+  itself and says it was dismissed. A tap on its action says it was
+  performed. The action sits beside a short message and under a long
+  one, which wraps and is not cut. On a screen, the floating action
+  button sits on the margins in the bottom end corner, a snackbar appears
+  above it without moving it, and a scrolling screen lets its last line
+  scroll clear of the button.
+- `ShkMenuTest`: each row is read once, as a button, without its icon,
+  and is 48 dp tall. A tap closes the menu, then calls the row; a row
+  turned off ignores taps. Long text wraps inside 280 dp. The top bar's
+  "More options" opens its menu.
+- `ShkDatePickerTest`: the picker is a pane announced by its title. "OK"
+  is off until a date is chosen. A day tapped is the date given, after
+  the dialog closes, and the chosen date is a polite live region read in
+  full. Days outside the earliest and latest date are off. Every day of
+  the month is 48 by 48 dp and no two overlap. In a window 320 dp wide
+  there is no month, and a typed date is the date given.
+- `ShkTimePickerTest`: the picker is a pane announced by its title. Each
+  field is read with its label, its number and its range, and is 48 dp
+  tall or more. With the 12-hour clock, AM and PM are radio buttons in
+  one group; with the 24-hour clock there are none. An impossible hour
+  gives the field an error and turns "OK" off; letters and a third digit
+  cannot be typed. "OK" gives the time typed, after the dialog closes.
+- `TimeFieldsTest` checks the rules of the time picker's fields without
+  drawing anything: the hours of each clock, the minutes, 12 AM and
+  12 PM, empty fields, what may be typed, and digits of other scripts,
+  such as Arabic-Indic.
+
 `ComponentPagesTest` in the Catalog opens each component page and checks
 the components where they sit: each has a label and a role, no two touch
 targets overlap, and every component that can be turned off is shown
@@ -950,7 +1173,12 @@ new value. On Lists, exactly one list item, the selected sample, is
 read as selected. On Navigation, a tap selects a destination and shows
 its name as the title. On List and detail, a tap on a note opens it in
 place of the list, and the back gesture, then Back in its top bar, closes
-it and leaves the page open. Every page is also opened and closed with
+it and leaves the page open. On the pages of batch 5, it opens each
+component under "Try it" in its window and uses it: the dialog's Delete
+and Cancel, a row of the sheet, the snackbar's Undo, a row of the top
+bar's menu, a date typed in the date picker (the test window is too
+narrow for the month), and an impossible hour, then a time, in the time
+picker. Every page is also opened and closed with
 the back gesture by `CatalogScreenTest`, so no sample on a page takes
 the back gesture for itself.
 
@@ -1015,6 +1243,31 @@ Components:
     a narrower one, a line says where to see them. Then one to try, which
     follows the window.
 
+17. **Dialogs**: the dialog with text and two buttons, with one button,
+    with a choice, with its confirm button turned off and with long text,
+    then one to try.
+18. **Bottom sheets**: the sheet with a title, without one and with long
+    text, then one to try.
+19. **Snackbars**: the snackbar with a message only, with an action and
+    with long text, then a screen to try, whose floating action button
+    shows a snackbar above itself.
+20. **Menus**: the menu with text only, with icons, with a row turned
+    off, with a row that deletes and with long text, then a top bar to
+    try, with its "More options".
+21. **Date pickers**: the picker with nothing chosen, with a date chosen,
+    with an earliest and a latest date, typing the date, and with a long
+    title, each on March 2026, then one to try.
+22. **Time pickers**: the picker with the 12-hour clock, with the 24-hour
+    clock, with an impossible time and with a long title, then one to
+    try, which follows the phone's clock setting.
+
+The samples of pages 17 to 22 are drawn in place
+([Windows of their own](#windows-of-their-own)); only the one under "Try
+it" opens a window. The date picker samples show a month in the past, so
+they do not change with today's date, and no day in them is marked as
+today. Material 3 keeps the date picker's state inside it, so its days
+respond to taps; its buttons do nothing.
+
 The sample of one pane with a note open draws the note's screen as the
 scaffold shows it, without the scaffold. In one pane the scaffold takes
 the back gesture while a note is open, so a sample that is always open
@@ -1050,6 +1303,15 @@ its height, and its panes scroll, as on a phone.
 
 Compose tests stop animations that never end, so the screenshots show the
 loading circle as it starts: a short arc at its top. On a phone it turns.
+
+`OpenComponentsScreenshotTest` opens each component of batch 5 from "Try
+it", the way a user does, and captures the whole screen with its window,
+in the eight standard configurations: `DialogOpen`, `BottomSheetOpen`,
+`MenuOpen`, `DatePickerOpen` and `TimePickerOpen`, and `SnackbarShown`,
+the snackbar above its floating action button. They show where each
+window sits and that nothing in it is cut off at font scale 2.0. The
+clock stands still while the snackbar shows, so it does not go away
+before the capture.
 
 ## How to check it on a phone
 
@@ -1123,6 +1385,35 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
     opens beside the list, with no arrow in its top bar. The open note is
     marked in the list, with a bar before its text, and TalkBack reads it
     as "selected". On the tablet held upright there is still one pane.
+20. On Dialogs, under "Try it", tap "Delete the note". The dialog opens
+    over the dimmed page, 16 dp from the edges. Tap Delete: the line
+    under the button says so. Open it again and tap outside it, then go
+    back: each closes it. With TalkBack on, the title is announced when
+    it opens. At the largest font size, the buttons of the long sample
+    are one above the other, Delete on top.
+21. On Bottom sheets, under "Try it", tap "Show the actions". The sheet
+    slides up; its title and rows start where the page title does. Tap a
+    row: the sheet closes and the line under the button names the row.
+    Open it again and swipe it down. With TalkBack on, find "Drag handle"
+    and use "Dismiss" from TalkBack's actions.
+22. On Snackbars, under "Try it", tap the plus. "Note added" shows above
+    it, with Undo, and the plus does not move. Tap Undo: the count goes
+    back. Tap the plus and wait: the snackbar goes away by itself. With
+    TalkBack on, "Note added" is announced.
+23. On Menus, under "Try it", tap the three dots. The menu opens over
+    them. Tap "Sort by date": the menu closes and the line under the top
+    bar says so. Delete is red in the samples.
+24. On Date pickers, under "Try it", tap "Choose a due date". March 2026
+    opens, with the 12th chosen. Tap another day and OK. Tap the pencil to
+    type a date instead. With TalkBack on, each day is read in full.
+25. On Time pickers, under "Try it", tap "Choose a reminder time". Type 13
+    as the hour: an error shows under it and OK turns off. Type 7, choose
+    PM and tap OK: the line under the button says 7:05 PM or the time you
+    typed. Turn on "Use 24-hour format" in the system settings, open it
+    again: AM and PM are gone, and the hour takes 0 to 23.
+26. Set the display size to the largest in the system settings and open
+    the date picker under "Try it". If the window is too narrow for the
+    month, it offers typing the date, with no pencil. Nothing is cut off.
 
 ## Open
 
@@ -1136,13 +1427,21 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
-- Where a floating action button goes in the navigation and in the list
-  and detail. It is decided in batch 5, together with the snackbar (owner
-  decision on pull request 16). Material 3 puts it in the rail on wide
-  windows.
 - When to look again at the suite's own adaptive layouts, for example for
   foldable devices: see [ADR 0024](../adr/0024-own-adaptive-layouts.md).
   Whether the apps use Navigation 3 is decided when the first app is
   built.
 - What batch 4 leaves out (see [Components](#components)), until an app
+  needs it.
+- Where the floating action button goes: proposed in batch 5, in the
+  screen at every width, not in the rail. See
+  [Floating action button and snackbar](#floating-action-button-and-snackbar).
+  The owner confirms or changes it.
+- The look of batch 5 that is proposed, not yet confirmed: the snackbar
+  in the inverse colours, and the menu's 16 dp corners.
+- Material 3's date picker and bottom sheet are experimental APIs. An
+  update of Material 3 may change them.
+- In a window narrower than 360 dp, the date picker offers typing only.
+  A month that fits there would need the suite's own date picker.
+- What batch 5 leaves out (see [Components](#components)), until an app
   needs it.

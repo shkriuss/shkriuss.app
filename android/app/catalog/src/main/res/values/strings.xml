@@ -329,7 +329,6 @@
     <string name="sample_answer_deleted">You tapped Delete.</string>
     <string name="sample_answer_closed">You closed the dialog without deleting.</string>
     <string name="sample_duplicate">Duplicate</string>
-    <string name="sample_move">Move to another folder</string>
     <string name="sample_reminder_supporting">It rings at the time you choose.</string>
     <string name="sample_duplicate_supporting">The copy opens, so you can change it.</string>
     <string name="sample_long_sheet_title">What to do with the shopping list for the weekend</string>
@@ -351,7 +350,6 @@
     <string name="sample_sort_by_date">Sort by date</string>
     <string name="sample_select_all">Select all</string>
     <string name="sample_long_menu_row">Move the note to another folder, such as Home or Work</string>
-    <string name="sample_no_due_date">No due date yet.</string>
     <string name="sample_due_on">Due: %1$s</string>
     <string name="sample_due_date">Due date</string>
     <string name="sample_choose_due_date">Choose a due date</string>

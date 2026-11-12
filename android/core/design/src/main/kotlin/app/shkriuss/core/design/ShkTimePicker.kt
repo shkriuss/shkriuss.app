@@ -52,8 +52,8 @@ import java.time.LocalTime
  *
  * It is built from the suite's own parts, not Material 3's time picker,
  * whose AM and PM buttons are 40dp tall and whose clock face puts the
- * touch targets of its numbers on top of each other (owner decision on
- * this batch). Every field, button and choice has a 48dp touch target.
+ * touch targets of its numbers on top of each other (owner decision
+ * while batch 5 was built). Every field, button and choice has a 48dp touch target.
  * It sits in the dialog panel of [ShkDialog], is 280 to 560dp wide, and
  * scrolls when it is taller than the window.
  */
