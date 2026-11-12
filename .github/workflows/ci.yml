@@ -365,7 +365,8 @@ jobs:
           # on-screen keyboard covers what the tests type into.
           printf 'hw.ramSize=4096\nhw.keyboard=yes\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
 
-          "$ANDROID_HOME/emulator/emulator" -version | head -n 1
+          # -no-window starts the emulator's windowless program. The one with
+          # a window needs a sound library that the runner does not have.
           nohup "$ANDROID_HOME/emulator/emulator" -avd test \
             -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
             -gpu swiftshader_indirect -camera-back none -camera-front none \
