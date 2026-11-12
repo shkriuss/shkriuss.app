@@ -1,6 +1,8 @@
 # 0002 GrapheneOS first, minimum Android 13
 
-- Status: Accepted
+- Status: Accepted. Point 4 extended by
+  [0025](0025-secure-app-spawning-in-grapheneos-checklist.md): secure app
+  spawning on.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 8), 13, 16
   and 17, and the owner's review of

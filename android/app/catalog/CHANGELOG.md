@@ -3,9 +3,9 @@
 Catalog (`app.shkriuss.catalog`) is the design gallery used during
 development.
 
-## Unreleased
+## 0.2.0 (2026-11-12)
 
-### 0.2.0
+Released as `catalog-v0.2.0`.
 
 The design tokens and the first components of the design system, each on
 a page of its own. From pull requests

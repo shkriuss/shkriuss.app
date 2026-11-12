@@ -16,7 +16,9 @@ Record 0021 covers version codes, from the owner's review of the release
 workflow in Phase 0, step 6. Records 0022 and 0023 cover the hub site, from
 the owner's prompt for Phase 0, step 7. Record 0024 covers the adaptive
 layouts of the design system, from the owner's decisions on pull request
-16; it replaces part of 0003.
+16; it replaces part of 0003. Record 0025 adds secure app spawning to the
+GrapheneOS checklist of 0002, from the owner's decision on pull request
+19.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -24,7 +26,7 @@ How a record may be edited or replaced is in point 7 of
 | No. | Decision | Status |
 |---|---|---|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
-| 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted |
+| 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025 |
 | 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024 |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
@@ -47,3 +49,4 @@ How a record may be edited or replaced is in point 7 of
 | 0022 | [Hub site generator](0022-hub-site-generator.md) | Accepted |
 | 0023 | [Hub site hosting and deploy](0023-hub-site-hosting-and-deploy.md) | Accepted |
 | 0024 | [Own adaptive layouts, no Material 3 adaptive libraries](0024-own-adaptive-layouts.md) | Accepted |
+| 0025 | [Secure app spawning in the GrapheneOS checklist](0025-secure-app-spawning-in-grapheneos-checklist.md) | Accepted |
