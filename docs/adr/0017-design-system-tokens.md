@@ -10,7 +10,9 @@
   [pull request 13](https://github.com/shkriuss/shkriuss.app/pull/13),
   which completed point 3, and on
   [pull request 15](https://github.com/shkriuss/shkriuss.app/pull/15),
-  which added the divider colour (point 13)
+  which added the divider colour (point 13), and the owner's check of
+  Catalog 0.2.0 at the Phase 1 gate on 2026-11-12, which confirmed the
+  teal accent (point 1) and the text styles (point 6)
 
 ## Context
 
@@ -40,6 +42,11 @@
    | Success | `#1B6E3C` | `#7FDB9A` |
    | Warning | `#7A5800` | `#F2C24B` |
 
+   The owner confirmed the teal accent as it is: `#00695C` in the light
+   theme and `#5FD6C2` in the dark theme. They checked it with Catalog
+   0.2.0 on the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a on
+   2026-11-12, at the Phase 1 gate.
+
 2. Checked contrast: every text pair is at least 5.1:1. Outlines are at
    least 3.3:1. Dividers are at least 1.57:1. Light text on accent,
    `#FFFFFF` on `#00695C`, is 6.61:1.
@@ -57,9 +64,10 @@
 5. Raised surfaces use a surface colour plus an outline, not shadows. This
    is the same in both themes. In the true-black theme, the surface is a
    lighter grey.
-6. Type: the system font, six text styles, no bundled fonts. Starting
-   values, shown in the Catalog since Phase 1, step 1. The owner confirms
-   them on the three devices at the Phase 1 gate:
+6. Type: the system font, six text styles, no bundled fonts. The Catalog
+   has shown them since Phase 1, step 1. The owner confirmed them as they are,
+   with Catalog 0.2.0 on the Pixel 9 Pro, the Pixel Tablet and the Pixel
+   6a on 2026-11-12, at the Phase 1 gate:
 
    | Style | Size (sp) | Line height (sp) |
    |---|---|---|
@@ -150,4 +158,6 @@
   [design-system.md](../development/design-system.md).
 - Changing a colour value changes this decision, so it needs the owner and
   a new record (point 7 of [0001](0001-record-architecture-decisions.md)).
-- Open: the owner confirms the text styles at the Phase 1 gate (point 6).
+- Settled at the Phase 1 gate: on 2026-11-12 the owner checked Catalog
+  0.2.0 on the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a. The teal
+  accent (point 1) and the six text styles (point 6) stay as they are.

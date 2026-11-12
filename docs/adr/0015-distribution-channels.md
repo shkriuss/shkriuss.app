@@ -40,5 +40,7 @@ The later channels are deferred, not rejected.
 - The Phase 0 gate includes installing Catalog through Obtainium
   (section 16). This was done on 2026-11-11 with Catalog 0.1.0, which was
   also checked with AppVerifier.
+- The first update through Obtainium, Catalog 0.1.0 to 0.2.0, worked on
+  the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a on 2026-11-12.
 - The route into the main F-Droid repository depends on reproducible
   builds. See [0014](0014-release-flow-and-reproducible-builds.md).
