@@ -19,6 +19,9 @@
   spawning**. On the owner's Pixel 9 Pro, Catalog 0.2.0 showed it as
   "Default (Enabled)".
 - 0002 does not name it, so the release checklist did not check it.
+- Secure app spawning is one of GrapheneOS's default protections, so
+  users run apps with it on. A test phone can have it turned off for an
+  app and forgotten.
 
 ## Decision
 
@@ -29,7 +32,9 @@
 
 ## Options rejected
 
-- **Keep the checklist as 0002 lists it.** Reason not recorded.
+- **Keep the checklist as 0002 lists it.** A release could then be tested
+  in a state that users do not run: with secure app spawning off on the
+  test phone.
 
 ## Consequences
 

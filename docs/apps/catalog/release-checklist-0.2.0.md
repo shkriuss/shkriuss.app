@@ -38,8 +38,9 @@ Done. Catalog 0.2.0 was published as `catalog-v0.2.0` on 2026-11-12.
   **Switch to user**. Part 1, step 8, now follows it.
 - On the owner's decision, secure app spawning joined part 1, step 2
   ([ADR 0025](../../adr/0025-secure-app-spawning-in-grapheneos-checklist.md)).
-- Still Open: the way from **Private space** to **Choose apps to
-  install** (part 1, step 9).
+- The owner sent the way for Private space too: Settings, **Security and
+  privacy**, **Private space**, **Install available apps**. Part 1, step
+  9, now follows it. No name in part 1 is Open any more.
 
 | | |
 |---|---|
@@ -55,9 +56,7 @@ page to open it, and Back to return. On each page, also try the samples
 under "Try it".
 
 The names in part 1 are the ones GrapheneOS shows. A value may start
-with "Default", for example "Default (Blocked)". Open: the way from
-**Private space** to **Choose apps to install** in step 9, as in the
-[release checklist](../../development/release-checklist.md#how-it-is-used).
+with "Default", for example "Default (Blocked)".
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
 
@@ -105,8 +104,9 @@ Before you merge the pull request that added this page.
    4. Go back and tap **Switch to user**. Open Catalog preview and use
       every screen.
 9. [x] Works in Private Space.
-   1. In Settings, search for **Private space** and open it.
-   2. Add Catalog preview on **Choose apps to install**, as in step 8.
+   1. In Settings, tap **Security and privacy**, then **Private space**.
+   2. Tap **Install available apps**, and turn on the switch next to
+      Catalog preview, as in step 8.
    3. Open Catalog preview in Private Space and use every screen.
 10. [x] Reminders: does not apply. Catalog has no reminders.
 

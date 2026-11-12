@@ -35,10 +35,6 @@ screenshots the owner sent on 2026-11-12. A value may start with
 "Default", for example "Default (Blocked)". That counts as the same
 value.
 
-Open: the way from **Private space** to the page **Choose apps to
-install** (part 1, step 9). Write down what your phone shows, so Claude
-can fix this page.
-
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
 
 1. [ ] Install the pull request's preview
@@ -78,8 +74,9 @@ can fix this page.
    4. Go back and tap **Switch to user**. Open the app and use every
       screen.
 9. [ ] Works in Private Space.
-   1. In Settings, search for **Private space** and open it.
-   2. Add the preview on **Choose apps to install**, as in step 8.
+   1. In Settings, tap **Security and privacy**, then **Private space**.
+   2. Tap **Install available apps**, and turn on the switch next to the
+      preview, as in step 8.
    3. Open the app in Private Space and use every screen.
 10. [ ] Reminders fire on time with the screen off, after a reboot, and
     after the first unlock. Only for an app with reminders. Open: the
