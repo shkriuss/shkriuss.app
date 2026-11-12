@@ -80,11 +80,18 @@ class ComponentState(
  * other in a narrow window, [wideColumns] to a row in a wide one. Each
  * component keeps its own width, so long labels wrap the way they would in
  * an app. Pass 1 for samples that need the whole width, such as a layout
- * in a frame.
+ * in a frame. Pass [equalHeights] false for samples that hold a list that
+ * scrolls sideways, such as the months of a date picker: such a list
+ * cannot say how tall it would be before it is laid out.
  */
 @Composable
-fun ComponentStates(states: List<ComponentState>, wideColumns: Int = 3) {
-    AdaptiveGrid(items = states, wideColumns = wideColumns, spacing = ShkSpacing.Large) { state, itemModifier ->
+fun ComponentStates(states: List<ComponentState>, wideColumns: Int = 3, equalHeights: Boolean = true) {
+    AdaptiveGrid(
+        items = states,
+        wideColumns = wideColumns,
+        spacing = ShkSpacing.Large,
+        equalHeights = equalHeights,
+    ) { state, itemModifier ->
         Column(itemModifier, verticalArrangement = Arrangement.spacedBy(ShkSpacing.ExtraSmall)) {
             ShkText(
                 text = stringResource(state.caption),
@@ -129,28 +136,31 @@ fun TokenLabel(name: String, detail: String, modifier: Modifier = Modifier) {
 /**
  * Lays out [items] one under the other in a narrow window, and in rows of
  * [wideColumns] in a window at least [ShkSpacing.WideWindowWidth] wide.
- * Items in a row get the same width and height. [spacing] is the gap
- * between items, both ways.
+ * Items in a row get the same width, and with [equalHeights] the same
+ * height. [spacing] is the gap between items, both ways.
  */
 @Composable
 fun <T> AdaptiveGrid(
     items: List<T>,
     wideColumns: Int,
     spacing: Dp = ShkSpacing.Small,
+    equalHeights: Boolean = true,
     content: @Composable (item: T, modifier: Modifier) -> Unit,
 ) {
     val columns = if (windowWidthIsWide()) wideColumns else 1
+    val rowHeight = if (equalHeights) Modifier.height(IntrinsicSize.Min) else Modifier
+    val itemHeight = if (equalHeights) Modifier.fillMaxHeight() else Modifier
     Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
         items.chunked(columns).forEach { row ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
+                    .then(rowHeight),
                 horizontalArrangement = Arrangement.spacedBy(spacing),
             ) {
                 row.forEach { item ->
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        content(item, Modifier.fillMaxWidth().fillMaxHeight())
+                    Box(Modifier.weight(1f).then(itemHeight)) {
+                        content(item, Modifier.fillMaxWidth().then(itemHeight))
                     }
                 }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }

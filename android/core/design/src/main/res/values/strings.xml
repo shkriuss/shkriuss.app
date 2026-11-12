@@ -2,4 +2,24 @@
 <resources>
     <!-- What TalkBack reads for the Back button at the start of a top bar. -->
     <string name="shk_back">Back</string>
+    <!-- What TalkBack reads for the button at the end of a top bar that opens its menu. -->
+    <string name="shk_more_options">More options</string>
+    <!-- What TalkBack reads for the handle at the top of a bottom sheet. It offers to close the sheet. -->
+    <string name="shk_drag_handle">Drag handle</string>
+    <!-- The label of the field for the hour in a time picker. -->
+    <string name="shk_hour">Hour</string>
+    <!-- The label of the field for the minute in a time picker. -->
+    <string name="shk_minute">Minute</string>
+    <!-- The help under the hour and the minute field of a time picker: the numbers it takes, such as "From 1 to 12". -->
+    <string name="shk_number_range">From %1$d to\u00A0%2$d</string>
+    <!-- The error under the hour field of a time picker when the hour is out of range. -->
+    <string name="shk_hour_error">Enter an hour from %1$d to\u00A0%2$d.</string>
+    <!-- The error under the minute field of a time picker when the minute is out of range. -->
+    <string name="shk_minute_error">Enter a minute from %1$d to\u00A0%2$d.</string>
+    <!-- The button of a date or time picker that closes it without choosing. -->
+    <string name="shk_cancel">Cancel</string>
+    <!-- The button of a date or time picker that chooses the date or time shown. -->
+    <string name="shk_ok">OK</string>
+    <!-- Shown large in a date picker, in place of the date, until a date is chosen. -->
+    <string name="shk_no_date">No date chosen</string>
 </resources>

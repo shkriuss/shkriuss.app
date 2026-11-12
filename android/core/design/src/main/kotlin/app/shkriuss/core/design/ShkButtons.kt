@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.style.TextAlign
 
@@ -105,12 +106,36 @@ fun ShkTextButton(
     enabled: Boolean = true,
     icon: Painter? = null,
 ) {
+    ColoredTextButton(
+        text = text,
+        onClick = onClick,
+        color = ShkTheme.colors.accent,
+        modifier = modifier,
+        enabled = enabled,
+        icon = icon,
+    )
+}
+
+/**
+ * A [ShkTextButton] whose text is [color] instead of the accent: the error
+ * colour for a destructive action in a dialog, or the other theme's accent
+ * on a snackbar. [color] must be a text colour on what the button sits on.
+ */
+@Composable
+internal fun ColoredTextButton(
+    text: String,
+    onClick: () -> Unit,
+    color: Color,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: Painter? = null,
+) {
     TextButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
         shape = ButtonShape,
-        colors = ButtonDefaults.textButtonColors(contentColor = ShkTheme.colors.accent),
+        colors = ButtonDefaults.textButtonColors(contentColor = color),
         elevation = null,
         contentPadding = if (icon == null) {
             ButtonDefaults.TextButtonContentPadding

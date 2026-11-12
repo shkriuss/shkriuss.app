@@ -11,6 +11,15 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.performTextReplacement
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
@@ -90,7 +99,10 @@ class ComponentPagesTest {
         // Selection controls: two each of checkbox, switch and radio button,
         // off and on. Lists: one list item. Cards, and the buttons of the
         // empty and error states, have no disabled state. Top bars: one
-        // action. Destinations and the list and detail have none.
+        // action. Destinations and the list and detail have none. Dialogs:
+        // the confirm button turned off. Menus: one row. Date pickers: OK
+        // while nothing is chosen. Time pickers: OK while the time is
+        // impossible. Sheets and snackbars have no disabled state.
         val expected = mapOf(
             CatalogPage.Buttons to 4,
             CatalogPage.FloatingActionButtons to 0,
@@ -104,6 +116,12 @@ class ComponentPagesTest {
             CatalogPage.TopBars to 1,
             CatalogPage.Navigation to 0,
             CatalogPage.ListDetail to 0,
+            CatalogPage.Dialogs to 1,
+            CatalogPage.BottomSheets to 0,
+            CatalogPage.Snackbars to 0,
+            CatalogPage.Menus to 1,
+            CatalogPage.DatePickers to 1,
+            CatalogPage.TimePickers to 1,
         )
         assertEquals("every component page is checked", COMPONENT_PAGES.toSet(), expected.keys)
         expected.forEach { (page, count) ->
@@ -278,6 +296,113 @@ class ComponentPagesTest {
         openTheNote()
         compose.onAllNodes(hasContentDescription(text(DesignR.string.shk_back))).onLast().performClick()
         compose.onAllNodes(openNote).assertCountEquals(0)
+    }
+
+    @Test
+    fun dialogToTryOpensInItsWindowAndSaysHowItWasAnswered() {
+        open(CatalogPage.Dialogs)
+        // The sample with two buttons asks the same question, in place.
+        val question = hasText(text(R.string.sample_delete_note_question)) and isHeading()
+        fun openTheDialog() {
+            compose.onAllNodes(hasText(text(R.string.sample_delete_the_note)) and hasClickAction())
+                .onLast()
+                .performScrollTo()
+                .performClick()
+            // In its window it is a pane that TalkBack announces by its title.
+            compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, text(R.string.sample_delete_note_question)))
+                .assertExists()
+            compose.onAllNodes(question).assertCountEquals(2)
+        }
+        compose.onAllNodes(question).assertCountEquals(1)
+
+        openTheDialog()
+        // Its buttons come after every sample's on the page.
+        compose.onAllNodes(hasText(text(R.string.sample_delete)) and hasClickAction()).onLast().performClick()
+        compose.onAllNodes(question).assertCountEquals(1)
+        compose.onNode(hasText(text(R.string.sample_answer_deleted))).assertExists()
+
+        openTheDialog()
+        compose.onAllNodes(hasText(text(R.string.sample_cancel)) and hasClickAction()).onLast().performClick()
+        compose.onAllNodes(question).assertCountEquals(1)
+        compose.onNode(hasText(text(R.string.sample_answer_closed))).assertExists()
+    }
+
+    @Test
+    fun sheetToTryClosesWithTheRowTapped() {
+        open(CatalogPage.BottomSheets)
+        compose.onNode(hasText(text(R.string.sample_open_sheet)) and hasClickAction()).performScrollTo().performClick()
+        compose.onNode(hasContentDescription(text(DesignR.string.shk_drag_handle))).assertExists()
+
+        compose.onAllNodes(hasText(text(R.string.sample_duplicate)) and hasClickAction()).onLast().performClick()
+        compose.onAllNodes(hasContentDescription(text(DesignR.string.shk_drag_handle))).assertCountEquals(0)
+        val chosen = compose.activity.getString(R.string.sample_you_chose, text(R.string.sample_duplicate))
+        compose.onNode(hasText(chosen)).assertExists()
+    }
+
+    @Test
+    fun snackbarToTryIsAnnouncedAndUndoTakesTheNoteAway() {
+        open(CatalogPage.Snackbars)
+        fun notes(count: Int) = compose.activity.resources.getQuantityString(R.plurals.sample_note_count, count, count)
+        compose.onNode(hasContentDescription(text(R.string.sample_new_note))).performScrollTo().performClick()
+        compose.onNode(hasText(notes(1))).assertExists()
+
+        // Material 3's host makes the snackbar a polite live region.
+        val polite = SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite)
+        compose.onNode(polite and hasAnyDescendant(hasText(text(R.string.sample_note_added)))).assertExists()
+        // The samples above have Undo too. The snackbar's is the last.
+        compose.onAllNodes(hasText(text(R.string.sample_undo)) and hasClickAction()).onLast().performClick()
+        compose.onNode(hasText(notes(0))).assertExists()
+        compose.onAllNodes(hasText(text(R.string.sample_note_added))).assertCountEquals(0)
+    }
+
+    @Test
+    fun menuToTryOpensFromTheTopBarAndClosesWithTheRowTapped() {
+        open(CatalogPage.Menus)
+        val sortByDate = hasText(text(R.string.sample_sort_by_date)) and hasClickAction()
+        // Only the menu samples on the page have "Sort by date": the text only one.
+        compose.onAllNodes(sortByDate).assertCountEquals(1)
+        compose.onNode(hasContentDescription(text(DesignR.string.shk_more_options))).performScrollTo().performClick()
+        compose.onAllNodes(sortByDate).assertCountEquals(2)
+
+        compose.onAllNodes(sortByDate).onLast().performClick()
+        compose.onAllNodes(sortByDate).assertCountEquals(1)
+        val chosen = compose.activity.getString(R.string.sample_you_chose, text(R.string.sample_sort_by_date))
+        compose.onNode(hasText(chosen)).assertExists()
+    }
+
+    @Test
+    fun datePickerToTryChoosesTheDateTyped() {
+        open(CatalogPage.DatePickers)
+        compose.onNode(hasText(text(R.string.sample_choose_due_date)) and hasClickAction()).performScrollTo().performClick()
+        // The test window is 320dp wide, too narrow for the month, so the
+        // picker offers typing the date. The field is the last on the page.
+        compose.onAllNodes(IS_TEXT_FIELD).onLast().performTextReplacement("03202026")
+        compose.onAllNodes(hasText(text(DesignR.string.shk_ok)) and hasClickAction()).onLast().performClick()
+
+        val due = LocalDate.of(2026, 3, 20).format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(Locale.US))
+        compose.onNode(hasText(compose.activity.getString(R.string.sample_due_on, due))).assertExists()
+    }
+
+    @Test
+    fun timePickerToTryChoosesTheTimeTyped() {
+        open(CatalogPage.TimePickers)
+        compose.onNode(hasText(text(R.string.sample_choose_time)) and hasClickAction()).performScrollTo().performClick()
+        val ok = compose.onAllNodes(hasText(text(DesignR.string.shk_ok)) and hasClickAction()).onLast()
+
+        // The test runs with the 12-hour clock. Its fields are the last on the page.
+        val hour = compose.onAllNodes(IS_TEXT_FIELD and hasText(text(DesignR.string.shk_hour), substring = true)).onLast()
+        hour.performTextReplacement("13")
+        hour.assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Error))
+        ok.assertIsNotEnabled()
+
+        hour.performTextReplacement("7")
+        compose.onAllNodes(IS_TEXT_FIELD and hasText(text(DesignR.string.shk_minute), substring = true)).onLast()
+            .performTextReplacement("05")
+        compose.onAllNodes(hasText("PM") and hasClickAction()).onLast().performClick()
+        ok.assertIsEnabled().performClick()
+
+        val time = LocalTime.of(19, 5).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.US))
+        compose.onNode(hasText(compose.activity.getString(R.string.sample_reminder_at, time))).assertExists()
     }
 
     private fun text(id: Int): String = compose.activity.getString(id)
