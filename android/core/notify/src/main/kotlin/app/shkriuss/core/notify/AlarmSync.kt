@@ -28,12 +28,13 @@ internal class AlarmSync(
         val now = clock.nowMillis()
         val wanted = source.alarms()
         require(wanted.map { it.id }.toSet().size == wanted.size) { "An AlarmSource names each alarm id once" }
+        val wantedNow = wanted.toSet()
         val before = registry.read()
 
         // An alarm that fired stays done for as long as the app names it
         // with the same time. A fired time that lies ahead means the clock
         // was set back: that alarm is due again.
-        val fired = before.fired.filter { (id, at) -> at <= now && Alarm(id, at) in wanted }
+        val fired = before.fired.filter { (id, at) -> at <= now && Alarm(id, at) in wantedNow }
         // The soonest ones are enough. Every alarm that fires ends in a
         // sync, which registers the ones after it.
         val next = wanted.filter { fired[it.id] != it.atMillis }.sortedBy { it.atMillis }.take(MOST_ALARMS)
