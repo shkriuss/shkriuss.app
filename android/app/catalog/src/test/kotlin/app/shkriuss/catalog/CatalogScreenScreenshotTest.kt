@@ -115,6 +115,36 @@ class CatalogScreenScreenshotTest(private val config: ScreenshotConfig) {
         captureWholePage(CatalogPage.ListDetail, "ListDetailPage")
     }
 
+    @Test
+    fun dialogsPage() {
+        captureWholePage(CatalogPage.Dialogs, "DialogsPage")
+    }
+
+    @Test
+    fun bottomSheetsPage() {
+        captureWholePage(CatalogPage.BottomSheets, "BottomSheetsPage")
+    }
+
+    @Test
+    fun snackbarsPage() {
+        captureWholePage(CatalogPage.Snackbars, "SnackbarsPage")
+    }
+
+    @Test
+    fun menusPage() {
+        captureWholePage(CatalogPage.Menus, "MenusPage")
+    }
+
+    @Test
+    fun datePickersPage() {
+        captureWholePage(CatalogPage.DatePickers, "DatePickersPage")
+    }
+
+    @Test
+    fun timePickersPage() {
+        captureWholePage(CatalogPage.TimePickers, "TimePickersPage")
+    }
+
     private fun captureWholePage(page: CatalogPage, name: String) {
         compose.onNode(hasText(compose.activity.getString(page.title))).performScrollTo().performClick()
         compose.captureWholeScreen(name, config)

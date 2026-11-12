@@ -63,6 +63,25 @@ development.
   note is selected in the list.
 - Lists shows a selected list item: a short bar in the accent colour
   before its text, on a light fill. TalkBack reads it as selected.
+- New page Dialogs: the dialog with text and two buttons, with one
+  button, with a choice, with its confirm button turned off and with long
+  text, and one to try that opens over the page.
+- New page Bottom sheets: the sheet with and without a title and with
+  long text, and one to try that slides up from the bottom, and slides
+  down again when a row is tapped.
+- New page Snackbars: the snackbar with a message only, with an action
+  and with long text, and a screen to try whose floating action button
+  shows "Note added" with Undo above itself.
+- New page Menus: the menu with text only, with icons, with a row turned
+  off, with a row that deletes and with long text, and a top bar to try
+  with a "More options" button that opens its menu.
+- New page Date pickers: the date picker with nothing chosen, with a
+  date chosen, with an earliest and a latest date, typing the date, and
+  with a long title, and one to try. In a window too narrow for the month
+  it offers typing the date.
+- New page Time pickers: the time picker with the 12-hour and the
+  24-hour clock, with an impossible time it refuses, and with a long
+  title, and one to try that follows the phone's clock setting.
 
 ## 0.1.0 (2026-11-11)
 

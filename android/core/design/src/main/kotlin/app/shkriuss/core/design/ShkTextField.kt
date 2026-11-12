@@ -54,6 +54,40 @@ fun ShkTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
+    TextFieldInStyle(
+        value = value,
+        onValueChange = onValueChange,
+        label = label,
+        textStyle = ShkTextStyle.Body,
+        modifier = modifier,
+        enabled = enabled,
+        singleLine = singleLine,
+        supportingText = supportingText,
+        errorText = errorText,
+        keyboardOptions = keyboardOptions,
+        keyboardActions = keyboardActions,
+    )
+}
+
+/**
+ * A [ShkTextField] whose typed text is in [textStyle] instead of the body
+ * style, such as the large numbers of the hour and the minute in a
+ * [ShkTimePicker]. Everything else is the same.
+ */
+@Composable
+internal fun TextFieldInStyle(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    textStyle: ShkTextStyle,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    singleLine: Boolean = true,
+    supportingText: String? = null,
+    errorText: String? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val isError = errorText != null
@@ -80,7 +114,7 @@ fun ShkTextField(
                     if (errorText != null) error(errorText)
                 },
             enabled = enabled,
-            textStyle = ShkTextStyle.Body.textStyle.copy(color = textColor),
+            textStyle = textStyle.textStyle.copy(color = textColor),
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
             singleLine = singleLine,

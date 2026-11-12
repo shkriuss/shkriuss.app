@@ -1,5 +1,6 @@
 package app.shkriuss.core.design
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -7,6 +8,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
@@ -31,7 +36,9 @@ import androidx.compose.ui.unit.offset
  * grows taller. Pass [onBack] for the Back button, which TalkBack reads as
  * "Back". Each of [actions] is an icon button that TalkBack reads by its
  * label. Use at most three; an action that needs words belongs in the
- * content as a button. Every button's touch target is 48dp.
+ * content as a button. Actions needed now and then go in [menuItems]: they
+ * add a "More options" button after the actions, which opens them in a
+ * [ShkMenu]. Every button's touch target is 48dp.
  *
  * The bar is at least 64dp tall and has no fill of its own: it is part of
  * the screen. The title starts at the screen margin, where the content
@@ -45,7 +52,9 @@ fun ShkTopBar(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     actions: List<ShkTopBarAction> = emptyList(),
+    menuItems: List<ShkMenuItem> = emptyList(),
 ) {
+    val buttonsAtEnd = actions.isNotEmpty() || menuItems.isNotEmpty()
     CompositionLocalProvider(LocalContentColor provides ShkTheme.colors.text) {
         Row(
             modifier = modifier
@@ -71,7 +80,7 @@ fun ShkTopBar(
                     .weight(1f)
                     .padding(
                         start = if (onBack == null) IconReach else 0.dp,
-                        end = if (actions.isEmpty()) IconReach else 0.dp,
+                        end = if (buttonsAtEnd) 0.dp else IconReach,
                     )
                     .padding(vertical = ShkSpacing.Medium)
                     .semantics { heading() },
@@ -84,7 +93,25 @@ fun ShkTopBar(
                     enabled = action.enabled,
                 )
             }
+            if (menuItems.isNotEmpty()) MoreOptions(menuItems)
         }
+    }
+}
+
+/**
+ * The "More options" button at the end of a top bar, and the menu it
+ * opens over itself. Whether the menu is open is state of the bar alone.
+ */
+@Composable
+private fun MoreOptions(items: List<ShkMenuItem>) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        ShkIconButton(
+            icon = painterResource(R.drawable.shk_icon_more),
+            contentDescription = stringResource(R.string.shk_more_options),
+            onClick = { expanded = true },
+        )
+        ShkMenu(expanded = expanded, onDismissRequest = { expanded = false }, items = items)
     }
 }
 

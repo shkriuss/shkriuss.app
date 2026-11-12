@@ -47,6 +47,18 @@
     <string name="page_navigation_summary">The bar along the bottom of a phone, the rail beside wider windows.</string>
     <string name="page_list_detail_title">List and detail</string>
     <string name="page_list_detail_summary">A list, and one item from it, in one pane or two.</string>
+    <string name="page_dialogs_title">Dialogs</string>
+    <string name="page_dialogs_summary">A question to answer before going on.</string>
+    <string name="page_sheets_title">Bottom sheets</string>
+    <string name="page_sheets_summary">A few actions or a short form that slide up over the screen.</string>
+    <string name="page_snackbars_title">Snackbars</string>
+    <string name="page_snackbars_summary">A short message at the bottom of the screen, with an action.</string>
+    <string name="page_menus_title">Menus</string>
+    <string name="page_menus_summary">A short list of actions that opens from a button.</string>
+    <string name="page_date_pickers_title">Date pickers</string>
+    <string name="page_date_pickers_summary">Choosing a day, on a calendar or by typing it.</string>
+    <string name="page_time_pickers_title">Time pickers</string>
+    <string name="page_time_pickers_summary">Choosing a time of day by typing the hour and the minute.</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
@@ -186,6 +198,31 @@
     <string name="state_one_pane_detail">One pane: a note open, with Back</string>
     <string name="state_two_panes_nothing_open">Two panes: nothing open</string>
     <string name="state_two_panes_open">Two panes: a note open</string>
+    <string name="state_two_actions">With text and two buttons</string>
+    <string name="state_one_action">With one button</string>
+    <string name="state_with_choice">With a choice</string>
+    <string name="state_confirm_disabled">With the confirm button turned off</string>
+    <string name="state_try_dialog">Try it: tap the button to open the dialog. Then tap Delete or Cancel, tap outside the dialog, or go back.</string>
+    <string name="state_with_title">With a title</string>
+    <string name="state_without_title">Without a title, with supporting text</string>
+    <string name="state_try_sheet">Try it: tap the button to open the sheet. Then tap a row, swipe the sheet down, tap above it, or go back.</string>
+    <string name="state_message_only">Message only</string>
+    <string name="state_with_action">With an action</string>
+    <string name="state_try_snackbar">Try it: tap the floating action button. The snackbar shows above it, and Undo takes the note away again.</string>
+    <string name="state_text_only">Text only</string>
+    <string name="state_with_icons">With icons</string>
+    <string name="state_row_disabled">With a row turned off</string>
+    <string name="state_destructive_row">With a row that deletes</string>
+    <string name="state_try_menu">Try it: tap More options at the end of the top bar, then a row.</string>
+    <string name="state_no_date">Nothing chosen yet</string>
+    <string name="state_date_chosen">A date chosen</string>
+    <string name="state_date_range">With an earliest and a latest date</string>
+    <string name="state_typing_date">Typing the date</string>
+    <string name="state_try_date">Try it: tap the button to open the date picker.</string>
+    <string name="state_clock_12">12-hour clock, with AM and PM</string>
+    <string name="state_clock_24">24-hour clock</string>
+    <string name="state_impossible_time">An impossible time, refused</string>
+    <string name="state_try_time">Try it: tap the button to open the time picker.</string>
     <string name="state_try_list_detail">Try it: tap a note to open it. This one follows the window: in one pane, Back or the back gesture returns to the list. In a window at least 840\u00A0dp wide, the note opens beside the list.</string>
 
     <!-- Component pages: the words on the sample components. -->
@@ -271,6 +308,56 @@
     <string name="sample_destination_body">The screen of the destination shows here.</string>
     <string name="sample_choose_note">Choose a note</string>
     <string name="sample_choose_note_body">The note you tap in the list opens here.</string>
+    <string name="sample_delete_note_question">Delete this note?</string>
+    <string name="sample_delete_note_text">It is deleted from this phone and cannot be brought back.</string>
+    <string name="sample_cancel">Cancel</string>
+    <string name="sample_delete">Delete</string>
+    <string name="sample_backup_unreadable">Could not read the backup</string>
+    <string name="sample_ok">OK</string>
+    <string name="sample_sort_by">Sort notes by</string>
+    <string name="sample_sort">Sort</string>
+    <string name="sample_date_changed">Date changed</string>
+    <string name="sample_title">Title</string>
+    <string name="sample_rename_list">Rename the list</string>
+    <string name="sample_rename">Rename</string>
+    <string name="sample_long_dialog_title">Delete all the notes in this folder, and the folder itself?</string>
+    <string name="sample_long_dialog_text">They are deleted from this phone and from every phone you sync with. A backup you made before keeps them.</string>
+    <string name="sample_keep_notes">Keep the notes</string>
+    <string name="sample_delete_all">Delete them all</string>
+    <string name="sample_delete_the_note">Delete the note</string>
+    <string name="sample_no_answer">No answer yet.</string>
+    <string name="sample_answer_deleted">You tapped Delete.</string>
+    <string name="sample_answer_closed">You closed the dialog without deleting.</string>
+    <string name="sample_duplicate">Duplicate</string>
+    <string name="sample_reminder_supporting">It rings at the time you choose.</string>
+    <string name="sample_duplicate_supporting">The copy opens, so you can change it.</string>
+    <string name="sample_long_sheet_title">What to do with the shopping list for the weekend</string>
+    <string name="sample_long_sheet_row">Move the list to another folder, such as Home or Work</string>
+    <string name="sample_long_sheet_supporting">The list keeps its reminders, and the folder it came from keeps nothing.</string>
+    <string name="sample_open_sheet">Show the actions</string>
+    <string name="sample_no_choice">Nothing chosen yet.</string>
+    <string name="sample_you_chose">You chose: %1$s</string>
+    <string name="sample_sheet_closed">You closed the sheet without choosing.</string>
+    <string name="sample_note_saved">Note saved</string>
+    <string name="sample_note_deleted">Note deleted</string>
+    <string name="sample_undo">Undo</string>
+    <string name="sample_long_snackbar">The note was moved to the folder Home, and its reminder was turned off</string>
+    <string name="sample_note_added">Note added</string>
+    <plurals name="sample_note_count">
+        <item quantity="one">%1$d note</item>
+        <item quantity="other">%1$d notes</item>
+    </plurals>
+    <string name="sample_sort_by_date">Sort by date</string>
+    <string name="sample_select_all">Select all</string>
+    <string name="sample_long_menu_row">Move the note to another folder, such as Home or Work</string>
+    <string name="sample_due_on">Due: %1$s</string>
+    <string name="sample_due_date">Due date</string>
+    <string name="sample_choose_due_date">Choose a due date</string>
+    <string name="sample_long_date_title">The day you want to be reminded about this task</string>
+    <string name="sample_reminder">Reminder</string>
+    <string name="sample_reminder_at">Reminder at %1$s</string>
+    <string name="sample_choose_time">Choose a reminder time</string>
+    <string name="sample_long_time_title">The time the reminder rings on each day it repeats</string>
 
     <!-- Buttons page. -->
     <string name="buttons_intro">Touch and hold a button to see it pressed. The buttons on this page do nothing when tapped.</string>
@@ -354,4 +441,34 @@
     <string name="list_detail_title">List and detail scaffold</string>
     <string name="list_detail_use">A list, and one item from it. In a window narrower than 840\u00A0dp the item opens in place of the list, with Back. From 840\u00A0dp it opens beside the list.</string>
     <string name="list_detail_two_panes_note">Two panes show only in a window at least 840\u00A0dp wide. Turn the phone sideways, or open this page on a tablet held sideways, to see them.</string>
+
+    <!-- Dialogs page. -->
+    <string name="dialogs_intro">Each dialog is drawn in place, as it looks in its window. In an app it opens over the screen, which dims. Only the button under Try it does something when tapped.</string>
+    <string name="dialog_title">Dialog</string>
+    <string name="dialog_use">A question to answer before going on, such as before deleting a note. TalkBack reads the title when it opens. A tap outside it or Back closes it.</string>
+
+    <!-- Bottom sheets page. -->
+    <string name="sheets_intro">Each sheet is drawn in place, as it looks when open. In an app it slides up over the screen, which dims. Only the button under Try it does something when tapped.</string>
+    <string name="sheet_title">Bottom sheet</string>
+    <string name="sheet_use">A few actions or a short form about what is on the screen, such as what to do with a note. A swipe down, a tap above it or Back closes it.</string>
+
+    <!-- Snackbars page. -->
+    <string name="snackbars_intro">Each snackbar is drawn in place. In an app it shows at the bottom of the screen, above the floating action button, and goes away by itself. Only the button under Try it does something when tapped.</string>
+    <string name="snackbar_title">Snackbar</string>
+    <string name="snackbar_use">A short message about something that just happened, such as a deleted note, with at most one action, such as Undo. TalkBack reads it when it appears.</string>
+
+    <!-- Menus page. -->
+    <string name="menus_intro">Each menu is drawn in place, as it looks when open. In an app it opens over the button that shows it. Only the top bar under Try it does something when tapped.</string>
+    <string name="menu_title">Menu</string>
+    <string name="menu_use">A short list of actions that opens from a button, such as More options in a top bar. TalkBack reads each row as a button.</string>
+
+    <!-- Date pickers page. -->
+    <string name="date_pickers_intro">Each date picker is drawn in place, as it looks in its window, on a month that does not change. In an app it opens over the screen, on the chosen date or on this month. You can tap the days of a sample; its buttons do nothing.</string>
+    <string name="date_picker_title">Date picker</string>
+    <string name="date_picker_use">Choosing a day, such as when a task is due. The pencil switches to typing the date. TalkBack reads each day in full.</string>
+
+    <!-- Time pickers page. -->
+    <string name="time_pickers_intro">Each time picker is drawn in place, as it looks in its window. In an app it opens over the screen, and uses AM and PM or the 24-hour clock as the phone is set. Only the button under Try it does something when tapped.</string>
+    <string name="time_picker_title">Time picker</string>
+    <string name="time_picker_use">Choosing a time of day, such as when a reminder rings. Type the hour and the minute with the number keyboard. A time that cannot be is refused with an error.</string>
 </resources>

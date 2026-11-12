@@ -45,6 +45,12 @@ enum class CatalogPage(
     TopBars(R.string.page_top_bars_title, R.string.page_top_bars_summary, CatalogGroup.Components),
     Navigation(R.string.page_navigation_title, R.string.page_navigation_summary, CatalogGroup.Components),
     ListDetail(R.string.page_list_detail_title, R.string.page_list_detail_summary, CatalogGroup.Components),
+    Dialogs(R.string.page_dialogs_title, R.string.page_dialogs_summary, CatalogGroup.Components),
+    BottomSheets(R.string.page_sheets_title, R.string.page_sheets_summary, CatalogGroup.Components),
+    Snackbars(R.string.page_snackbars_title, R.string.page_snackbars_summary, CatalogGroup.Components),
+    Menus(R.string.page_menus_title, R.string.page_menus_summary, CatalogGroup.Components),
+    DatePickers(R.string.page_date_pickers_title, R.string.page_date_pickers_summary, CatalogGroup.Components),
+    TimePickers(R.string.page_time_pickers_title, R.string.page_time_pickers_summary, CatalogGroup.Components),
 }
 
 /**
@@ -77,5 +83,11 @@ fun CatalogApp() {
         CatalogPage.TopBars -> TopBarsPage()
         CatalogPage.Navigation -> NavigationPage()
         CatalogPage.ListDetail -> ListDetailPage()
+        CatalogPage.Dialogs -> DialogsPage()
+        CatalogPage.BottomSheets -> BottomSheetsPage()
+        CatalogPage.Snackbars -> SnackbarsPage()
+        CatalogPage.Menus -> MenusPage()
+        CatalogPage.DatePickers -> DatePickersPage()
+        CatalogPage.TimePickers -> TimePickersPage()
     }
 }
