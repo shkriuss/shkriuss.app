@@ -63,6 +63,10 @@ gradlePlugin {
             id = "shkriuss.android.instrumented-test"
             implementationClass = "app.shkriuss.buildlogic.AndroidInstrumentedTestConventionPlugin"
         }
+        register("androidTestFixtures") {
+            id = "shkriuss.android.test-fixtures"
+            implementationClass = "app.shkriuss.buildlogic.AndroidTestFixturesConventionPlugin"
+        }
         register("androidRoom") {
             id = "shkriuss.android.room"
             implementationClass = "app.shkriuss.buildlogic.AndroidRoomConventionPlugin"

@@ -29,6 +29,9 @@ import org.w3c.dom.Element
  *   under `com.google.android.gms` in the APK's dex files.
  * - Rule 4, and "no permissions" for every app so far: no permission is
  *   declared or requested.
+ * - ADR 0029: no class of the test fixtures of `core/crypto`. They hold a
+ *   stand-in for the Android Keystore that keeps keys in memory, and are
+ *   for tests only.
  *
  * It runs every time an APK is assembled. Apps that are later allowed an
  * exception (Sync and the network permission, Grammar and native code) get
@@ -56,7 +59,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
     @TaskAction
     fun check() {
         val problems = manifestProblems(mergedManifest.get().asFile) + nativeLibraryProblems() +
-            playServicesClassProblems()
+            playServicesClassProblems() + cryptoTestFixtureClassProblems()
         if (problems.isNotEmpty()) {
             throw GradleException(
                 buildString {
@@ -68,7 +71,8 @@ abstract class CheckApkRulesTask : DefaultTask() {
             )
         }
         report.get().asFile.writeText(
-            "No permissions, no native libraries, no emoji font loader, no Play services classes.\n",
+            "No permissions, no native libraries, no emoji font loader, no Play services classes, " +
+                "no test fixtures of core/crypto.\n",
         )
     }
 
@@ -111,7 +115,23 @@ abstract class CheckApkRulesTask : DefaultTask() {
      * An APK with no dex file fails too, so the rule never passes by
      * reading nothing.
      */
-    private fun playServicesClassProblems(): List<String> {
+    private fun playServicesClassProblems(): List<String> =
+        classProblems(PLAY_SERVICES_DESCRIPTOR, "rule 3: no Google Play services", failWithoutDex = true)
+
+    /**
+     * ADR 0029: no class under `app.shkriuss.core.crypto.fixtures`, the
+     * package of the test fixtures of `core/crypto`, in any dex file of the
+     * APK. It is found the same way as a Play services class. An APK with
+     * no dex file is already reported by that rule.
+     */
+    private fun cryptoTestFixtureClassProblems(): List<String> = classProblems(
+        CRYPTO_TEST_FIXTURES_DESCRIPTOR,
+        "ADR 0029: the test fixtures of core/crypto are for tests only and never part of an app",
+        failWithoutDex = false,
+    )
+
+    /** The classes under [descriptor] that the dex files of the APK name, each as a problem that cites [rule]. */
+    private fun classProblems(descriptor: String, rule: String, failWithoutDex: Boolean): List<String> {
         val artifacts = builtArtifactsLoader.get().load(apkFolder.get())
             ?: throw GradleException("No APK found in ${apkFolder.get().asFile}")
         return artifacts.elements.flatMap { element ->
@@ -119,12 +139,16 @@ abstract class CheckApkRulesTask : DefaultTask() {
             ZipFile(apk).use { zip ->
                 val dexFiles = zip.entries().asSequence().filter { it.name.endsWith(".dex") }.toList()
                 if (dexFiles.isEmpty()) {
-                    listOf("no dex file in ${apk.name}, so its classes cannot be checked (rule 3)")
+                    if (failWithoutDex) {
+                        listOf("no dex file in ${apk.name}, so its classes cannot be checked (rule 3)")
+                    } else {
+                        emptyList()
+                    }
                 } else {
                     dexFiles.flatMap { dexFile ->
-                        val classes = playServicesClasses(zip.getInputStream(dexFile).use { it.readBytes() })
+                        val classes = classesUnder(descriptor, zip.getInputStream(dexFile).use { it.readBytes() })
                         val shown = classes.take(MOST_CLASSES_SHOWN).map { name ->
-                            "class $name in ${dexFile.name} of ${apk.name} (rule 3: no Google Play services)"
+                            "class $name in ${dexFile.name} of ${apk.name} ($rule)"
                         }
                         val more = classes.size - MOST_CLASSES_SHOWN
                         if (more > 0) shown + "and $more more such classes in ${dexFile.name} of ${apk.name}" else shown
@@ -164,6 +188,9 @@ abstract class CheckApkRulesTask : DefaultTask() {
         /** How a dex file starts the name of every class of Google Play services. */
         const val PLAY_SERVICES_DESCRIPTOR = "Lcom/google/android/gms/"
 
+        /** How a dex file starts the name of every class of the test fixtures of `core/crypto`. */
+        const val CRYPTO_TEST_FIXTURES_DESCRIPTOR = "Lapp/shkriuss/core/crypto/fixtures/"
+
         /** A failing build names this many classes for each dex file, and counts the rest. */
         const val MOST_CLASSES_SHOWN = 20
 
@@ -171,11 +198,11 @@ abstract class CheckApkRulesTask : DefaultTask() {
         const val LONGEST_CLASS_NAME = 300
 
         /**
-         * The names of the Play services classes that the bytes of one dex
-         * file name, in dotted form, sorted, each once.
+         * The names of the classes under [descriptor] that the bytes of one
+         * dex file name, in dotted form, sorted, each once.
          */
-        fun playServicesClasses(dex: ByteArray): List<String> {
-            val pattern = PLAY_SERVICES_DESCRIPTOR.toByteArray(Charsets.US_ASCII)
+        fun classesUnder(descriptor: String, dex: ByteArray): List<String> {
+            val pattern = descriptor.toByteArray(Charsets.US_ASCII)
             val found = sortedSetOf<String>()
             var start = 0
             while (start <= dex.size - pattern.size) {

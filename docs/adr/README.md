@@ -27,7 +27,9 @@ the owner's decisions of 2026-11-12. Their detail is in
 Phase 1, step 4, session C, with the owner's decisions on pull request
 24. Record 0008 was completed in Phase 1, step 5, with the owner's
 decisions of 2026-11-12. Its detail is in
-[backup-format.md](../architecture/backup-format.md).
+[backup-format.md](../architecture/backup-format.md). Record 0029 comes
+from the same step: how the tests of other modules get real keys, with
+the owner's decisions of 2026-11-12.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -62,3 +64,4 @@ How a record may be edited or replaced is in point 7 of
 | 0026 | [Room's build tools and committed schemas](0026-room-build-tools.md) | Accepted |
 | 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |
 | 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted |
+| 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |

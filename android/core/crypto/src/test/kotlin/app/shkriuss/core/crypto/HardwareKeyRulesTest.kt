@@ -1,5 +1,6 @@
 package app.shkriuss.core.crypto
 
+import app.shkriuss.core.crypto.fixtures.SoftwareHardwareKeys
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
