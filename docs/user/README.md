@@ -11,9 +11,11 @@ Pages:
   updates.
 - [Verify with AppVerifier](verify.md): how to check that an app is
   genuine, against the signing fingerprint.
+- [Back up and restore](backup.md): what a backup file is, how to make
+  one and how to restore it. No released app can make a backup yet. The
+  page is not on the hub website until one can.
 
 What else belongs here:
 
 - One guide per app. The first one comes with the Water app.
-- How to back up and restore.
 - How to set up sync.

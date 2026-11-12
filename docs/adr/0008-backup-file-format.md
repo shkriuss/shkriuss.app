@@ -7,7 +7,9 @@
   [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4).
   Completed on 2026-11-12 in Phase 1, step 5
   ([PROMPTS.md](../development/PROMPTS.md)) with the owner's decisions in
-  the planning session of that step. The detail is in
+  the planning session of that step and while it was built, for
+  [pull request 25](https://github.com/shkriuss/shkriuss.app/pull/25).
+  The detail is in
   [backup-format.md](../architecture/backup-format.md).
 
 ## Context
@@ -206,8 +208,8 @@ follows that page exactly.
   ([0027](0027-record-fields-and-stamping.md), point 8). `core/backup`
   depends on `core/crypto` and `core/data`.
 - The tests of `core/backup` need real keys with no Android Keystore.
-  How they get them is a decision of its own, recorded when it is built
-  in this step.
+  They get them from the test fixtures of `core/crypto`
+  ([0029](0029-test-fixtures-for-the-keystore-stand-in.md)).
 - No screen is part of this step. The screens for backup and restore
   come with the first app (step 2.5 in
   [PROMPTS.md](../development/PROMPTS.md)). What Water puts into a backup

@@ -44,6 +44,9 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   ([third-party.md](third-party.md)). Its test fixtures, in
   `src/testFixtures/`, give the tests of other modules real keys
   ([Test fixtures](#test-fixtures)).
+- `android/core/backup/`: the backup file of an app: writing, checking
+  and restoring it. See
+  [backup-format.md](../architecture/backup-format.md).
 - `android/core/testing/`: test helpers that other modules use in their
   tests only.
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
@@ -240,10 +243,11 @@ second build must write the same mapping file, or the release stops. See
   since" query, the example migration and the migration test helpers,
   on the system SQLite driver under Robolectric
   ([architecture/data.md](../architecture/data.md#tests)).
-- `core/crypto` has 19 test classes with 148 tests. They are the items 1
+- `core/crypto` has 20 test classes with 150 tests. They are the items 1
   to 8 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
-  and the rules for hardware keys.
+  the rules for hardware keys, and the example file of the backup format
+  (`BackupExampleFileTest`, see `core/backup` below).
   - No Android Keystore exists on the JVM. So the tests pass a software
     stand-in for the hardware keys, `SoftwareHardwareKeys`, with the same
     byte layout. It can act like a phone that is locked, a Keystore that
@@ -292,6 +296,39 @@ second build must write the same mapping file, or the release stops. See
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
+- `core/backup` has 10 test classes with 68 tests. They are the items of
+  "What the tests must cover" in
+  [backup-format.md](../architecture/backup-format.md#what-the-tests-must-cover).
+  - They use real keys: `SoftwareKeysApp` from the
+    [test fixtures](#test-fixtures) of `core/crypto`, and a fake app
+    that holds its records in memory and its files in a folder.
+  - `RoundTripTest`, `DamagedFileTest`, `WrongKeyAndVersionTest`,
+    `BodyRulesTest`, `ExportTest` and `NothingChangesTest` write, check
+    and restore backups in memory. `DamagedFileTest` cuts a backup at
+    every length and changes every byte of it, one at a time. For every
+    file that must be refused, a check and a restore must give the same
+    answer, the app must be as it was, and nothing may be left in the
+    staging folder.
+  - `BodyRulesTest` writes bodies by hand that break one rule each, and
+    encrypts them with the real keys. So only the rule can refuse them.
+  - `LargeFileTest` proves that a file is never held in memory. One file
+    of a little over 2 GiB, longer than all the memory the test JVM may
+    use, goes into a backup and through the check, with nothing stored.
+    It takes about 3 seconds. Two more tests watch that writing and
+    restoring a file of 64 MiB never run more than 4 MiB ahead of what
+    they have passed on.
+  - `ExampleFileTest` reads the example file of the page as a backup.
+    `BackupExampleFileTest` in `core/crypto` builds the same bytes a
+    second time with `ReferenceStream`. It is there because only
+    `core/crypto` may use plain AES-GCM.
+  - `BackupsTest` runs under Robolectric. It writes, checks and restores
+    through Android's content resolver, with documents that are files
+    behind a small content provider of the test. It checks that a
+    document is opened in the mode that cuts off old content, that a
+    failed backup is deleted, that only `content:` URIs are taken, and
+    the two intents of the system file picker.
+  - No test opens the picker itself. That is checked by hand with the
+    first app.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
