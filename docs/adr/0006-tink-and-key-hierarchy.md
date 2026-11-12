@@ -153,8 +153,9 @@ in for the Unlocked key.
 - No new constructions. Only the ones documented in
   [crypto-design.md](../security/crypto-design.md) (CLAUDE.md).
 - Database rows, and the keys that open records, are available whenever
-  the app runs. Files, backup and the recovery key need an unlocked
-  phone, and with the app lock on, files need the prompt.
+  the app runs. On Android 15 and later, backup and, with the app lock
+  off, files need an unlocked phone. The kept recovery key always needs
+  the prompt, and with the app lock on, files need it too.
 - On Android 13 and 14 the hardware does not refuse the backup keyset
   and, with the app lock off, the file keys while the phone is locked.
   This matters only against someone who breaks Android itself, which is
@@ -169,6 +170,15 @@ in for the Unlocked key.
 - A file key that is sealed by a key that exists only on one phone never
   leaves that phone. Backup and sync of files start only after the file
   keys are sealed by a recovery-key-derived key.
+- A keyset file under a hardware key can be the only way to a user's
+  files. crypto-design.md has the rules for making, replacing and losing
+  a hardware key. A key is never made again because an operation failed.
+- For a key that needs the prompt, associated data is given to the
+  cipher only after the prompt succeeds. Tink's helper does it earlier,
+  which is one more reason it cannot be used for these keys.
+- Sealing file keys again in the database needs a `RecordWriter`
+  function of its own
+  ([0027](0027-record-fields-and-stamping.md), point 8).
 - Session B adds the dependency, its version catalog entry and its
   verification metadata, the rule in the APK rules check, and the unit
   tests listed in crypto-design.md.

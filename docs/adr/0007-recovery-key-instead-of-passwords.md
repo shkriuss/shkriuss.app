@@ -102,7 +102,8 @@ owner chose words only for now, and one random key per file, on
 - Restoring a backup and setting up sync both need the recovery key,
   because their keys derive from it.
 - If the recovery key is lost, data on devices that are already set up
-  stays usable.
+  stays usable. One exception: an app with the app lock on, after the
+  screen lock is removed. See [0006](0006-tink-and-key-hierarchy.md).
 - If the recovery key and every device are lost, synced data and backup
   files cannot be opened. The user guide must say so.
 - The self-hosting guide may show Cloudflare Access as an optional extra
