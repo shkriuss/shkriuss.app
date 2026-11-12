@@ -35,8 +35,11 @@ class AppLock internal constructor(private val vault: KeyVault) {
         }
     }
 
-    /** True between an unlock and the next lock: the file keys are in memory. */
-    fun isUnlocked(): Boolean = vault.locked { vault.fileKeyInMemory() != null }
+    /**
+     * True if the app lock is on and the app is locked: the file keys are
+     * not in memory, and the next use of a file needs [beginUnlock].
+     */
+    fun isLocked(): Boolean = vault.locked { state() == AppLockState.ON && vault.fileKeyInMemory() == null }
 
     /**
      * True if the app lock can be turned on: it is off, the phone has a

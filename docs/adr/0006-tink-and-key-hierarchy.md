@@ -85,10 +85,11 @@
 10. Every encrypted blob starts with `SHK`, a version byte and a kind
     byte. These bytes and the ID of the record or file are bound as
     associated data. Nonces come only from Tink and the Keystore.
-11. `core/crypto` calls Android directly, and not through Tink, in three
+11. `core/crypto` calls Android directly, and not through Tink, in five
     places: the AES-256-GCM cipher of a key that needs the prompt, in the
     same byte layout as Tink's Keystore helper; reading a key's security
-    level; and SHA-256 for the checksum of the recovery words.
+    level; SHA-256 for the checksum of the recovery words; listing the
+    app's hardware keys; and asking whether one hardware key exists.
 12. No Play services provider: `core/crypto` refuses to work if a
     provider named `GmsCore_OpenSSL` is installed, and the APK rules
     check refuses any class under `com.google.android.gms`.
@@ -102,6 +103,14 @@ where available, and usable only while the device is unlocked." The owner
 changed it twice on 2026-11-12: the record keyset is also usable while
 the device is locked, and on Android 13 and 14 the Background key stands
 in for the Unlocked key.
+
+Point 11 first read "in three places". The owner added the last two on
+2026-11-12, in step 1.4, session B. Tink's helper cannot list keys. And
+its `hasKey` also answers "no" when the Keystore only failed for a
+moment, read in the source of Android 13 and 14. A living key would then
+count as lost. The list has the same weakness, so it is never taken as
+proof that a key is gone. See
+[crypto-design.md](../security/crypto-design.md#where-android-does-the-work-not-tink).
 
 ## Options rejected
 
@@ -179,9 +188,10 @@ in for the Unlocked key.
 - Sealing file keys again in the database needs a `RecordWriter`
   function of its own
   ([0027](0027-record-fields-and-stamping.md), point 8).
-- Session B adds the dependency, its version catalog entry and its
+- Session B added the dependency, its version catalog entry and its
   verification metadata, the rule in the APK rules check, and the unit
-  tests listed in crypto-design.md.
+  tests listed in crypto-design.md. A unit test, `CryptoBoundaryTest`,
+  enforces the first consequence above.
 - The behaviour of the four keys is proven by emulator tests on Android
   13, 14, 15 and the newest. They are the step after session B (step
   1.4, session C), because they need the emulator job in the CI

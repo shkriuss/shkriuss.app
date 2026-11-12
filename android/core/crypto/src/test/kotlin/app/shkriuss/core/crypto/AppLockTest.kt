@@ -83,6 +83,7 @@ class AppLockTest {
         val app = fixture.app
         val crypto = app.open()
         assertEquals(AppLockState.OFF, crypto.appLock.state())
+        assertFalse("an app with the app lock off is never locked", crypto.appLock.isLocked())
         assertEquals(HardwareKeyRef(HardwareKeyKind.UNLOCKED, 1), app.keyOf(KeysetName.FILE_KEY))
 
         val step = crypto.appLock.beginTurnOn()
@@ -93,7 +94,7 @@ class AppLockTest {
         step.finish()
 
         assertEquals(AppLockState.ON, crypto.appLock.state())
-        assertTrue(crypto.appLock.isUnlocked())
+        assertFalse(crypto.appLock.isLocked())
         assertEquals(lockKey, app.keyOf(KeysetName.FILE_KEY))
         assertEquals(listOf("backup", "file-key"), app.store.changes)
         assertEquals(
@@ -133,7 +134,7 @@ class AppLockTest {
         // The app started again is locked.
         val locked = app.open()
         assertEquals(AppLockState.ON, locked.appLock.state())
-        assertFalse(locked.appLock.isUnlocked())
+        assertTrue(locked.appLock.isLocked())
         assertFilesAreClosed(locked, fixture)
         assertRecordsWork(locked, fixture)
         assertNotNull(locked.backups.keyId())
@@ -141,11 +142,11 @@ class AppLockTest {
 
         // One prompt, one operation, one unlock.
         locked.appLock.beginUnlock().finish()
-        assertTrue(locked.appLock.isUnlocked())
+        assertFalse(locked.appLock.isLocked())
         assertFilesOpen(locked, fixture)
 
         locked.appLock.lock()
-        assertFalse(locked.appLock.isUnlocked())
+        assertTrue(locked.appLock.isLocked())
         assertFilesAreClosed(locked, fixture)
         locked.appLock.beginUnlock().cancel()
         assertFilesAreClosed(locked, fixture)
@@ -288,7 +289,7 @@ class AppLockTest {
         val app = fixture.app
         val crypto = app.open()
         crypto.appLock.beginTurnOn().finish()
-        assertTrue(crypto.appLock.isUnlocked())
+        assertFalse(crypto.appLock.isLocked())
 
         app.hardware.removeScreenLock()
 
@@ -309,7 +310,7 @@ class AppLockTest {
 
         val locked = app.open()
         assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { locked.appLock.beginUnlock().finish() })
-        assertFalse(locked.appLock.isUnlocked())
+        assertTrue(locked.appLock.isLocked())
     }
 
     @Test
