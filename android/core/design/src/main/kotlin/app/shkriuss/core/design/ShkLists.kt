@@ -12,11 +12,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 /**
@@ -36,10 +44,18 @@ import androidx.compose.ui.unit.dp
  * With [enabled] false, the row dims, ignores taps, and TalkBack reads
  * "disabled".
  *
+ * With [selected], the row is marked as the one that is open, such as the
+ * note shown beside the list in two panes of a [ShkListDetailScaffold].
+ * It is filled with the higher surface colour and has a bar in the accent
+ * colour along its start edge, so the mark does not rely on colour alone.
+ * TalkBack reads "selected". Rows that are not selected say nothing about
+ * it, so a list where nothing can be open sounds as before.
+ *
  * Its content starts and ends at the edges of the space it is given, so
  * its text lines up with the page title and the other text on the screen.
- * Only its touch target and its pressed state, a rounded [ShkShapes.Field],
- * reach 8dp past those edges, as those of a checkbox or switch row do.
+ * Only its touch target, its pressed state and its selected mark, a
+ * rounded [ShkShapes.Field], reach 8dp past those edges, as those of a
+ * checkbox or switch row do. The bar sits in that space, before the text.
  */
 @Composable
 fun ShkListItem(
@@ -50,6 +66,7 @@ fun ShkListItem(
     icon: Painter? = null,
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
+    selected: Boolean = false,
 ) {
     val colors = ShkTheme.colors
     val alpha = if (enabled) 1f else DisabledContentAlpha
@@ -59,8 +76,16 @@ fun ShkListItem(
         // One TalkBack item, as a row that can be tapped is.
         Modifier.semantics(mergeDescendants = true) { if (!enabled) disabled() }
     }
+    val mark = if (selected) {
+        Modifier
+            .selectedMark(fill = colors.surfaceHigh.copy(alpha = alpha), bar = colors.accent.copy(alpha = alpha))
+            .semantics { this.selected = true }
+    } else {
+        Modifier
+    }
     Row(
-        modifier = modifier.shkRow(action = action, verticalPadding = ShkSpacing.Small),
+        // The mark comes before the action, so the pressed state is drawn over it.
+        modifier = modifier.shkRow(action = mark.then(action), verticalPadding = ShkSpacing.Small),
         horizontalArrangement = Arrangement.spacedBy(ShkSpacing.Medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -121,6 +146,33 @@ fun ShkSectionHeader(text: String, modifier: Modifier = Modifier) {
             .semantics { heading() },
     )
 }
+
+/** Draws the mark of a selected list item behind its content. See [drawSelectedMark]. */
+private fun Modifier.selectedMark(fill: Color, bar: Color): Modifier = drawBehind { drawSelectedMark(fill, bar) }
+
+/**
+ * The mark of a selected list item, over the whole highlight, which
+ * reaches [RowReach] past the row's edges: a [fill] of the area, and a
+ * [bar] along its start edge. The bar is [SelectedBarWidth] wide, inside
+ * the reach, so the text does not move. It keeps clear of the rounded
+ * corners by their radius at the top and the bottom. It is on the right in
+ * right-to-left languages.
+ */
+internal fun DrawScope.drawSelectedMark(fill: Color, bar: Color) {
+    drawRect(fill)
+    val width = SelectedBarWidth.toPx()
+    val inset = ShkShapes.FieldCorner.toPx()
+    val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - width
+    drawRoundRect(
+        color = bar,
+        topLeft = Offset(x, inset),
+        size = Size(width, (size.height - 2 * inset).coerceAtLeast(0f)),
+        cornerRadius = CornerRadius(width / 2),
+    )
+}
+
+/** The width of the bar of a selected list item. Half the reach, so 4dp are left before the text. */
+private val SelectedBarWidth = ShkSpacing.ExtraSmall
 
 /** The size Material 3 draws the icon at the start of a list item. */
 private val ListItemIconSize = 24.dp

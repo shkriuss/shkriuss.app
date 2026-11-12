@@ -7,14 +7,18 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasParent
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.isNotEnabled
@@ -27,6 +31,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.toSize
 import app.shkriuss.core.design.ShkSpacing
 import org.junit.Assert.assertEquals
+import app.shkriuss.core.design.R as DesignR
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -84,7 +89,8 @@ class ComponentPagesTest {
         // one assist chip. Floating action buttons have no disabled state.
         // Selection controls: two each of checkbox, switch and radio button,
         // off and on. Lists: one list item. Cards, and the buttons of the
-        // empty and error states, have no disabled state.
+        // empty and error states, have no disabled state. Top bars: one
+        // action. Destinations and the list and detail have none.
         val expected = mapOf(
             CatalogPage.Buttons to 4,
             CatalogPage.FloatingActionButtons to 0,
@@ -95,6 +101,9 @@ class ComponentPagesTest {
             CatalogPage.Cards to 0,
             CatalogPage.Lists to 1,
             CatalogPage.ContentStates to 0,
+            CatalogPage.TopBars to 1,
+            CatalogPage.Navigation to 0,
+            CatalogPage.ListDetail to 0,
         )
         assertEquals("every component page is checked", COMPONENT_PAGES.toSet(), expected.keys)
         expected.forEach { (page, count) ->
@@ -185,6 +194,15 @@ class ComponentPagesTest {
     }
 
     @Test
+    fun theSelectedListItemIsReadAsSelected() {
+        open(CatalogPage.Lists)
+        // One sample is selected. The other list items say nothing about it.
+        val selected = SemanticsMatcher.expectValue(SemanticsProperties.Selected, true)
+        compose.onAllNodes(selected and hasClickAction()).assertCountEquals(1)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)).assertCountEquals(1)
+    }
+
+    @Test
     fun onlyTheEmptyStateThatAnswersASearchIsAnnounced() {
         open(CatalogPage.ContentStates)
         // "No results" answers a search, so it is announced. "No notes yet"
@@ -221,6 +239,47 @@ class ComponentPagesTest {
         compose.onNode(error).assert(polite)
     }
 
+    @Test
+    fun navigationToTrySelectsTheDestinationTapped() {
+        open(CatalogPage.Navigation)
+        val search = text(R.string.sample_search)
+        // The one to try is the last sample on the page. The others show
+        // the first destination, Today, as their title.
+        compose.onAllNodes(hasText(search) and isHeading()).assertCountEquals(0)
+        compose.onAllNodes(hasText(search) and hasClickAction())
+            .onLast()
+            .performScrollTo()
+            .assertIsNotSelected()
+            .performClick()
+            .assertIsSelected()
+        compose.onAllNodes(hasText(search) and isHeading()).assertCountEquals(1)
+    }
+
+    @Test
+    fun listAndDetailToTryOpensANoteAndBackReturnsToTheList() {
+        open(CatalogPage.ListDetail)
+        // Only the one to try opens "Call the dentist". It is the last
+        // sample on the page, and the test window is narrow: one pane.
+        val dentist = text(R.string.sample_call_dentist)
+        val openNote = hasText(dentist) and isHeading()
+        fun openTheNote() {
+            compose.onAllNodes(hasText(dentist) and hasClickAction()).onLast().scrollPageTo().performClick()
+            compose.onNode(openNote).assertExists()
+        }
+        compose.onAllNodes(openNote).assertCountEquals(0)
+
+        // The back gesture closes the note, and leaves the page open.
+        openTheNote()
+        back()
+        compose.onAllNodes(openNote).assertCountEquals(0)
+        compose.onNode(hasText(text(R.string.page_list_detail_title)) and isHeading()).assertExists()
+
+        // Back in the note's top bar closes it too. The one to try is last.
+        openTheNote()
+        compose.onAllNodes(hasContentDescription(text(DesignR.string.shk_back))).onLast().performClick()
+        compose.onAllNodes(openNote).assertCountEquals(0)
+    }
+
     private fun text(id: Int): String = compose.activity.getString(id)
 
     private fun open(page: CatalogPage) {
@@ -230,6 +289,21 @@ class ComponentPagesTest {
     private fun back() {
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()
+    }
+
+    /**
+     * Scrolls the page until this node is a third of the way down the
+     * window. `performScrollTo` scrolls only the closest part that
+     * scrolls, which for a node in a sample that scrolls inside the page,
+     * such as a pane of a list and detail, is the sample, not the page.
+     */
+    private fun SemanticsNodeInteraction.scrollPageTo(): SemanticsNodeInteraction {
+        val page = compose.onNode(hasScrollAction() and !hasAnyAncestor(hasScrollAction()))
+        val window = page.fetchSemanticsNode()
+        val offset = fetchSemanticsNode().positionInRoot.y - window.positionInRoot.y - window.size.height / 3f
+        page.performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, offset) }
+        compose.waitForIdle()
+        return this
     }
 
     /**

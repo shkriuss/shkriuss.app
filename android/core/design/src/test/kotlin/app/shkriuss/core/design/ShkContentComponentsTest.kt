@@ -60,6 +60,8 @@ import org.robolectric.annotation.GraphicsMode
  *   divider and decorative icons not at all,
  * - a list item is at least 48dp tall, and a plain card's button keeps a
  *   touch target of its own,
+ * - a selected list item is read as selected; other rows say nothing
+ *   about it. How its mark is drawn is checked by [ShkSelectedMarkTest],
  * - long text wraps, is not cut by its own layout, and stays inside the
  *   component; the text of a state stays centred.
  *
@@ -117,6 +119,24 @@ class ShkContentComponentsTest(private val fontScale: Float) {
 
         compose.onNodeWithTag(TARGET).assertIsNotEnabled()
         compose.onNode(hasClickAction()).assertIsNotEnabled()
+    }
+
+    @Test
+    fun aSelectedListItemIsReadAsSelectedAndTheOthersSayNothingAboutIt() {
+        show {
+            Column {
+                ShkListItem(headline = HEADLINE, onClick = {}, selected = true)
+                ShkListItem(headline = SUPPORTING, onClick = {})
+                ShkListItem(headline = TRAILING, selected = true, modifier = Modifier.testTag(TARGET))
+            }
+        }
+
+        val selected = compose.onNode(hasText(HEADLINE)).fetchSemanticsNode().config
+        assertEquals(true, selected[SemanticsProperties.Selected])
+        assertEquals("A selected row that can be tapped is still a button", Role.Button, selected[SemanticsProperties.Role])
+        assertEquals(true, compose.onNodeWithTag(TARGET).fetchSemanticsNode().config[SemanticsProperties.Selected])
+        val other = compose.onNode(hasText(SUPPORTING)).fetchSemanticsNode().config
+        assertFalse("A row that is not selected should say nothing about it", SemanticsProperties.Selected in other)
     }
 
     @Test

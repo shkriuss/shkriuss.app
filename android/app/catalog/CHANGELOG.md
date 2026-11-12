@@ -52,6 +52,17 @@ development.
   pressed highlight reaches a little past it.
 - Dividers are a lighter grey, the new divider colour. Colours lists it,
   with its contrast on each background.
+- New page Top bars: the top bar with a title only, with Back, with
+  actions, with an action turned off, and with a long title.
+- New page Navigation: the navigation bar and rail, with short and long
+  labels, and one to try that is a bar on a phone held upright and a rail
+  on a tablet or a phone held sideways.
+- New page List and detail: one pane with the list or a note, two panes
+  in a window at least 840 dp wide, and one to try. On a phone, Back and
+  the back gesture return from a note to the list. In two panes, the open
+  note is selected in the list.
+- Lists shows a selected list item: a short bar in the accent colour
+  before its text, on a light fill. TalkBack reads it as selected.
 
 ## 0.1.0 (2026-11-11)
 

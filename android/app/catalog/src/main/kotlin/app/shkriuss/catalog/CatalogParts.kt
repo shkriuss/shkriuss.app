@@ -1,6 +1,8 @@
 package app.shkriuss.catalog
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,12 +15,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import app.shkriuss.core.design.ShkShapes
 import app.shkriuss.core.design.ShkSpacing
 import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTextStyle
@@ -72,12 +77,14 @@ class ComponentState(
 
 /**
  * The states of one component, each under its caption: one under the
- * other in a narrow window, three to a row in a wide one. Each component
- * keeps its own width, so long labels wrap the way they would in an app.
+ * other in a narrow window, [wideColumns] to a row in a wide one. Each
+ * component keeps its own width, so long labels wrap the way they would in
+ * an app. Pass 1 for samples that need the whole width, such as a layout
+ * in a frame.
  */
 @Composable
-fun ComponentStates(states: List<ComponentState>) {
-    AdaptiveGrid(items = states, wideColumns = 3, spacing = ShkSpacing.Large) { state, itemModifier ->
+fun ComponentStates(states: List<ComponentState>, wideColumns: Int = 3) {
+    AdaptiveGrid(items = states, wideColumns = wideColumns, spacing = ShkSpacing.Large) { state, itemModifier ->
         Column(itemModifier, verticalArrangement = Arrangement.spacedBy(ShkSpacing.ExtraSmall)) {
             ShkText(
                 text = stringResource(state.caption),
@@ -86,6 +93,27 @@ fun ComponentStates(states: List<ComponentState>) {
             )
             state.content()
         }
+    }
+}
+
+/**
+ * A frame that stands for a window or the top of a screen, for the
+ * samples of the layout components: the background colour inside an
+ * outline with card corners. It is as wide as the space it is given, and
+ * [height] tall, or as tall as its content without one.
+ */
+@Composable
+fun WindowFrame(modifier: Modifier = Modifier, height: Dp? = null, content: @Composable () -> Unit) {
+    val colors = ShkTheme.colors
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (height != null) Modifier.height(height) else Modifier)
+            .clip(ShkShapes.Card)
+            .background(colors.background)
+            .border(1.dp, colors.outline, ShkShapes.Card),
+    ) {
+        content()
     }
 }
 

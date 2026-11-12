@@ -41,6 +41,12 @@
     <string name="page_lists_summary">List items, section headers and dividers.</string>
     <string name="page_states_title">Empty, loading and error</string>
     <string name="page_states_summary">What shows in place of content that is missing, on its way or failed.</string>
+    <string name="page_top_bars_title">Top bars</string>
+    <string name="page_top_bars_summary">The title, Back and actions at the top of a screen.</string>
+    <string name="page_navigation_title">Navigation</string>
+    <string name="page_navigation_summary">The bar along the bottom of a phone, the rail beside wider windows.</string>
+    <string name="page_list_detail_title">List and detail</string>
+    <string name="page_list_detail_summary">A list, and one item from it, in one pane or two.</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
@@ -130,6 +136,7 @@
     <string name="state_not_selected">Not selected</string>
     <string name="state_selected">Selected</string>
     <string name="state_selected_disabled">Selected and disabled</string>
+    <string name="state_selected_open">Selected: open beside the list</string>
     <string name="state_try_it">Try it: tap a chip to select or clear it</string>
     <string name="state_field_empty">Empty</string>
     <string name="state_with_text">With text</string>
@@ -166,6 +173,20 @@
     <string name="state_title_only">Title only</string>
     <string name="state_loading">Loading</string>
     <string name="state_try_states">Try it: tap Try again, or turn the switch on and off. With TalkBack on, each state is announced as it appears.</string>
+    <string name="state_with_back">With Back</string>
+    <string name="state_with_actions">With actions</string>
+    <string name="state_with_back_and_action">With Back and an action</string>
+    <string name="state_action_disabled">With an action turned off</string>
+    <string name="state_bar">Bar, in a window narrower than 600\u00A0dp</string>
+    <string name="state_rail">Rail, in a window from 600\u00A0dp wide</string>
+    <string name="state_bar_long_label">Bar, with a long label</string>
+    <string name="state_rail_long_label">Rail, with a long label</string>
+    <string name="state_try_navigation">Try it: tap a destination. This one follows the window: a bar on a phone held upright, a rail on a tablet or a phone held sideways.</string>
+    <string name="state_one_pane_list">One pane: the list</string>
+    <string name="state_one_pane_detail">One pane: a note open, with Back</string>
+    <string name="state_two_panes_nothing_open">Two panes: nothing open</string>
+    <string name="state_two_panes_open">Two panes: a note open</string>
+    <string name="state_try_list_detail">Try it: tap a note to open it. This one follows the window: in one pane, Back or the back gesture returns to the list. In a window at least 840\u00A0dp wide, the note opens beside the list.</string>
 
     <!-- Component pages: the words on the sample components. -->
     <string name="sample_save">Save</string>
@@ -245,6 +266,11 @@
     <string name="sample_try_error">Could not load the list</string>
     <string name="sample_try_error_body">Check that the file is still there.</string>
     <string name="sample_long_error_body">The file is damaged, or it is not a backup made by this app. Choose another file.</string>
+    <string name="sample_notes">Notes</string>
+    <string name="sample_long_destination">Notes and lists from earlier</string>
+    <string name="sample_destination_body">The screen of the destination shows here.</string>
+    <string name="sample_choose_note">Choose a note</string>
+    <string name="sample_choose_note_body">The note you tap in the list opens here.</string>
 
     <!-- Buttons page. -->
     <string name="buttons_intro">Touch and hold a button to see it pressed. The buttons on this page do nothing when tapped.</string>
@@ -298,7 +324,7 @@
     <!-- Lists page. -->
     <string name="lists_intro">Touch and hold a tappable list item to see it pressed. Nothing on this page does anything when tapped.</string>
     <string name="list_item_title">List item</string>
-    <string name="list_item_use">One row in a list of things that look alike, such as tasks. A tappable row is one touch target, text included.</string>
+    <string name="list_item_use">One row in a list of things that look alike, such as tasks. A tappable row is one touch target, text included. A selected row is the one open beside the list; TalkBack reads it as selected.</string>
     <string name="section_header_title">Section header</string>
     <string name="section_header_use">The heading of a group, such as Today above a list of tasks. TalkBack reads it as a heading.</string>
     <string name="divider_title">Divider</string>
@@ -312,4 +338,20 @@
     <string name="loading_state_use">While content is on its way, when the wait is long enough to notice. TalkBack reads its text.</string>
     <string name="error_state_title">Error state</string>
     <string name="error_state_use">When content could not be shown. It says what went wrong in plain words, and how to try again.</string>
+
+    <!-- Top bars page. -->
+    <string name="top_bars_intro">Each top bar is drawn in a frame, as the top of a screen. The buttons on this page do nothing when tapped.</string>
+    <string name="top_bar_title">Top bar</string>
+    <string name="top_bar_use">The title of a screen, Back when the screen was opened from another one, and up to three actions for the whole screen. TalkBack reads the title as a heading.</string>
+
+    <!-- Navigation page. -->
+    <string name="navigation_intro">In a window narrower than 600\u00A0dp the destinations are a bar along the bottom. From 600\u00A0dp they are a rail along the side. Each sample is drawn in a frame, for one window width. Only the one under Try it does something when tapped.</string>
+    <string name="navigation_title">Navigation bar and rail</string>
+    <string name="navigation_use">Switching between the three to five main places of an app. TalkBack reads each destination as a tab, and whether it is selected.</string>
+
+    <!-- List and detail page. -->
+    <string name="list_detail_intro">Each sample is drawn in a frame that stands for a window. Only the one under Try it does something when tapped.</string>
+    <string name="list_detail_title">List and detail scaffold</string>
+    <string name="list_detail_use">A list, and one item from it. In a window narrower than 840\u00A0dp the item opens in place of the list, with Back. From 840\u00A0dp it opens beside the list.</string>
+    <string name="list_detail_two_panes_note">Two panes show only in a window at least 840\u00A0dp wide. Turn the phone sideways, or open this page on a tablet held sideways, to see them.</string>
 </resources>

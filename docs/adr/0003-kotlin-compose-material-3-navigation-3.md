@@ -1,6 +1,7 @@
 # 0003 Kotlin, Compose, Material 3, Navigation 3
 
-- Status: Accepted
+- Status: Accepted. Point 2's "adaptive libraries" superseded by
+  [0024](0024-own-adaptive-layouts.md).
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 2), 3, 4 and 17,
   and the owner's review of
@@ -21,6 +22,12 @@
 1. Language: Kotlin 2.4.x.
 2. UI: Jetpack Compose through the Compose BOM, Material 3 and its adaptive
    libraries, and Navigation 3.
+   - The adaptive libraries are not used: `core/design` builds its own
+     adaptive layouts ([0024](0024-own-adaptive-layouts.md), owner
+     decision on
+     [pull request 16](https://github.com/shkriuss/shkriuss.app/pull/16)).
+   - Open: whether the apps use Navigation 3 is decided when the first
+     app is built (the same decision).
 3. Only `core/design` uses Material 3 directly. Apps use the `Shk*`
    components (section 4).
 4. Other libraries:

@@ -13,4 +13,7 @@ dependencies {
     api(libs.compose.ui)
     api(libs.compose.foundation)
     implementation(libs.compose.material3)
+    // For the back gesture in ShkListDetailScaffold. Material 3 already
+    // brings it at run time; the apps use the same version.
+    implementation(libs.activity.compose)
 }
