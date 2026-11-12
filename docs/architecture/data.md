@@ -135,6 +135,35 @@ the table's DAO, a `Clock` and an `IdSource` through its constructor.
 8. `updatedAt` always moves forward, even when the clock was set back. A
    write sets it to now, or to one millisecond after the record's last
    `updatedAt` if that is later.
+9. `takeFromBackup(record)` takes one record of a backup. It is the one
+   write that keeps the record fields it is given, because that record
+   was stamped when it was first written. See below.
+
+### Records from a backup
+
+`takeFromBackup` is the only way a record of a backup is written
+([ADR 0008](../adr/0008-backup-file-format.md),
+[backup-format.md](backup-format.md#the-restore-rule)). The rule is: the
+newest edit wins.
+
+| Answer (`BackupTake`) | When | What is written |
+|---|---|---|
+| `TAKEN` | No record with this ID is stored, or the stored one has an older `updatedAt` | The record of the backup |
+| `SAME` | The stored record has the same `updatedAt` | Nothing |
+| `STORED_IS_NEWER` | The stored record has a later `updatedAt` | Nothing |
+
+1. The record keeps its `id`, `createdAt`, `updatedAt` and `deletedAt`.
+   The clock and the ID source are not used.
+2. The change number that comes with the record is ignored. The record
+   gets the next one of this database, and only when it is written.
+3. A deleted record is taken like any other. So a record that was deleted
+   after the backup stays deleted, and a deletion in the backup that is
+   newer deletes the stored record.
+4. Taking the same records twice writes nothing the second time.
+5. An app takes all records of a backup inside one write transaction.
+   The calls join it, and a failure rolls all of them back.
+6. It is the function for backups. Sync gets its own, because there the
+   same `updatedAt` must end the same on every device.
 
 ### Clock and IDs
 
@@ -231,8 +260,10 @@ interface IntakeDao : RecordDao<IntakeEntity> {
    by `AND` and more conditions, with no `OR`. When a purge is allowed at
    all is for the sync design. A purge never touches the counter.
 5. There is no other exception. If a table that is not a record ever
-   needs a write, stop and ask the owner. Restoring a backup and importing
-   from sync will get their own `RecordWriter` functions in their steps.
+   needs a write, stop and ask the owner. Restoring a backup has its own
+   `RecordWriter` function, `takeFromBackup`
+   ([Records from a backup](#records-from-a-backup)). Importing from sync
+   will get its own in its step.
 6. Reads that show records to the user filter out deleted ones with
    `deletedAt IS NULL`.
 
@@ -337,7 +368,7 @@ a wrong migration and a missing step fail.
 
 | Test | Module | What it checks |
 |---|---|---|
-| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back; every write gets a new change number, across the tables of a database; a number is not used again after a purge; a failed write transaction rolls back, its numbers with it. |
+| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back; every write gets a new change number, across the tables of a database; a number is not used again after a purge; a failed write transaction rolls back, its numbers with it. For `takeFromBackup`: each of its three answers, the record fields kept, a change number only for a write, a deletion as an edit like any other, the same records taken twice, and several calls that roll back together. |
 | `ChangedSinceTest` | `core/data` | Paging reads every change once, in order, deleted records included; a clock set back hides no change; a write that commits while a reader is paging is read after it; the query plan uses the index. |
 | `SampleMigrationTest` | `core/data` | The example migration with its change numbers and counter, Room opening the migrated file and counting on, every version migrating to the newest, the record conventions, and that a wrong migration and a missing step fail. |
 | `RecordConventionsTest` | `core/testing` | The conventions check passes a good database and names each problem; the change number check finds shared and too high numbers. |

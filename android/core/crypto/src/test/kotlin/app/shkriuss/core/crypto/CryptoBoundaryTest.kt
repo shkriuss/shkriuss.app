@@ -34,7 +34,7 @@ class CryptoBoundaryTest {
     fun noOtherModuleUsesCryptography() {
         val sources = sourcesIn(androidFolder).filterNot { it.startsWith(thisModule) }
         assertTrue("the test must read the other modules, and found only ${sources.size} files", sources.size >= 50)
-        listOf("core/data", "core/design", "core/testing", "app/catalog", "build-logic").forEach { module ->
+        listOf("core/backup", "core/data", "core/design", "core/testing", "app/catalog", "build-logic").forEach { module ->
             assertTrue("no source of $module was read", sources.any { it.startsWith(File(androidFolder, module)) })
         }
 

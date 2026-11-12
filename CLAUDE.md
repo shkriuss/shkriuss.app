@@ -55,8 +55,9 @@ If a task seems to need it, stop and say so in the PR description.
 
 Run from `android/`. Keep this list correct when tasks change.
 
-- `./gradlew check` unit tests, Android Lint, and the schema and DAO rule checks, for all modules.
+- `./gradlew check` unit tests, Android Lint, and the schema, DAO rules and instrumented test suite checks, for all modules.
 - `./gradlew :app:<name>:assembleDebug` build one app.
+- `./gradlew :<module>:assembleDebugAndroidTest` build a module's test APK for the emulator, for example `:core:crypto`. It shows that the instrumented tests compile. They run only in CI.
 - `./gradlew verifyRoborazziDebug` compare screenshots with the committed ones.
 - `./gradlew recordRoborazziDebug` re-record screenshots after an intended UI change.
 - `./gradlew recordRoomSchemas` write the database schema files after an intended schema change. Commit them.

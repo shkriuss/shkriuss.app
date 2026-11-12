@@ -170,7 +170,9 @@ exist. Two checks make sure it stays so:
    fails if an APK holds a class under `com.google.android.gms`. The
    check is an owner-only file. The owner asked for this rule in
    session B. It reads the class names in the APK's dex files. That works
-   because the build never renames classes.
+   because the build never renames classes, and because an R8 rule keeps
+   every class of that package as it is, so that R8 cannot fold one into
+   another class (the owner's decision on pull request 25).
 
 ### Where Android does the work, not Tink
 
@@ -782,8 +784,9 @@ associated data = the blob's own bytes before the ciphertext part
 - Keyset: `backup`. Associated data: header + the whole backup header.
 - The backup header, the place of this stream in the file, and what is
   inside the stream belong to step 1.5 and
-  [ADR 0008](../adr/0008-backup-file-format.md). This page asks four
-  things of that format:
+  [ADR 0008](../adr/0008-backup-file-format.md). They are in
+  [backup-format.md](../architecture/backup-format.md). This page asks
+  five things of that format:
   1. The backup header is not secret and is given to `core/crypto` as
      the context, byte for byte.
   2. It contains the key ID, so the app can say "wrong recovery key"
@@ -1503,8 +1506,10 @@ Each of the three must fail when its last 17 bytes are cut off.
 
 ### Kind 3: backup stream
 
-The real backup header comes in step 1.5. This vector uses the ASCII
-text "example backup header" in its place.
+The real backup header is in
+[backup-format.md](../architecture/backup-format.md#the-backup-header),
+which has an example file of its own. This vector uses the ASCII text
+"example backup header" in its place.
 
 ```text
 key              the backup key for water, above

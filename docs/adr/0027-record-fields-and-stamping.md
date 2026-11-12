@@ -120,6 +120,12 @@
 - The conventions check of `core/testing` checks points 1 to 3 and the
   counter table for every database's newest schema. The migration tests
   check that change numbers and the counter survive each migration.
+- Restoring a backup got its function in Phase 1, step 5:
+  `RecordWriter.takeFromBackup` ([0008](0008-backup-file-format.md)). It
+  is the one write that keeps the record fields it is given, because a
+  record of a backup was stamped when it was first written. It gives the
+  record a new change number, as point 6 says. Importing from sync still
+  gets its own function in its step.
 - Open: when deletion markers may be purged is for the sync design
   (ADR 0009, Phase 5). `@PurgesDeletedRecords` is ready for it.
 - The details are in [data.md](../architecture/data.md).

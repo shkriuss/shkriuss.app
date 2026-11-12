@@ -25,7 +25,11 @@ request 21. Records 0006 and 0007 were completed in Phase 1, step 4, with
 the owner's decisions of 2026-11-12. Their detail is in
 [crypto-design.md](../security/crypto-design.md). Record 0028 comes from
 Phase 1, step 4, session C, with the owner's decisions on pull request
-24.
+24. Record 0008 was completed in Phase 1, step 5, with the owner's
+decisions of 2026-11-12. Its detail is in
+[backup-format.md](../architecture/backup-format.md). Record 0029 comes
+from the same step: how the tests of other modules get real keys, with
+the owner's decisions of 2026-11-12.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -39,7 +43,7 @@ How a record may be edited or replaced is in point 7 of
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md |
 | 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md |
-| 0008 | [Backup file format](0008-backup-file-format.md) | Accepted |
+| 0008 | [Backup file format](0008-backup-file-format.md) | Accepted; detail in backup-format.md |
 | 0009 | [Sync protocol and server](0009-sync-protocol-and-server.md) | Accepted |
 | 0010 | [Exact alarms and reminder storage](0010-exact-alarms-and-reminder-storage.md) | Accepted |
 | 0011 | [No native code, Grammar exception](0011-no-native-code-grammar-exception.md) | Accepted |
@@ -60,3 +64,4 @@ How a record may be edited or replaced is in point 7 of
 | 0026 | [Room's build tools and committed schemas](0026-room-build-tools.md) | Accepted |
 | 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |
 | 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted |
+| 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |

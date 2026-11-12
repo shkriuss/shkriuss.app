@@ -608,6 +608,10 @@ Cover: what the app is for in two sentences; every screen described in words
 for phone and tablet; the data model; units; reminder behaviour (quiet hours,
 snooze, missed reminders); settings; backup contents; permissions; TalkBack
 notes; what is out of scope for version 1.0. Keep version 1.0 small.
+
+For the backup contents, follow docs/architecture/backup-format.md: name the
+record types, say what the content of each one holds, and give the app's
+data version for a backup.
 ```
 
 ### 2.2 to 2.5 Build it
@@ -632,6 +636,10 @@ Steps:
 - 2.5 Backup, restore, app lock and settings. The settings get a screen
   that shows the notices of all third-party material in the app. Complete
   `docs/development/third-party.md` with everything that ships in the app.
+  For backup and restore, use `core/backup`: the screens call
+  `Backups.export`, `Backups.check` and `Backups.restore`, and the app
+  calls `Backups.start()` when it starts. Decide with me when a backup is
+  checked.
 
 ### 2.6 Release preparation
 

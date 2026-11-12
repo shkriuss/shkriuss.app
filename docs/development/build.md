@@ -41,7 +41,12 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
 - `android/core/crypto/`: all cryptography, with Tink. See
   [crypto-design.md](../security/crypto-design.md). The recovery word
   list and its licence are in its resources
-  ([third-party.md](third-party.md)).
+  ([third-party.md](third-party.md)). Its test fixtures, in
+  `src/testFixtures/`, give the tests of other modules real keys
+  ([Test fixtures](#test-fixtures)).
+- `android/core/backup/`: the backup file of an app: writing, checking
+  and restoring it. See
+  [backup-format.md](../architecture/backup-format.md).
 - `android/core/testing/`: test helpers that other modules use in their
   tests only.
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
@@ -58,6 +63,8 @@ Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)):
   `CheckGraphicsPathUseTask.kt`,
 - `AndroidApplicationConventionPlugin.kt`, which connects both checks to
   the build.
+- `r8/app-rules.pro`, the R8 rules every app shares, which the APK rules
+  check depends on (owner's decision on pull request 25),
 - the two checks of the record rules, `CheckRoomSchemasTask.kt` and
   `CheckDaoRulesTask.kt`, and `AndroidRoomConventionPlugin.kt`, which
   connects them to the build (owner's decision on pull request 21),
@@ -116,6 +123,7 @@ CI runs `./gradlew check verifyRoborazziDebug` together with
 | `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
 | `shkriuss.android.screenshot-test` | Roborazzi. Applies the unit-test plugin too. |
 | `shkriuss.android.instrumented-test` | Tests on an emulator, in `src/androidTest/`: the project's own test runner, JUnit 4 and `core/testing`. Tests in `src/sharedTest/` run on the JVM and on the emulator ([emulator-tests.md](emulator-tests.md), [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)). The [instrumented test suite check](#instrumented-test-suite-check). |
+| `shkriuss.android.test-fixtures` | Test helpers that the tests of other modules may use, in `src/testFixtures/` ([Test fixtures](#test-fixtures), [ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md)). |
 | `shkriuss.android.room` | Room 3 on the system SQLite: KSP, Room's Gradle plugin, the runtime, the driver and the test library. The schema check and record tasks ([Room schemas](#room-schemas)) and the [DAO rules check](#dao-rules-check). |
 
 Every module refuses the bundled SQLite driver, `androidx.sqlite:sqlite-bundled`.
@@ -163,6 +171,15 @@ Reasons:
   computer to translate renamed ones.
 
 The rules are in `android/build-logic/r8/app-rules.pro`.
+
+The file has two more rules since Phase 1, step 5: classes of Google
+Play services, and classes of the test fixtures of `core/crypto`, are
+kept as they are. They exist only so that the APK rules check can find
+such a class in a `release` or `preview` APK. No app holds one, so the
+rules match nothing
+([The Play services class rule](#the-play-services-class-rule),
+[The test fixtures rule](#the-test-fixtures-rule)). The file is
+owner-only since then.
 
 ### What a stack trace shows
 
@@ -231,16 +248,19 @@ second build must write the same mapping file, or the release stops. See
   since" query, the example migration and the migration test helpers,
   on the system SQLite driver under Robolectric
   ([architecture/data.md](../architecture/data.md#tests)).
-- `core/crypto` has 19 test classes with 148 tests. They are the items 1
+- `core/crypto` has 20 test classes with 150 tests. They are the items 1
   to 8 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
-  and the rules for hardware keys.
+  the rules for hardware keys, and the example file of the backup format
+  (`BackupExampleFileTest`, see `core/backup` below).
   - No Android Keystore exists on the JVM. So the tests pass a software
     stand-in for the hardware keys, `SoftwareHardwareKeys`, with the same
     byte layout. It can act like a phone that is locked, a Keystore that
     fails for a moment, a key that is gone and a screen lock that was
     removed. `StoppingStore` lets a test stop the app before any change
-    to a keyset file, and start it again.
+    to a keyset file, and start it again. The stand-in is in the
+    module's [test fixtures](#test-fixtures), so that the tests of other
+    modules can have real keys too.
   - `DesignVectorsTest` and `PublishedVectorsTest` run every vector of
     the page and the published ones. Tink cannot be told which salt and
     nonce to use, so `ReferenceStream` builds the stream blobs a second
@@ -276,10 +296,45 @@ second build must write the same mapping file, or the release stops. See
   - Four of the classes are in `src/sharedTest/`, with the helpers they
     use: `DesignVectorsTest`, `PublishedVectorsTest`, `RecoveryWordsTest`
     and `KeysetFilesTest`. They run here on the JVM, and a second time on
-    the emulator, where Tink takes its Android path.
+    the emulator, where Tink takes its Android path. The stand-in they
+    use comes from the test fixtures on both.
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
+- `core/backup` has 10 test classes with 71 tests. They are the items of
+  "What the tests must cover" in
+  [backup-format.md](../architecture/backup-format.md#what-the-tests-must-cover).
+  - They use real keys: `SoftwareKeysApp` from the
+    [test fixtures](#test-fixtures) of `core/crypto`, and a fake app
+    that holds its records in memory and its files in a folder.
+  - `RoundTripTest`, `DamagedFileTest`, `WrongKeyAndVersionTest`,
+    `BodyRulesTest`, `ExportTest` and `NothingChangesTest` write, check
+    and restore backups in memory. `DamagedFileTest` cuts a backup at
+    every length and changes every byte of it, one at a time. For every
+    file that must be refused, a check and a restore must give the same
+    answer, the app must be as it was, and nothing may be left in the
+    staging folder.
+  - `BodyRulesTest` writes bodies by hand that break one rule each, and
+    encrypts them with the real keys. So only the rule can refuse them.
+  - `LargeFileTest` proves that a file is never held in memory. One file
+    of a little over 2 GiB, longer than all the memory the test JVM may
+    use, goes into a backup and through the check, with nothing stored.
+    It takes about 3 seconds in the cloud environment. In CI the whole
+    test task of `core/backup` ended 29 seconds after its code was
+    compiled. Two more tests watch that writing and restoring a file of
+    64 MiB never run more than 4 MiB ahead of what they have passed on.
+  - `ExampleFileTest` reads the example file of the page as a backup.
+    `BackupExampleFileTest` in `core/crypto` builds the same bytes a
+    second time with `ReferenceStream`. It is there because only
+    `core/crypto` may use plain AES-GCM.
+  - `BackupsTest` runs under Robolectric. It writes, checks and restores
+    through Android's content resolver, with documents that are files
+    behind a small content provider of the test. It checks that a
+    document is opened in the mode that cuts off old content, that a
+    failed backup is deleted, that only `content:` URIs are taken, and
+    the two intents of the system file picker.
+  - No test opens the picker itself. That is checked by hand with the
+    first app.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
@@ -297,6 +352,36 @@ of CI. Today those are the tests of the hardware keys in `core/crypto`.
 They cannot run in a cloud session, which has no emulator. What they
 are, how they run and what they found is in
 [emulator-tests.md](emulator-tests.md).
+
+### Test fixtures
+
+Test helpers that the tests of other modules may use
+([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md)).
+
+1. A module that applies `shkriuss.android.test-fixtures` has a folder
+   `src/testFixtures/`. Today only `core/crypto` does.
+2. Code there sees the `internal` declarations of its module. The
+   module's own unit tests and emulator tests see what is in the
+   fixtures, also what is `internal` there.
+3. Another module uses the fixtures in its tests only:
+   `testImplementation(testFixtures(project(":core:crypto")))`.
+4. The fixtures of `core/crypto` are one package,
+   `app.shkriuss.core.crypto.fixtures`, with two classes:
+   - `SoftwareHardwareKeys`, the stand-in for the Android Keystore.
+   - `SoftwareKeysApp`, which builds a real `ShkCrypto` on the stand-in
+     and a folder. A test gives it a recovery key, and then encrypts and
+     decrypts as an app does.
+5. Fixtures are never part of an app. For those of `core/crypto`, the
+   APK rules check makes sure ([The test fixtures rule](#the-test-fixtures-rule)).
+6. Android Gradle Plugin 9.5.1 still marks test fixtures as incubating.
+   What this project needs was checked on 2026-11-12 in the cloud
+   environment:
+   - Kotlin code in `src/testFixtures/` compiles with no experimental
+     flag.
+   - The visibility of point 2 holds, for the unit tests and for the
+     emulator tests.
+   - Nothing new is downloaded, so the dependency verification file did
+     not change.
 
 ### Screenshot tests
 
@@ -702,7 +787,11 @@ and fails the build if:
 3. its manifest still starts the emoji font loader (hard rule 3, see below),
 4. one of its dex files names a class under `com.google.android.gms`, the
    package of Google Play services (hard rule 3), or it has no dex file
-   at all.
+   at all,
+5. one of its dex files names a class under
+   `app.shkriuss.core.crypto.fixtures`, the test fixtures of
+   `core/crypto` ([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md),
+   see below).
 
 The report is written to `build/reports/apk-rules/`. A library can add any
 of these without anyone noticing. The check makes sure someone does.
@@ -731,20 +820,29 @@ How it still finds a class after R8:
    name.
 2. R8 can only rename a class that is inside the APK. A class the code
    only refers to always keeps its name.
-3. The same rule runs on the preview APK of every pull request, and on a
+3. One R8 rule keeps every class of that package as it is:
+   `-keep class com.google.android.gms.** { *; }` in
+   `build-logic/r8/app-rules.pro`. The owner asked for it on pull
+   request 25. Without it R8 can fold such a class into another one:
+   the name is gone and the code stays. That is what the second test
+   below showed.
+4. The same rule runs on the preview APK of every pull request, and on a
    debug APK whenever one is built. R8 never touches a debug APK. CI
    itself builds only `release` and `preview`.
 
 Its limits:
 
-- It depends on `-dontobfuscate`. A comment next to that line in
-  `build-logic/r8/app-rules.pro` says so. If renaming is ever turned on,
-  the rule must read the classes before R8 instead, as the
-  [graphics-path check](#the-graphics-path-check) does. That needs
-  `AndroidApplicationConventionPlugin.kt`, which is owner-only.
-- R8 removes code that nothing uses. A Play services library that is
-  added but never called leaves no class in a release APK. Then the APK
-  holds none, which is what the rule asks. The debug APK still holds it.
+- It depends on `-dontobfuscate` and on the R8 rule of point 3. Comments
+  next to both lines in `build-logic/r8/app-rules.pro` say so. If
+  renaming is ever turned on, the rule must read the classes before R8
+  instead, as the [graphics-path check](#the-graphics-path-check) does.
+  That needs `AndroidApplicationConventionPlugin.kt`, which is
+  owner-only.
+- Before the R8 rule, a Play services library that was added but never
+  called left no class in a release APK, because R8 removes code that
+  nothing uses. With the R8 rule its classes are kept, so the release
+  APK fails too. A Play services library in an app is always a mistake,
+  called or not.
 
 How it was tested, on 2026-11-12 in the cloud environment:
 
@@ -756,9 +854,82 @@ How it was tested, on 2026-11-12 in the cloud environment:
    and the preview APK, which R8 had shrunk.
 3. With the class removed, all three passed.
 
+That first probe happened to be a class that R8 left as it was. The
+second test, on the same day for pull request 25, used one that R8 folds
+away:
+
+1. Catalog got a temporary class `com.google.android.gms.Probe` with one
+   small function, and its activity used the result.
+2. Without the R8 rule: `assembleDebug` failed in its APK rules check
+   and named the class. `assembleRelease` and `assemblePreview`
+   **passed**. R8 had folded the class into the activity, so no class of
+   that package was named in the APK any more.
+3. With the R8 rule: `assembleDebug`, `assembleRelease` and
+   `assemblePreview` each failed in their APK rules check and named the
+   class: in `classes6.dex` and `classes7.dex` of the debug APK, and in
+   `classes.dex` of the release and the preview APK.
+4. With the use removed and only the class left, `assembleRelease` still
+   failed and named the class.
+5. With the class removed, all three passed.
+6. The release APK of Catalog is the same, byte for byte, with and
+   without the R8 rule (SHA-256 compared). In an app with no Play
+   services class the rule matches nothing.
+
 CI runs `checkReleaseApkRules` by name for every app, and checks that its
 report was written. So removing the check from the build, or turning it
 off, fails CI ([ci.md](ci.md#job-check)).
+
+### The test fixtures rule
+
+The owner asked for rule 5 in Phase 1, step 5. The test fixtures of
+`core/crypto` hold a stand-in for the Android Keystore that keeps keys in
+memory ([Test fixtures](#test-fixtures)). It is for tests only and must
+never be in an app.
+
+1. The rule searches the bytes of every dex file for
+   `Lapp/shkriuss/core/crypto/fixtures/` and names each class it finds,
+   the same way as the Play services class rule.
+2. One R8 rule goes with it, in `build-logic/r8/app-rules.pro`:
+   `-keep class app.shkriuss.core.crypto.fixtures.** { *; }`. It makes
+   sure such a class keeps its name in a `release` and a `preview` APK,
+   so that the check can see it. Why it is needed is in "How it was
+   tested".
+3. In an app with no fixtures, the R8 rule matches nothing. The release
+   APK of Catalog is the same, byte for byte, with and without it
+   (SHA-256 compared on 2026-11-12).
+4. An app that only depends on the fixtures and never calls them fails
+   too. The R8 rule keeps the classes, where R8 would have dropped them.
+   A dependency on the fixtures outside tests is always a mistake.
+5. The rule is for app APKs. It does not run for test APKs. The test APK
+   of `core/crypto` holds the stand-in, because a test that runs on the
+   JVM and on the emulator uses it. Only CI installs that APK, on an
+   emulator. The owner decided to leave that as it is.
+
+How it was tested, on 2026-11-12 in the cloud environment:
+
+1. Catalog got a temporary dependency on the fixtures,
+   `implementation(testFixtures(project(":core:crypto")))`, and one call
+   to them in its activity.
+2. First try, without the R8 rule. `assembleDebug` failed in its APK
+   rules check and named `SoftwareHardwareKeys` and `SoftwareKeysApp`.
+   `assembleRelease` and `assemblePreview` **passed**. R8 had folded the
+   two classes into other classes. No class of the fixtures package was
+   named in the APK any more, but the code of the stand-in was in it:
+   its own error messages were in the dex file.
+3. Second try, with the R8 rule. `assembleDebug`, `assembleRelease` and
+   `assemblePreview` each failed in their APK rules check and named the
+   two classes: in `classes2.dex` and `classes6.dex` of the debug APK,
+   and in `classes.dex` of the release and the preview APK.
+4. With the call removed and only the dependency left, `assembleRelease`
+   still failed and named the two classes.
+5. With the probe removed, all three passed.
+
+What step 2 showed is true for every rule that finds classes by name:
+"never rename" is not enough. R8 can fold a class into another one, and
+then the name of the first is gone. The Play services class rule reads
+names the same way. So the owner decided on pull request 25 that it gets
+an R8 rule of its own
+([The Play services class rule](#the-play-services-class-rule)).
 
 ## Native code from Compose
 
