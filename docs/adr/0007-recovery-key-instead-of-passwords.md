@@ -119,8 +119,9 @@ owner chose words only for now, and one random key per file, on
 - Until the handover between apps is built, every app is set up by
   entering the words, so every such app is a keeper.
 - The app needs the BIP-39 English word list, 2048 words. It is data, not
-  a library. Its source and its MIT notice are recorded with the
-  project's third-party material.
+  a library. Its source and its MIT notice are recorded in
+  `docs/development/third-party.md`, which session B creates, and the
+  MIT text sits next to the list.
 - A preview build makes the same keys from the same words as its app.
   Testers never type real recovery words into a preview
   ([test-a-pull-request.md](../development/test-a-pull-request.md#safety)).
@@ -128,5 +129,4 @@ owner chose words only for now, and one random key per file, on
   [crypto-design.md](../security/crypto-design.md#open-questions). Those
   that touch this record are the handover interface and how an app that
   is not a keeper checks the paper copy (the handover step), the QR
-  code (step 1.7), where third-party material is listed, and a new
-  recovery key across devices (Phase 5).
+  code (step 1.7), and a new recovery key across devices (Phase 5).

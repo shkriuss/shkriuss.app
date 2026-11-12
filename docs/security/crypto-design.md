@@ -507,7 +507,8 @@ When the app gets its recovery-key-derived keys:
    can be undone and the file must then open. It changes only the wrapped
    file key and the change number, and leaves `updatedAt` as it is. Each
    app says which of its tables hold wrapped file keys. All of this is
-   built with the first app that stores files, not in session B.
+   built with the first app that stores files, not in session B. The
+   owner agreed to this on pull request 22.
 
 ### Where keys are stored
 
@@ -924,9 +925,13 @@ gone. Starting again makes a new one.
      checked on 2026-11-12.
    - Licence: MIT, "Copyright (c) 2013-2016 Pavol Rusnak". The MIT licence
      asks that this notice and the licence text go with every copy.
-   - Session B commits the list. It records the source and the licence
-     where the project lists third-party material. No such place exists
-     yet. See the [open questions](#open-questions).
+   - Session B commits the list and puts the MIT licence text next to
+     it in the module. It also creates the page
+     `docs/development/third-party.md`, with the word list, and with Tink
+     and the four libraries it brings: each with its source, its licence
+     and its notice. Listing everything else that ships in an app, and
+     showing the notices inside the apps, comes in Phase 2, before
+     Water's first release.
 2. Encoding: take the 32 bytes. Add one byte: the first byte of their
    SHA-256. Cut the 264 bits into 24 groups of 11 bits. Each group is the
    number of a word, 0 to 2047.
@@ -1535,6 +1540,8 @@ left open. Each is built into the page above.
 | StrongBox cannot be tested in an emulator | A line in the release checklist of the first app that stores keys, checked on the three devices. |
 | The emulator tests | Not part of session B. They are the next step, in their own pull request. |
 | The system prompt | Android's own `BiometricPrompt`. No AndroidX Biometric in `core/crypto`. |
+| Where third-party material is listed | Session B creates `docs/development/third-party.md` with the word list, and with Tink and its four libraries, and puts the MIT text next to the list. Everything else that ships in an app, and the notices inside the apps, come in Phase 2 before Water's first release. |
+| Sealing file keys again in the database | Its own `RecordWriter` function, built with the first app that stores files. |
 
 ## Open questions
 
@@ -1552,37 +1559,26 @@ What is left, with the step that decides it.
 3. **The QR code**: whether to build it, what it holds, what draws it,
    and what scans it. Scanning needs the camera permission and a
    decoder, so a decision record. Step 1.7, session A.
-4. **Where the project lists third-party material.** No such place
-   exists yet. The word list needs one, and the MIT licence asks that
-   its notice goes with every copy, so also with the app. Proposal:
-   a page `docs/development/third-party.md` with the source, the licence
-   and the notice, and the licence text next to the list in the module.
-   Needed for session B.
-5. **The permission `USE_BIOMETRIC`** for the system prompt. It needs a
+4. **The permission `USE_BIOMETRIC`** for the system prompt. It needs a
    decision record, an entry in [permissions.md](permissions.md), and
    the APK rules check must allow it, which is an owner-only file. The
    step that first shows a prompt: step 1.7, session A.
-6. **AndroidX Biometric is then not needed anywhere.**
+5. **AndroidX Biometric is then not needed anywhere.**
    [ADR 0003](../adr/0003-kotlin-compose-material-3-navigation-3.md)
    names it for the app lock. Proposal: step 1.7 uses Android's own
    prompt too and notes it in that record.
-7. **A new recovery key.** The whole flow: how other devices, other apps
+6. **A new recovery key.** The whole flow: how other devices, other apps
    and the server learn of it, when old keys are dropped, how old sealed
    records are sealed again, and how sealing file keys again fits "last
    writer wins". It must keep the rules under "A new recovery key".
    Phase 5.
-8. **The sync signing key.** Proposal: ECDSA P-256 in the Keystore,
+7. **The sync signing key.** Proposal: ECDSA P-256 in the Keystore,
    because StrongBox must support it, with the settings of a Background
    key so that sync works while the phone is locked. Phase 5.
-9. **The largest sealed record.** The server's limits decide. Phase 5.
-10. **File ciphertext that arrives while the app is locked** is stored
-    unchecked until the file is opened. A hostile server could fill
-    storage with bytes that never open. Should the file's record carry a
-    hash of the ciphertext? Phase 5.
-11. **The threat model page** does not exist. A step of its own: step
+8. **The largest sealed record.** The server's limits decide. Phase 5.
+9. **File ciphertext that arrives while the app is locked** is stored
+   unchecked until the file is opened. A hostile server could fill
+   storage with bytes that never open. Should the file's record carry a
+   hash of the ciphertext? Phase 5.
+10. **The threat model page** does not exist. A step of its own: step
     1.8.
-12. **Sealing file keys again in the database.** It needs a
-    `RecordWriter` function of its own and a way for each app to say
-    which tables hold wrapped file keys. Proposal: built with the first
-    app that stores files (Notes, Phase 4), with the owner's agreement
-    for the new function, as ADR 0027 asks.

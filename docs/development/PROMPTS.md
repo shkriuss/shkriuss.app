@@ -406,6 +406,14 @@ test here.
 Also not part of this session: the handover between apps (step 3.0), and
 the recovery key screens and the QR code (step 1.7).
 
+Create `docs/development/third-party.md` as crypto-design.md says: the
+word list, and Tink and the four libraries it brings, each with its source,
+its licence and its notice. Put the MIT licence text next to the word list.
+
+I am the owner and I ask you to add Tink 1.24.0 and the four libraries it
+brings to android/gradle/verification-metadata.xml and the keyring, and
+nothing else in those files.
+
 I am the owner and I ask you to add the include lines for the new
 modules to android/settings.gradle.kts, and nothing else in that file.
 
@@ -519,6 +527,9 @@ Then build:
 - Catalog page, screenshot tests, user guide page.
 - Add the StrongBox check to docs/development/release-checklist.md, as
   crypto-design.md says.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
 Session B, the app lock:
@@ -615,7 +626,9 @@ Steps:
   android/settings.gradle.kts, and nothing else in that file.
 - 2.3 Screens: all screens from the spec with the `Shk*` components.
 - 2.4 Reminders: through `core/notify`, with the permission flow.
-- 2.5 Backup, restore, app lock and settings.
+- 2.5 Backup, restore, app lock and settings. The settings get a screen
+  that shows the notices of all third-party material in the app. Complete
+  `docs/development/third-party.md` with everything that ships in the app.
 
 ### 2.6 Release preparation
 
@@ -626,6 +639,8 @@ Prepare Water 1.0.0 for release. Do not start the release workflow.
 
 - User guide in `docs/user/water.md`, written for a phone screen.
 - `docs/security/permissions.md` and the data inventory are complete.
+- `docs/development/third-party.md` lists everything that ships in the
+  app, and the app shows those notices.
 - `CHANGELOG.md` for the app.
 - The reminder steps of `docs/development/release-checklist.md` (part 1,
   step 10), which are Open until now, as exact steps.
@@ -674,6 +689,9 @@ First write its decision record and show me. No code until I agree. Cover:
 
 Then build it with tests, update crypto-design.md and the user guide, and
 tell me how to try it on a phone with two apps.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
 ---
