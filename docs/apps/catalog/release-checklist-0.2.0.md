@@ -27,8 +27,14 @@ Done. Catalog 0.2.0 was published as `catalog-v0.2.0` on 2026-11-12.
   Default (Blocked), **WebView JIT** Default (Disabled), **Dynamic code
   loading via memory** and **via storage** Default (Restricted). Part 1,
   steps 2 to 4, now use these names.
-- Still Open: the names of the Sensors permission, Install available
-  apps and Private space (part 1, steps 6, 8 and 9).
+- More screenshots of the installed Catalog 0.2.0, the same day. **App
+  info**: **Permissions** "No permissions granted", **Mobile data usage**
+  "No data used", and the **Force stop** button. **App permissions**:
+  **Allowed** "No permissions allowed", **Sensors** under **Not
+  allowed**. And the page **Choose apps to install**, with a switch for
+  Catalog. Part 1, steps 5 to 9, now use these names.
+- Still Open: the way from **Users** and from **Private space** to
+  **Choose apps to install** (part 1, steps 8 and 9).
 
 | | |
 |---|---|
@@ -43,9 +49,9 @@ Done. Catalog 0.2.0 was published as `catalog-v0.2.0` on 2026-11-12.
 page to open it, and Back to return. On each page, also try the samples
 under "Try it".
 
-The names in part 1, steps 2 to 4, are the ones GrapheneOS shows. A value
-may start with "Default", for example "Default (Blocked)". Open: the names
-in steps 6, 8 and 9, as in the
+The names in part 1 are the ones GrapheneOS shows. A value may start
+with "Default", for example "Default (Blocked)". Open: the way to
+**Choose apps to install** in steps 8 and 9, as in the
 [release checklist](../../development/release-checklist.md#how-it-is-used).
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
@@ -71,21 +77,25 @@ Before you merge the pull request that added this page.
    says Disabled. Catalog has no WebView, so WebView JIT changes nothing
    for it.
 5. [x] Network permission revoked. On **App info**, tap **Permissions**.
-   Catalog asks for no permissions, so Network must not be listed.
-6. [x] Sensors permission revoked. In **Permissions**, tap **Sensors**,
-   then **Don't allow**. If Sensors is not listed, write that down.
+   The page **App permissions** opens. Catalog asks for no permissions,
+   so Network is not listed, and **Allowed** says "No permissions
+   allowed".
+6. [x] Sensors permission revoked. On **App permissions**, **Sensors** is
+   under **Not allowed**. If it is under **Allowed**, tap it and change
+   it.
 7. [x] With all of these set, Catalog still works.
    1. On **App info**, tap **Force stop**, so the settings apply.
    2. Open Catalog preview and use every screen. Nothing crashes, and no
       page is empty.
 8. [x] Works in a secondary user profile.
    1. In the Owner user, open Settings and search for **Users**.
-   2. Tap the secondary user and use GrapheneOS's **Install available
-      apps** to add Catalog preview to it.
-   3. Switch to that user, open Catalog preview and use every screen.
+   2. Tap the secondary user and open GrapheneOS's install available
+      apps. The page **Choose apps to install** opens.
+   3. Turn on the switch next to Catalog preview.
+   4. Switch to that user, open Catalog preview and use every screen.
 9. [x] Works in Private Space.
    1. In Settings, search for **Private space** and open it.
-   2. Add Catalog preview with **Install available apps**, as in step 8.
+   2. Add Catalog preview on **Choose apps to install**, as in step 8.
    3. Open Catalog preview in Private Space and use every screen.
 10. [x] Reminders: does not apply. Catalog has no reminders.
 
