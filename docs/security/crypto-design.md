@@ -1802,5 +1802,13 @@ What is left, with the step that decides it.
     over without losing files? The file keys that were sealed in
     between would have to be sealed again under the keys of the new
     recovery key first, as in the move from a random `file-key`.
-    Nothing is built for this. Open: the owner names the step that
-    decides it.
+    Nothing is built for this. Decided in step 1.7, session A.
+12. **A keyset file that is damaged while its hardware key lives** can
+    never be replaced (rule 2 under "Rules for making, replacing and
+    losing a hardware key"). Not even the right recovery words help: the
+    setup stops at "damaged or changed" and writes nothing. For
+    `file-key` that closes the app's files on this phone for good,
+    although the words could derive the keyset again. Proposal: with
+    the right recovery words, set the damaged file aside, never delete
+    it, and store the keyset again. Nothing is built for this. Decided
+    in step 1.7, session A.

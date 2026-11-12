@@ -23,7 +23,9 @@ which the owner asked for, and how the record fields of 0004 are stored
 and stamped, with the change number from the owner's decisions on pull
 request 21. Records 0006 and 0007 were completed in Phase 1, step 4, with
 the owner's decisions of 2026-11-12. Their detail is in
-[crypto-design.md](../security/crypto-design.md).
+[crypto-design.md](../security/crypto-design.md). Record 0028 comes from
+Phase 1, step 4, session C. It is proposed: the owner decides on it with
+the pull request of that session.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -57,3 +59,4 @@ How a record may be edited or replaced is in point 7 of
 | 0025 | [Secure app spawning in the GrapheneOS checklist](0025-secure-app-spawning-in-grapheneos-checklist.md) | Accepted |
 | 0026 | [Room's build tools and committed schemas](0026-room-build-tools.md) | Accepted |
 | 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |
+| 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Proposed |

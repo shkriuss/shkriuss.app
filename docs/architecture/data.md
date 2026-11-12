@@ -344,8 +344,8 @@ a wrong migration and a missing step fail.
 | `TestSourcesTest` | `core/testing` | `TestIdSource` gives valid UUIDs in order; `TestClock` moves only when told. |
 
 All of them run in `./gradlew check`, on the JVM with Robolectric. Their
-SQLite is Robolectric's, not a phone's. No emulator test exists yet
-([emulator-tests.md](../development/emulator-tests.md)).
+SQLite is Robolectric's, not a phone's. None of them runs on an emulator
+yet ([emulator-tests.md](../development/emulator-tests.md)).
 
 ## Open
 

@@ -514,6 +514,9 @@ First decide with me, before any code:
 - The permission `USE_BIOMETRIC` for the system prompt: its decision
   record, and which owner-only files must change for it.
 - Whether AndroidX Biometric is still needed anywhere (ADR 0003).
+- Open questions 11 and 12 of crypto-design.md: how a user starts over
+  after a setup that stopped half way, and what happens to a keyset file
+  that is damaged while its hardware key lives.
 
 Then build:
 - Create a recovery key: show the 24 words, ask for four of them, then

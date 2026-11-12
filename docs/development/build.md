@@ -80,6 +80,7 @@ Claude runs these from `android/`. The same list is in
 | `./gradlew checkDaoRules` | Checks that DAOs only read and that only `RecordWriter` writes records. Part of `check`. |
 | `./gradlew :app:<name>:assembleRelease` | Builds the unsigned release APK. |
 | `./gradlew :app:<name>:assemblePreview` | Builds the unsigned preview APK. |
+| `./gradlew :core:crypto:assembleDebugAndroidTest` | Builds a module's test APK for the emulator. It checks that the instrumented tests compile. The tests themselves run only in CI ([emulator-tests.md](emulator-tests.md)). |
 
 The commands after a dependency change are in
 [After a dependency change](#after-a-dependency-change).
@@ -113,6 +114,7 @@ CI runs `./gradlew check verifyRoborazziDebug` together with
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
 | `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
 | `shkriuss.android.screenshot-test` | Roborazzi. Applies the unit-test plugin too. |
+| `shkriuss.android.instrumented-test` | Tests on an emulator, in `src/androidTest/`: the project's own test runner, JUnit 4 and `core/testing`. Tests in `src/sharedTest/` run on the JVM and on the emulator ([emulator-tests.md](emulator-tests.md), [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)). |
 | `shkriuss.android.room` | Room 3 on the system SQLite: KSP, Room's Gradle plugin, the runtime, the driver and the test library. The schema check and record tasks ([Room schemas](#room-schemas)) and the [DAO rules check](#dao-rules-check). |
 
 Every module refuses the bundled SQLite driver, `androidx.sqlite:sqlite-bundled`.
@@ -268,8 +270,12 @@ second build must write the same mapping file, or the release stops. See
     `AndroidHardwareKeys`. Robolectric has no Android Keystore, so it
     checks the other half: where the Keystore gives no answer, nothing is
     made, stored or deleted, and no key counts as lost. The Keystore
-    itself is for the emulator tests
-    ([emulator-tests.md](emulator-tests.md#what-the-hardware-key-tests-must-cover)).
+    itself is tested on an emulator
+    ([emulator-tests.md](emulator-tests.md#the-tests-of-the-hardware-keys)).
+  - Four of the classes are in `src/sharedTest/`, with the helpers they
+    use: `DesignVectorsTest`, `PublishedVectorsTest`, `RecoveryWordsTest`
+    and `KeysetFilesTest`. They run here on the JVM, and a second time on
+    the emulator, where Tink takes its Android path.
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
@@ -282,6 +288,14 @@ second build must write the same mapping file, or the release stops. See
   that do not overlap, the disabled states, the components to try, the
   section headers as headings, the loading state as "in progress", and
   the loading and error states to try as polite live regions.
+
+### Instrumented tests
+
+Tests that need a real Android run on an emulator, in the job "Emulator"
+of CI. Today those are the tests of the hardware keys in `core/crypto`.
+They cannot run in a cloud session, which has no emulator. What they
+are, how they run and what they found is in
+[emulator-tests.md](emulator-tests.md).
 
 ### Screenshot tests
 
