@@ -360,6 +360,9 @@ Read CLAUDE.md and docs/plan/PLAN.md sections 3, 5 and 7. Build `core/data`:
 - Schema export and a migration test harness in `core/testing`, with one
   example migration and its test.
 - `docs/architecture/data.md`.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
 ### 1.4 Cryptography
@@ -393,6 +396,9 @@ Tests: known-answer vectors, round trips, tampering, truncation, wrong key,
 wrong version, empty and very large inputs. No key material in logs, errors
 or `toString`. No `javax.crypto` or Tink calls outside this module; add a
 lint or test that enforces it.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
 ### 1.5 Backup
@@ -411,6 +417,9 @@ each app implements to list and restore its records and files.
 Tests: round trip, a file cut short, one changed byte, wrong recovery key, a
 file from a newer format version, a very large file without loading it into
 memory. Write the user guide page "Back up and restore".
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
 ### 1.6 Notifications
@@ -430,6 +439,9 @@ Read CLAUDE.md and docs/plan/PLAN.md section 8. Build `core/notify`:
   happens after a reboot before the first unlock, in Private Space, and in a
   secondary profile.
 - Update `docs/security/permissions.md` for every permission and receiver.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
 ### 1.7 App lock
@@ -447,6 +459,9 @@ as a shared piece that every app can turn on:
   an access gate only; say so honestly in the user guide.
 - An option to hide the app in the recent-apps view and block screenshots.
 - Catalog page, screenshot tests, user guide page.
+
+I am the owner and I ask you to add the include lines for the new
+modules to android/settings.gradle.kts, and nothing else in that file.
 ```
 
 ### Phase 1 gate (you)
@@ -495,7 +510,9 @@ changelog.
 Steps:
 
 - 2.2 Data and logic: tables, repository, view models, unit tests, exported
-  schema. Create `feature/water` and `app/water`.
+  schema. Create `feature/water` and `app/water`. I am the owner and I ask
+  you to add the include lines for the new modules to
+  android/settings.gradle.kts, and nothing else in that file.
 - 2.3 Screens: all screens from the spec with the `Shk*` components.
 - 2.4 Reminders: through `core/notify`, with the permission flow.
 - 2.5 Backup, restore, app lock and settings.
@@ -592,9 +609,13 @@ Steps:
   workflow that uses the `cloudflare` environment (I am the owner and I ask
   for that workflow).
 - 5.3 `core/sync-client`: change-set export and import, conflict rules,
-  property tests with many random edit orders.
+  property tests with many random edit orders. I am the owner and I ask you
+  to add the include lines for the new modules to
+  android/settings.gradle.kts, and nothing else in that file.
 - 5.4 `app/sync` and the signature-protected interface in Water. Only
-  `app/sync` declares the network permission.
+  `app/sync` declares the network permission. I am the owner and I ask you
+  to add the include lines for the new modules to
+  android/settings.gradle.kts, and nothing else in that file.
 - 5.5 `docs/self-hosting/`: deploy from a phone browser, upgrade, costs,
   limits, how to delete everything.
 

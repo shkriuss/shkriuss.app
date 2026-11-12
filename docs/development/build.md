@@ -13,6 +13,8 @@ build. Set up in Phase 0, step 3.
 | Android Gradle Plugin (AGP) | 9.5.1 | `android/gradle/libs.versions.toml` |
 | Kotlin | 2.4.21 | `android/gradle/libs.versions.toml` |
 | Compose BOM | 2026.09.00 | `android/gradle/libs.versions.toml` |
+| Room | 3.0.3 | `android/gradle/libs.versions.toml` |
+| KSP (runs Room's compiler) | 2.3.13 | `android/gradle/libs.versions.toml` |
 | Min SDK | 33 (Android 13) | `build-logic`, `ShkBuild.kt` |
 | Compile and target SDK | 37 (Android 17), platform `android-37.0` | `build-logic`, `ShkBuild.kt` |
 | SDK build tools | 36.0.0 | `build-logic`, `ShkBuild.kt` |
@@ -32,6 +34,11 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   and version, and its dependencies.
 - `android/core/design/`: the design system. See
   [design-system.md](design-system.md).
+- `android/core/data/`: the base for every app database, and the
+  committed schemas of its example database in `schemas/`. See
+  [architecture/data.md](../architecture/data.md).
+- `android/core/testing/`: test helpers that other modules use in their
+  tests only.
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
 
@@ -58,6 +65,8 @@ Claude runs these from `android/`. The same list is in
 | `./gradlew :app:<name>:assembleDebug` | Builds one app. |
 | `./gradlew verifyRoborazziDebug` | Compares screenshots with the committed ones. |
 | `./gradlew recordRoborazziDebug` | Records screenshots again after an intended UI change. |
+| `./gradlew recordRoomSchemas` | Writes the database schema files after a schema change, to commit them. |
+| `./gradlew checkRoomSchemas` | Checks that the committed schema files match the code. Part of `check`. |
 | `./gradlew :app:<name>:assembleRelease` | Builds the unsigned release APK. |
 | `./gradlew :app:<name>:assemblePreview` | Builds the unsigned preview APK. |
 
@@ -93,8 +102,14 @@ CI runs `./gradlew check verifyRoborazziDebug` together with
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
 | `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
 | `shkriuss.android.screenshot-test` | Roborazzi. Applies the unit-test plugin too. |
+| `shkriuss.android.room` | Room 3 on the system SQLite: KSP, Room's Gradle plugin, the runtime, the driver and the test library. The schema check and record tasks. See [Room schemas](#room-schemas). |
+
+Every module refuses the bundled SQLite driver, `androidx.sqlite:sqlite-bundled`.
+Resolving it fails the build, with a message that names hard rule 2. The
+setting is in `AndroidCommon.kt`.
 
 Compiler warnings are errors in every module and in `build-logic` itself.
+KSP's warnings, which include Room's, are errors too.
 
 ## Build types
 
@@ -196,6 +211,12 @@ second build must write the same mapping file, or the release stops. See
     the screenshot tests, 411 by 914 dp, with `@Config(qualifiers)`. On
     Robolectric's own smaller screen its long samples at font scale 2.0
     would not fit, and their text would be squeezed.
+- `core/data` has `RecordWriterTest`, `ChangedSinceTest` and
+  `SampleMigrationTest`, and `core/testing` has `RecordConventionsTest`
+  and `TestSourcesTest`. They check how records are written, the "changed
+  since" query, the example migration and the migration test helpers,
+  on the system SQLite driver under Robolectric
+  ([architecture/data.md](../architecture/data.md#tests)).
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
@@ -251,6 +272,33 @@ At font scale 2.0 the title grows by about 1.5 times, not 2 times. Android
   removed). A version constraint lifts it to 3.7.0, which works. Espresso
   is not a direct dependency.
 
+## Room schemas
+
+Room writes the schema of each database version to a JSON file. The files
+are committed in `schemas/<database class>/<version>.json` of the module
+that holds the database. The decision is in
+[ADR 0026](../adr/0026-room-build-tools.md).
+
+1. Room's compiler writes a schema file only when the committed one is
+   missing or describes a different schema.
+2. Room's Gradle plugin would copy that file over the committed one in
+   every build. The `shkriuss.android.room` plugin turns the copy off.
+3. `checkRoomSchemas`, part of `check`, fails if Room wrote any file that
+   is not committed exactly as written. So CI fails when a schema changes
+   without a new version, or a new schema file is not committed.
+4. `recordRoomSchemas` copies the files Room wrote into `schemas/`. Commit
+   them.
+5. Unit tests read the committed files as assets, for the migration tests
+   in `core/testing`.
+
+The steps for a schema change are in
+[architecture/data.md](../architecture/data.md#how-to-change-a-schema).
+
+How it was tested in Phase 1, step 3: with version 2 of the example
+database not yet recorded, `checkRoomSchemas` failed and named
+`2.json`. A changed `NOT NULL` in the committed `2.json` failed it too.
+A change of spaces only did not, because the schema is the same.
+
 ## Lint
 
 1. Android Lint runs in `check`. Warnings are errors.
@@ -300,10 +348,20 @@ The decision is recorded in
   download. Gradle fetched the public keys from `keys.openpgp.org` and
   `keyserver.ubuntu.com`. Nothing was checked by hand. That is trust on
   first use.
-- 55 keys are trusted. Google now signs most AndroidX and AGP files, so
-  those are checked by signature.
-- 63 components are checked by checksum only, because they are not signed:
-  mostly older AndroidX releases, and parent POM files.
+- Room, KSP and what they need were added on 2026-11-12, in Phase 1,
+  step 3, the same way. Gradle could not fetch one key,
+  `3288B8BE8512D6C0CA185268C51E6CBC7FF46F0B` (Ron Shapiro, Google), from
+  any key server, in two tries. It signs one parent POM,
+  `com.google.auto:auto-parent:7`. Claude fetched the key from
+  `keyserver.ubuntu.com`, checked with `gpg` that it made the POM's
+  signature, and added it to the keyring. Gradle then recorded the
+  signature itself.
+- 59 keys are trusted. Google signs most AndroidX and AGP files, Room 3
+  and `androidx.sqlite` included, so those are checked by signature.
+- 64 components are listed one by one. 48 are checked by checksum only,
+  because they are not signed: mostly older AndroidX releases, and parent
+  POM files. 16 are checked by a key trusted for that one file.
+- The keyring holds 67 keys.
 - Gradle groups a trusted key by Maven group where it can. A new version in
   that group, signed by the same key, is then trusted without a new entry.
 
@@ -312,8 +370,12 @@ The decision is recorded in
 Claude does this in the same pull request as the change to
 `libs.versions.toml` (hard rule 5 in CLAUDE.md).
 
-1. Run `./gradlew clean`. Without it, tasks that are up to date do not
-   resolve their files, and entries go missing.
+1. Delete the build folders: `build/` in `android/`, in `build-logic/`
+   and in every module, and `android/.gradle/configuration-cache/`.
+   Without it, tasks that are up to date do not resolve their files, and
+   entries go missing. `./gradlew clean` is not enough: it does not clean
+   `build-logic`, and it fails when a new Gradle plugin is not in the file
+   yet.
 2. Run
    `./gradlew --write-verification-metadata sha256,pgp --export-keys help check verifyRoborazziDebug assembleDebug assembleRelease assemblePreview`.
    It runs every task CI runs, so files that are only resolved while a task
@@ -323,14 +385,23 @@ Claude does this in the same pull request as the change to
 4. Search the file for `ignored-key`. An ignored key means Gradle could not
    fetch it. Run step 2 again with `--refresh-keys`; Gradle remembers a
    failed key lookup for 24 hours. In the cloud environment, key lookups
-   failed now and then in Phase 0.
+   failed now and then in Phase 0 and Phase 1.
+   - If a key still fails, fetch it from `keyserver.ubuntu.com`, check with
+     `gpg --verify` that it made the signature of the files it signs, and
+     add it to `verification-keyring.keys`. Remove the `ignored-key` entry
+     and the checksum entries Gradle wrote instead, then run step 2 for a
+     task that resolves those files. Say in the pull request which key it
+     was and how it was checked.
 5. Read the diff of both files. Every new key and checksum must belong to
    the new dependency. Say in the pull request where it comes from.
 6. Gradle also writes `verification-keyring.gpg`. It is ignored by Git.
    Only the `.keys` file is committed.
 
-Gradle adds entries but never removes them. To drop old ones, delete the
-file, run steps 1 and 2, and add the `key-servers` line back.
+Gradle adds entries but never removes them. To drop old ones, put back
+the files from `main` (or delete them and add the `key-servers` line
+back), then run steps 1 and 2. In Phase 1, step 3, both files were
+started again from `main`, so the pull request held only the entries the
+new dependencies need.
 
 ### When verification fails
 

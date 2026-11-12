@@ -33,6 +33,8 @@ dependencies {
     implementation(libs.kotlin.gradle.plugin)
     implementation(libs.compose.compiler.gradle.plugin)
     implementation(libs.roborazzi.gradle.plugin)
+    implementation(libs.room.gradle.plugin)
+    implementation(libs.ksp.gradle.plugin)
 }
 
 gradlePlugin {
@@ -56,6 +58,10 @@ gradlePlugin {
         register("androidScreenshotTest") {
             id = "shkriuss.android.screenshot-test"
             implementationClass = "app.shkriuss.buildlogic.AndroidScreenshotTestConventionPlugin"
+        }
+        register("androidRoom") {
+            id = "shkriuss.android.room"
+            implementationClass = "app.shkriuss.buildlogic.AndroidRoomConventionPlugin"
         }
     }
 }
