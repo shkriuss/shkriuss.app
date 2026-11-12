@@ -19,7 +19,7 @@ The code is in `android/core/data`. The test helpers are in
 | Change number | `changeNumber`, local, from one counter per database | `Record`, `ChangeCounter` |
 | Writes | Stamped by `RecordWriter`. Deletes only mark. | `RecordWriter` |
 | Changes since a point | `RecordDao.changedSince`, by change number | `ChangedSince.kt` |
-| DAO rules | No DAO deletes, upserts or replaces records | `checkDaoRules` |
+| DAO rules | DAOs only read; only `RecordWriter` writes | `checkDaoRules` |
 | Schemas | One JSON file per database version, committed | `schemas/` in each module |
 | Migration tests | `MigrationTestRule` | `core/testing` |
 
@@ -71,6 +71,9 @@ Every table that stores records has these columns (ADR 0027).
 
 The first four are `RecordFields`. They travel with the record. The change
 number is a column of its own, so it stays on the device.
+
+There is no index on `updatedAt`. An app that needs one, for example to
+sort by the last change, adds its own.
 
 Each database also has one table that is not a record table:
 `change_counter`, with one row that holds the last change number handed
@@ -212,21 +215,38 @@ interface IntakeDao : RecordDao<IntakeEntity> {
 }
 ```
 
-1. Only `RecordWriter` calls `rawInsert` and `rawUpdate`.
-2. A DAO never declares `@Delete`, `@Upsert`, a `DELETE` or `UPDATE`
-   query, or `OnConflictStrategy.REPLACE` (or `INSERT OR REPLACE` and
-   `REPLACE INTO` in a query). They would skip the stamping and the change
-   number, and some would remove rows for good.
+1. A DAO only reads. It never declares `@Insert`, `@Update`, `@Delete` or
+   `@Upsert`, `OnConflictStrategy.REPLACE`, or an `INSERT`, `UPDATE`,
+   `DELETE`, `INSERT OR REPLACE` or `REPLACE INTO` query. They would skip
+   the stamping and the change number, and some would remove rows for
+   good.
+2. Only `RecordDao` itself declares the two writes, `rawInsert` and
+   `rawUpdate`, and only `RecordWriter` calls them.
 3. `checkDaoRules`, part of `check`, fails the build if any class of a
-   module with a database breaks rule 2, in main or test code
+   module with a database breaks rule 1 or 2, in main or test code
    ([build.md](../development/build.md#dao-rules-check)).
 4. The one exception is a future purge of deleted records: one function
    per DAO may be marked `@PurgesDeletedRecords`, if it is
    `DELETE FROM <table> WHERE deletedAt IS NOT NULL`, optionally followed
    by `AND` and more conditions, with no `OR`. When a purge is allowed at
    all is for the sync design. A purge never touches the counter.
-5. Reads that show records to the user filter out deleted ones with
+5. There is no other exception. If a table that is not a record ever
+   needs a write, stop and ask the owner. Restoring a backup and importing
+   from sync will get their own `RecordWriter` functions in their steps.
+6. Reads that show records to the user filter out deleted ones with
    `deletedAt IS NULL`.
+
+### What the check cannot see
+
+`checkDaoRules` reads the compiled classes. It cannot see:
+
+- **SQL that code runs outside a DAO**, through a connection, for example
+  with `useWriterConnection` and `executeSQL`. `RecordWriter` does this
+  for the change counter, which is not a record. Review keeps every other
+  such use out.
+- **Calls from modules without a database.** It runs in modules with the
+  `shkriuss.android.room` plugin. A call to `rawInsert` or `rawUpdate`
+  from an app module would not be found.
 
 ## Schemas and migrations
 

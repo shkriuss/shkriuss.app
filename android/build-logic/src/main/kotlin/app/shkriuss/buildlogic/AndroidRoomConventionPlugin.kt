@@ -98,13 +98,13 @@ class AndroidRoomConventionPlugin : Plugin<Project> {
     }
 
     /**
-     * Fails `check` when a DAO of the module, in main or test code, could
+     * Fails `check` when code of the module, in main or test code, could
      * remove records for good or write past RecordWriter ([CheckDaoRulesTask]).
      */
     private fun Project.registerDaoRulesCheck() {
         val check = tasks.register<CheckDaoRulesTask>("checkDaoRules") {
             group = "verification"
-            description = "Checks that no DAO deletes, upserts or replaces records."
+            description = "Checks that no DAO writes or deletes records, and only RecordWriter calls rawInsert and rawUpdate."
             // Every Kotlin compile task of the module: main and unit tests,
             // debug and release. Their outputs are the compiled classes.
             classes.from(tasks.withType<KotlinJvmCompile>())

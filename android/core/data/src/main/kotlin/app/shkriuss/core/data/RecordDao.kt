@@ -18,12 +18,13 @@ import androidx.room3.Update
  * }
  * ```
  *
- * A DAO never declares `@Delete`, `@Upsert`, a `DELETE` or `UPDATE` query,
- * or `OnConflictStrategy.REPLACE`, which deletes the old row. All of them
- * would skip the stamping and the change number, and some would remove a
- * record for good. `checkDaoRules` fails the build if one does. The only
- * exception is one query marked [PurgesDeletedRecords]. Reads may filter
- * out deleted records with `WHERE deletedAt IS NULL`.
+ * A DAO only reads. It never declares `@Insert`, `@Update`, `@Delete`,
+ * `@Upsert`, or an `INSERT`, `UPDATE`, `DELETE` or `REPLACE` query. All of
+ * them would skip the stamping and the change number, and some would
+ * remove a record for good. Only this interface declares the two writes,
+ * and only [RecordWriter] calls them. `checkDaoRules` fails the build
+ * otherwise. The one exception is one query marked [PurgesDeletedRecords].
+ * Reads may filter out deleted records with `WHERE deletedAt IS NULL`.
  */
 interface RecordDao<T : Record<T>> {
     /** Stores [record] as it is, without stamping. Only [RecordWriter] calls it. */

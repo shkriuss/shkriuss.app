@@ -6,7 +6,8 @@
   and the owner's decisions on
   [pull request 21](https://github.com/shkriuss/shkriuss.app/pull/21): the
   proposal accepted except its point 6, which the owner replaced with the
-  change number. It adds detail to point 5 of
+  change number, and the owner's answers on the same pull request that
+  widened point 8. It adds detail to point 5 of
   [0004](0004-room-on-system-sqlite-no-sqlcipher.md).
 
 ## Context
@@ -33,7 +34,8 @@
    since 1970-01-01T00:00:00Z. `deletedAt` is null while the record is not
    deleted. The other two are `NOT NULL`.
 3. Each record table also has `changeNumber INTEGER NOT NULL`, with a
-   unique index on it.
+   unique index on it. There is no index on `updatedAt`. An app that needs
+   one adds its own.
 4. Entities embed the four fields of point 1 and 2 as one class,
    `RecordFields`, so the columns have the same names in every table. The
    change number is a column of its own, outside `RecordFields`.
@@ -57,10 +59,18 @@
      sync sends. A restored or imported record gets a new one.
 7. Times come from a `Clock`, and IDs from an `IdSource`, both passed
    through constructors.
-8. A build check, `checkDaoRules`, fails when a DAO declares `@Delete`,
-   `@Upsert`, a `DELETE` or `UPDATE` query, or
-   `OnConflictStrategy.REPLACE`. One function per DAO may be marked
-   `@PurgesDeletedRecords`, for a future purge of deleted records.
+8. A DAO only reads. A build check, `checkDaoRules`, fails when:
+   - any DAO but `RecordDao` itself declares `@Insert` or `@Update`,
+   - any DAO declares `@Delete`, `@Upsert`, `OnConflictStrategy.REPLACE`,
+     or an `INSERT`, `DELETE`, `UPDATE` or `REPLACE` query,
+   - any code but `RecordWriter` calls `rawInsert` or `rawUpdate`.
+
+   One function per DAO may be marked `@PurgesDeletedRecords`, for a
+   future purge of deleted records. There is no other exception. If a
+   table that is not a record ever needs a write, the owner decides.
+   Restoring a backup and importing from sync will get their own
+   `RecordWriter` functions in their steps; they are no reason to allow
+   direct writes.
 
 ## Options rejected
 
@@ -80,6 +90,12 @@
   names it.
 - **SQLite triggers that refuse a `DELETE`.** Room does not know about
   triggers, so they are not in the schema files or the migration tests.
+- **The `(updatedAt, id)` index of the first proposal.** It served only the
+  first "changed since" query. The owner decided on pull request 21 not to
+  keep it.
+- **Allowing plain `@Insert` and `@Update` in feature DAOs.** They would
+  skip the stamping and the change number. The owner decided on pull
+  request 21 to refuse them.
 
 ## Consequences
 
@@ -97,6 +113,10 @@
 - Each table's DAO declares its own `find` and `changedSince` queries,
   because Room needs the table name written out. The shared SQL is in
   `RecordSql.CHANGED_SINCE`.
+- `checkDaoRules` reads compiled classes. It cannot see SQL that code runs
+  outside a DAO, through a connection. `RecordWriter`'s counter SQL is the
+  one such use today. It checks the modules that have a database, so a
+  call to `rawInsert` or `rawUpdate` from an app module is not checked.
 - The conventions check of `core/testing` checks points 1 to 3 and the
   counter table for every database's newest schema. The migration tests
   check that change numbers and the counter survive each migration.

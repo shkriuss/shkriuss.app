@@ -55,7 +55,9 @@ Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)):
   the build.
 - the two checks of the record rules, `CheckRoomSchemasTask.kt` and
   `CheckDaoRulesTask.kt`, and `AndroidRoomConventionPlugin.kt`, which
-  connects them to the build (owner's decision on pull request 21).
+  connects them to the build (owner's decision on pull request 21),
+- `AndroidCommon.kt`, the settings every module shares, which refuse the
+  bundled SQLite driver (owner's decision on pull request 21).
 
 ## Commands
 
@@ -70,7 +72,7 @@ Claude runs these from `android/`. The same list is in
 | `./gradlew recordRoborazziDebug` | Records screenshots again after an intended UI change. |
 | `./gradlew recordRoomSchemas` | Writes the database schema files after a schema change, to commit them. |
 | `./gradlew checkRoomSchemas` | Checks that the committed schema files match the code. Part of `check`. |
-| `./gradlew checkDaoRules` | Checks that no DAO deletes, upserts or replaces records. Part of `check`. |
+| `./gradlew checkDaoRules` | Checks that DAOs only read and that only `RecordWriter` writes records. Part of `check`. |
 | `./gradlew :app:<name>:assembleRelease` | Builds the unsigned release APK. |
 | `./gradlew :app:<name>:assemblePreview` | Builds the unsigned preview APK. |
 
@@ -307,45 +309,69 @@ A change of spaces only did not, because the schema is the same.
 
 Records are only marked as deleted, and every write goes through
 `RecordWriter`, which stamps the record fields and the change number
-([ADR 0027](../adr/0027-record-fields-and-stamping.md)). The task
-`checkDaoRules` fails the build when code could break that. It runs in
-`check` for every module with the `shkriuss.android.room` plugin.
+([ADR 0027](../adr/0027-record-fields-and-stamping.md)). A DAO only reads.
+The task `checkDaoRules` fails the build when code could break that. It
+runs in `check` for every module with the `shkriuss.android.room` plugin.
 
 1. It reads every class the module's Kotlin compile tasks write, main and
-   tests. Room's annotations stay in the class files, and each query is
-   there as the compiler joined it, constants included. It needs no
-   library: `CheckDaoRulesTask.kt` reads the class file format itself.
-2. A function fails the check if it is:
-   - annotated `@Delete` or `@Upsert`,
-   - annotated `@Insert` or `@Update` with `OnConflictStrategy.REPLACE`,
-   - annotated `@Query` with SQL that contains `DELETE`, `UPDATE`,
-     `REPLACE INTO` or `OR REPLACE`. Comments and text in quotes are not
-     counted.
+   tests. Room's annotations stay in the class files, each query is there
+   as the compiler joined it, constants included, and so is every method a
+   class calls. It needs no library: `CheckDaoRulesTask.kt` reads the class
+   file format itself.
+2. It fails if:
+   - a function is annotated `@Delete` or `@Upsert`,
+   - a function is annotated `@Insert` or `@Update`, unless it is in
+     `RecordDao` itself,
+   - a function is annotated `@Insert` or `@Update` with
+     `OnConflictStrategy.REPLACE`, even in `RecordDao`,
+   - a function is annotated `@Query` with SQL that contains `INSERT`,
+     `DELETE`, `UPDATE`, `REPLACE INTO` or `OR REPLACE`. Comments and text
+     in quotes are not counted,
+   - a class other than `RecordWriter` and its nested classes calls
+     `rawInsert` or `rawUpdate`, directly or as a function reference.
 3. It checks every class, not only those marked `@Dao`, so a forbidden
    function in a base interface is caught too.
-4. The one exception: a function marked `@PurgesDeletedRecords` passes if
+4. A DAO implementation that Room generates calls its own `rawInsert` and
+   `rawUpdate`: that is a bridge the Kotlin compiler adds. A class that
+   calls its own function of that name is therefore left alone.
+5. The one exception: a function marked `@PurgesDeletedRecords` passes if
    its query is `DELETE FROM <table> WHERE deletedAt IS NOT NULL`,
    optionally followed by `AND` and more conditions, with no `OR`. A class
    may have only one. A marked function that is anything else fails.
-5. The failure message lists each function and what it does, and says to
-   stop and ask the owner. Never change the check to make a build pass.
+   There is no other exception (owner's decision on pull request 21).
+6. The failure message lists each problem, and says to stop and ask the
+   owner. Never change the check to make a build pass.
 
 The report is written to `build/reports/dao-rules/`.
 
-It covers DAOs only. `RecordWriter` raises the change counter with SQL
-through its transaction, not through a DAO, because the counter is not a
-record.
+What it cannot see:
 
-How it was tested in Phase 1, step 3: a temporary file in the tests of
-`core/data` declared, in DAOs and in one base interface without `@Dao`,
-every forbidden form: `@Delete`, `@Upsert`, `@Insert` and `@Update` with
-`REPLACE`, `DELETE` and lower-case `update` queries, `INSERT OR REPLACE`,
-`REPLACE INTO`, a `DELETE` built from two joined constants, a marked purge
-with `OR`, a marked read, and two marked purges in one DAO.
-`checkDaoRules` failed and named all 13. A marked purge with quoted names
-and `AND`, and a read with `update` and `delete` inside quotes and a
-comment, passed. With the file removed, the check passed on the 108
-classes of `core/data`.
+- SQL that code runs outside a DAO, through a connection. `RecordWriter`
+  raises the change counter that way, because the counter is not a
+  record.
+- Calls to `rawInsert` or `rawUpdate` from modules without the Room
+  plugin, such as app modules.
+
+How it was tested in Phase 1, step 3, with a temporary file in the tests
+of `core/data`:
+
+1. First round. In DAOs and in one base interface without `@Dao`, the
+   file declared `@Delete`, `@Upsert`, `@Insert` and `@Update` with
+   `REPLACE`, `DELETE` and lower-case `update` queries, `INSERT OR
+   REPLACE`, `REPLACE INTO`, a `DELETE` built from two joined constants, a
+   marked purge with `OR`, a marked read, and two marked purges in one
+   DAO. `checkDaoRules` failed and named all 13.
+2. Second round, after the owner's answers on pull request 21. The same
+   file also declared a plain `@Insert` and a plain `@Update` in a feature
+   DAO, an `INSERT` query, a repository that calls `rawInsert`, and a
+   function reference to `rawUpdate`. The check failed and named 20
+   problems: the 13, the `@Insert` and `@Update` of the two `REPLACE`
+   functions, and the 5 new ones.
+3. In both rounds a marked purge with quoted names and `AND`, a read with
+   `update`, `delete` and `insert` inside quotes and a comment, and a
+   repository that only calls `find` and `changedSince` passed.
+4. With the file removed, the check passed on the 108 classes of
+   `core/data`, including Room's generated DAO implementations.
 
 ## Lint
 
