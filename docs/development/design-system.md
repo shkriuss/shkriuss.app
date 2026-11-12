@@ -92,6 +92,10 @@ Read colours with `ShkTheme.colors`, for example
 The values are from ADR 0017. The "Use" column is the starting guidance;
 the component batches in Phase 1, step 2 may refine it.
 
+The owner confirmed the teal accent as it is, with Catalog 0.2.0 on the
+Pixel 9 Pro, the Pixel Tablet and the Pixel 6a on 2026-11-12, at the
+Phase 1 gate ([ADR 0017](../adr/0017-design-system-tokens.md), point 1).
+
 ### Which colours may be text, and on what
 
 - Text colours: `text`, `textSecondary`, `accent`, `error`, `success`,
@@ -115,7 +119,12 @@ its contrast.
 
 ## Type
 
-Six styles, all in the system font. Use them through `ShkText`:
+Six styles, all in the system font. The owner confirmed them as they are,
+with Catalog 0.2.0 on the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a
+on 2026-11-12, at the Phase 1 gate
+([ADR 0017](../adr/0017-design-system-tokens.md), point 6).
+
+Use them through `ShkText`:
 
 ```kotlin
 ShkText(text = stringResource(R.string.title), style = ShkTextStyle.Headline)
@@ -1428,8 +1437,6 @@ before the capture.
 
 ## Open
 
-- The six text styles are the starting values of ADR 0017. The owner
-  confirms them on the three devices at the Phase 1 gate.
 - The "Use" columns above are starting guidance, to be refined by the
   component batches.
 - `ScreenshotConfig` and `captureWholeScreen` live in the Catalog's tests.

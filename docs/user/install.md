@@ -48,7 +48,8 @@ Obtainium checks for new releases and tells you when one is out. Tap the
 app in Obtainium, then **Update**.
 
 These two steps were checked with the first update, Catalog 0.1.0 to
-0.2.0, on 2026-11-12.
+0.2.0, on 2026-11-12. It worked on all three test devices: a Pixel 9 Pro,
+a Pixel Tablet and a Pixel 6a.
 
 Android installs an update only if it is signed with the same key as the
 app on your phone. So once you have checked an app with AppVerifier, an

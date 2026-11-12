@@ -41,6 +41,9 @@ Done. Catalog 0.2.0 was published as `catalog-v0.2.0` on 2026-11-12.
 - The owner sent the way for Private space too: Settings, **Security and
   privacy**, **Private space**, **Install available apps**. Part 1, step
   9, now follows it. No name in part 1 is Open any more.
+- Part 4, step 1, asks for one phone. The owner reported that the update
+  from 0.1.0 to 0.2.0 through Obtainium worked on all three devices: the
+  Pixel 9 Pro, the Pixel Tablet and the Pixel 6a, on 2026-11-12.
 
 | | |
 |---|---|

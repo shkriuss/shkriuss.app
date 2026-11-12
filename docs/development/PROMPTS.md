@@ -451,6 +451,12 @@ as a shared piece that every app can turn on:
 
 ### Phase 1 gate (you)
 
+The design part was done on 2026-11-12 with Catalog 0.2.0, on the Pixel
+9 Pro, the Pixel Tablet and the Pixel 6a. It covers the tokens and
+components of steps 1.1 and 1.2. The teal accent and the six text styles
+stay as they are ([ADR 0017](../adr/0017-design-system-tokens.md)). The
+rest of the gate waits for steps 1.3 to 1.7.
+
 1. Install Catalog on the Pixel 9 Pro, Pixel Tablet and Pixel 6a.
 2. Look at every page in light and dark, with large font, with TalkBack.
 3. Write what you dislike as a comment. Use prompt R3 to change it.
