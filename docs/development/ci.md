@@ -439,10 +439,17 @@ The preview jobs are not required. They run only when a pull request
 touches an app, so a required preview would block every docs-only pull
 request.
 
-The four emulator jobs are not required either. Open: the owner decides
-whether they become required. They run on every pull request, so they
-could be. To require them, add each of the four names in step 4, for
-example `Emulator (Android 13)`.
+The four emulator jobs are not required for now. The owner's decision on
+[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24):
+
+- They keep running on every pull request and every push to `main`.
+- The owner decides at the Phase 1 gate whether they become required,
+  after seeing how stable they are.
+- Until then a red emulator job does not block a merge. Read it all the
+  same: it means a test of the hardware keys failed, or the emulator did.
+
+To require them later, add each of the four names in step 4, for example
+`Emulator (Android 13)`.
 
 What a required check proves: that the jobs named "Gradle wrapper" and
 "Check" passed, as the pull request's own copy of `ci.yml` defines them. A

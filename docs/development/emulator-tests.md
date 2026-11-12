@@ -19,7 +19,8 @@ the tests compile.
 | How the emulator starts | Shell steps with `sdkmanager`, `avdmanager`, `emulator` and `adb`. No action. |
 | Test runner | The project's own, `InstrumentedTestRunner` in `core/testing`, on Android's `Instrumentation` and JUnit 4 |
 | Test libraries | None added |
-| Decision | [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md), proposed |
+| Decision | [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md) |
+| Required checks | Not yet. The owner decides at the Phase 1 gate ([Decided](#decided)). |
 
 ## How a module gets instrumented tests
 
@@ -29,7 +30,9 @@ the tests compile.
    package.
 3. List every test class in a JUnit suite named `InstrumentedTests` in
    that package. The runner runs this one class. A test class that is not
-   listed does not run.
+   listed would not run, so `./gradlew check` fails for it and names it
+   ([build.md](build.md#instrumented-test-suite-check)). The same goes
+   for a test class in `src/sharedTest/`.
 4. Reach the emulator through `TestDevice` in `core/testing`:
    - `TestDevice.context`: the context of the test APK.
    - `TestDevice.instrumentation`: to start a screen, or to run something
@@ -313,16 +316,26 @@ update from Android 14 to 15 (your devices are past it), a screen lock
 reset by a device administrator, a Keystore that fails for a moment, a
 loss of power, and the time before the first unlock.
 
+## Decided
+
+The owner's decisions on
+[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24):
+
+1. **The runner.** ADR 0028 is accepted: the project's own runner, shell
+   steps and AOSP images. A test class that the suite does not list
+   fails the build.
+2. **Required checks.** Not yet. The four jobs keep running on every
+   pull request. The owner decides at the Phase 1 gate, after seeing how
+   stable they are ([ci.md](ci.md#required-checks)).
+3. **Pinning.** The emulator and the system images are not pinned to a
+   revision. `sdkmanager` takes the newest, and the job writes the
+   installed revisions into its log. A new revision can fix a fault,
+   such as the one of the Android 17 image above, or bring a new one.
+4. **Owner-only files.** The runner, the convention plugin and the suite
+   check are listed in [CODEOWNERS](../../.github/CODEOWNERS).
+
 ## Open
 
-- Whether the four emulator jobs become required checks
-  ([ci.md](ci.md#required-checks)).
-- Whether they run on every pull request, as now, or only when `android/`
-  or `ci.yml` changes.
-- Whether the emulator and the system images should be pinned to a
-  revision. Today `sdkmanager` takes the newest, and the job writes the
-  revisions into its log (ADR 0028). A new revision can fix a fault,
-  such as the one of the Android 17 image above, or bring a new one.
 - A restart of the emulator, and clearing the app's data, could be
   tested in a job with two runs of the tests and a step between them.
   Not built. Today both are steps for the three devices.

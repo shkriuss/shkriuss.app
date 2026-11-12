@@ -6,7 +6,8 @@ import org.junit.runners.Suite
 /**
  * Every test of this module that runs on the emulator. The runner in
  * `core/testing` runs this class and nothing else, so a test class that is
- * not listed here does not run.
+ * not listed here would not run. `./gradlew check` fails for such a class
+ * (`checkInstrumentedTestSuite`).
  *
  * The first four are in `src/sharedTest/` and also run on the JVM. The
  * others need the real Android Keystore.

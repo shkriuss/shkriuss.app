@@ -19,7 +19,9 @@ import org.junit.runner.notification.RunListener
  *
  * 1. It runs one class: the JUnit suite `InstrumentedTests` in the
  *    module's package. The test APK of the module `a.b` has the package
- *    `a.b.test`, so the suite is `a.b.InstrumentedTests`.
+ *    `a.b.test`, so the suite is `a.b.InstrumentedTests`. A test class
+ *    that the suite does not list would not run. The build check
+ *    `checkInstrumentedTestSuite` fails for such a class.
  * 2. It writes one line per test, and the stack trace of each failure, to
  *    the output of `am instrument -w` and to the system log.
  * 3. Its last line is [PASSED] only if at least one test ran and none

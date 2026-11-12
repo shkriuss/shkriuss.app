@@ -1,12 +1,14 @@
 # 0028 Instrumented tests: own runner, emulator started by shell steps
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-12
 - Source: the owner's prompt for Phase 1, step 4, session C
   ([PROMPTS.md](../development/PROMPTS.md)), which asked for the emulator
-  job and the tests of the hardware keys. Points 1 and 2 are Claude's
-  choice inside that prompt. The owner accepts or changes them on the
-  pull request of session C.
+  job and the tests of the hardware keys. Claude proposed points 1 and 2
+  inside that prompt. The owner accepted them on
+  [pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24),
+  and added point 7 there. The owner also decided there that the
+  emulator and the system images are not pinned (point 4).
 
 ## Context
 
@@ -49,8 +51,8 @@
    `android.app.Instrumentation` and JUnit's `JUnitCore`. No test library
    is added.
    - It runs one class: the JUnit suite `InstrumentedTests` in the
-     module's package. A test class that the suite does not list does not
-     run.
+     module's package. A test class that the suite does not list would
+     not run. Point 7 makes the build fail for such a class.
    - It writes one line per test and the stack trace of each failure.
      Its last line is `INSTRUMENTED_TESTS_PASSED` only if at least one
      test ran and none failed.
@@ -67,7 +69,9 @@
 4. The emulator, `platform-tools` and the system images are SDK packages
    from Google's SDK repository, installed with `sdkmanager`, like the
    SDK platform and the build tools that "Check" installs. They are test
-   tools. Nothing of them goes into an APK.
+   tools. Nothing of them goes into an APK. They are not pinned to a
+   revision: `sdkmanager` takes the newest, and the job writes the
+   installed revisions into its log.
 5. A new convention plugin, `shkriuss.android.instrumented-test`, sets
    the runner, adds JUnit and `core/testing` to a module's instrumented
    tests, and adds the folder `src/sharedTest/` to both the unit tests
@@ -78,6 +82,14 @@
    needs. The APK is installed only on the emulator in CI. No app gets
    the permission from this record
    ([permissions.md](../security/permissions.md)).
+7. A test class that the suite does not list fails the build. The task
+   `checkInstrumentedTestSuite` compares the classes with `@Test` in a
+   module's `src/androidTest/` and `src/sharedTest/` with the classes the
+   suite lists. It runs in `check`
+   ([build.md](../development/build.md#instrumented-test-suite-check)).
+8. The runner, the convention plugin and the check are owner-only files
+   ([CODEOWNERS](../../.github/CODEOWNERS)). A change to one of them
+   could stop tests from running without a red check.
 
 ## Options rejected
 
@@ -114,11 +126,14 @@
   text and keeps Android's log and a picture of the screen when a test
   fails.
 - A test class must be listed in its module's `InstrumentedTests` suite.
-  Forgetting that is silent: the class does not run.
+  Forgetting that fails `check`, which names the class.
 - The emulator and the system images are not pinned to a version or a
   checksum of our own. `sdkmanager` takes the newest revision and checks
-  the download against Google's own list. The job writes the installed
-  revisions into its log. Open: whether the owner wants them pinned.
+  the download against Google's own list. So a new revision can change
+  what a run does, and the log of a run says which revisions it used.
+- The four emulator jobs are not required checks for now. The owner
+  decides at the Phase 1 gate
+  ([ci.md](../development/ci.md#required-checks)).
 - Compose's test rule for instrumented tests
   (`androidx.compose.ui:ui-test-junit4`) expects the AndroidX runner. The
   plan puts Compose accessibility checks into emulator tests (section 11
