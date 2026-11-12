@@ -469,9 +469,12 @@ The parts of batch 4:
   request 16). In the dark theme the surface is close to black, so the
   line is what sets them apart. The line only separates, so it is the
   divider colour, as between two panes.
-- The list pane is 360 dp wide, as in Material 3's list and detail. That
-  is about the width of a phone, so a list looks the same in a pane as on
-  a phone.
+- The list pane is 360 dp wide, as in Material 3's list and detail (owner
+  decision on pull request 16). That is about the width of a phone, so a
+  list looks the same in a pane as on a phone.
+- The space under a top bar is the screen margin, 16 or 24 dp, as on
+  every side of a screen (owner decision on pull request 16). Material 3
+  leaves none above a list.
 - A selected list item marks the item that is open beside the list, in
   two panes. It must show with more than a change of colour (owner
   decision on pull request 16). So besides the higher surface colour
@@ -1143,5 +1146,3 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
   built.
 - What batch 4 leaves out (see [Components](#components)), until an app
   needs it.
-- The space under a top bar is the screen margin, 16 or 24 dp, as on
-  every side of a screen. Material 3 leaves none above a list.
