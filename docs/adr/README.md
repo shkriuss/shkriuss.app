@@ -20,7 +20,8 @@ layouts of the design system, from the owner's decisions on pull request
 GrapheneOS checklist of 0002, from the owner's decision on pull request
 19. Records 0026 and 0027 come from Phase 1, step 3: Room's build tools,
 which the owner asked for, and how the record fields of 0004 are stored
-and stamped, proposed for the owner's review.
+and stamped, with the change number from the owner's decisions on pull
+request 21.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -53,4 +54,4 @@ How a record may be edited or replaced is in point 7 of
 | 0024 | [Own adaptive layouts, no Material 3 adaptive libraries](0024-own-adaptive-layouts.md) | Accepted |
 | 0025 | [Secure app spawning in the GrapheneOS checklist](0025-secure-app-spawning-in-grapheneos-checklist.md) | Accepted |
 | 0026 | [Room's build tools and committed schemas](0026-room-build-tools.md) | Accepted |
-| 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Proposed |
+| 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |

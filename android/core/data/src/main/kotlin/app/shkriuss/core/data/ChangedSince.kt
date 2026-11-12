@@ -9,49 +9,20 @@ object RecordSql {
      * The end of a "changed since" query, after `WHERE`. A DAO writes
      * `@Query("SELECT * FROM <table> WHERE " + RecordSql.CHANGED_SINCE)`.
      *
-     * - It finds every record changed after a [ChangeCursor], deleted
-     *   records included, oldest change first.
-     * - Records with the same `updatedAt` are ordered by `id`, so paging
-     *   never skips or repeats one.
-     * - The first condition lets SQLite read the `(updatedAt, id)` index
-     *   from the cursor on. The order then needs no sorting.
+     * - It finds every record whose change number is above
+     *   `:afterChangeNumber`, deleted records included, oldest change
+     *   first, at most `:limit` of them.
+     * - Change numbers are unique, so paging never skips or repeats a
+     *   record. They do not depend on the clock.
+     * - The unique index on `changeNumber` serves it. The order then needs
+     *   no sorting.
      */
-    const val CHANGED_SINCE =
-        "updatedAt >= :afterUpdatedAt " +
-            "AND (updatedAt > :afterUpdatedAt OR id > :afterId) " +
-            "ORDER BY updatedAt, id LIMIT :limit"
+    const val CHANGED_SINCE: String =
+        "changeNumber > :afterChangeNumber ORDER BY changeNumber LIMIT :limit"
 }
 
 /**
- * A position in the order of changes: records sorted by `updatedAt`, then
- * by `id`. [RecordDao.changedSince] returns the records after a position.
- *
- * To read all changes in pages, start at [Start], and continue from the
- * cursor of the last record of each page ([of]). A record that changes
- * again moves to the end of the order, so it is read again later, with its
- * newest content.
+ * The change number before every change. Change numbers start at 1. To
+ * read every change, start here.
  */
-data class ChangeCursor(
-    /** The `updatedAt` of the position. */
-    val updatedAt: Long,
-    /** The `id` of the position, which orders records with the same `updatedAt`. */
-    val id: String,
-) {
-    /** The cursors that do not come from a record. */
-    companion object {
-        /** Before every record. */
-        val Start: ChangeCursor = ChangeCursor(updatedAt = Long.MIN_VALUE, id = "")
-
-        /** The position of [record], so the next page starts after it. */
-        fun of(record: RecordFields): ChangeCursor = ChangeCursor(record.updatedAt, record.id)
-    }
-}
-
-/**
- * Up to [limit] records that changed after [cursor], deleted ones
- * included, oldest change first.
- */
-suspend fun <T : Record<T>> RecordDao<T>.changedSince(cursor: ChangeCursor, limit: Int): List<T> {
-    require(limit > 0) { "limit must be at least 1" }
-    return changedSince(cursor.updatedAt, cursor.id, limit)
-}
+const val BEFORE_FIRST_CHANGE: Long = 0L

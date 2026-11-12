@@ -1,9 +1,9 @@
 # Data
 
-How the apps store their records: Room on the system SQLite, the four
-fields every record has, how every write stamps them, the "changed since"
-query, and how schemas and migrations are kept and tested. Built in
-Phase 1, step 3.
+How the apps store their records: Room on the system SQLite, the fields
+every record has, how every write stamps them, the change number and the
+"changed since" query, and how schemas and migrations are kept and tested.
+Built in Phase 1, step 3.
 
 The code is in `android/core/data`. The test helpers are in
 `android/core/testing`.
@@ -16,8 +16,10 @@ The code is in `android/core/data`. The test helpers are in
 | SQLite | The system SQLite, through `AndroidSQLiteDriver` (`androidx.sqlite` 2.7.1) | `systemSqliteDatabaseBuilder` |
 | Room's code generator | Room's compiler, run by KSP 2.3.13 | `shkriuss.android.room` plugin |
 | Record fields | `id`, `createdAt`, `updatedAt`, `deletedAt` | `RecordFields` |
+| Change number | `changeNumber`, local, from one counter per database | `Record`, `ChangeCounter` |
 | Writes | Stamped by `RecordWriter`. Deletes only mark. | `RecordWriter` |
-| Changes since a point | `RecordDao.changedSince`, `ChangeCursor` | `ChangedSince.kt` |
+| Changes since a point | `RecordDao.changedSince`, by change number | `ChangedSince.kt` |
+| DAO rules | No DAO deletes, upserts or replaces records | `checkDaoRules` |
 | Schemas | One JSON file per database version, committed | `schemas/` in each module |
 | Migration tests | `MigrationTestRule` | `core/testing` |
 
@@ -26,7 +28,7 @@ Decisions: [ADR 0004](../adr/0004-room-on-system-sqlite-no-sqlcipher.md)
 [ADR 0026](../adr/0026-room-build-tools.md) (KSP, Room's Gradle plugin,
 the committed schemas) and
 [ADR 0027](../adr/0027-record-fields-and-stamping.md) (how the record
-fields are stored and stamped).
+fields and the change number are stored and stamped).
 
 ## The database
 
@@ -57,50 +59,65 @@ fields are stored and stamped).
 
 ## Record fields
 
-Every table that stores records has these four columns. They are the
-convention of ADR 0004, stored as decided in ADR 0027.
+Every table that stores records has these columns (ADR 0027).
 
-| Column | SQL type | What it holds | Changes |
-|---|---|---|---|
-| `id` | `TEXT NOT NULL`, the primary key | A random UUID (version 4), 36 characters, lower case | Never |
-| `createdAt` | `INTEGER NOT NULL` | When the record was created, in milliseconds since 1970-01-01T00:00:00Z | Never |
-| `updatedAt` | `INTEGER NOT NULL` | When the record last changed, deletion included, in the same unit | Only forward |
-| `deletedAt` | `INTEGER`, may be null | When the record was deleted, or null | Set by a delete, cleared by a restore |
+| Column | SQL type | What it holds | Changes | In a backup and in sync |
+|---|---|---|---|---|
+| `id` | `TEXT NOT NULL`, the primary key | A random UUID (version 4), 36 characters, lower case | Never | Yes |
+| `createdAt` | `INTEGER NOT NULL` | When the record was created, in milliseconds since 1970-01-01T00:00:00Z | Never | Yes |
+| `updatedAt` | `INTEGER NOT NULL` | When the record last changed, deletion included, in the same unit | Only forward | Yes |
+| `deletedAt` | `INTEGER`, may be null | When the record was deleted, or null | Set by a delete, cleared by a restore | Yes |
+| `changeNumber` | `INTEGER NOT NULL`, with a unique index | The record's place in the order of changes in this database | On every write, to a new, higher number | No |
 
-Each table also has an index on (`updatedAt`, `id`), in that order. It
-serves the "changed since" query.
+The first four are `RecordFields`. They travel with the record. The change
+number is a column of its own, so it stays on the device.
 
-An entity embeds the four fields as `RecordFields` and implements `Record`:
+Each database also has one table that is not a record table:
+`change_counter`, with one row that holds the last change number handed
+out (`ChangeCounter`).
+
+An entity embeds `RecordFields`, has a `changeNumber` and implements
+`Record`:
 
 ```kotlin
 @Entity(
     tableName = "intake",
     primaryKeys = ["id"],
-    indices = [Index("updatedAt", "id")],
+    indices = [Index("changeNumber", unique = true)],
 )
 data class IntakeEntity(
     @Embedded override val record: RecordFields,
+    override val changeNumber: Long,
     val amountMl: Int,
 ) : Record<IntakeEntity> {
-    override fun withRecord(record: RecordFields) = copy(record = record)
+    override fun withRecord(record: RecordFields, changeNumber: Long) =
+        copy(record = record, changeNumber = changeNumber)
 }
+```
+
+The database lists `ChangeCounter` among its entities:
+
+```kotlin
+@Database(entities = [IntakeEntity::class, ChangeCounter::class], version = 1)
+abstract class WaterDatabase : RoomDatabase() { /* ... */ }
 ```
 
 `MigrationTestRule.checkNewestFollowsRecordConventions()` fails the tests
 of any database whose newest schema breaks these rules: a missing column,
-a wrong type, a wrong primary key, or no change index.
+a wrong type, a wrong primary key, no unique index on `changeNumber`, or
+no `change_counter` table.
 
 ## Writing records
 
 All writes go through one `RecordWriter` per table. It takes the database,
 the table's DAO, a `Clock` and an `IdSource` through its constructor.
 
-1. `create { fields -> ... }` gives the record a new ID from the
-   `IdSource`, and sets `createdAt` and `updatedAt` to now. `deletedAt` is
-   null.
+1. `create { fields, changeNumber -> ... }` gives the record a new ID from
+   the `IdSource`, and sets `createdAt` and `updatedAt` to now.
+   `deletedAt` is null.
 2. `update(id) { current -> changed }` reads the stored record, applies the
-   change and writes it back, in one write transaction. `updatedAt` moves
-   forward. If nothing changed, nothing is written.
+   change and writes it back. `updatedAt` moves forward. If nothing
+   changed, nothing is written.
 3. `markDeleted(id)` sets `deletedAt` and `updatedAt` to now. The row
    stays. Deleting never removes a row.
 4. `restore(id)` clears `deletedAt` of a deleted record, for example to
@@ -108,13 +125,74 @@ the table's DAO, a `Clock` and an `IdSource` through its constructor.
 5. A deleted record cannot be updated or deleted again until it is
    restored. `update`, `markDeleted` and `restore` return null when there
    is no record they can change.
-6. The callers never set the record fields. `create` and `update` ignore
-   any change a caller makes to them.
-7. `updatedAt` always moves forward, even when the clock was set back. A
+6. Each of these writes is one write transaction, and takes the next
+   change number in it (see below).
+7. The callers never set the record fields or the change number. `create`
+   and `update` ignore any change a caller makes to them.
+8. `updatedAt` always moves forward, even when the clock was set back. A
    write sets it to now, or to one millisecond after the record's last
    `updatedAt` if that is later.
 
-### Rules for DAOs
+### Clock and IDs
+
+- `Clock` gives the current time in milliseconds. Apps pass
+  `Clock.System`, the device's wall clock.
+- `IdSource` gives new IDs. Apps pass `IdSource.RandomUuid`. Its random
+  bits come from the platform's secure random source.
+- Both are passed through constructors, never looked up (ADR 0012). Tests
+  pass `TestClock`, which moves only when the test says, and
+  `TestIdSource`, which hands out known IDs in order.
+
+## The change number
+
+1. Every write, create included, gets a change number inside its own write
+   transaction. `RecordWriter` raises the counter in `change_counter` by
+   one and gives the new value to the record.
+2. There is one counter per database, shared by all its record tables.
+3. It only goes up. It never goes down, so a number is never used twice,
+   even after deleted records are purged one day.
+4. A number taken by a write that rolls back is free again. No reader ever
+   saw it, because the write never committed.
+5. SQLite runs one write transaction at a time on a database file, also
+   across processes. So numbers follow the order in which writes commit.
+6. The change number does not depend on the clock. `updatedAt` stays for
+   display and for last writer wins.
+7. It is local. It is not part of a backup or of what sync sends. A
+   record restored from a backup or received by sync gets a new number
+   when it is written here.
+8. A stored "last change number read", such as the one sync will keep,
+   belongs in the same database as the records. If the database file were
+   ever made new, numbering would start again from 1.
+
+## Reading changes ("changed since")
+
+The pattern that sync can use later to find what changed. It is not the
+sync design, which comes in Phase 5 ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
+
+1. `changedSince(afterChangeNumber, limit)` returns up to `limit` records
+   whose change number is above `afterChangeNumber`, lowest first.
+   Deleted records are included, so a deletion is a change like any other.
+2. To read every change in pages, start at `BEFORE_FIRST_CHANGE` (0).
+   Continue from the change number of the last record of each page, until
+   a page is shorter than the limit.
+3. Change numbers are unique, so paging never skips or repeats a record,
+   even when many records change in the same millisecond.
+4. A record that changes again gets a higher number and moves to the end
+   of the order. A reader finds it again, with its newest content.
+5. A clock set back hides nothing. `ChangedSinceTest` changes a record
+   after the clock went back two hours, and the reader still finds it.
+6. A write that commits while a reader is paging is read after it. The
+   write took its number inside its transaction, and no other write could
+   commit meanwhile, so its number is above all the reader has seen.
+   `ChangedSinceTest` holds a write open while a reader pages through a
+   database file, then lets it commit.
+7. The query reads the unique `changeNumber` index from the cursor on, and
+   SQLite does not sort. `ChangedSinceTest` checks the query plan.
+
+The SQL is in `RecordSql.CHANGED_SINCE`. Room needs each table's name
+written in its own query, so each DAO joins it to its own `SELECT`.
+
+## Rules for DAOs
 
 A table's DAO extends `RecordDao`, which gives `RecordWriter` its
 `rawInsert` and `rawUpdate`. The DAO adds `find` and `changedSince` for its
@@ -127,7 +205,7 @@ interface IntakeDao : RecordDao<IntakeEntity> {
     override suspend fun find(id: String): IntakeEntity?
 
     @Query("SELECT * FROM intake WHERE " + RecordSql.CHANGED_SINCE)
-    override suspend fun changedSince(afterUpdatedAt: Long, afterId: String, limit: Int): List<IntakeEntity>
+    override suspend fun changedSince(afterChangeNumber: Long, limit: Int): List<IntakeEntity>
 
     @Query("SELECT * FROM intake WHERE deletedAt IS NULL ORDER BY createdAt DESC")
     fun observeLive(): Flow<List<IntakeEntity>>
@@ -136,48 +214,19 @@ interface IntakeDao : RecordDao<IntakeEntity> {
 
 1. Only `RecordWriter` calls `rawInsert` and `rawUpdate`.
 2. A DAO never declares `@Delete`, `@Upsert`, a `DELETE` or `UPDATE`
-   query, or `OnConflictStrategy.REPLACE`. They would skip the stamping.
-   `@Delete`, `DELETE` and `REPLACE` would also remove rows for good.
-3. Reads that show records to the user filter out deleted ones with
+   query, or `OnConflictStrategy.REPLACE` (or `INSERT OR REPLACE` and
+   `REPLACE INTO` in a query). They would skip the stamping and the change
+   number, and some would remove rows for good.
+3. `checkDaoRules`, part of `check`, fails the build if any class of a
+   module with a database breaks rule 2, in main or test code
+   ([build.md](../development/build.md#dao-rules-check)).
+4. The one exception is a future purge of deleted records: one function
+   per DAO may be marked `@PurgesDeletedRecords`, if it is
+   `DELETE FROM <table> WHERE deletedAt IS NOT NULL`, optionally followed
+   by `AND` and more conditions, with no `OR`. When a purge is allowed at
+   all is for the sync design. A purge never touches the counter.
+5. Reads that show records to the user filter out deleted ones with
    `deletedAt IS NULL`.
-
-These DAO rules are kept by review. The build does not check them (see
-[Open](#open)).
-
-### Clock and IDs
-
-- `Clock` gives the current time in milliseconds. Apps pass
-  `Clock.System`, the device's wall clock.
-- `IdSource` gives new IDs. Apps pass `IdSource.RandomUuid`. Its random
-  bits come from the platform's secure random source.
-- Both are passed through constructors, never looked up (ADR 0012). Tests
-  pass `TestClock`, which moves only when the test says, and
-  `TestIdSource`, which hands out known IDs in order.
-
-## Reading changes ("changed since")
-
-The pattern that sync can use later to find what changed. It is not the
-sync design, which comes in Phase 5 ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
-
-1. The order of changes is: by `updatedAt`, then by `id`.
-2. A `ChangeCursor` is a position in that order: an `updatedAt` and an
-   `id`. `ChangeCursor.Start` is before every record.
-3. `changedSince(cursor, limit)` returns up to `limit` records after the
-   cursor, oldest change first. Deleted records are included, so a
-   deletion is a change like any other.
-4. To read every change in pages, start at `ChangeCursor.Start`. Continue
-   from `ChangeCursor.of(lastRecordOfThePage.record)` until a page is
-   shorter than the limit.
-5. Records with the same `updatedAt` are ordered by `id`, so paging never
-   skips or repeats one, even when many records change in the same
-   millisecond.
-6. A record that changes again moves to the end of the order. A reader
-   finds it again, with its newest content.
-7. The query reads the (`updatedAt`, `id`) index from the cursor on, and
-   SQLite does not sort. `ChangedSinceTest` checks the query plan.
-
-The SQL is in `RecordSql.CHANGED_SINCE`. Room needs each table's name
-written in its own query, so each DAO joins it to its own `SELECT`.
 
 ## Schemas and migrations
 
@@ -207,13 +256,15 @@ change ("Changing formats" in [CLAUDE.md](../../CLAUDE.md)):
 3. Run `./gradlew recordRoomSchemas` from `android/`. It writes the new
    schema file.
 4. Add a migration test for the step: create the old version with rows,
-   migrate, and check the rows.
+   migrate, and check the rows, their record fields and their change
+   numbers.
 5. Run `./gradlew check`.
 6. Commit the new schema file with the change.
 
 Never change the schema file of a version that was released. A migration
-changes tables, not records: it leaves the record fields of every row as
-they are.
+changes tables, not records: it leaves the record fields, the change
+numbers and the counter as they are. A new record table starts with the
+`changeNumber` column and its index.
 
 ### Migration tests
 
@@ -230,14 +281,18 @@ they are.
    step anywhere in the chain.
 4. `checkNewestFollowsRecordConventions()` checks the newest schema
    against the record fields above.
+5. `changeNumberProblems(connection)` checks the stored change numbers:
+   each from 1 up to the counter, and none shared by two records in any
+   table. Run it on the migrated connection.
 
 Each test starts and ends with no database file.
 
 ### The example
 
 `core/data` has a small database in its tests only, `SampleDatabase`. It
-shows every rule on this page. Version 1 has notes with a title. Version 2
-adds `pinned`, with the migration `SampleMigrations.From1To2`:
+shows every rule on this page. Version 1 has notes with a title and tags
+with a name, two record tables that share one counter. Version 2 adds
+`pinned` to notes, with the migration `SampleMigrations.From1To2`:
 
 ```kotlin
 val From1To2: Migration = Migration(startVersion = 1, endVersion = 2) { connection ->
@@ -247,9 +302,10 @@ val From1To2: Migration = Migration(startVersion = 1, endVersion = 2) { connecti
 
 `SampleMigrationTest` is the model for every app's migration test:
 
-- one test per version step that checks the rows and their record fields
-  survive,
-- a test that the app opens the migrated file with Room,
+- one test per version step that checks the rows, their record fields,
+  their change numbers and the counter survive,
+- a test that the app opens the migrated file with Room and goes on
+  counting from the last number,
 - `checkEveryVersionMigratesToNewest` and
   `checkNewestFollowsRecordConventions`, which need no change when a
   version is added.
@@ -261,10 +317,10 @@ a wrong migration and a missing step fail.
 
 | Test | Module | What it checks |
 |---|---|---|
-| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back; a failed write transaction rolls back. |
-| `ChangedSinceTest` | `core/data` | Paging reads every change once, in order, deleted records included, also with many changes in one millisecond; the query plan uses the index. |
-| `SampleMigrationTest` | `core/data` | The example migration, Room opening the migrated file, every version migrating to the newest, the record conventions, and that a wrong migration and a missing step fail. |
-| `RecordConventionsTest` | `core/testing` | The conventions check passes a good table and names each problem. |
+| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back; every write gets a new change number, across the tables of a database; a number is not used again after a purge; a failed write transaction rolls back, its numbers with it. |
+| `ChangedSinceTest` | `core/data` | Paging reads every change once, in order, deleted records included; a clock set back hides no change; a write that commits while a reader is paging is read after it; the query plan uses the index. |
+| `SampleMigrationTest` | `core/data` | The example migration with its change numbers and counter, Room opening the migrated file and counting on, every version migrating to the newest, the record conventions, and that a wrong migration and a missing step fail. |
+| `RecordConventionsTest` | `core/testing` | The conventions check passes a good database and names each problem; the change number check finds shared and too high numbers. |
 | `TestSourcesTest` | `core/testing` | `TestIdSource` gives valid UUIDs in order; `TestClock` moves only when told. |
 
 All of them run in `./gradlew check`, on the JVM with Robolectric. Their
@@ -273,15 +329,9 @@ SQLite is Robolectric's, not a phone's. No emulator test exists yet
 
 ## Open
 
-- **The clock and the change order.** `updatedAt` comes from the device's
-  clock. It never moves backwards for one record, but a record changed
-  while the clock was set back can get an `updatedAt` below a cursor that
-  a reader already passed. That reader would not see the change. How sync
-  reads changes safely is for the sync design in Phase 5, step 1.
 - **When deletion markers may be removed.** Deleted records stay stored.
   When, if ever, they may be purged is for the sync design (ADR 0009).
+  `@PurgesDeletedRecords` is ready for that one query.
 - **Migrations and sync.** How a migration on one device relates to
   records that arrive from a device on an older version is for the sync
   design.
-- **Enforcing the DAO rules.** No build check stops a DAO from declaring
-  `@Delete` or `REPLACE` yet. A lint check could, later.

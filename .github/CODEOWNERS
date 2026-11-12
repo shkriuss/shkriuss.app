@@ -18,6 +18,13 @@
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckGraphicsPathUseTask.kt            @shkriuss
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidApplicationConventionPlugin.kt  @shkriuss
 
+# Build checks that enforce the record rules of ADR 0026 and 0027 (schema
+# files committed, no DAO that deletes or writes past RecordWriter), and
+# the plugin that connects them to the build.
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckRoomSchemasTask.kt                @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckDaoRulesTask.kt                   @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidRoomConventionPlugin.kt         @shkriuss
+
 # Signing configuration and key material, wherever they appear.
 # Release and preview signing are planned to run only in workflows under
 # .github/, which is covered above.

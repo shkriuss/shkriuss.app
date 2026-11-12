@@ -14,15 +14,16 @@ import androidx.room3.Update
  *     override suspend fun find(id: String): NoteEntity?
  *
  *     @Query("SELECT * FROM note WHERE " + RecordSql.CHANGED_SINCE)
- *     override suspend fun changedSince(afterUpdatedAt: Long, afterId: String, limit: Int): List<NoteEntity>
+ *     override suspend fun changedSince(afterChangeNumber: Long, limit: Int): List<NoteEntity>
  * }
  * ```
  *
  * A DAO never declares `@Delete`, `@Upsert`, a `DELETE` or `UPDATE` query,
  * or `OnConflictStrategy.REPLACE`, which deletes the old row. All of them
- * would skip the stamping, and the first and last would remove a record
- * for good. Reads may filter out deleted records with
- * `WHERE deletedAt IS NULL`.
+ * would skip the stamping and the change number, and some would remove a
+ * record for good. `checkDaoRules` fails the build if one does. The only
+ * exception is one query marked [PurgesDeletedRecords]. Reads may filter
+ * out deleted records with `WHERE deletedAt IS NULL`.
  */
 interface RecordDao<T : Record<T>> {
     /** Stores [record] as it is, without stamping. Only [RecordWriter] calls it. */
@@ -41,10 +42,11 @@ interface RecordDao<T : Record<T>> {
     suspend fun find(id: String): T?
 
     /**
-     * Up to [limit] records that changed after the position
-     * ([afterUpdatedAt], [afterId]), deleted ones included, in the order of
-     * [RecordSql.CHANGED_SINCE]. Call it through
-     * `changedSince(cursor, limit)`.
+     * Up to [limit] records whose change number is above
+     * [afterChangeNumber], deleted ones included, lowest change number
+     * first ([RecordSql.CHANGED_SINCE]). To read every change, start at
+     * [BEFORE_FIRST_CHANGE] and continue from the change number of the last
+     * record of each page.
      */
-    suspend fun changedSince(afterUpdatedAt: Long, afterId: String, limit: Int): List<T>
+    suspend fun changedSince(afterChangeNumber: Long, limit: Int): List<T>
 }

@@ -73,5 +73,7 @@
   force a KSP update, but both are checked in the monthly update (prompt
   R5 in [PROMPTS.md](../development/PROMPTS.md)).
 - `CheckRoomSchemasTask.kt` and `AndroidRoomConventionPlugin.kt` in
-  `build-logic` hold the check. Open: whether the owner adds them to
-  [CODEOWNERS](../../.github/CODEOWNERS), like the other build checks.
+  `build-logic` hold the check. They are owner-only
+  ([CODEOWNERS](../../.github/CODEOWNERS)), like the other build checks,
+  by the owner's decision on
+  [pull request 21](https://github.com/shkriuss/shkriuss.app/pull/21).

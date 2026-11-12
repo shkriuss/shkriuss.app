@@ -1,9 +1,12 @@
 package app.shkriuss.core.data
 
+import androidx.room3.executeSQL
+import androidx.room3.useWriterConnection
 import androidx.room3.withWriteTransaction
 import androidx.test.platform.app.InstrumentationRegistry
 import app.shkriuss.core.data.sample.SampleDatabase
 import app.shkriuss.core.data.sample.SampleNote
+import app.shkriuss.core.data.sample.SampleTag
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.core.testing.inMemoryTestDatabaseBuilder
@@ -18,21 +21,24 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Checks that [RecordWriter] stamps every write, that deletes only mark,
- * and that its writes are transactions on the system SQLite driver.
+ * Checks that [RecordWriter] stamps every write, gives every write a new
+ * change number, only marks deletes, and writes in transactions on the
+ * system SQLite driver.
  */
 @RunWith(RobolectricTestRunner::class)
 class RecordWriterTest {
     private val clock = TestClock()
     private val ids = TestIdSource()
     private lateinit var database: SampleDatabase
-    private lateinit var writer: RecordWriter<SampleNote>
+    private lateinit var notes: RecordWriter<SampleNote>
+    private lateinit var tags: RecordWriter<SampleTag>
 
     @Before
     fun openDatabase() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         database = inMemoryTestDatabaseBuilder<SampleDatabase>(context).build()
-        writer = RecordWriter(database, database.notes(), clock, ids)
+        notes = RecordWriter(database, database.notes(), clock, ids)
+        tags = RecordWriter(database, database.tags(), clock, ids)
     }
 
     @After
@@ -41,8 +47,8 @@ class RecordWriterTest {
     }
 
     @Test
-    fun createGivesANewIdAndSetsBothTimesToNow() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
+    fun createGivesANewIdBothTimesAndTheFirstChangeNumber() = runBlocking {
+        val note = createNote("Milk")
 
         val expected = RecordFields(
             id = TestIdSource.idNumber(1),
@@ -51,64 +57,69 @@ class RecordWriterTest {
             deletedAt = null,
         )
         assertEquals(expected, note.record)
+        assertEquals(1L, note.changeNumber)
         assertEquals(note, database.notes().find(note.record.id))
     }
 
     @Test
-    fun createIgnoresRecordFieldsSetByTheCaller() = runBlocking {
-        val note = writer.create { fields ->
-            SampleNote(fields.copy(id = "chosen", createdAt = 1, deletedAt = 2), title = "Milk", pinned = false)
+    fun createIgnoresRecordFieldsAndChangeNumberSetByTheCaller() = runBlocking {
+        val note = notes.create { fields, _ ->
+            SampleNote(fields.copy(id = "chosen", createdAt = 1, deletedAt = 2), changeNumber = 99, title = "Milk", pinned = false)
         }
 
         assertEquals(TestIdSource.idNumber(1), note.record.id)
         assertEquals(clock.nowMillis, note.record.createdAt)
         assertNull(note.record.deletedAt)
+        assertEquals(1L, note.changeNumber)
         assertEquals(listOf(note), database.notes().all())
     }
 
     @Test
-    fun updateMovesUpdatedAtAndKeepsIdAndCreatedAt() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
+    fun updateMovesUpdatedAtAndTheChangeNumberAndKeepsIdAndCreatedAt() = runBlocking {
+        val note = createNote("Milk")
         clock.advanceBy(5_000)
 
-        val updated = writer.update(note.record.id) { it.copy(title = "Oat milk") }
+        val updated = notes.update(note.record.id) { it.copy(title = "Oat milk") }
 
         assertEquals("Oat milk", updated?.title)
         assertEquals(note.record.copy(updatedAt = clock.nowMillis), updated?.record)
+        assertEquals(2L, updated?.changeNumber)
         assertEquals(updated, database.notes().find(note.record.id))
     }
 
     @Test
-    fun updateIgnoresChangesToRecordFields() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
+    fun updateIgnoresChangesToRecordFieldsAndChangeNumber() = runBlocking {
+        val note = createNote("Milk")
         clock.advanceBy(1_000)
 
-        val updated = writer.update(note.record.id) { current ->
-            current.copy(record = current.record.copy(createdAt = 0, deletedAt = 7), pinned = true)
+        val updated = notes.update(note.record.id) { current ->
+            current.copy(record = current.record.copy(createdAt = 0, deletedAt = 7), changeNumber = 50, pinned = true)
         }
 
         assertEquals(note.record.copy(updatedAt = clock.nowMillis), updated?.record)
+        assertEquals(2L, updated?.changeNumber)
         assertEquals(true, updated?.pinned)
     }
 
     @Test
     fun updateThatChangesNothingWritesNothing() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
+        val note = createNote("Milk")
         clock.advanceBy(1_000)
 
-        val updated = writer.update(note.record.id) { it.copy(title = "Milk") }
+        val updated = notes.update(note.record.id) { it.copy(title = "Milk") }
 
         assertEquals(note, updated)
         assertEquals(note, database.notes().find(note.record.id))
+        assertEquals("The unused write took no change number", 2L, createNote("Bread").changeNumber)
     }
 
     @Test
     fun updatedAtMovesForwardWhenTheClockIsSetBack() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
+        val note = createNote("Milk")
         clock.advanceBy(-60_000)
 
-        val updated = writer.update(note.record.id) { it.copy(title = "Oat milk") }
-        val deleted = writer.markDeleted(note.record.id)
+        val updated = notes.update(note.record.id) { it.copy(title = "Oat milk") }
+        val deleted = notes.markDeleted(note.record.id)
 
         assertEquals(note.record.updatedAt + 1, updated?.record?.updatedAt)
         assertEquals(note.record.updatedAt + 2, deleted?.record?.updatedAt)
@@ -116,12 +127,15 @@ class RecordWriterTest {
 
     @Test
     fun markDeletedKeepsTheRowAndSetsDeletedAt() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
+        val note = createNote("Milk")
         clock.advanceBy(2_000)
 
-        val deleted = writer.markDeleted(note.record.id)
+        val deleted = notes.markDeleted(note.record.id)
 
-        val expected = note.copy(record = note.record.copy(updatedAt = clock.nowMillis, deletedAt = clock.nowMillis))
+        val expected = note.copy(
+            record = note.record.copy(updatedAt = clock.nowMillis, deletedAt = clock.nowMillis),
+            changeNumber = 2,
+        )
         assertEquals(expected, deleted)
         assertEquals(listOf(expected), database.notes().all())
         assertEquals(emptyList<SampleNote>(), database.notes().live())
@@ -129,48 +143,78 @@ class RecordWriterTest {
 
     @Test
     fun aDeletedRecordIsNotChangedOrDeletedAgain() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
-        val deleted = writer.markDeleted(note.record.id)
+        val note = createNote("Milk")
+        val deleted = notes.markDeleted(note.record.id)
         clock.advanceBy(1_000)
 
-        assertNull(writer.update(note.record.id) { it.copy(title = "Oat milk") })
-        assertNull(writer.markDeleted(note.record.id))
+        assertNull(notes.update(note.record.id) { it.copy(title = "Oat milk") })
+        assertNull(notes.markDeleted(note.record.id))
         assertEquals(deleted, database.notes().find(note.record.id))
     }
 
     @Test
-    fun restoreBringsBackADeletedRecord() = runBlocking {
-        val note = writer.create { SampleNote(it, title = "Milk", pinned = false) }
-        writer.markDeleted(note.record.id)
+    fun restoreBringsBackADeletedRecordWithANewChangeNumber() = runBlocking {
+        val note = createNote("Milk")
+        notes.markDeleted(note.record.id)
         clock.advanceBy(3_000)
 
-        val restored = writer.restore(note.record.id)
+        val restored = notes.restore(note.record.id)
 
-        assertEquals(note.copy(record = note.record.copy(updatedAt = clock.nowMillis)), restored)
+        assertEquals(note.copy(record = note.record.copy(updatedAt = clock.nowMillis), changeNumber = 3), restored)
         assertEquals(listOf(restored), database.notes().live())
-        assertNull("A record that is not deleted is not restored", writer.restore(note.record.id))
+        assertNull("A record that is not deleted is not restored", notes.restore(note.record.id))
     }
 
     @Test
     fun aMissingRecordGivesNull() = runBlocking {
-        assertNull(writer.update("missing") { it.copy(title = "Milk") })
-        assertNull(writer.markDeleted("missing"))
-        assertNull(writer.restore("missing"))
+        assertNull(notes.update("missing") { it.copy(title = "Milk") })
+        assertNull(notes.markDeleted("missing"))
+        assertNull(notes.restore("missing"))
     }
 
     @Test
-    fun writesInsideAFailedTransactionAreRolledBack() = runBlocking {
-        val kept = writer.create { SampleNote(it, title = "Kept", pinned = false) }
+    fun changeNumbersGoUpAcrossEveryTableOfTheDatabase() = runBlocking {
+        val note = createNote("Milk")
+        val tag = tags.create { fields, number -> SampleTag(fields, number, name = "Shopping") }
+        val updatedNote = notes.update(note.record.id) { it.copy(title = "Oat milk") }!!
+        val deletedTag = tags.markDeleted(tag.record.id)!!
+
+        val numbers = listOf(note.changeNumber, tag.changeNumber, updatedNote.changeNumber, deletedTag.changeNumber)
+
+        assertEquals(listOf(1L, 2L, 3L, 4L), numbers)
+    }
+
+    @Test
+    fun aChangeNumberIsNeverUsedAgainAfterRecordsArePurged() = runBlocking {
+        val kept = createNote("Kept")
+        val purged = List(2) { index -> createNote("Purged $index") }
+        purged.forEach { notes.markDeleted(it.record.id) }
+        // What a future purge would do: remove deleted rows for good.
+        database.useWriterConnection { it.executeSQL("DELETE FROM sample_note WHERE deletedAt IS NOT NULL") }
+
+        val next = createNote("Next")
+
+        assertEquals(listOf(kept, next), database.notes().all())
+        assertEquals("1 to 3 for the creates, 4 and 5 for the deletes", 6L, next.changeNumber)
+    }
+
+    @Test
+    fun writesInsideAFailedTransactionAreRolledBackWithTheirChangeNumbers() = runBlocking {
+        val kept = createNote("Kept")
 
         val failure = runCatching {
             database.withWriteTransaction {
-                writer.create { SampleNote(it, title = "Rolled back", pinned = false) }
-                writer.markDeleted(kept.record.id)
+                createNote("Rolled back")
+                notes.markDeleted(kept.record.id)
                 error("Stop the transaction")
             }
         }
 
         assertTrue(failure.isFailure)
         assertEquals(listOf(kept), database.notes().all())
+        assertEquals("Numbers of writes that never happened are free", 2L, createNote("Next").changeNumber)
     }
+
+    private suspend fun createNote(title: String): SampleNote =
+        notes.create { fields, number -> SampleNote(fields, number, title = title, pinned = false) }
 }

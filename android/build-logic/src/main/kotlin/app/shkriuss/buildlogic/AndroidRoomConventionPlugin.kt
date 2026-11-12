@@ -16,6 +16,7 @@ import org.gradle.kotlin.dsl.dependencies
 import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 /**
  * Plugin `shkriuss.android.room`: Room 3 in a library module, on the system
@@ -49,6 +50,7 @@ class AndroidRoomConventionPlugin : Plugin<Project> {
             }
 
             registerSchemaTasks()
+            registerDaoRulesCheck()
             addSchemasToUnitTestAssets()
 
             dependencies {
@@ -93,6 +95,22 @@ class AndroidRoomConventionPlugin : Plugin<Project> {
             duplicatesStrategy = DuplicatesStrategy.INCLUDE
             dependsOn(compilers)
         }
+    }
+
+    /**
+     * Fails `check` when a DAO of the module, in main or test code, could
+     * remove records for good or write past RecordWriter ([CheckDaoRulesTask]).
+     */
+    private fun Project.registerDaoRulesCheck() {
+        val check = tasks.register<CheckDaoRulesTask>("checkDaoRules") {
+            group = "verification"
+            description = "Checks that no DAO deletes, upserts or replaces records."
+            // Every Kotlin compile task of the module: main and unit tests,
+            // debug and release. Their outputs are the compiled classes.
+            classes.from(tasks.withType<KotlinJvmCompile>())
+            report.set(layout.buildDirectory.file("reports/dao-rules/check.txt"))
+        }
+        tasks.named { it == "check" }.configureEach { dependsOn(check) }
     }
 
     private fun Project.addSchemasToUnitTestAssets() {

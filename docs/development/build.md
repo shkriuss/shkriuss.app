@@ -53,6 +53,9 @@ Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)):
   `CheckGraphicsPathUseTask.kt`,
 - `AndroidApplicationConventionPlugin.kt`, which connects both checks to
   the build.
+- the two checks of the record rules, `CheckRoomSchemasTask.kt` and
+  `CheckDaoRulesTask.kt`, and `AndroidRoomConventionPlugin.kt`, which
+  connects them to the build (owner's decision on pull request 21).
 
 ## Commands
 
@@ -67,6 +70,7 @@ Claude runs these from `android/`. The same list is in
 | `./gradlew recordRoborazziDebug` | Records screenshots again after an intended UI change. |
 | `./gradlew recordRoomSchemas` | Writes the database schema files after a schema change, to commit them. |
 | `./gradlew checkRoomSchemas` | Checks that the committed schema files match the code. Part of `check`. |
+| `./gradlew checkDaoRules` | Checks that no DAO deletes, upserts or replaces records. Part of `check`. |
 | `./gradlew :app:<name>:assembleRelease` | Builds the unsigned release APK. |
 | `./gradlew :app:<name>:assemblePreview` | Builds the unsigned preview APK. |
 
@@ -102,7 +106,7 @@ CI runs `./gradlew check verifyRoborazziDebug` together with
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
 | `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
 | `shkriuss.android.screenshot-test` | Roborazzi. Applies the unit-test plugin too. |
-| `shkriuss.android.room` | Room 3 on the system SQLite: KSP, Room's Gradle plugin, the runtime, the driver and the test library. The schema check and record tasks. See [Room schemas](#room-schemas). |
+| `shkriuss.android.room` | Room 3 on the system SQLite: KSP, Room's Gradle plugin, the runtime, the driver and the test library. The schema check and record tasks ([Room schemas](#room-schemas)) and the [DAO rules check](#dao-rules-check). |
 
 Every module refuses the bundled SQLite driver, `androidx.sqlite:sqlite-bundled`.
 Resolving it fails the build, with a message that names hard rule 2. The
@@ -298,6 +302,50 @@ How it was tested in Phase 1, step 3: with version 2 of the example
 database not yet recorded, `checkRoomSchemas` failed and named
 `2.json`. A changed `NOT NULL` in the committed `2.json` failed it too.
 A change of spaces only did not, because the schema is the same.
+
+## DAO rules check
+
+Records are only marked as deleted, and every write goes through
+`RecordWriter`, which stamps the record fields and the change number
+([ADR 0027](../adr/0027-record-fields-and-stamping.md)). The task
+`checkDaoRules` fails the build when code could break that. It runs in
+`check` for every module with the `shkriuss.android.room` plugin.
+
+1. It reads every class the module's Kotlin compile tasks write, main and
+   tests. Room's annotations stay in the class files, and each query is
+   there as the compiler joined it, constants included. It needs no
+   library: `CheckDaoRulesTask.kt` reads the class file format itself.
+2. A function fails the check if it is:
+   - annotated `@Delete` or `@Upsert`,
+   - annotated `@Insert` or `@Update` with `OnConflictStrategy.REPLACE`,
+   - annotated `@Query` with SQL that contains `DELETE`, `UPDATE`,
+     `REPLACE INTO` or `OR REPLACE`. Comments and text in quotes are not
+     counted.
+3. It checks every class, not only those marked `@Dao`, so a forbidden
+   function in a base interface is caught too.
+4. The one exception: a function marked `@PurgesDeletedRecords` passes if
+   its query is `DELETE FROM <table> WHERE deletedAt IS NOT NULL`,
+   optionally followed by `AND` and more conditions, with no `OR`. A class
+   may have only one. A marked function that is anything else fails.
+5. The failure message lists each function and what it does, and says to
+   stop and ask the owner. Never change the check to make a build pass.
+
+The report is written to `build/reports/dao-rules/`.
+
+It covers DAOs only. `RecordWriter` raises the change counter with SQL
+through its transaction, not through a DAO, because the counter is not a
+record.
+
+How it was tested in Phase 1, step 3: a temporary file in the tests of
+`core/data` declared, in DAOs and in one base interface without `@Dao`,
+every forbidden form: `@Delete`, `@Upsert`, `@Insert` and `@Update` with
+`REPLACE`, `DELETE` and lower-case `update` queries, `INSERT OR REPLACE`,
+`REPLACE INTO`, a `DELETE` built from two joined constants, a marked purge
+with `OR`, a marked read, and two marked purges in one DAO.
+`checkDaoRules` failed and named all 13. A marked purge with quoted names
+and `AND`, and a read with `update` and `delete` inside quotes and a
+comment, passed. With the file removed, the check passed on the 108
+classes of `core/data`.
 
 ## Lint
 
