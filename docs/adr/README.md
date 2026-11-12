@@ -21,7 +21,9 @@ GrapheneOS checklist of 0002, from the owner's decision on pull request
 19. Records 0026 and 0027 come from Phase 1, step 3: Room's build tools,
 which the owner asked for, and how the record fields of 0004 are stored
 and stamped, with the change number from the owner's decisions on pull
-request 21.
+request 21. Records 0006 and 0007 were completed in Phase 1, step 4, with
+the owner's decisions of 2026-11-12. Their detail is in
+[crypto-design.md](../security/crypto-design.md).
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -33,8 +35,8 @@ How a record may be edited or replaced is in point 7 of
 | 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024 |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
-| 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted |
-| 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted |
+| 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md |
+| 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md |
 | 0008 | [Backup file format](0008-backup-file-format.md) | Accepted |
 | 0009 | [Sync protocol and server](0009-sync-protocol-and-server.md) | Accepted |
 | 0010 | [Exact alarms and reminder storage](0010-exact-alarms-and-reminder-storage.md) | Accepted |

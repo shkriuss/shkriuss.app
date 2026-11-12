@@ -4,7 +4,11 @@
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 3), 3, 6, 10
   and 17, and the owner's review of
-  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4)
+  [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4).
+  Completed on 2026-11-12 in Phase 1, step 4
+  ([PROMPTS.md](../development/PROMPTS.md)) with the owner's decisions in
+  the planning session of that step. The detail is in
+  [crypto-design.md](../security/crypto-design.md).
 
 ## Context
 
@@ -18,27 +22,81 @@
 - Out of scope: a compromised OS, an unlocked phone in an attacker's hands,
   a malicious keyboard or accessibility service, coercion, and traffic
   analysis of sync timing and sizes (section 10).
+- Sync and reminders must go on while an app is locked and while the
+  phone is locked. The owner asked for this on 2026-11-12.
+- No phone setting may destroy files. The owner asked for this on
+  2026-11-12.
+- Android's reference warns that keys made with
+  `setUnlockedDeviceRequired(true)` are deleted on Android 12 to 14 when
+  the screen lock is removed, and cannot be made there without a screen
+  lock. Android 15 fixed this.
+- A key that needs a system prompt for every use must be given to the
+  prompt as a cipher object. Tink's Keystore helper keeps its cipher to
+  itself.
 
 ## Decision
 
-1. Tink for Java is the only cryptography library.
+1. Tink for Java is the only cryptography library. The artifact is
+   `com.google.crypto.tink:tink-android`, version 1.24.0. It brings Gson,
+   JSR-305, Error Prone annotations and `annotation-jvm` with it.
 2. All cryptography lives in `core/crypto`. It is documented in
-   `docs/security/crypto-design.md`.
-3. Device key: kept in the Android Keystore, backed by StrongBox where
-   available, and usable only while the device is unlocked.
-4. The optional app lock ties the device key to user authentication.
-5. Primitives, all from Tink:
+   [crypto-design.md](../security/crypto-design.md), and the code follows
+   that page exactly.
+3. Device keys: each installed app has up to four AES-256-GCM keys in the
+   Android Keystore, backed by StrongBox where available, else by the
+   TEE. They wrap keysets only.
+   - **Background key.** Usable whenever the app runs. It wraps the
+     record keyset.
+   - **Unlocked key.** Usable only while the device is unlocked. It wraps
+     the backup keyset and, while the app lock is off, the file-key
+     keyset. It exists on Android 15 and later. On Android 13 and 14 the
+     Background key takes its place.
+   - **Lock key.** Needs the system prompt for every use. It exists while
+     the app lock is on and wraps the file-key keyset.
+   - **Recovery guard.** Needs the system prompt for every use, with the
+     app lock on or off. It wraps the kept recovery key.
+4. The optional app lock ties the file keys to user authentication: one
+   prompt, one Keystore operation, one unlock. The prompt accepts a
+   fingerprint or the device credential. The record keyset and the backup
+   keyset are not behind the prompt, so sync and reminders go on while
+   the app is locked.
+5. The app lock can be turned on only after the app has keys derived
+   from a recovery key. Adding files needs no recovery key.
+6. Primitives, all from Tink:
    - XChaCha20-Poly1305 for records that leave the database for sync. Each
      record is sealed on its own, so the server stores one opaque blob per
-     record.
-   - AES-GCM-HKDF streaming for files, attachments and the backup file.
-   - HKDF for key derivation.
-6. Rows at rest in the local database are not encrypted by the app. See
+     record. The same primitive seals file keys.
+   - AES-GCM-HKDF streaming (`AES256_GCM_HKDF_1MB`) for files, attachments
+     and the backup file.
+   - HKDF-SHA256 for key derivation, through Tink's `KeysetDeriver`, with
+     one label per app and purpose.
+7. Rows at rest in the local database are not encrypted by the app. See
    [0004](0004-room-on-system-sqlite-no-sqlcipher.md).
-7. Account: a random 256-bit recovery key. All backup and sync keys derive
-   from it. See [0007](0007-recovery-key-instead-of-passwords.md).
-8. Sync identity: a non-exportable signing key per device, checked by the
-   server.
+8. Account: a random 256-bit recovery key. The record keyset, the backup
+   keyset and the file-key keyset derive from it, per app. See
+   [0007](0007-recovery-key-instead-of-passwords.md).
+9. Files: each file content has its own random key and is encrypted once.
+   The same ciphertext is on the device, on the server and on every other
+   device. The file key is stored sealed by the file-key keyset, and
+   travels in that sealed form in the file's record and in a backup.
+10. Every encrypted blob starts with `SHK`, a version byte and a kind
+    byte. These bytes and the ID of the record or file are bound as
+    associated data. Nonces come only from Tink and the Keystore.
+11. `core/crypto` calls Android directly, and not through Tink, in three
+    places: the AES-256-GCM cipher of a key that needs the prompt, in the
+    same byte layout as Tink's Keystore helper; reading a key's security
+    level; and SHA-256 for the checksum of the recovery words.
+12. No Play services provider: `core/crypto` refuses to work if a
+    provider named `GmsCore_OpenSSL` is installed, and a build check
+    refuses any class under `com.google.android.gms`.
+13. Sync identity: a non-exportable signing key per device, checked by the
+    server.
+
+Point 3 first read: "kept in the Android Keystore, backed by StrongBox
+where available, and usable only while the device is unlocked." The owner
+changed it twice on 2026-11-12: the record keyset is also usable while
+the device is locked, and on Android 13 and 14 the Background key stands
+in for the Unlocked key.
 
 ## Options rejected
 
@@ -50,18 +108,64 @@
 - **EncryptedSharedPreferences.** It is deprecated.
 - **Hand-written file encryption.** The project never invents
   constructions. Tink's streaming encryption is used.
+- **The plain `tink` artifact.** It depends on an HTTP client and on
+  `conscrypt-openjdk-uber`, which holds native libraries.
+- **Tink's `AndroidKeysetManager`.** It stores keysets in shared
+  preferences, and it cannot use a key that needs the prompt for every
+  use.
+- **Tink's `serializeEncryptedKeyset` for wrapped keysets.** It adds a
+  copy of the key types and IDs in the clear, and it hides the IV that
+  the prompt needs before decrypting. The same encryption is done with
+  Tink's AEAD over Tink's binary keyset.
+- **One device key for everything.** Either sync would stop while an app
+  is locked, or file keys would not be behind the prompt.
+- **A time window after any unlock for the app lock.** It needs no direct
+  Keystore call. But unlocking the phone itself also opens the window, so
+  the tie to the app's own prompt is loose. The owner chose one prompt
+  per unlock.
+- **Two encryptions for files**, one for the device and one for sync.
+  Every upload and download would be encrypted again, and an interrupted
+  upload of a large file would start again. The owner chose one
+  encryption with a key per file.
+- **Every key usable only while the device is unlocked.** Records that
+  arrive would wait until the next unlock, so a reminder made on another
+  device would not ring on a phone that stayed locked.
+- **`setUnlockedDeviceRequired(true)` on Android 13 and 14.** Removing
+  the screen lock would delete the key, and with it the file keys of a
+  user with no recovery key.
+- **A warning instead of a rule for the app lock.** The owner decided
+  that a warning is not enough: no phone setting may destroy files.
 
 ## Consequences
 
 - No `javax.crypto` or Tink calls outside `core/crypto`
   ([CLAUDE.md](../../CLAUDE.md)).
 - No new constructions. Only the ones documented in
-  `docs/security/crypto-design.md` (CLAUDE.md).
-- Anything that needs the device key works only while the device is
-  unlocked.
-- Open: the full key hierarchy, the parameters, the byte layouts, key
-  rotation, and what happens when StrongBox is missing. They come in
-  `docs/security/crypto-design.md` in Phase 1, step 4, which completes this
-  record ([PROMPTS.md](../development/PROMPTS.md)).
-- Open: which Tink artifact to use, and a check that no Play services
-  provider is ever used (section 17).
+  [crypto-design.md](../security/crypto-design.md) (CLAUDE.md).
+- Database rows, and the keys that open records, are available whenever
+  the app runs. Files, backup and the recovery key need an unlocked
+  phone, and with the app lock on, files need the prompt.
+- On Android 13 and 14 the hardware does not refuse the backup keyset
+  and, with the app lock off, the file keys while the phone is locked.
+  This matters only against someone who breaks Android itself, which is
+  out of scope.
+- Removing the screen lock deletes the Lock key and the Recovery guard.
+  With the app lock off, nothing else happens. With it on, the app's
+  files stay closed until the recovery words are entered.
+- A user with the app lock on who removes the screen lock and has lost
+  the recovery words cannot open that app's files on that phone. The
+  user guide must say so.
+- A file key that is sealed by a key that exists only on one phone never
+  leaves that phone. Backup and sync of files start only after the file
+  keys are sealed by a recovery-key-derived key.
+- Session B adds the dependency, its version catalog entry and its
+  verification metadata, and builds the tests listed in
+  crypto-design.md. The behaviour of the four keys is proven by emulator
+  tests on Android 13, 14, 15 and the newest.
+- The backup format (0008) and the sync protocol (0009) build on the
+  blobs of crypto-design.md and add no cryptography of their own.
+- Open: the points listed under "Open questions" in
+  [crypto-design.md](../security/crypto-design.md#open-questions). Those
+  that touch this record are the case of lost words above, a
+  software-only Keystore, where the Play services build check lives,
+  Tink's companion libraries, and the sync signing key (Phase 5).
