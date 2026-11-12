@@ -40,6 +40,7 @@ internal object SystemPrompt {
             val answers = LinkedBlockingQueue<String>()
             instrumentation.runOnMainSync { show(screen, cryptoObject, answers) }
             val fieldShown = TestDevice.waitUntil(FIELD_TIMEOUT_MILLIS) { pinFieldIsShown() }
+            if (!fieldShown) TestDevice.note("No PIN field was seen before typing. Window in front: ${windowInFront()}")
             TestDevice.shell("input text $pin")
             TestDevice.shell("input keyevent KEYCODE_ENTER")
             val answer = answers.poll(ANSWER_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -79,8 +80,16 @@ internal object SystemPrompt {
         return (0 until node.childCount).any { index -> node.getChild(index)?.let { holdsTextField(it) } == true }
     }
 
+    /** The window in front and the kinds of views in it, to say what was there when no PIN field was found. */
     private fun windowInFront(): String {
         val root = TestDevice.instrumentation.uiAutomation.rootInActiveWindow ?: return "none"
-        return "${root.packageName} ${root.className}"
+        val kinds = sortedSetOf<String>()
+        collectKinds(root, kinds)
+        return "${root.packageName}: ${kinds.joinToString(", ")}"
+    }
+
+    private fun collectKinds(node: AccessibilityNodeInfo, kinds: MutableSet<String>) {
+        kinds += node.className?.toString()?.substringAfterLast('.') ?: "unknown"
+        for (index in 0 until node.childCount) node.getChild(index)?.let { collectKinds(it, kinds) }
     }
 }

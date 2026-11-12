@@ -254,12 +254,28 @@ jobs:
             image: "system-images;android-35;default;x86_64"
           - android: "17"
             image: "system-images;android-37.0;default;x86_64"
+          # Temporary, to find emulator settings with which Android 17 does
+          # not crash. Removed again before this pull request is done.
+          - android: "17-try-a"
+            image: "system-images;android-37.0;default;x86_64"
+            emulator_feature: "-GLDMA"
+          - android: "17-try-b"
+            image: "system-images;android-37.0;default;x86_64"
+            emulator_gpu: "swangle_indirect"
+          - android: "17-try-c"
+            image: "system-images;android-37.0;default;x86_64"
+            emulator_gpu: "lavapipe"
+          - android: "17-try-d"
+            image: "system-images;android-37.0;default;x86_64"
+            emulator_gpu: "auto"
     concurrency:
       group: ci-emulator-${{ matrix.android }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     env:
       IMAGE: ${{ matrix.image }}
       ANDROID_VERSION: ${{ matrix.android }}
+      EMULATOR_GPU: ${{ matrix.emulator_gpu || 'swiftshader_indirect' }}
+      EMULATOR_FEATURE: ${{ matrix.emulator_feature || '' }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -367,9 +383,11 @@ jobs:
 
           # -no-window starts the emulator's windowless program. The one with
           # a window needs a sound library that the runner does not have.
+          options=(-gpu "$EMULATOR_GPU")
+          if [ -n "$EMULATOR_FEATURE" ]; then options+=(-feature "$EMULATOR_FEATURE"); fi
           nohup "$ANDROID_HOME/emulator/emulator" -avd test \
             -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
-            -gpu swiftshader_indirect -camera-back none -camera-front none \
+            -camera-back none -camera-front none "${options[@]}" \
             > "$RUNNER_TEMP/emulator.log" 2>&1 &
 
           if ! timeout 300 "$adb" wait-for-device; then
@@ -449,8 +467,11 @@ jobs:
           timeout 60 "$adb" logcat -d > "$RUNNER_TEMP/emulator-logs/logcat.txt" 2> /dev/null || true
           timeout 60 "$adb" exec-out screencap -p > "$RUNNER_TEMP/emulator-logs/screen.png" 2> /dev/null || true
           # The crashes and the test runner's own lines, to read without a download.
+          echo "::group::The emulator's own log"
+          grep -a -i -E 'gpu|render|feature|error|warn|fatal' "$RUNNER_TEMP/emulator.log" | head -n 80 || true
+          echo "::endgroup::"
           echo "::group::Crashes and test lines in Android's log"
-          grep -a -E ' (AndroidRuntime|InstrumentedTests|DEBUG|libc) *:' "$RUNNER_TEMP/emulator-logs/logcat.txt" | tail -n 250 || true
+          grep -a -E ' (F|E) (AndroidRuntime|DEBUG|libc) *:| InstrumentedTests *: (FAIL|NOTE)' "$RUNNER_TEMP/emulator-logs/logcat.txt" | tail -n 120 || true
           echo "::endgroup::"
 
       # The test output, the emulator's own log, Android's log and a picture
