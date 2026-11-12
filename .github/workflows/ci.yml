@@ -355,10 +355,15 @@ jobs:
         run: |
           set -u
           adb="$ANDROID_HOME/platform-tools/adb"
+          # One folder for the emulator's files, named to both tools. Left to
+          # themselves, avdmanager and the emulator look in different places
+          # on this runner.
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir "$ANDROID_AVD_HOME"
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name test --package "$IMAGE" > /dev/null
           # More memory than the default, and a hardware keyboard, so that no
           # on-screen keyboard covers what the tests type into.
-          printf 'hw.ramSize=4096\nhw.keyboard=yes\n' >> "$HOME/.android/avd/test.avd/config.ini"
+          printf 'hw.ramSize=4096\nhw.keyboard=yes\n' >> "$ANDROID_AVD_HOME/test.avd/config.ini"
 
           "$ANDROID_HOME/emulator/emulator" -version | head -n 1
           nohup "$ANDROID_HOME/emulator/emulator" -avd test \
