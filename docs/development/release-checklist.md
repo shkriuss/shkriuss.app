@@ -29,24 +29,32 @@ your phones keep the old version for the update in part 4. Merge nothing
 else that changes the app between part 1 and the release. Then the
 release is built from the code you checked.
 
-Open: the exact names of the GrapheneOS settings in part 1. They were not
-checked on a phone or in GrapheneOS's own guide when this page was
-written. Write down the names your phone shows, so Claude can fix this
-page.
+The names in part 1, steps 2 to 4, are the ones GrapheneOS shows under
+**Exploit protection** on **App info**. They come from a screenshot the
+owner sent on 2026-11-12. A value may start with "Default", for example
+"Default (Blocked)". That counts as the same value.
+
+Open: the names in part 1, steps 6, 8 and 9 (**Sensors**, **Install
+available apps** and **Private space**), are not checked on a phone yet.
+Write down the names your phone shows, so Claude can fix this page.
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
 
 1. [ ] Install the pull request's preview
    ([Install a preview](test-a-pull-request.md#install-a-preview)).
 2. [ ] Hardened memory allocator on, memory tagging on.
-   1. Long-press the preview's icon and tap **App info**.
-   2. Find the exploit protection settings. The hardened memory allocator
-      must be on. If there is an exploit protection compatibility mode, it
-      must be off, because it turns the hardened memory allocator off.
-   3. Memory tagging must be on.
+   1. Long-press the preview's icon and tap **App info**. Scroll down to
+      **Exploit protection**.
+   2. **Exploit protection compatibility mode** is off. When on, it turns
+      some of these protections off.
+   3. **Hardened memory allocator** says Enabled.
+   4. **Memory tagging** says Enabled.
 3. [ ] Dynamic code loading via memory restricted, and via storage
-   restricted. Both are on the same **App info** page.
-4. [ ] Native code debugging blocked. WebView JIT restricted.
+   restricted. In the same section, **Dynamic code loading via memory**
+   and **Dynamic code loading via storage** both say Restricted.
+4. [ ] Native code debugging blocked, WebView JIT restricted. In the same
+   section, **Native code debugging** says Blocked, and **WebView JIT**
+   says Disabled.
 5. [ ] Network permission revoked. On **App info**, tap **Permissions**.
    Network must not be allowed. A data app asks for no network access, so
    Network may not be listed at all.

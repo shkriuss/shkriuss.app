@@ -19,8 +19,16 @@ Done. Catalog 0.2.0 was published as `catalog-v0.2.0` on 2026-11-12.
   pre-release, and it is immutable. Its notes say the two builds made the
   same APK. The certificate SHA-256 in its notes is the one in
   [fingerprints.md](../../security/fingerprints.md).
-- Still Open: the exact names of the GrapheneOS settings. The owner did
-  not note them this time.
+- After the update, the owner sent a screenshot of Catalog's **App
+  info**: "Version 0.2.0", "App installed from Obtainium". Under
+  **Exploit protection**: **Exploit protection compatibility mode** off,
+  **Hardened memory allocator** Enabled, **Memory tagging** Enabled,
+  **Secure app spawning** Default (Enabled), **Native code debugging**
+  Default (Blocked), **WebView JIT** Default (Disabled), **Dynamic code
+  loading via memory** and **via storage** Default (Restricted). Part 1,
+  steps 2 to 4, now use these names.
+- Still Open: the names of the Sensors permission, Install available
+  apps and Private space (part 1, steps 6, 8 and 9).
 
 | | |
 |---|---|
@@ -35,9 +43,10 @@ Done. Catalog 0.2.0 was published as `catalog-v0.2.0` on 2026-11-12.
 page to open it, and Back to return. On each page, also try the samples
 under "Try it".
 
-Open: the exact names of the GrapheneOS settings in part 1, as in the
+The names in part 1, steps 2 to 4, are the ones GrapheneOS shows. A value
+may start with "Default", for example "Default (Blocked)". Open: the names
+in steps 6, 8 and 9, as in the
 [release checklist](../../development/release-checklist.md#how-it-is-used).
-Write down the names your phone shows.
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
 
@@ -48,15 +57,19 @@ Before you merge the pull request that added this page.
    It installs next to the real Catalog. Leave Catalog 0.1.0 as it is on
    every device, for part 4.
 2. [x] Hardened memory allocator on, memory tagging on.
-   1. Long-press the Catalog preview icon and tap **App info**.
-   2. Find the exploit protection settings. The hardened memory allocator
-      must be on. If there is an exploit protection compatibility mode, it
-      must be off, because it turns the hardened memory allocator off.
-   3. Memory tagging must be on.
+   1. Long-press the Catalog preview icon and tap **App info**. Scroll
+      down to **Exploit protection**.
+   2. **Exploit protection compatibility mode** is off. When on, it turns
+      some of these protections off.
+   3. **Hardened memory allocator** says Enabled.
+   4. **Memory tagging** says Enabled.
 3. [x] Dynamic code loading via memory restricted, and via storage
-   restricted. Both are on the same **App info** page.
-4. [x] Native code debugging blocked. WebView JIT restricted. Catalog has
-   no WebView, so restricting WebView JIT changes nothing for it.
+   restricted. In the same section, **Dynamic code loading via memory**
+   and **Dynamic code loading via storage** both say Restricted.
+4. [x] Native code debugging blocked, WebView JIT restricted. In the same
+   section, **Native code debugging** says Blocked, and **WebView JIT**
+   says Disabled. Catalog has no WebView, so WebView JIT changes nothing
+   for it.
 5. [x] Network permission revoked. On **App info**, tap **Permissions**.
    Catalog asks for no permissions, so Network must not be listed.
 6. [x] Sensors permission revoked. In **Permissions**, tap **Sensors**,
