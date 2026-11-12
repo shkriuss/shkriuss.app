@@ -9,16 +9,16 @@ step 7.
 
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
-| CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. |
+| CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. Runs the instrumented tests on emulators with Android 13, 14, 15 and 17. |
 | PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
 | Site | [`site.yml`](../../.github/workflows/site.yml) | Pull requests that change the site, every push to `main`, and by hand | Builds the hub site from `docs/` and `site/` and checks it. On `main` only, deploys it to the Cloudflare Worker `shkriuss-hub`, which serves static files only, and checks the live site and its security headers. See [site.md](site.md). |
 
 How to install a preview on a phone is in
-[test-a-pull-request.md](test-a-pull-request.md). Emulator tests are not set
-up yet. The plan is in [emulator-tests.md](emulator-tests.md). What the
-protected-paths flag protects against, and what it does not, is in
+[test-a-pull-request.md](test-a-pull-request.md). What the emulator tests
+are and what they found is in [emulator-tests.md](emulator-tests.md). What
+the protected-paths flag protects against, and what it does not, is in
 [protected-paths.md](../security/protected-paths.md).
 
 Still to come (plan section 13): `backend`.
@@ -137,6 +137,56 @@ With nothing cached, the Gradle command took 3 minutes 43 seconds on
 GitHub's runner on 2026-11-11, and 4 minutes 35 seconds in the cloud
 environment.
 
+### Job "Emulator"
+
+Four jobs side by side, one for each Android version: "Emulator (Android
+13)", "(Android 14)", "(Android 15)" and "(Android 17)". Each runs the
+instrumented tests of every module that has a folder `src/androidTest/`.
+Today that is `core/crypto`, with the tests of the hardware keys
+([emulator-tests.md](emulator-tests.md)). One version that fails does not
+stop the others.
+
+Each job waits for "Gradle wrapper". Then:
+
+1. It uses the JDK 21 of the runner, as "Check" does.
+2. It checks that the system image is an AOSP image:
+   `system-images;android-<level>;default;x86_64`. Any other name stops
+   the job (hard rule 3).
+3. It installs the two SDK packages the build pins, and for the emulator
+   `platform-tools`, `emulator` and the system image. It writes the
+   installed revisions into the log.
+4. It lets the runner's user use KVM, with one udev rule. Without KVM an
+   emulator is too slow to use.
+5. It restores Gradle's downloads. It never saves them.
+6. It builds the test APK of each module with instrumented tests:
+   `./gradlew :<module>:assembleDebugAndroidTest`. Gradle does nothing
+   else in this job. It does not start the emulator.
+7. It makes an emulator with `avdmanager` and starts it with `emulator`,
+   with no window, no sound and no saved state. Both tools are told the
+   same folder for the emulator's files. It waits until Android has
+   started, turns the animations off, keeps the screen on and unlocks
+   it.
+8. It installs each test APK with `adb` and runs it with
+   `am instrument -w`. The project's own runner writes one line per test
+   ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
+9. `am instrument` ends without an error also when a test fails. So only
+   the runner's last line counts: `INSTRUMENTED_TESTS_PASSED`. The job
+   fails without it. It also fails if an installed test APK does not use
+   the project's runner.
+10. If anything failed, it prints the crashes from Android's log and the
+    warnings from the emulator's own log, to read in the browser. It
+    also uploads `emulator-logs-android-<version>`: the test output, the
+    emulator's own log, Android's whole log and a picture of the screen.
+
+No action starts the emulator. The usual one,
+`reactivecircus/android-emulator-runner`, is not one of GitHub's own
+actions. The Android Gradle Plugin's Managed Devices are not used either:
+they need artifacts that are not in the verification metadata (ADR 0028).
+
+A job takes four to five minutes: about one minute to install the SDK
+packages, two to build the test APK, half a minute to start the emulator
+and one for the tests. Measured on 2026-11-12.
+
 ### When CI fails
 
 1. Open the pull request, tap the failed check, and read the open step.
@@ -147,7 +197,14 @@ environment.
    the new image alone.
 3. If the change was intended, Claude records the screenshots again with
    `./gradlew recordRoborazziDebug` and commits them.
-4. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). Never weaken a
+4. An emulator failure names the Android version in the check's name.
+   Open the step **Run the instrumented tests**. Each test has a line
+   that starts with `OK`, `FAIL` or `SKIP`. A failed test has its stack
+   trace above its `FAIL` line. If the run stops with "System has
+   crashed", open the step **Collect the logs**: it shows the crash.
+   More is in the run's **Summary**, under
+   **emulator-logs-android-&lt;version&gt;**.
+5. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). Never weaken a
    check to make it pass (hard rule 9).
 
 ## PR preview
@@ -296,7 +353,7 @@ with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
 | Action | Version | Commit | Used for |
 |---|---|---|---|
 | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` | Getting the code |
-| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the artifact numbers for the comment. In Release, the files passed between jobs. In Site, the built site |
+| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the emulator logs, the artifact numbers for the comment. In Release, the files passed between jobs. In Site, the built site |
 | `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job. In Release, the files from earlier jobs. In Site, the built site, in "Deploy" |
 | `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache. Not used in Release |
 | `actions/attest` | v4.2.2 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Release only: the build provenance attestation of the signed APK |
@@ -381,6 +438,18 @@ merging**, add the same two checks, and tap **Save changes**.
 The preview jobs are not required. They run only when a pull request
 touches an app, so a required preview would block every docs-only pull
 request.
+
+The four emulator jobs are not required for now. The owner's decision on
+[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24):
+
+- They keep running on every pull request and every push to `main`.
+- The owner decides at the Phase 1 gate whether they become required,
+  after seeing how stable they are.
+- Until then a red emulator job does not block a merge. Read it all the
+  same: it means a test of the hardware keys failed, or the emulator did.
+
+To require them later, add each of the four names in step 4, for example
+`Emulator (Android 13)`.
 
 What a required check proves: that the jobs named "Gradle wrapper" and
 "Check" passed, as the pull request's own copy of `ci.yml` defines them. A

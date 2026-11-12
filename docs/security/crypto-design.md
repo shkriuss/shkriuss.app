@@ -12,10 +12,15 @@ follows this page.
   day. The owner decided three more points then, and the page was made
   exact where it was silent
   ([Decided in session B](#decided-in-session-b)).
-- Not built yet: the emulator tests of the hardware keys (session C), the
-  screens (step 1.7), the handover between apps (step 3.0), sealing file
-  keys again in the database (the first app that stores files), and a
-  new recovery key (Phase 5).
+- Session C tested the hardware keys on emulators with the real Android
+  Keystore, on the same day
+  ([emulator-tests.md](../development/emulator-tests.md#what-the-tests-showed)).
+  What an emulator cannot show is a list of steps for the owner's three
+  devices
+  ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+- Not built yet: the screens (step 1.7), the handover between apps
+  (step 3.0), sealing file keys again in the database (the first app
+  that stores files), and a new recovery key (Phase 5).
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -203,7 +208,8 @@ key that needs the prompt:
    the cipher is thrown away. The next try starts at step 1.
 
 A unit test with a software key cannot find a mistake here. Session C
-tests it on an emulator.
+tested it on emulators, through the real prompt
+([assumption 24](#assumptions)).
 
 #### Asking which keys exist
 
@@ -227,7 +233,12 @@ keyset file could be written over.
    written.
 5. Rule 8 deletes only keys that the list shows. So a list that failed
    deletes nothing.
-6. Session C tests all of this on the emulator.
+6. Session C tested on emulators what the real Keystore answers for a
+   key that exists and for one that does not
+   ([assumptions 28 and 29](#assumptions)). A test cannot make the real
+   Keystore fail, so what it answers then is still only read from
+   Android's source. The rules for that case are tested with the
+   stand-in (`HardwareKeyRulesTest`).
 
 Whether the phone has a screen lock is asked from Android's
 `KeyguardManager.isDeviceSecure`. That is not cryptography, so it is not
@@ -1561,12 +1572,12 @@ de01854b108f58a9ff8768fca193f7fce8d937f5dc0b2efa4402b2edb7
 ## What the tests must cover
 
 Items 1 to 8 are for session B, which built them
-([build.md](../development/build.md#unit-tests)). Item 9 is not. It is
-the next step, in its own pull request, because it needs the emulator job
-in the CI workflow (step 1.4, session C in
-[PROMPTS.md](../development/PROMPTS.md)). What session B could not test
-is listed in
-[emulator-tests.md](../development/emulator-tests.md#what-the-hardware-key-tests-must-cover).
+([build.md](../development/build.md#unit-tests)). Item 9 is session C,
+which built it in its own pull request, with the emulator job in the CI
+workflow (step 1.4, session C in
+[PROMPTS.md](../development/PROMPTS.md)). The tests and what they showed
+are in
+[emulator-tests.md](../development/emulator-tests.md#the-tests-of-the-hardware-keys).
 
 Unit tests run on the JVM with Robolectric, where no Keystore exists. So
 `core/crypto` takes its hardware keys through an interface passed in by
@@ -1597,7 +1608,9 @@ constructor, and the tests pass a software one with the same byte layout.
    lock is changed, removed and set again, each key is there or gone as
    the table in "When things change" says. What an emulator cannot do,
    such as StrongBox and a real fingerprint, becomes a list of steps for
-   the owner's three devices.
+   the owner's three devices. Built: the tests are in
+   `android/core/crypto/src/androidTest/`, and the steps are in
+   [emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices).
 
 ## Assumptions
 
@@ -1634,9 +1647,23 @@ owner. Each one is a place to object.
     in the reference of `KeyGenParameterSpec.Builder`. The binding of a
     prompt key to the device credential, and the deletion of an app's
     keys when its data is cleared, were also read in Android 16's source.
-    Session C and the three devices must confirm all of it.
+    - Session C, on AOSP emulators with Android 13, 14, 15 and 17: confirmed for
+      the screen lock. A key that needs the prompt stays when the PIN is
+      changed, and still works after it. It is deleted at once when the
+      screen lock is removed, and does not come back when a lock is set
+      again. A key that needs no prompt stays through all of it. From
+      Android 15 the Unlocked key is made and used with no screen lock,
+      stays when the lock is removed, and is refused while the emulator
+      is locked.
+    - Still to confirm on the three devices: a fingerprint added or
+      removed, GrapheneOS, a second profile, Private Space, and app data
+      cleared
+      ([the steps](../development/emulator-tests.md#steps-for-the-three-devices)).
 12. A key that accepts fingerprint and device credential can be made with
-    no fingerprint enrolled. Read in Android 16's source.
+    no fingerprint enrolled. Read in Android 16's source. Session C
+    confirmed it on emulators with Android 13, 14, 15 and 17: they have no
+    fingerprint, and the Lock key and the Recovery guard were made. With
+    no screen lock, making them fails, as the page says.
 13. `setInvalidatedByBiometricEnrollment(false)` is set although the
     device credential already makes it unnecessary. It makes the intent
     plain.
@@ -1661,12 +1688,23 @@ owner. Each one is a place to object.
 23. Android's own `BiometricPrompt` takes a cipher together with
     fingerprint or device credential on Android 13 and later, also when
     no fingerprint is enrolled. Read in the source of Android 13 and
-    Android 16. Session C or the first prompt on a device must confirm
-    it, also for a key in StrongBox.
+    Android 16. Session C confirmed it on emulators with Android
+    13, 14, 15 and 17: the prompt took the cipher of a Lock key and of a Recovery
+    guard and was answered with the PIN, to encrypt and to decrypt. A
+    fingerprint as the answer, and a key in StrongBox, are still to
+    confirm on the three devices.
 24. For a key that needs the prompt, the cipher can be started before the
     prompt, and associated data must wait until after it. An encrypt
     operation gives its IV when it is done. Read in Android's source by
-    the independent review. Session C must confirm it.
+    the independent review. Session C confirmed it on emulators with
+    Android 13, 14, 15 and 17:
+    - In the page's order every step works, and the IV read after
+      encrypting is 12 bytes.
+    - Without the prompt, the last step fails and nothing is stored. One
+      prompt serves one operation: a second cipher is not opened by it.
+    - With associated data given before the prompt, Android does not
+      complain at that call. The operation is lost all the same: it
+      fails at its last step, also after a prompt that succeeded.
 25. No part of an app runs before the first unlock after a restart, and
     the keyset files are in credential-encrypted storage.
 26. `RecordWriter` can get a function that seals file keys again without
@@ -1676,21 +1714,35 @@ owner. Each one is a place to object.
     to survive a power loss on the supported phones.
 28. `KeyStore.getKey` on the Android Keystore answers "no key" only for
     "not found", and throws for every other failure. Read in the source
-    of Android 13 and 14. Session C must confirm it on every version.
+    of Android 13 and 14. Session C confirmed the first half on
+    emulators with Android 13, 14, 15 and 17: "no key" for an alias that was
+    never made, that was deleted, and that Android deleted with the
+    screen lock. The second half cannot be tested: a test cannot make
+    the real Keystore fail.
 29. `KeyStore.aliases` comes back empty or short when the Keystore
     fails. Read in Android 14's source. The code never depends on the
-    list being complete.
+    list being complete. Session C confirmed on emulators that the list
+    shows each key from when it is made until it is gone. A list from a
+    failing Keystore cannot be tested.
 30. `KeyPermanentlyInvalidatedException` reaches the app from the cipher.
     When a key is loaded, Android reports the same state as a key that
     cannot be recovered, which the code counts as "not usable now". Read
-    in Android's source. Session C must confirm it.
+    in Android's source. Session C could not confirm it: no test met
+    this state. On emulators with Android 13, 14, 15 and 17, a key that Android
+    deleted with the screen lock is simply "not found", which the code
+    counts as gone. Starting a cipher for it also answers "gone".
 31. A folder can be flushed to storage through a `FileChannel` opened on
-    it. That is how the code flushes `shk-keys/`. Session C must confirm
-    it on a device.
+    it. That is how the code flushes `shk-keys/`. Session C confirmed on
+    emulators with Android 13, 14, 15 and 17 that the call works on Android's
+    file system: every keyset file in the tests is replaced this way.
+    That the file survives a loss of power (assumption 27) cannot be
+    tested.
 32. Tink's code path for Android is the same construction as the one a
     JVM test runs. A JVM test never runs the Android path, because Tink
-    tells Android from a desktop by Java's vendor name. Session C runs
-    the vectors on the emulator.
+    tells Android from a desktop by Java's vendor name. Session C ran
+    every vector of this page and the published ones on emulators with
+    Android 13, 14, 15 and 17. All pass. Android's own provider is there, and no
+    Play services provider.
 
 ## Decided on pull request 22
 
@@ -1802,5 +1854,13 @@ What is left, with the step that decides it.
     over without losing files? The file keys that were sealed in
     between would have to be sealed again under the keys of the new
     recovery key first, as in the move from a random `file-key`.
-    Nothing is built for this. Open: the owner names the step that
-    decides it.
+    Nothing is built for this. Decided in step 1.7, session A.
+12. **A keyset file that is damaged while its hardware key lives** can
+    never be replaced (rule 2 under "Rules for making, replacing and
+    losing a hardware key"). Not even the right recovery words help: the
+    setup stops at "damaged or changed" and writes nothing. For
+    `file-key` that closes the app's files on this phone for good,
+    although the words could derive the keyset again. Proposal: with
+    the right recovery words, set the damaged file aside, never delete
+    it, and store the keyset again. Nothing is built for this. Decided
+    in step 1.7, session A.

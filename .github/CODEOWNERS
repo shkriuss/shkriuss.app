@@ -25,6 +25,13 @@
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckDaoRulesTask.kt                   @shkriuss
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidRoomConventionPlugin.kt         @shkriuss
 
+# The runner of the tests on an emulator, the plugin that sets it for a
+# module, and the build check that fails when a test class is not in the
+# suite the runner runs (ADR 0028).
+/android/core/testing/src/main/kotlin/app/shkriuss/core/testing/InstrumentedTestRunner.kt                    @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidInstrumentedTestConventionPlugin.kt     @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckInstrumentedTestSuiteTask.kt              @shkriuss
+
 # Settings every Android module shares, including the refusal of the
 # bundled SQLite driver (hard rule 2, ADR 0004).
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidCommon.kt                       @shkriuss

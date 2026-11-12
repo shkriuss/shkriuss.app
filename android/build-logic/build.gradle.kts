@@ -59,6 +59,10 @@ gradlePlugin {
             id = "shkriuss.android.screenshot-test"
             implementationClass = "app.shkriuss.buildlogic.AndroidScreenshotTestConventionPlugin"
         }
+        register("androidInstrumentedTest") {
+            id = "shkriuss.android.instrumented-test"
+            implementationClass = "app.shkriuss.buildlogic.AndroidInstrumentedTestConventionPlugin"
+        }
         register("androidRoom") {
             id = "shkriuss.android.room"
             implementationClass = "app.shkriuss.buildlogic.AndroidRoomConventionPlugin"

@@ -40,3 +40,20 @@ Other components that libraries add, none of them a permission:
 
 Catalog stores no data, so Android backup and device-to-device transfer are
 turned off.
+
+## Test APKs
+
+A test APK is built from a module's `src/androidTest/` folder. It is
+installed only on the emulator in CI
+([emulator-tests.md](../development/emulator-tests.md)). It is never part
+of an app and never reaches a user, so the APK rules check does not look
+at it.
+
+| Test APK | Permission | Why |
+|---|---|---|
+| `app.shkriuss.core.crypto.test` | `android.permission.USE_BIOMETRIC` | Android's own system prompt needs it. The tests of the Lock key and the Recovery guard show the prompt and answer it with the emulator's PIN. |
+
+No app gets this permission from the test APK. The step that first shows
+the prompt in an app writes the decision record for it
+([crypto-design.md](crypto-design.md#open-questions), step 1.7,
+session A).

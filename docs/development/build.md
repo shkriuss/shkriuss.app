@@ -71,15 +71,17 @@ Claude runs these from `android/`. The same list is in
 
 | Command | What it does |
 |---|---|
-| `./gradlew check` | Unit tests and Android Lint for all modules. |
+| `./gradlew check` | Unit tests, Android Lint, and the schema, DAO rules and instrumented test suite checks, for all modules. |
 | `./gradlew :app:<name>:assembleDebug` | Builds one app. |
 | `./gradlew verifyRoborazziDebug` | Compares screenshots with the committed ones. |
 | `./gradlew recordRoborazziDebug` | Records screenshots again after an intended UI change. |
 | `./gradlew recordRoomSchemas` | Writes the database schema files after a schema change, to commit them. |
 | `./gradlew checkRoomSchemas` | Checks that the committed schema files match the code. Part of `check`. |
 | `./gradlew checkDaoRules` | Checks that DAOs only read and that only `RecordWriter` writes records. Part of `check`. |
+| `./gradlew checkInstrumentedTestSuite` | Checks that the suite the emulator runs lists every test class. Part of `check`. |
 | `./gradlew :app:<name>:assembleRelease` | Builds the unsigned release APK. |
 | `./gradlew :app:<name>:assemblePreview` | Builds the unsigned preview APK. |
+| `./gradlew :core:crypto:assembleDebugAndroidTest` | Builds a module's test APK for the emulator. It checks that the instrumented tests compile. The tests themselves run only in CI ([emulator-tests.md](emulator-tests.md)). |
 
 The commands after a dependency change are in
 [After a dependency change](#after-a-dependency-change).
@@ -113,6 +115,7 @@ CI runs `./gradlew check verifyRoborazziDebug` together with
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
 | `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
 | `shkriuss.android.screenshot-test` | Roborazzi. Applies the unit-test plugin too. |
+| `shkriuss.android.instrumented-test` | Tests on an emulator, in `src/androidTest/`: the project's own test runner, JUnit 4 and `core/testing`. Tests in `src/sharedTest/` run on the JVM and on the emulator ([emulator-tests.md](emulator-tests.md), [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)). The [instrumented test suite check](#instrumented-test-suite-check). |
 | `shkriuss.android.room` | Room 3 on the system SQLite: KSP, Room's Gradle plugin, the runtime, the driver and the test library. The schema check and record tasks ([Room schemas](#room-schemas)) and the [DAO rules check](#dao-rules-check). |
 
 Every module refuses the bundled SQLite driver, `androidx.sqlite:sqlite-bundled`.
@@ -268,8 +271,12 @@ second build must write the same mapping file, or the release stops. See
     `AndroidHardwareKeys`. Robolectric has no Android Keystore, so it
     checks the other half: where the Keystore gives no answer, nothing is
     made, stored or deleted, and no key counts as lost. The Keystore
-    itself is for the emulator tests
-    ([emulator-tests.md](emulator-tests.md#what-the-hardware-key-tests-must-cover)).
+    itself is tested on an emulator
+    ([emulator-tests.md](emulator-tests.md#the-tests-of-the-hardware-keys)).
+  - Four of the classes are in `src/sharedTest/`, with the helpers they
+    use: `DesignVectorsTest`, `PublishedVectorsTest`, `RecoveryWordsTest`
+    and `KeysetFilesTest`. They run here on the JVM, and a second time on
+    the emulator, where Tink takes its Android path.
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
@@ -282,6 +289,14 @@ second build must write the same mapping file, or the release stops. See
   that do not overlap, the disabled states, the components to try, the
   section headers as headings, the loading state as "in progress", and
   the loading and error states to try as polite live regions.
+
+### Instrumented tests
+
+Tests that need a real Android run on an emulator, in the job "Emulator"
+of CI. Today those are the tests of the hardware keys in `core/crypto`.
+They cannot run in a cloud session, which has no emulator. What they
+are, how they run and what they found is in
+[emulator-tests.md](emulator-tests.md).
 
 ### Screenshot tests
 
@@ -422,6 +437,63 @@ of `core/data`:
    repository that only calls `find` and `changedSince` passed.
 4. With the file removed, the check passed on the 108 classes of
    `core/data`, including Room's generated DAO implementations.
+
+## Instrumented test suite check
+
+The emulator runs one class of a module: the JUnit suite
+`InstrumentedTests` ([emulator-tests.md](emulator-tests.md),
+[ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
+A test class that the suite does not list is compiled and never runs,
+and no red check would say so. The task `checkInstrumentedTestSuite`
+fails the build for it. It runs in `check` for every module with the
+`shkriuss.android.instrumented-test` plugin. The owner asked for it on
+[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24).
+
+What it compares:
+
+1. Every class with a `@Test` function in the module's `src/androidTest/`
+   and `src/sharedTest/` folders.
+2. Every class the suite lists in `@Suite.SuiteClasses`.
+
+It fails if:
+
+- a class with `@Test` is not in the suite,
+- the suite lists a class that has no `@Test` in those folders,
+- there are such tests and no class `InstrumentedTests` in the module's
+  package,
+- a file with `@Test` holds no class, or more than one, at the left edge
+  of the file. Then the check cannot tell which class the tests are in,
+- a `.java` file is in those folders.
+
+How it works, and its limits:
+
+- It reads the source text, not compiled classes. So it runs in `check`
+  without building a test APK, also in a cloud session.
+- Comments and text in quotes are left out before it looks. A `@Test` in
+  a comment counts for nothing.
+- It asks for a simple shape: one test class in a file, and the suite
+  names each class as `Name::class`. A test that a class only inherits
+  from another class is not seen.
+- It does not run the tests. That the listed classes pass is what the
+  job "Emulator" shows ([ci.md](ci.md#job-emulator)).
+
+The check is `CheckInstrumentedTestSuiteTask.kt` in `build-logic`. It is an
+owner-only file, as are the runner and the plugin that connects them.
+
+How it was tested, on 2026-11-12, in `core/crypto`:
+
+1. `TinkOnAndroidTest` taken out of the suite: the check failed and named
+   it.
+2. A new file `ForgottenTest.kt` with one `@Test`, in `src/sharedTest/`
+   and not in the suite: the check failed and named it.
+3. `DeviceApp`, a class with no test, added to the suite: the check
+   failed and named it.
+4. The suite's file taken away: the check failed and said that none of
+   the tests would run.
+5. A `@Test` written only in a line comment, in a block comment and
+   inside quotes: the check passed.
+6. With all of that undone, the check passed on the 19 files of
+   `core/crypto`.
 
 ## Lint
 
