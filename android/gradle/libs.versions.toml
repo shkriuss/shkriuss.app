@@ -23,6 +23,9 @@ room = "3.0.3"
 sqlite = "2.7.1"
 # Kotlin Symbol Processing, which runs Room's compiler (ADR 0026).
 ksp = "2.3.13"
+# Tink for Java, the only cryptography library (ADR 0006). Only core/crypto
+# uses it. The Android artifact holds no native code and no network code.
+tink = "1.24.0"
 # Not direct dependencies. Used as version constraints only.
 # Compose and Activity ask for Lifecycle 2.9, whose lint checks no longer
 # load in this lint version. 2.11.0 fixes them.
@@ -49,6 +52,7 @@ activity-compose = { module = "androidx.activity:activity-compose", version.ref 
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "lifecycle" }
 room-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room" }
 sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "sqlite" }
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
 
 # Build time only. Room's code generator, run by KSP.
 room-compiler = { module = "androidx.room3:room3-compiler", version.ref = "room" }

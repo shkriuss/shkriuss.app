@@ -35,5 +35,6 @@ rootProject.name = "shkriuss"
 
 include(":core:design")
 include(":core:data")
+include(":core:crypto")
 include(":core:testing")
 include(":app:catalog")
