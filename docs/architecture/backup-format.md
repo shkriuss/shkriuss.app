@@ -3,9 +3,11 @@
 The exact bytes of a backup file, what an app puts into it, and how a
 backup is written, checked and restored.
 
-- Status: design. Written on 2026-11-12 in Phase 1, step 5
-  ([PROMPTS.md](../development/PROMPTS.md)). The code is not built yet.
-  It starts after the owner has read this page.
+- Status: design, being built. Written on 2026-11-12 in Phase 1, step 5
+  ([PROMPTS.md](../development/PROMPTS.md)). The owner read it on the
+  same day, added one point and accepted the rest
+  ([Decided by the owner](#decided-by-the-owner)). The code is built in
+  the same pull request.
 - The code will be `android/core/backup`. It must follow this page
   exactly. If this page is wrong or unclear, the fix is a change to this
   page first, agreed with the owner.
@@ -272,11 +274,14 @@ for every app:
 3. A file's record holds the wrapped file key in its content, exactly as
    it is in the row.
 4. Each file whose stored stream is on this device, once, under the `id`
-   of its record. A file whose stream is not on the device is left out.
-   Its record still goes in.
-5. Records and files are listed as one snapshot: every file is the
+   of its record.
+5. A file whose stream is not on the device is left out. Its record
+   still goes in. Leaving a file out is never silent: the app tells the
+   backup how many files it left out
+   ([Files that are left out](#files-that-are-left-out)).
+6. Records and files are listed as one snapshot: every file is the
    content that its listed record describes.
-6. Records first, then files.
+7. Records first, then files.
 
 Never in a backup:
 
@@ -320,8 +325,12 @@ own pages. The first is Water (step 2.1 in
 4. Open the stream with the backup header as its context.
 5. Write the Manifest: the app's data version, and now.
 6. The app lists its records, then its files. Each becomes one entry.
+   The app also says how many files it left out.
 7. Write End with the two counts. Close the stream. Closing writes the
    last segment.
+
+A backup that was written gives back three numbers: the records in it,
+the files in it, and the files that were left out.
 
 If anything fails on the way, the backup is not made. The app tries to
 delete the document. If it cannot, a half-written file stays. It has no
@@ -329,8 +338,24 @@ End, so it never passes a check or a restore.
 
 Mistakes of the calling code stop the backup at once: a record after a
 file, an ID that is not a UUID, a type name or a content outside the
-limits, and a file whose bytes are not as many as the length given for
-it.
+limits, a file whose bytes are not as many as the length given for it,
+and a number of files left out that is below 0.
+
+### Files that are left out
+
+An app can know of a file whose stream is not on this device, for
+example a file that sync has listed and not yet fetched. Such a file
+cannot be in a backup made here.
+
+1. The file's record goes into the backup. The file's stream does not.
+2. The app tells the backup how many files it left out. It may say so
+   once, or several times while it lists. The numbers are added up.
+3. The result of writing the backup carries that number. So a screen can
+   say "N files are not on this device and are not in this backup".
+4. The number is not written into the file. This is not a format
+   change. A check or a restore of the file later cannot give it.
+5. After a restore, the app has the record of such a file and no stream
+   for it, as the device that made the backup had.
 
 ## Checking a backup
 
@@ -352,9 +377,13 @@ just written. The check also lets a screen say what a file holds before
 the user restores it. When a screen calls the check is decided with the
 screens (step 2.5).
 
-What the check cannot know: whether the document will still be there
-later, and whether the app's own code can take every record. The second
-is what the tests of each app are for.
+What the check cannot know:
+
+- Whether the document will still be there later.
+- Whether the app's own code can take every record. That is what the
+  tests of each app are for.
+- How many files were left out when the backup was made. The file does
+  not say it ([Files that are left out](#files-that-are-left-out)).
 
 ## Restoring a backup
 
@@ -539,9 +568,9 @@ needs other names.
 
 | What | Who writes it | What it does |
 |---|---|---|
-| `BackupContent` | Each app, once | Says the app's data version. Lists every record and file into a backup. Takes a checked backup into the app. |
+| `BackupContent` | Each app, once | Says the app's data version. Lists every record and file into a backup, and says how many files it left out. Takes a checked backup into the app. |
 | `BackupRecord` | `core/backup` | One record on its way: type name, the four fields (`RecordFields` of `core/data`), content |
-| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto` and its app name. Writes a backup to a URI, checks one, restores one. Empties the staging folder at app start. |
+| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto` and its app name. Writes a backup to a URI and says how many records, files and left-out files there were. Checks one. Restores one. Empties the staging folder at app start. |
 | `BackupDocuments` | `core/backup` | The two intents for the system file picker and the suggested file name |
 | `RecordWriter.takeFromBackup` | `core/data` | The only way a record of a backup is written ([ADR 0027](../adr/0027-record-fields-and-stamping.md), point 8) |
 
@@ -707,6 +736,8 @@ Unit tests in `core/backup`, on the JVM, with real keys and a fake app.
 11. The example of this page opens with the real code.
 12. A backup is refused before the app has a recovery key. No
     `toString` shows content.
+13. Files that are left out: the result of writing carries their number,
+    their records are in the backup, and their streams are not.
 
 In `core/data`: `takeFromBackup` gives each of its three answers, keeps
 the four fields, takes a change number only when it writes, and several
@@ -732,23 +763,26 @@ itself. The picker is checked by hand with the first app.
 
 ## Decided by the owner
 
-In the planning session of this step, on 2026-11-12.
+In the planning session of this step and after reading this page, on
+2026-11-12.
 
 | Question | Decision |
 |---|---|
+| A file that is left out because its stream is not on the device | It must not be silent. The app tells the backup how many files it left out, and the result of writing a backup carries that number. No change to the file format. |
+| The other choices under "Assumptions" | Accepted as they are. |
 | A record that is in the app and in the backup | The newest edit wins, by `updatedAt`. The same `updatedAt` keeps the stored record. |
 | What the user is told | The user guide says plainly that a restore cannot undo a deletion or an edit made after the backup. |
 | The restore rule and the format | The format stays free of the rule, so that a "restore as it was" mode can be added later without a new format version. |
 | Checking a backup after it is written | Built in this step: one function that reads a backup from a URI, checks everything a restore checks, and changes nothing. The screen of step 2.5 decides when to call it. |
 | Ties in sync | Not decided here. Phase 5 must decide ties so that all devices end the same. `takeFromBackup` is not assumed to be sync's function. |
 | The very large file test | If it takes more than about a minute in CI, a cheaper proof is used. |
-| When code starts | After the owner has read this page and ADR 0008. |
+| When code starts | After the owner has read this page and ADR 0008. The owner gave the OK on 2026-11-12. |
 
 ## Assumptions
 
 Things this page chose without a decision by the owner on that point.
-The owner approved them with the plan of this step. Each one is a place
-to object.
+The owner read them on 2026-11-12 and accepted them as they are. A later
+reader may still object to each one.
 
 1. The magic is `SHKBAK` and the format version is one byte.
 2. The app name is in the public header.
@@ -762,6 +796,8 @@ to object.
 7. A backup holds records and files only. A setting that must come back
    is a record.
 8. A file whose stream is not on the device is left out of a backup.
+   The owner added that this is never silent
+   ([Files that are left out](#files-that-are-left-out)).
 9. A backup is of one app. There is no file for the whole suite.
 10. No compression.
 11. The staging folder is `shk-restore/` in the app's no-backup files

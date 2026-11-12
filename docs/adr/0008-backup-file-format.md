@@ -78,7 +78,11 @@
    reader for every older one.
 10. A file is written as its stored ciphertext, byte for byte. Backup
     never opens a file key and never encrypts a file's content again.
-    The wrapped file key travels inside the file's record.
+    The wrapped file key travels inside the file's record. A file whose
+    stored ciphertext is not on the device is left out, and its record
+    still goes in. That is never silent: the app says how many files it
+    left out, and the result of writing a backup carries the number. The
+    number is not in the file.
 11. A backup holds records and files only. It never holds the recovery
     key, a keyset, anything wrapped by a hardware key, or a setting that
     is not a record.
