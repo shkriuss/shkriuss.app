@@ -79,15 +79,14 @@ internal class BackupEngine(
      * put aside first. Only then does the app's own code get it.
      */
     suspend fun restore(input: InputStream): RestoreResult {
-        val staged = staging.newRun()
+        val staged = StagingOnDemand(staging)
         try {
             val summary = try {
                 read(input, staged)
             } catch (refused: BackupRefused) {
                 return RestoreResult.Refused(refused.answer)
             }
-            staged.finish()
-            content.restore(staged.checked(summary))
+            content.restore(staged.finish().checked(summary))
             return RestoreResult.Restored(summary)
         } finally {
             staged.delete()
@@ -109,14 +108,12 @@ internal class BackupEngine(
         }
         if (!hasKey) throw BackupRefused(BackupAnswer.OtherRecoveryKey(header.keyId))
 
-        val summary = try {
+        return try {
             val body = crypto.decryptingStream(header.bytes, input).buffered(BackupFormat.COPY_BUFFER)
-            BackupReader(body).read(sink)
+            BackupReader(body, content.dataVersion).read(sink)
         } catch (refused: BlobException) {
             throw BackupRefused(answerOf(refused.answer))
         }
-        if (summary.dataVersion > content.dataVersion) throw BackupRefused(BackupAnswer.NewerVersion)
-        return summary
     }
 
     /**

@@ -170,7 +170,9 @@ exist. Two checks make sure it stays so:
    fails if an APK holds a class under `com.google.android.gms`. The
    check is an owner-only file. The owner asked for this rule in
    session B. It reads the class names in the APK's dex files. That works
-   because the build never renames classes.
+   because the build never renames classes, and because an R8 rule keeps
+   every class of that package as it is, so that R8 cannot fold one into
+   another class (the owner's decision on pull request 25).
 
 ### Where Android does the work, not Tink
 

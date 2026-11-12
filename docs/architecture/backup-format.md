@@ -8,7 +8,9 @@ backup is written, checked and restored.
   same day, added one point and accepted the rest
   ([Decided by the owner](#decided-by-the-owner)). The code and its
   tests were built from this page on the same day, in the same pull
-  request.
+  request. On that pull request the owner changed one thing: a backup
+  with a higher data version is refused right after the Manifest. That
+  is a change to the order of reading, not to the file format.
 - Not built yet: the screens (step 2.5), and the backup of a real app.
   The first is Water (step 2.1).
 - The code is `android/core/backup`. It must follow this page exactly.
@@ -311,7 +313,9 @@ own pages. The first is Water (step 2.1 in
    - a newer layout version of the file stream (kind 2) or of the wrapped
      file key (kind 4) inside.
 3. A reader refuses a backup whose data version is higher than its own:
-   "made by a newer version of the app".
+   "made by a newer version of the app". It does so right after the
+   Manifest, before it reads a record or a file. The Manifest is the
+   first entry so that it can.
 4. An app keeps a reader for every older data version it ever wrote.
 
 ## Writing a backup
@@ -368,8 +372,10 @@ A backup can be checked without restoring it. The check reads a document
 and does everything a restore does before it changes the app:
 
 1. It reads the backup header and gives the same answers.
-2. It decrypts the whole stream, to its end.
-3. It checks every rule of the body, and the data version.
+2. It reads the Manifest. A higher data version than the app's stops the
+   check there, as it stops a restore.
+3. It decrypts the whole stream, to its end, and checks every rule of
+   the body.
 4. It stores nothing, changes nothing and never calls the app's code.
 
 A good backup gives back its data version, when it was made, and how many
@@ -412,15 +418,28 @@ In this order. The first rule that does not hold gives the answer.
 5. The `backup` keyset cannot be opened now: "needs keys this app does
    not have now". The key ID is not in the keyset: "needs another
    recovery key". The answer names the key ID.
-6. Open the stream with the backup header as its context. Read every
-   entry and check every rule of the body. Records and file streams go
-   into staging, not into the app.
+6. Open the stream with the backup header as its context. Read the
+   Manifest.
 7. The data version is higher than the app's: "made by a newer version
-   of the app".
-8. The stream has ended without an error, right after End, and the
+   of the app". The reader stops. It has read no record and no file,
+   and nothing was put into staging.
+8. Read every other entry and check every rule of the body. Records and
+   file streams go into staging, not into the app.
+9. The stream has ended without an error, right after End, and the
    counts are right. Only now is the backup good.
 
-How the answers of `core/crypto` are taken, in steps 6 to 8:
+Step 7 comes before the rest of the file is read. The owner decided this
+on pull request 25. Two things follow:
+
+- The answer for a backup from a newer version of the app is quick, also
+  for a very large file, and such a backup takes no room on the phone.
+- Such a backup answers "made by a newer version of the app" also when a
+  later part of it is cut or changed. The reader never gets that far.
+  The Manifest itself is given out only after the tag of its segment was
+  checked, so a change in the first segment is still "damaged or
+  changed".
+
+How the answers of `core/crypto` are taken, in steps 6 to 9:
 
 - "Made by a newer version of the app", for the version byte of the
   stream, stays that answer.
@@ -475,7 +494,9 @@ a backup can be larger than memory. So what is read is first put aside.
    storage. It is not the cache folder, which Android may empty at any
    time. Proposed: `shk-restore/` in the app's no-backup files folder,
    next to `shk-keys/`.
-2. Each restore gets a folder of its own inside it.
+2. Each restore gets a folder of its own inside it. The folder is made
+   when the first record or file arrives. A file that is refused by its
+   header or by its Manifest never touches the staging folder.
 3. Records go into one file there. Each file stream goes into a file of
    its own, as it is: still encrypted with the file's key. A third file
    lists the file streams, with their IDs and lengths.
@@ -760,8 +781,10 @@ Unit tests in `core/backup`, on the JVM, with real keys and a fake app.
 4. A wrong recovery key: the answer names the key ID. An app with no
    keys. A key ID in the header changed to one the app has.
 5. A newer version: a higher format version, a higher version of the
-   stream, a higher data version. An older data version reaches the
-   app's code.
+   stream, a higher data version. A higher data version is refused right
+   after the Manifest: the rest of the document is not read, nothing is
+   put into staging, and damage in a later part is not seen. An older
+   data version reaches the app's code.
 6. A very large file that is never held in memory. See below.
 7. Every rule of "What a reader refuses in the body", through real
    encryption.
@@ -803,10 +826,10 @@ proof is split in three, and all are cheap (`LargeFileTest`):
 
 Measured on 2026-11-12 in the cloud environment: the first takes about 3
 seconds and needs no disk. The other two together take under 1 second,
-and the third needs 64 MiB in a temporary folder for that time. All 68
+and the third needs 64 MiB in a temporary folder for that time. All 71
 tests of `core/backup` together take about 11 seconds.
 
-In CI, on 2026-11-12: the whole test task of `core/backup`, all 68
+In CI, on 2026-11-12: the whole test task of `core/backup`, then 68
 tests, ended 29 seconds after its code was compiled. That is an upper
 limit, because other tasks ran in between. The log of CI gives no time
 for a single test. So the first proof stays well under the owner's limit
@@ -817,8 +840,8 @@ itself. The picker is checked by hand with the first app.
 
 ## Decided by the owner
 
-In the planning session of this step and after reading this page, on
-2026-11-12.
+In the planning session of this step, after reading this page, and on
+pull request 25, all on 2026-11-12.
 
 | Question | Decision |
 |---|---|
@@ -831,6 +854,7 @@ In the planning session of this step and after reading this page, on
 | Ties in sync | Not decided here. Phase 5 must decide ties so that all devices end the same. `takeFromBackup` is not assumed to be sync's function. |
 | The very large file test | If it takes more than about a minute in CI, a cheaper proof is used. |
 | When code starts | After the owner has read this page and ADR 0008. The owner gave the OK on 2026-11-12. |
+| A backup with a higher data version (on pull request 25) | It is refused right after the Manifest, before anything is staged. This changes the order of reading, not the file format. |
 
 ## Assumptions
 

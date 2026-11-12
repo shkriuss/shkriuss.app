@@ -18,6 +18,12 @@
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckGraphicsPathUseTask.kt            @shkriuss
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidApplicationConventionPlugin.kt  @shkriuss
 
+# The R8 rules every app shares. The APK rules check depends on them: they
+# keep the names of classes, and they keep classes of Google Play services
+# and of the test fixtures of core/crypto as they are, so that the check
+# can find one that reaches an app (ADR 0029).
+/android/build-logic/r8/app-rules.pro                                                               @shkriuss
+
 # Build checks that enforce the record rules of ADR 0026 and 0027 (schema
 # files committed, no DAO that deletes or writes past RecordWriter), and
 # the plugin that connects them to the build.

@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
-import java.io.InputStream
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -34,25 +33,6 @@ class NothingChangesTest {
 
         override fun close() {
             closed = true
-        }
-    }
-
-    /** Fails with [failure] once [good] bytes were read. */
-    private class FailingInput(file: ByteArray, private val good: Int, private val failure: IOException) : InputStream() {
-        private val bytes = ByteArrayInputStream(file)
-        private var read = 0
-
-        override fun read(): Int {
-            if (read >= good) throw failure
-            read++
-            return bytes.read()
-        }
-
-        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-            if (read >= good) throw failure
-            val count = bytes.read(buffer, offset, minOf(length, good - read))
-            if (count > 0) read += count
-            return count
         }
     }
 
@@ -108,6 +88,21 @@ class NothingChangesTest {
         assertTrue("$thrown", thrown is BackupStagingException)
         assertEquals(0, device.app.restores)
         assertEquals("a check needs no staging", CheckResult.Good::class, runBlocking { engine.check(ByteArrayInputStream(file)) }::class)
+    }
+
+    @Test
+    fun aFileThatIsRefusedByItsHeaderNeverTouchesStaging() {
+        val device = deviceWithKeys()
+        val fromAnotherKey = deviceWithKeys().backup()
+        // A file stands where the staging folder should be. A restore that needed staging would fail.
+        val engine = BackupEngine(device.keys.crypto.backups, WATER, device.app, BackupStaging(temporary.newFile()), device.clock)
+
+        val notABackup = runBlocking { engine.restore(ByteArrayInputStream(pattern(500))) }
+        val otherKey = runBlocking { engine.restore(ByteArrayInputStream(fromAnotherKey)) }
+
+        assertEquals(RestoreResult.Refused(BackupAnswer.NotABackup), notABackup)
+        assertTrue("$otherKey", (otherKey as RestoreResult.Refused).answer is BackupAnswer.OtherRecoveryKey)
+        assertEquals(0, device.app.restores)
     }
 
     @Test

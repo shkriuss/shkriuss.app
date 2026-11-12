@@ -26,8 +26,12 @@ internal object NoSink : BodySink {
  * rule of "What a reader refuses in the body" in
  * docs/architecture/backup-format.md. It stops with [BackupRefused] at the
  * first rule that does not hold. It never guesses.
+ *
+ * [newestDataVersion] is the app's own data version. A backup with a
+ * higher one is refused right after the Manifest, before any record or
+ * file is read.
  */
-internal class BackupReader(input: InputStream) {
+internal class BackupReader(input: InputStream, private val newestDataVersion: Int) {
     private val body = BodyInput(input)
 
     /** Reads the whole body into [sink]. Returns only when the body ended right after a good End. */
@@ -36,6 +40,8 @@ internal class BackupReader(input: InputStream) {
         val dataVersion = body.int()
         if (dataVersion < 1) damaged()
         val madeAt = body.long()
+        // A newer version of the app made this backup. Nothing of it has reached the sink yet.
+        if (dataVersion > newestDataVersion) throw BackupRefused(BackupAnswer.NewerVersion)
 
         var records = 0L
         var files = 0L

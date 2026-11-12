@@ -63,6 +63,8 @@ Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)):
   `CheckGraphicsPathUseTask.kt`,
 - `AndroidApplicationConventionPlugin.kt`, which connects both checks to
   the build.
+- `r8/app-rules.pro`, the R8 rules every app shares, which the APK rules
+  check depends on (owner's decision on pull request 25),
 - the two checks of the record rules, `CheckRoomSchemasTask.kt` and
   `CheckDaoRulesTask.kt`, and `AndroidRoomConventionPlugin.kt`, which
   connects them to the build (owner's decision on pull request 21),
@@ -170,11 +172,14 @@ Reasons:
 
 The rules are in `android/build-logic/r8/app-rules.pro`.
 
-The file has one more rule since Phase 1, step 5: classes of the test
-fixtures of `core/crypto` are kept as they are. It exists only so that
-the APK rules check can find such a class in a `release` or `preview`
-APK. No app holds one, so the rule matches nothing
-([The test fixtures rule](#the-test-fixtures-rule)).
+The file has two more rules since Phase 1, step 5: classes of Google
+Play services, and classes of the test fixtures of `core/crypto`, are
+kept as they are. They exist only so that the APK rules check can find
+such a class in a `release` or `preview` APK. No app holds one, so the
+rules match nothing
+([The Play services class rule](#the-play-services-class-rule),
+[The test fixtures rule](#the-test-fixtures-rule)). The file is
+owner-only since then.
 
 ### What a stack trace shows
 
@@ -296,7 +301,7 @@ second build must write the same mapping file, or the release stops. See
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
-- `core/backup` has 10 test classes with 68 tests. They are the items of
+- `core/backup` has 10 test classes with 71 tests. They are the items of
   "What the tests must cover" in
   [backup-format.md](../architecture/backup-format.md#what-the-tests-must-cover).
   - They use real keys: `SoftwareKeysApp` from the
@@ -815,20 +820,29 @@ How it still finds a class after R8:
    name.
 2. R8 can only rename a class that is inside the APK. A class the code
    only refers to always keeps its name.
-3. The same rule runs on the preview APK of every pull request, and on a
+3. One R8 rule keeps every class of that package as it is:
+   `-keep class com.google.android.gms.** { *; }` in
+   `build-logic/r8/app-rules.pro`. The owner asked for it on pull
+   request 25. Without it R8 can fold such a class into another one:
+   the name is gone and the code stays. That is what the second test
+   below showed.
+4. The same rule runs on the preview APK of every pull request, and on a
    debug APK whenever one is built. R8 never touches a debug APK. CI
    itself builds only `release` and `preview`.
 
 Its limits:
 
-- It depends on `-dontobfuscate`. A comment next to that line in
-  `build-logic/r8/app-rules.pro` says so. If renaming is ever turned on,
-  the rule must read the classes before R8 instead, as the
-  [graphics-path check](#the-graphics-path-check) does. That needs
-  `AndroidApplicationConventionPlugin.kt`, which is owner-only.
-- R8 removes code that nothing uses. A Play services library that is
-  added but never called leaves no class in a release APK. Then the APK
-  holds none, which is what the rule asks. The debug APK still holds it.
+- It depends on `-dontobfuscate` and on the R8 rule of point 3. Comments
+  next to both lines in `build-logic/r8/app-rules.pro` say so. If
+  renaming is ever turned on, the rule must read the classes before R8
+  instead, as the [graphics-path check](#the-graphics-path-check) does.
+  That needs `AndroidApplicationConventionPlugin.kt`, which is
+  owner-only.
+- Before the R8 rule, a Play services library that was added but never
+  called left no class in a release APK, because R8 removes code that
+  nothing uses. With the R8 rule its classes are kept, so the release
+  APK fails too. A Play services library in an app is always a mistake,
+  called or not.
 
 How it was tested, on 2026-11-12 in the cloud environment:
 
@@ -839,6 +853,27 @@ How it was tested, on 2026-11-12 in the cloud environment:
    `classes5.dex` of the debug APK, and in `classes.dex` of the release
    and the preview APK, which R8 had shrunk.
 3. With the class removed, all three passed.
+
+That first probe happened to be a class that R8 left as it was. The
+second test, on the same day for pull request 25, used one that R8 folds
+away:
+
+1. Catalog got a temporary class `com.google.android.gms.Probe` with one
+   small function, and its activity used the result.
+2. Without the R8 rule: `assembleDebug` failed in its APK rules check
+   and named the class. `assembleRelease` and `assemblePreview`
+   **passed**. R8 had folded the class into the activity, so no class of
+   that package was named in the APK any more.
+3. With the R8 rule: `assembleDebug`, `assembleRelease` and
+   `assemblePreview` each failed in their APK rules check and named the
+   class: in `classes6.dex` and `classes7.dex` of the debug APK, and in
+   `classes.dex` of the release and the preview APK.
+4. With the use removed and only the class left, `assembleRelease` still
+   failed and named the class.
+5. With the class removed, all three passed.
+6. The release APK of Catalog is the same, byte for byte, with and
+   without the R8 rule (SHA-256 compared). In an app with no Play
+   services class the rule matches nothing.
 
 CI runs `checkReleaseApkRules` by name for every app, and checks that its
 report was written. So removing the check from the build, or turning it
@@ -892,8 +927,9 @@ How it was tested, on 2026-11-12 in the cloud environment:
 What step 2 showed is true for every rule that finds classes by name:
 "never rename" is not enough. R8 can fold a class into another one, and
 then the name of the first is gone. The Play services class rule reads
-names the same way. It was not changed here. Whether it needs an R8 rule
-of its own is for the owner to decide.
+names the same way. So the owner decided on pull request 25 that it gets
+an R8 rule of its own
+([The Play services class rule](#the-play-services-class-rule)).
 
 ## Native code from Compose
 

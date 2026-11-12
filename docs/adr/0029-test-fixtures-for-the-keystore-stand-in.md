@@ -96,9 +96,11 @@
 - How the rule was proven to fail, and what the first try showed, is in
   [build.md](../development/build.md#the-test-fixtures-rule).
 - What the first try showed also holds for the Play services rule: R8
-  can fold a class into another one even when it never renames. Whether
-  that rule needs an R8 rule of its own is for the owner to decide. It
-  was not changed here.
+  can fold a class into another one even when it never renames. The
+  owner decided on pull request 25 that the Play services rule gets an
+  R8 rule of its own, and that the file of the R8 rules is owner-only
+  from then on
+  ([build.md](../development/build.md#the-play-services-class-rule)).
 - An app's own test APK is not checked by the APK rules check. If an app
   module ever uses the fixtures in emulator tests, the stand-in is in
   that test APK, and never in the app.

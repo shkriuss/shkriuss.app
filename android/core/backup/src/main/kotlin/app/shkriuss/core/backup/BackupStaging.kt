@@ -41,6 +41,29 @@ internal class BackupStaging(private val folder: File) {
     }
 }
 
+/**
+ * The staging of one restore, made only when the first record or file of
+ * the backup arrives. So a backup that is refused by its header or by its
+ * Manifest puts nothing aside and never touches the app's storage.
+ */
+internal class StagingOnDemand(private val staging: BackupStaging) : BodySink {
+    private var run: StagedBackup? = null
+
+    private fun run(): StagedBackup = run ?: staging.newRun().also { run = it }
+
+    override fun record(record: BackupRecord) = run().record(record)
+
+    override suspend fun file(id: String, content: BoundedInput) = run().file(id, content)
+
+    /** Flushes what was put aside to storage and returns it. A backup with nothing in it is put aside as that. */
+    fun finish(): StagedBackup = run().also { it.finish() }
+
+    /** Deletes what was put aside, if anything was. */
+    fun delete() {
+        run?.delete()
+    }
+}
+
 /** Runs [write], a write into staging. A failure of it is a [BackupStagingException], never a failed read of the backup. */
 internal inline fun <T> staging(write: () -> T): T = try {
     write()

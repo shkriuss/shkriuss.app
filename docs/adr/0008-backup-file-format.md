@@ -96,7 +96,8 @@
     aside in a staging folder in the app's private storage. Only when the
     stream has ended without an error and every rule holds does the app's
     own code get the records and files. Until then nothing in the app
-    changes.
+    changes. A backup with a higher data version than the app's is
+    refused right after the Manifest, before anything is put aside.
 14. A backup can be checked without restoring it. One function reads a
     backup from a URI, checks everything a restore checks, and changes
     nothing. A backup that cannot be restored must be found on the day it
@@ -118,6 +119,10 @@
 The byte layouts, the limits, the order of every check and the rules for
 apps are in [backup-format.md](../architecture/backup-format.md). The code
 follows that page exactly.
+
+Point 13 first had no last sentence: the data version was looked at only
+after the whole file was read. The owner changed it on pull request 25,
+on 2026-11-12. It changes the order of reading, not the file format.
 
 ## Options rejected
 
@@ -176,6 +181,11 @@ follows that page exactly.
   not a new format version. Open: whether and when to build it.
 - Into an app with no data, a restore gives exactly what the backup
   holds.
+- A backup from a newer version of the app gets its answer after the
+  first segment, also when the file is very large, and it takes no room
+  in the staging folder. A cut or a change in a later part of such a
+  file is not seen: the answer is still "made by a newer version of the
+  app".
 - Restoring the same backup twice changes nothing the second time.
 - "The same `updatedAt` keeps the stored record" is right for a restore,
   which touches one device. In sync it would let two devices keep

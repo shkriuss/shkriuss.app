@@ -9,6 +9,8 @@ import app.shkriuss.core.testing.TestIdSource
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
 import java.security.MessageDigest
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -31,6 +33,25 @@ internal fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-2
 
 /** Bytes with a pattern that does not repeat at any block size the code uses: byte number i is i mod 251. */
 internal fun pattern(size: Int): ByteArray = ByteArray(size) { (it % 251).toByte() }
+
+/** A document that fails with [failure] once [good] bytes of it were read. */
+internal class FailingInput(file: ByteArray, private val good: Int, private val failure: IOException) : InputStream() {
+    private val bytes = ByteArrayInputStream(file)
+    private var read = 0
+
+    override fun read(): Int {
+        if (read >= good) throw failure
+        read++
+        return bytes.read()
+    }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (read >= good) throw failure
+        val count = bytes.read(buffer, offset, minOf(length, good - read))
+        if (count > 0) read += count
+        return count
+    }
+}
 
 /** A record for a test. Record number [number] has the ID that [TestIdSource] gives that number. */
 internal fun record(

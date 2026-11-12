@@ -1,5 +1,7 @@
 package app.shkriuss.core.backup
 
+import java.io.IOException
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -102,6 +104,49 @@ class WrongKeyAndVersionTest {
         older.giveKeys(recoveryKey)
 
         assertEquals(BackupAnswer.NewerVersion, older.answerOf(file))
+    }
+
+    @Test
+    fun aHigherDataVersionIsRefusedRightAfterTheManifestBeforeAnythingIsPutAside() {
+        val newer = Device(temporary, dataVersion = 5)
+        val recoveryKey = newer.giveKeys()
+        newer.app.add(record(1, type = "file"))
+        newer.app.putFile(1, pattern(2_500_000))
+        val file = newer.backup()
+        val older = Device(temporary, dataVersion = 4)
+        older.giveKeys(recoveryKey)
+        // Two traps that a reader who went on would fall into. The staging folder cannot be made: a file
+        // stands in its place. And the document fails a little after its first segment, of three.
+        val engine = BackupEngine(older.keys.crypto.backups, WATER, older.app, BackupStaging(temporary.newFile()), older.clock)
+        val afterTheFirstSegment = 1_200_000
+        val failure = IOException("The reader went on after the Manifest")
+
+        val checked = runBlocking { engine.check(FailingInput(file, afterTheFirstSegment, failure)) }
+        val restored = runBlocking { engine.restore(FailingInput(file, afterTheFirstSegment, failure)) }
+
+        assertTrue("the backup has three segments", file.size > 2 * 1_048_576)
+        assertEquals(CheckResult.Refused(BackupAnswer.NewerVersion), checked)
+        assertEquals(RestoreResult.Refused(BackupAnswer.NewerVersion), restored)
+        assertEquals(0, older.app.restores)
+    }
+
+    @Test
+    fun aNewerBackupIsANewerVersionEvenWhenItsLaterPartIsDamaged() {
+        val newer = Device(temporary, dataVersion = 5)
+        val recoveryKey = newer.giveKeys()
+        newer.app.add(record(1, type = "file"))
+        newer.app.putFile(1, pattern(2_500_000))
+        val file = newer.backup()
+        val older = Device(temporary, dataVersion = 4)
+        older.giveKeys(recoveryKey)
+        val changedAtTheEnd = file.copyOf().also { it[it.size - 1] = (it[it.size - 1].toInt() xor 0x01).toByte() }
+        val changedInTheFirstSegment = file.copyOf().also { it[100] = (it[100].toInt() xor 0x01).toByte() }
+
+        // The reader stops at the Manifest, so it never reaches the damage at the end.
+        assertEquals(BackupAnswer.NewerVersion, older.answerOf(changedAtTheEnd))
+        assertEquals(BackupAnswer.NewerVersion, older.answerOf(file.copyOf(file.size - 100)))
+        // The Manifest is released only after the tag of its segment was checked.
+        assertEquals(BackupAnswer.Damaged, older.answerOf(changedInTheFirstSegment))
     }
 
     @Test
