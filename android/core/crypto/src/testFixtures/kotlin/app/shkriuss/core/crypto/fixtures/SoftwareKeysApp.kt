@@ -35,4 +35,16 @@ class SoftwareKeysApp(folder: File, appName: AppName) {
         set(value) {
             hardware.phoneLocked = value
         }
+
+    /**
+     * False for a phone with no screen lock: the recovery key cannot be
+     * kept, and there is no app lock. Setting it to false also deletes the
+     * keys that need the prompt, as Android does when the screen lock is
+     * removed.
+     */
+    var screenLock: Boolean
+        get() = hardware.screenLock
+        set(value) {
+            if (value) hardware.screenLock = true else hardware.removeScreenLock()
+        }
 }

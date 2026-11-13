@@ -208,11 +208,14 @@ proof that a key is gone. See
     crypto-design.md says
     ([emulator-tests.md](../development/emulator-tests.md#what-the-tests-showed)).
 - Showing the system prompt needs the permission `USE_BIOMETRIC`. The
-  step that first shows a prompt writes its decision record.
+  step that first shows a prompt writes its decision record:
+  [0031](0031-use-biometric-for-the-system-prompt.md), step 1.7,
+  session A.
 - The backup format (0008) and the sync protocol (0009) build on the
   blobs of crypto-design.md and add no cryptography of their own.
 - Open: the points listed under "Open questions" in
   [crypto-design.md](../security/crypto-design.md#open-questions). Those
-  that touch this record are the permission for the system prompt, the
-  use of AndroidX Biometric elsewhere (step 1.7), and the sync signing
-  key (Phase 5).
+  that touch this record are the sync signing key and a new recovery key
+  (Phase 5). The permission for the system prompt and AndroidX Biometric
+  were decided in step 1.7, session A
+  ([0031](0031-use-biometric-for-the-system-prompt.md)).

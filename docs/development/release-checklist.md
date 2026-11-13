@@ -13,8 +13,8 @@ and the steps of [release.md](release.md) in the order you do them.
    `docs/apps/<app>/release-checklist-<version>.md`. Claude fills in the
    app and the version, and writes "Does not apply" and the reason next to
    an item that does not fit the app.
-2. You work through the copy on your phones. Parts 1 and 2 use the
-   preview of that pull request, before you merge it. Parts 3 and 4 come
+2. You work through the copy on your phones. Parts 1 to 3 use the
+   preview of that pull request, before you merge it. Parts 4 and 5 come
    after the merge.
 3. Tell Claude in a session what you checked and anything that did not
    match. Claude ticks the boxes in the copy, and fixes this page, in the
@@ -26,7 +26,7 @@ in a session, and the checks on the preview are owner decisions on
 
 Why the preview: it is the release build with another app ID
 ([build.md](build.md#build-types)). It installs next to the real app, so
-your phones keep the old version for the update in part 4. Merge nothing
+your phones keep the old version for the update in part 5. Merge nothing
 else that changes the app between part 1 and the release. Then the
 release is built from the code you checked.
 
@@ -95,11 +95,26 @@ value.
    3. upright and turned sideways.
 3. [ ] No text is cut off, clipped or on top of other text, and nothing
    sits under the system bars.
-4. [ ] Uninstall the previews on all three devices when you are done
+
+## Part 3: Keys, on all three devices
+
+Steps 1 and 2 are only for an app that holds keys. Catalog holds none:
+write "Does not apply" next to them. An emulator has no StrongBox, so
+only these devices can check it
+([crypto-design.md](../security/crypto-design.md#strongbox-and-other-hardware),
+point 8).
+
+1. [ ] On the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a: open the
+   preview, create a recovery key for testing (never your real words),
+   and keep it on the phone with the system prompt.
+2. [ ] On each of the three, open the app's security screen. Under
+   **Keys on this phone**, every key says **StrongBox: a separate
+   security chip**.
+3. [ ] Uninstall the previews on all three devices when you are done
    ([Install a newer preview](test-a-pull-request.md#install-a-newer-preview),
    step 1).
 
-## Part 3: Release
+## Part 4: Release
 
 1. [ ] Merge the pull request.
 2. [ ] CI is green on the newest commit of `main`
@@ -113,7 +128,7 @@ value.
 6. [ ] Open `github.com/shkriuss/shkriuss.app/tags`. The tag
    `<app>-v<version>` is there, on the commit from the notes.
 
-## Part 4: After publishing
+## Part 5: After publishing
 
 1. [ ] On a phone with the old version from Obtainium, open Obtainium. It
    shows the update. Tap the app, then **Update**. It installs as an

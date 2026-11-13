@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared by every screen of the recovery key. -->
+    <string name="sec_preview_warning">This is a preview build. Never type your real recovery words into it. Make a new recovery key here to test.</string>
+    <string name="sec_word_numbered">%1$d. %2$s</string>
+    <string name="sec_done">Done</string>
+    <string name="sec_try_again">Try again</string>
+    <string name="sec_working">Storing the keys</string>
+    <string name="sec_prompt_subtitle">Use your fingerprint, or your phone\'s PIN, pattern or password.</string>
+    <string name="sec_prompt_failed">The system prompt did not succeed. Try again in a moment.</string>
+
+    <!-- The security screen. -->
+    <string name="sec_security_title">Security</string>
+    <string name="sec_loading">Reading the keys</string>
+    <string name="sec_failed">The keys could not be read now. Try again in a moment.</string>
+    <string name="sec_section_recovery_key">Recovery key</string>
+    <string name="sec_no_key">This app has no recovery key yet. The recovery key is 24 words on paper. Backup and sync need it.</string>
+    <string name="sec_create">Create a recovery key</string>
+    <string name="sec_enter">I have a recovery key</string>
+    <string name="sec_unfinished">Setting up the recovery key stopped half way. Enter the same 24 words to finish.</string>
+    <string name="sec_finish">Enter the words to finish</string>
+    <string name="sec_start_over">I do not have those words</string>
+    <string name="sec_set_up">This app has its keys from your recovery key. Its short name is %1$s. The short name is not secret and opens nothing.</string>
+    <string name="sec_set_up_no_name">This app has its keys from your recovery key.</string>
+    <string name="sec_kept">This phone keeps the recovery key. It shows you the words again after you confirm that it is you.</string>
+    <string name="sec_show">Show the recovery key</string>
+    <string name="sec_not_kept">This phone does not keep the recovery key. Your paper copy is the only copy. To keep it here, enter the words once.</string>
+    <string name="sec_keep_here">Enter the words to keep it here</string>
+    <string name="sec_not_kept_no_lock">This phone cannot keep the recovery key, because it has no screen lock. Your paper copy is the only copy.</string>
+    <string name="sec_section_screen_lock">Screen lock</string>
+    <string name="sec_screen_lock_on">This phone has a screen lock.</string>
+    <string name="sec_screen_lock_off">This phone has no screen lock. So it cannot keep the recovery key or show it again, and the app lock cannot be turned on. Backup, sync and files still work. Set a screen lock in Android\'s settings to change this.</string>
+    <string name="sec_section_keys">Keys on this phone</string>
+    <string name="sec_keys_intro">The keys that protect this app\'s data on this phone, and where each one lives. No key can be copied out of the phone.</string>
+    <string name="sec_no_keys">No keys yet. They are made when you set up a recovery key or add a file.</string>
+    <string name="sec_software_notice">Some keys are not protected by hardware. This phone has no secure hardware for keys, or Android does not use it. Emulators are such phones.</string>
+    <string name="sec_key_background">Key for records and sync</string>
+    <string name="sec_key_unlocked">Key for backups and files</string>
+    <string name="sec_key_lock">Key of the app lock</string>
+    <string name="sec_key_recovery_guard">Key that guards the recovery key</string>
+    <string name="sec_level_strongbox">StrongBox: a separate security chip</string>
+    <string name="sec_level_tee">Trusted execution environment: a secure area of the main processor</string>
+    <string name="sec_level_secure_unknown">Secure hardware of a kind Android does not name</string>
+    <string name="sec_level_software">Software only: not protected by hardware</string>
+    <string name="sec_section_repair">Damaged key files</string>
+    <string name="sec_repair">A key file of this app is damaged. Enter your 24 words to repair it. If the words are right, nothing is lost.</string>
+    <string name="sec_repair_button">Enter the words to repair</string>
+    <string name="sec_give_up_text">Some files of this app cannot be opened, because the key file that opens them is damaged. No recovery words can bring it back.</string>
+    <string name="sec_give_up_button">Give up these files</string>
+    <string name="sec_give_up_title">Give up these files?</string>
+    <string name="sec_give_up_warning">These files can then never be opened again, on any device. Backup, sync and the app lock then work again.</string>
+    <string name="sec_give_up_confirm">Give up the files</string>
+    <string name="sec_cancel">Cancel</string>
+    <string name="sec_start_over_title">Start over?</string>
+    <string name="sec_start_over_text">You use a new recovery key, or other words. The words of the setup that stopped will no longer work for this app. Files on this phone stay.</string>
+    <string name="sec_start_over_create">Create a new recovery key</string>
+    <string name="sec_start_over_enter">Enter other words</string>
+
+    <!-- Creating a recovery key. -->
+    <string name="sec_create_title">Create a recovery key</string>
+    <string name="sec_create_intro_what">Your recovery key is 24 words. Whoever has them can read your backups and your synced data.</string>
+    <string name="sec_create_intro_paper">Write the words on paper, in order. Keep the paper somewhere safe. If you lose the words and this phone, nobody can help.</string>
+    <string name="sec_create_intro_wallet">The words look like a cryptocurrency wallet phrase. They are not one, and they hold no money.</string>
+    <string name="sec_create_intro_screen">Make sure nobody can see your screen. Screenshots are blocked here. If TalkBack is on, it reads the words aloud.</string>
+    <string name="sec_show_words">Show the words</string>
+    <string name="sec_words_intro">Write these 24 words on paper, in this order.</string>
+    <string name="sec_words_mismatch">A word did not match. Check your paper against these words, then try again.</string>
+    <string name="sec_words_written">I wrote them down</string>
+    <string name="sec_confirm_intro">Check your paper. Enter these four words.</string>
+    <string name="sec_confirm_label">Word %1$d</string>
+    <string name="sec_check">Check</string>
+
+    <!-- Keeping the recovery key, and the end of a flow. -->
+    <string name="sec_keep_title">Keep it on this phone</string>
+    <string name="sec_keep_text">This phone can keep the recovery key, so that it can show you the words again later. Confirm with your fingerprint, or your phone\'s PIN, pattern or password.</string>
+    <string name="sec_keep_button">Keep it on this phone</string>
+    <string name="sec_keep_skip">Not now</string>
+    <string name="sec_keep_cancelled">The recovery key is not kept on this phone yet. Everything else works.</string>
+    <string name="sec_keep_failed">The system prompt did not succeed. Try again, or keep only the paper copy.</string>
+    <string name="sec_prompt_keep">Keep the recovery key on this phone</string>
+    <string name="sec_done_title">The recovery key is set up</string>
+    <string name="sec_done_kept">This phone keeps it. Your paper copy is the backup.</string>
+    <string name="sec_done_not_kept">This phone does not keep it. Your paper copy is the only copy.</string>
+    <string name="sec_done_no_lock">This phone has no screen lock, so it cannot keep the recovery key. Your paper copy is the only copy.</string>
+    <string name="sec_failed_title">That did not work</string>
+    <string name="sec_problem_not_now">The keys could not be stored now. Unlock the phone and try again in a moment.</string>
+    <string name="sec_problem_damaged">A key file is damaged, and these words could not repair it. Check that they are your words.</string>
+    <string name="sec_problem_cannot_make_key">Android could not make a key for this app. Try again later.</string>
+    <string name="sec_problem_key_id_in_use">These words cannot be used in this app, because their short name is already taken by another key. This is very rare. Check the words and try again.</string>
+    <string name="sec_problem_file_keys_damaged">A key file for files is damaged. Give those files up on the security screen first. Then start over.</string>
+    <string name="sec_problem_setup_unfinished">Setting up a recovery key stopped half way in this app. Open the security screen to finish it or to start over.</string>
+    <string name="sec_problem_already_set_up">This app already has a recovery key.</string>
+
+    <!-- Entering the words. -->
+    <string name="sec_enter_title">Enter your recovery key</string>
+    <string name="sec_enter_intro">Type the 24 words from your paper, one at a time. Pick each word from the list under the field, or press the keyboard\'s next key. The first four letters are enough.</string>
+    <string name="sec_enter_no_paste">Pasting is turned off, so that the words never end up in the clipboard.</string>
+    <string name="sec_enter_label">Word %1$d of 24</string>
+    <string name="sec_enter_slot_empty">%1$d. not entered yet</string>
+    <string name="sec_enter_check">Check the words</string>
+    <string name="sec_enter_not_in_list">Word %1$d is not in the word list.</string>
+    <string name="sec_enter_do_not_belong">These words do not belong together. Check each word.</string>
+    <string name="sec_enter_older">These are the words of an older recovery key of this app. Enter the words of the current one.</string>
+    <string name="sec_enter_different">This app has its keys from another recovery key, whose short name is %1$s. These words belong to a different one.</string>
+    <string name="sec_enter_different_no_name">This app has its keys from another recovery key. These words belong to a different one.</string>
+    <string name="sec_enter_start_over_offer">These words do not finish the setup that stopped. You can start over with them instead. Files on this phone stay.</string>
+    <string name="sec_enter_start_over">Start over with these words</string>
+    <string name="sec_enter_other">Enter other words</string>
+
+    <!-- Showing the kept recovery key. -->
+    <string name="sec_show_title">Your recovery key</string>
+    <string name="sec_show_intro">The words show after you confirm that it is you. Make sure nobody can see your screen. If TalkBack is on, it reads the words aloud.</string>
+    <string name="sec_prompt_show">Show the recovery key</string>
+    <string name="sec_show_words_intro">Your 24 words, in order. They leave the screen when you close it or switch to another app.</string>
+    <string name="sec_show_not_kept">This phone does not keep the recovery key any more. Maybe the screen lock was removed. Enter the words once to keep it here again.</string>
+    <string name="sec_show_damaged">The recovery key kept on this phone is damaged. Enter your 24 words to repair it.</string>
+    <string name="sec_show_enter">Enter the words</string>
+</resources>

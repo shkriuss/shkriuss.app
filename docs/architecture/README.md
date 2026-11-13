@@ -16,6 +16,9 @@ Pages:
   exact alarms, keeps them right after a reboot, an update and a change
   of the time or the time zone, shows notifications, and what a screen
   shows when the user does not allow them.
+- [Recovery key screens](security-screens.md): the screens of
+  `core/security` that every app uses to create, enter and show the
+  recovery key, the security screen, and what keeps the words safe.
 
 What else belongs here:
 

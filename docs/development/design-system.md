@@ -1203,8 +1203,8 @@ the back gesture for itself.
 
 ### Catalog
 
-The Catalog app shows every token and every component. Its start screen
-lists its pages in two groups.
+The Catalog app shows every token and every component, and the screens
+that every app shares. Its start screen lists its pages in three groups.
 
 Tokens:
 
@@ -1280,6 +1280,20 @@ Components:
     clock, with an impossible time and with a long title, then one to
     try, which follows the phone's clock setting.
 
+Shared screens:
+
+23. **Recovery key screens**: every state of the screens of
+    `core/security`, with sample words that are no real key: the
+    security screen with no key yet, set up and kept with keys in
+    StrongBox, with no screen lock and keys in software, and with a setup
+    that stopped, damaged key files and the warning of a preview build;
+    creating a key, from the screen before the words to done; entering
+    the words, with suggestions, which can be typed into; words that
+    could start over; and the words shown again. Each opens full window,
+    and Back returns to the list. A switch blocks screenshots as in an
+    app; it is off by default
+    ([security-screens.md](../architecture/security-screens.md#catalog)).
+
 The samples of pages 17 to 22 are drawn in place
 ([Windows of their own](#windows-of-their-own)); only the one under "Try
 it" opens a window. The date picker samples show a month in the past, so
@@ -1322,6 +1336,10 @@ its height, and its panes scroll, as on a phone.
 
 Compose tests stop animations that never end, so the screenshots show the
 loading circle as it starts: a short arc at its top. On a phone it turns.
+
+`SecurityScreensScreenshotTest` opens each state of the recovery key
+screens from its page, the way the owner does, and captures it to its end
+in the eight standard configurations: `RecoveryKey<State>_<config>.png`.
 
 `OpenComponentsScreenshotTest` opens each component of batch 5 from "Try
 it", the way a user does, and captures the whole screen with its window,

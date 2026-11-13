@@ -13,6 +13,7 @@
     <!-- The two groups of pages on the start screen. -->
     <string name="catalog_group_tokens">Tokens</string>
     <string name="catalog_group_components">Components</string>
+    <string name="catalog_group_screens">Shared screens</string>
 
     <!-- The pages, with the line under each name on the start screen. -->
     <string name="page_colors_title">Colours</string>
@@ -59,6 +60,8 @@
     <string name="page_date_pickers_summary">Choosing a day, on a calendar or by typing it.</string>
     <string name="page_time_pickers_title">Time pickers</string>
     <string name="page_time_pickers_summary">Choosing a time of day by typing the hour and the minute.</string>
+    <string name="page_recovery_key_title">Recovery key screens</string>
+    <string name="page_recovery_key_summary">Creating, entering and showing the recovery key, and the security screen.</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
@@ -471,4 +474,22 @@
     <string name="time_pickers_intro">Each time picker is drawn in place, as it looks in its window. In an app it opens over the screen, and uses AM and PM or the 24-hour clock as the phone is set. Only the button under Try it does something when tapped.</string>
     <string name="time_picker_title">Time picker</string>
     <string name="time_picker_use">Choosing a time of day, such as when a reminder rings. Type the hour and the minute with the number keyboard. A time that cannot be is refused with an error.</string>
+
+    <!-- The recovery key screens page. -->
+    <string name="recovery_key_intro">The screens of the recovery key that every app shares, from core/security. Each state shows with sample words. They are no real key, and nothing here makes or stores one. Back returns to this list.</string>
+    <string name="recovery_key_block_heading">Screenshots</string>
+    <string name="recovery_key_block">Block screenshots, as in an app</string>
+    <string name="recovery_key_states_heading">States</string>
+    <string name="sample_security_no_key">Security screen, no recovery key yet</string>
+    <string name="sample_security_set_up">Security screen, set up and kept, keys in StrongBox</string>
+    <string name="sample_security_no_screen_lock">Security screen, no screen lock, keys in software</string>
+    <string name="sample_security_problems">Security screen, setup stopped and damaged key files, preview build</string>
+    <string name="sample_create_intro">Create: before the words</string>
+    <string name="sample_create_words">Create: the 24 words</string>
+    <string name="sample_create_confirm">Create: four words to confirm</string>
+    <string name="sample_create_keeping">Create: keep it on this phone, prompt closed</string>
+    <string name="sample_create_done">Create: done</string>
+    <string name="sample_enter_words">Enter: the words, with suggestions</string>
+    <string name="sample_enter_start_over">Enter: words that could start over</string>
+    <string name="sample_show_words">Show: the words again</string>
 </resources>

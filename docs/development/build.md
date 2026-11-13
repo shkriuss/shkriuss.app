@@ -47,6 +47,9 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
 - `android/core/backup/`: the backup file of an app: writing, checking
   and restoring it. See
   [backup-format.md](../architecture/backup-format.md).
+- `android/core/security/`: the recovery key screens and the security
+  screen that every app uses. See
+  [security-screens.md](../architecture/security-screens.md).
 - `android/core/testing/`: test helpers that other modules use in their
   tests only.
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
@@ -248,11 +251,13 @@ second build must write the same mapping file, or the release stops. See
   since" query, the example migration and the migration test helpers,
   on the system SQLite driver under Robolectric
   ([architecture/data.md](../architecture/data.md#tests)).
-- `core/crypto` has 20 test classes with 150 tests. They are the items 1
-  to 8 of "What the tests must cover" in
+- `core/crypto` has 22 test classes with 180 tests. They are the items 1
+  to 8 and 10 to 12 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
-  (`BackupExampleFileTest`, see `core/backup` below).
+  (`BackupExampleFileTest`, see `core/backup` below). `StartOverTest` and
+  `RepairTest` came with step 1.7, session A: starting over after a setup
+  that stopped, a damaged keyset file, and giving file keys up.
   - No Android Keystore exists on the JVM. So the tests pass a software
     stand-in for the hardware keys, `SoftwareHardwareKeys`, with the same
     byte layout. It can act like a phone that is locked, a Keystore that
@@ -365,6 +370,16 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
+- `core/security` has three test classes with 25 tests
+  ([security-screens.md](../architecture/security-screens.md#tests)).
+  - `FlowViewModelsTest` runs every flow of the recovery key through its
+    ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
+    test's own thread, so each state shows right after each call. The
+    system prompt is answered by calling what the screen calls.
+  - `SecurityActivitiesTest` starts the four screens under Robolectric,
+    with the app class `TestHostApp`, a `SecurityHost`. It reads the
+    window's flags and what the field tells the keyboard.
+  - `WordInputTest` checks what a word field accepts, with no Android.
 
 ### Instrumented tests
 
@@ -380,7 +395,8 @@ Test helpers that the tests of other modules may use
 ([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md)).
 
 1. A module that applies `shkriuss.android.test-fixtures` has a folder
-   `src/testFixtures/`. Today only `core/crypto` does.
+   `src/testFixtures/`. Today only `core/crypto` does. `core/backup` and
+   `core/security` use them.
 2. Code there sees the `internal` declarations of its module. The
    module's own unit tests and emulator tests see what is in the
    fixtures, also what is `internal` there.

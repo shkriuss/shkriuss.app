@@ -15,11 +15,13 @@ enum class CatalogGroup(
 ) {
     Tokens(R.string.catalog_group_tokens),
     Components(R.string.catalog_group_components),
+    Screens(R.string.catalog_group_screens),
 }
 
 /**
  * The pages of the design gallery, in the order the start screen lists
- * them. Phase 1, step 2 adds pages for each batch of components.
+ * them. Phase 1, step 2 added pages for each batch of components; the
+ * screens that every app shares come after them.
  */
 enum class CatalogPage(
     /** The page's name, on the start screen and as the page's title. */
@@ -51,6 +53,7 @@ enum class CatalogPage(
     Menus(R.string.page_menus_title, R.string.page_menus_summary, CatalogGroup.Components),
     DatePickers(R.string.page_date_pickers_title, R.string.page_date_pickers_summary, CatalogGroup.Components),
     TimePickers(R.string.page_time_pickers_title, R.string.page_time_pickers_summary, CatalogGroup.Components),
+    RecoveryKeyScreens(R.string.page_recovery_key_title, R.string.page_recovery_key_summary, CatalogGroup.Screens),
 }
 
 /**
@@ -89,5 +92,6 @@ fun CatalogApp() {
         CatalogPage.Menus -> MenusPage()
         CatalogPage.DatePickers -> DatePickersPage()
         CatalogPage.TimePickers -> TimePickersPage()
+        CatalogPage.RecoveryKeyScreens -> RecoveryKeyScreensPage()
     }
 }

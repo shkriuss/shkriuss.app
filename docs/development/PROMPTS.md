@@ -553,6 +553,9 @@ as a shared piece that every app can turn on:
 - Decide with me what a notification shows while the app lock is on. It is
   an open question in docs/architecture/notifications.md. Record the
   decision there.
+- When the words repair a `file-key` that was damaged under the Lock key,
+  `core/crypto` turns the app lock off. Show the user that the app lock
+  was turned off, and how to turn it on again.
 - Catalog page, screenshot tests, user guide page.
 
 I am the owner and I ask you to add the include lines for the new
@@ -647,15 +650,18 @@ Steps:
   alarm handler fails: today the reminder is marked as fired and is lost
   without a word. It is an open question in
   docs/architecture/notifications.md. Record the decision there. I am
-  the owner and I ask you to allow the three permissions of core/notify
-  for Water in the APK rules check, and nothing else in those files.
+  the owner and I ask you to add a per-app allow list of permissions to
+  the APK rules check, `CheckApkRulesTask.kt`, with the three
+  permissions of core/notify for Water, and nothing else in that file.
 - 2.5 Backup, restore, app lock and settings. The settings get a screen
   that shows the notices of all third-party material in the app. Complete
   `docs/development/third-party.md` with everything that ships in the app.
   For backup and restore, use `core/backup`: the screens call
   `Backups.export`, `Backups.check` and `Backups.restore`, and the app
   calls `Backups.start()` when it starts. Decide with me when a backup is
-  checked.
+  checked. I am the owner and I ask you to add
+  `android.permission.USE_BIOMETRIC` for Water to the allow list of the
+  APK rules check, and nothing else in that file.
 
 ### 2.6 Release preparation
 

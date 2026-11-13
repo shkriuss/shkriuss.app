@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What core/security adds to every app that uses it: one permission and
+    four screens. See docs/architecture/security-screens.md,
+    docs/security/permissions.md and ADR 0031.
+
+    No screen is exported. Only the app itself can open them.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        To show Android's own system prompt: a fingerprint, or the phone's
+        PIN, pattern or password. Android grants it at install. It gives no
+        access to any data. ADR 0031.
+    -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <application>
+        <!-- The security screen: which keys exist and where, the screen lock, the recovery key. -->
+        <activity
+            android:name="app.shkriuss.core.security.SecurityActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+
+        <!-- Create a recovery key: the 24 words, four of them to confirm, then the keys are stored. -->
+        <activity
+            android:name="app.shkriuss.core.security.CreateRecoveryKeyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+
+        <!-- Enter the 24 words of a recovery key. -->
+        <activity
+            android:name="app.shkriuss.core.security.EnterRecoveryKeyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+
+        <!-- Show the kept recovery key again, after the system prompt. -->
+        <activity
+            android:name="app.shkriuss.core.security.ShowRecoveryKeyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+    </application>
+
+</manifest>
