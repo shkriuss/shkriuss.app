@@ -545,7 +545,9 @@ What stops it:
    environment that holds no secrets
    ([cloud-environment.md](../development/cloud-environment.md)).
 3. The owner reviews and approves every pull request. The required checks
-   "Gradle wrapper" and "Check" must pass
+   "Gradle wrapper" and "Check" must pass. The owner decided on
+   2026-11-13 that the emulator jobs for Android 13, 14 and 15 are
+   required too, and turns that on in the ruleset
    ([ci.md](../development/ci.md#required-checks)).
 4. Owner-only paths ([CODEOWNERS](../../.github/CODEOWNERS)), and the
    [protected-paths flag](protected-paths.md), which marks a pull request
@@ -576,8 +578,11 @@ What does not:
 4. A pull request's own copy of `ci.yml` and `pr-preview.yml` runs before
    anyone reviews it, without secrets
    ([ci.md](../development/ci.md#what-a-pull-request-can-do-in-these-workflows)).
-5. The emulator jobs are not required checks
-   ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
+5. The emulator job for Android 17 is not a required check, while its
+   image crashes Android's system process. The owner decides again at
+   the Phase 2 gate
+   ([ci.md](../development/ci.md#the-emulator-jobs),
+   [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 
 ## Out of scope
 
@@ -1082,7 +1087,10 @@ Status: **Not met.**
   ([install.md](../user/install.md#updates)).
 - Only the newest release of each app gets security fixes
   ([SECURITY.md](../../SECURITY.md)).
-- Open: whether the suite should have a way to make users update.
+- Accepted deviation, decided by the owner on 2026-11-13: no forced
+  update. Data apps have no network, and updates come through Obtainium.
+  Step 5.1 decides again for the Sync app
+  ([PROMPTS.md](../development/PROMPTS.md#51-protocol-design)).
 
 **MASVS-CODE-3: The app only uses software components without known
 vulnerabilities.**
@@ -1090,7 +1098,8 @@ Status: **Partly met.**
 
 - MASWE-0044, known vulnerabilities: not met. No scan for known
   vulnerabilities runs (MASTG-TEST-0272 and 0274). Plan section 17 lists
-  code scanning as still to set up. Open.
+  code scanning as still to set up. Open. Step 2.6 decides how, before
+  Water's first release.
 - MASWE-0045, the compiler's security features: does not apply. The apps
   have no native code (hard rule 2). Grammar's Rust code is the later
   exception, under its own
@@ -1181,7 +1190,7 @@ Status: **Partly met.**
 
 - MASWE-0072, a privacy policy: not met. There is no privacy policy
   page. The privacy claims are in the [README](../../README.md) and on
-  the hub's home page. Open.
+  the hub's home page. Open. Step 2.6 writes the page.
 - MASWE-0073, declared data: not written yet. The data inventory, what
   each app stores and where, is planned ([README.md](README.md)). It is
   due with Water (step 2.6).
@@ -1236,7 +1245,9 @@ page above.
 | Question | Decision |
 |---|---|
 | The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted. Confirmed by the owner on 2026-11-13 ([Status words](#status-words)). |
-| The points under [Found while writing this page](#found-while-writing-this-page) | They stay Open. The owner decides a step for each at the Phase 1 gate ([PROMPTS.md](../development/PROMPTS.md#phase-1-gate-you)). |
+| The points under [Found while writing this page](#found-while-writing-this-page) | Decided at the Phase 1 gate, on 2026-11-13: a step for each, written next to the point. The points stay Open until their step is done, except point 5, which is an accepted deviation. |
+| Required checks | The emulator jobs for Android 13, 14 and 15 become required. The job for Android 17 does not, for now. The owner decides again at the Phase 2 gate ([ci.md](../development/ci.md#the-emulator-jobs)). |
+| The seventh deviation | No forced update (MASVS-CODE-2). Accepted by the owner on 2026-11-13. Step 5.1 decides again for the Sync app. |
 | The name of Claude's machine account | `shkriuss-bot`. It has worked since Phase 0. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
 
 ## Open questions
@@ -1317,10 +1328,10 @@ Other:
     ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md),
     point 5).
 18. The rehearsal of restoring and rotating the signing key, and the
-    decision record a rotation needs
+    decision record a rotation needs. Step 2.7
     ([ADR 0013](../adr/0013-signing-key-custody-and-rotation.md)).
-19. Whether the emulator jobs become required checks, and their
-    unpinned images
+19. Whether the emulator job for Android 17 becomes required (decided
+    again at the Phase 2 gate), and the unpinned images
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 20. The path of any signing configuration inside the Gradle project
     ([CODEOWNERS](../../.github/CODEOWNERS)).
@@ -1329,27 +1340,51 @@ Other:
 
 ### Found while writing this page
 
-Nothing decides these yet. This page proposes no answer. The owner
-decides a step for each of them at the Phase 1 gate
-([PROMPTS.md](../development/PROMPTS.md#phase-1-gate-you)).
+The owner decided a step for each point at the Phase 1 gate, on
+2026-11-13. The steps are in
+[PROMPTS.md](../development/PROMPTS.md#phase-1-gate-you). A point stays
+Open until its step is done.
 
 1. No build check makes sure that every app turns Android's own backup
    and device transfer off (STORAGE-2).
+   **Step 1.9**, "Build checks from the threat model".
 2. No build check refuses a WebView or code loaded at runtime (hard
    rule 1; PLATFORM-2, CODE-4).
+   **Step 1.9.** If a library that ships today trips the check, the
+   session stops and tells the owner which.
 3. Logging of user content is tested only in `core/crypto`
    (STORAGE-2).
+   **Step 1.9**: one check for all modules that main code does not log.
 4. Nothing scans the dependencies for known vulnerabilities (CODE-3).
+   **Step 2.6** decides how, before Water's first release. It first
+   tries what GitHub offers by itself.
 5. There is no way to make users update (CODE-2).
+   **Decided now: no forced update.** Data apps have no network, and
+   updates come through Obtainium. An accepted deviation. **Step 5.1**
+   decides again for the Sync app.
 6. The Sync app's TLS settings, and whether it pins the server
    (NETWORK-1 and NETWORK-2, Phase 5).
+   **Step 5.1.**
 7. Protection against overlays, and marking views as sensitive for
    accessibility services (PLATFORM-3, CODE-1).
+   **Step 1.10**, "Overlays and accessibility data on the security
+   screens". It decides with the owner. A new permission needs its ADR.
 8. There is no privacy policy page (PRIVACY-3).
+   **Step 2.6**: a privacy page in the user guide and on the hub site.
 9. How the owner's GitHub and Cloudflare accounts are protected, for
    example by a second factor. It is not documented.
+   The owner checks their accounts themselves. **Step 2.6** asks the
+   owner what to record. Only the rule goes into the repository, no
+   details of the accounts.
 10. The domain's registrar lock, DNSSEC and CAA records. They are not
     documented.
+    As point 9: the owner checks the domain themselves, and step 2.6
+    asks what to record.
 11. What to do if the signing key is stolen.
+    **Step 2.7**: the restore and rotation rehearsal with a throwaway
+    key (ADR 0013, point 8), and the decision record for a rotation and
+    for a stolen key. It can run at any time, and is done before the
+    first data app is released.
 12. Whether the recovery words alone can add a device to the sync
     server (Phase 5).
+    **Step 5.1.**

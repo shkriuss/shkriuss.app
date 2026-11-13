@@ -21,7 +21,7 @@ the tests compile.
 | Test runner | The project's own, `InstrumentedTestRunner` in `core/testing`, on Android's `Instrumentation` and JUnit 4 |
 | Test libraries | None added |
 | Decision | [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md) |
-| Required checks | Not yet. The owner decides at the Phase 1 gate ([Decided](#decided)). |
+| Required checks | Android 13, 14 and 15. Not Android 17, for now ([Decided](#decided)). |
 
 ## How a module gets instrumented tests
 
@@ -619,9 +619,12 @@ The owner's decisions on
 1. **The runner.** ADR 0028 is accepted: the project's own runner, shell
    steps and AOSP images. A test class that the suite does not list
    fails the build.
-2. **Required checks.** Not yet. The four jobs keep running on every
-   pull request. The owner decides at the Phase 1 gate, after seeing how
-   stable they are ([ci.md](ci.md#required-checks)).
+2. **Required checks.** Decided at the Phase 1 gate, on 2026-11-13.
+   "Emulator (Android 13)", "(Android 14)" and "(Android 15)" become
+   required checks. "Emulator (Android 17)" does not, while its image
+   crashes Android's system process (point 3 of
+   [What the tests showed](#what-the-tests-showed)). The owner decides
+   again at the Phase 2 gate ([ci.md](ci.md#the-emulator-jobs)).
 3. **Pinning.** The emulator and the system images are not pinned to a
    revision. `sdkmanager` takes the newest, and the job writes the
    installed revisions into its log. A new revision can fix a fault,

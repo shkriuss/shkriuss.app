@@ -42,6 +42,10 @@
 7. Key rotation uses APK signature scheme v3.1 (Android 13 and later).
 8. Restoring the key and rotating it are rehearsed with a throwaway key
    before the first public release.
+   - Catalog 0.1.0 and 0.2.0 were released before the rehearsal. It is
+     now step 2.7 of [PROMPTS.md](../development/PROMPTS.md#27-restore-and-rotation-rehearsal).
+     It can run at any time, and must be done before the first data app
+     is released.
 9. Preview builds use a throwaway key and the application ID suffix
    `.preview`, so they install next to the real app.
 10. The encrypted backup:

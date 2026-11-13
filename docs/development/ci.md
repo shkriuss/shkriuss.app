@@ -450,19 +450,56 @@ The preview jobs are not required. They run only when a pull request
 touches an app, so a required preview would block every docs-only pull
 request.
 
-The four emulator jobs are not required for now. The owner's decision on
-[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24):
+### The emulator jobs
 
-- They keep running on every pull request and every push to `main`.
-- The owner decides at the Phase 1 gate whether they become required,
-  after seeing how stable they are.
-- Until then a red emulator job does not block a merge. Read it all the
-  same: it means a test of the hardware keys failed, or the emulator did.
+The owner's decision at the Phase 1 gate, on 2026-11-13, after
+[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24) first
+left the question open:
 
-To require them later, add each of the four names in step 4, for example
-`Emulator (Android 13)`.
+- "Emulator (Android 13)", "Emulator (Android 14)" and "Emulator (Android
+  15)" become required checks. The owner turns them on in the ruleset
+  (the steps are below). Until the owner has done that, a red emulator
+  job does not block a merge. Read it all the same.
+- "Emulator (Android 17)" stays **not required**. Its system image
+  crashes Android's own system process when a screen of the tests closes
+  ([emulator-tests.md](emulator-tests.md#what-the-tests-showed), point
+  3; pull requests
+  [26](https://github.com/shkriuss/shkriuss.app/pull/26) and
+  [30](https://github.com/shkriuss/shkriuss.app/pull/30)). The job keeps
+  running on every pull request and every push to `main`. A red result
+  is information, not a block.
+- The owner decides again at the Phase 2 gate whether "Emulator (Android
+  17)" becomes required.
 
-What a required check proves: that the jobs named "Gradle wrapper" and
-"Check" passed, as the pull request's own copy of `ci.yml` defines them. A
+A pull request that renames one of the emulator jobs, or changes the
+list of Android versions, must say so in its description. Otherwise
+every pull request waits for a check that never comes.
+
+To add the three checks, on a phone:
+
+1. Open `github.com/shkriuss/shkriuss.app/settings/rules` in the browser.
+2. Tap the ruleset that protects `main`.
+3. Under **Require status checks to pass**, tap **Add checks**. GitHub
+   lists only checks that have run, and the emulator jobs have.
+4. Type `Emulator (Android 13)` and pick it. Do the same for `Emulator
+   (Android 14)` and `Emulator (Android 15)`. Do not add `Emulator
+   (Android 17)`.
+5. Next to each of the three, set the source to **GitHub Actions**, not
+   "any source".
+6. Check the list. It must show five checks: "Gradle wrapper", "Check"
+   and the three emulator jobs.
+7. Tap **Save changes**.
+
+If `main` is protected by a branch protection rule instead of a ruleset:
+open `github.com/shkriuss/shkriuss.app/settings/branches`, tap **Edit** on
+the rule for `main`, add the same three checks, and tap **Save changes**.
+
+If an emulator job fails with a fault of the emulator and not of the
+tests, run it again with **Re-run failed jobs**. If it fails the same way
+on several pull requests, tell Claude in a session. Do not take the check
+out of the ruleset to get a merge through.
+
+What a required check proves: that the jobs named "Gradle wrapper",
+"Check" and the three emulator jobs passed, as the pull request's own copy of `ci.yml` defines them. A
 pull request that changes `ci.yml` can change what they do. So read every
 change to `.github/` yourself before you approve it.
