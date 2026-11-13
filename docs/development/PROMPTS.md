@@ -595,6 +595,8 @@ rest of the gate waits for steps 1.3 to 1.7.
 1. Install Catalog on the Pixel 9 Pro, Pixel Tablet and Pixel 6a.
 2. Look at every page in light and dark, with large font, with TalkBack.
 3. Write what you dislike as a comment. Use prompt R3 to change it.
+4. Decide a step for each point under "Found while writing this page"
+   in [threat-model.md](../security/threat-model.md#found-while-writing-this-page).
 
 ---
 

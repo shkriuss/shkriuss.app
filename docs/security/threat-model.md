@@ -8,9 +8,11 @@ does not. It ends with the OWASP MASVS controls and every open question.
 - Sources: section 10 of the [plan](../plan/PLAN.md#10-security-and-privacy),
   [crypto-design.md](crypto-design.md), and the decision records in
   [docs/adr](../adr/README.md).
-- This page adds no decision. It says what other pages decided, and
-  where. Where nothing is decided, it says **Open**. Every open point is
-  listed at the [end](#open-questions).
+- This page adds no decision of its own. It says what other pages
+  decided, and where. The owner's decisions on this page are under
+  [Decided on pull request 30](#decided-on-pull-request-30). Where
+  nothing is decided, it says **Open**. Every open point is listed at
+  the [end](#open-questions).
 - What exists today: Catalog and the core modules
   ([modules.md](../architecture/modules.md)). No data app is released.
   There is no Sync app and no sync server yet. Where this page speaks of
@@ -484,7 +486,8 @@ What does not:
    ([test-a-pull-request.md](../development/test-a-pull-request.md#safety)).
    A taken-over account could put anything into one.
 
-Open: the account's name is not recorded yet (working-with-claude.md).
+The account is `shkriuss-bot`. It has worked since Phase 0
+([working-with-claude.md](../development/working-with-claude.md#claude)).
 
 #### The Cloudflare account
 
@@ -814,7 +817,8 @@ controls. The resilience profile is skipped on purpose (plan section 10).
   not built yet is Open.
 - **Partly met.** Some weaknesses are handled and some are not. Each gap
   is named. A gap that a decision chose is a **deviation**, with a link
-  to the decision.
+  to the decision. The owner confirmed every deviation on this page as
+  accepted on 2026-11-13.
 - **Not met.** Nothing handles it.
 - **Does not apply.** The suite has nothing the control is about. The
   reason is given.
@@ -898,7 +902,7 @@ Status: **Partly met.**
     code never does.
   - MASWE-0014, deriving keys: HKDF-SHA256 through Tink, from a random
     256-bit key ([crypto-design.md](crypto-design.md#deriving-keys)).
-- Deviations, decided:
+- Accepted deviations:
   - MASWE-0015, rotation: keys change on events, not by the calendar.
     Keysets can hold several keys, and every blob names its key
     ([crypto-design.md](crypto-design.md#key-rotation)).
@@ -942,7 +946,7 @@ Status: **Partly met.**
   through a system prompt that holds a Keystore cipher, one operation per
   prompt (MASWE-0020, MASTG-TEST-0330;
   [crypto-design.md](crypto-design.md#the-system-prompt)).
-- Deviations, decided:
+- Accepted deviations:
   - Records are behind the gate only. For them, the prompt's success is
     an event the app acts on, not a key (MASWE-0020, MASTG-TEST-0327).
     Decided in [ADR 0004](../adr/0004-room-on-system-sqlite-no-sqlcipher.md).
@@ -1224,6 +1228,17 @@ dynamic code loading
 It protects the app through the platform. It is not a resilience
 control.
 
+## Decided on pull request 30
+
+The owner's decisions of 2026-11-13 on this page. Each is built into the
+page above.
+
+| Question | Decision |
+|---|---|
+| The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted. Confirmed by the owner on 2026-11-13 ([Status words](#status-words)). |
+| The points under [Found while writing this page](#found-while-writing-this-page) | They stay Open. The owner decides a step for each at the Phase 1 gate ([PROMPTS.md](../development/PROMPTS.md#phase-1-gate-you)). |
+| The name of Claude's machine account | `shkriuss-bot`. It has worked since Phase 0. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
+
 ## Open questions
 
 Everything this page marks Open. None is decided here.
@@ -1309,14 +1324,14 @@ Other:
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 20. The path of any signing configuration inside the Gradle project
     ([CODEOWNERS](../../.github/CODEOWNERS)).
-21. The name of Claude's machine account
-    ([working-with-claude.md](../development/working-with-claude.md#claude)).
-22. Code scanning for Kotlin
+21. Code scanning for Kotlin
     ([plan section 17](../plan/PLAN.md#17-to-confirm-in-phase-0)).
 
 ### Found while writing this page
 
-Nothing decides these yet. This page proposes no answer.
+Nothing decides these yet. This page proposes no answer. The owner
+decides a step for each of them at the Phase 1 gate
+([PROMPTS.md](../development/PROMPTS.md#phase-1-gate-you)).
 
 1. No build check makes sure that every app turns Android's own backup
    and device transfer off (STORAGE-2).
