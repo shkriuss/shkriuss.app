@@ -121,6 +121,31 @@ opens the app lock screen ([The app lock](app-lock.md)).
 Screenshots and screen recordings are blocked on every one of these
 screens, and the app shows blank in the list of recent apps.
 
+## Other apps on your phone
+
+The screens of the recovery key keep other apps away. So do the
+security screen and the app lock screen.
+
+1. **Apps that draw over other apps disappear** while one of these
+   screens shows, and come back when you leave it. Examples are screen
+   dimmers, chat bubbles of other apps, and the buttons of screen
+   recorders. Android's own parts stay: the status bar, the keyboard,
+   notifications and TalkBack. So no other app can put a fake screen
+   over your words.
+2. **A tap under another app's window does nothing.** If a tap seems
+   to do nothing, close the app that draws over other apps, then try
+   again. To find it: open Android's settings, then **Apps**, then
+   **Special app access**, then **Display over other apps**.
+3. **Accessibility apps, on Android 14 and later.** Only apps that
+   declare themselves accessibility tools can read these screens. TalkBack
+   is such an app.
+   - An assistive app that does not declare itself an accessibility tool
+     cannot read these screens on Android 14 and later.
+   - A harmful app can falsely claim to be an accessibility tool. Only
+     turn on accessibility apps you trust.
+   - On Android 13, every accessibility app you turned on can read these
+     screens.
+
 ## If setting up stopped
 
 If the app was stopped while it stored its keys, the security screen

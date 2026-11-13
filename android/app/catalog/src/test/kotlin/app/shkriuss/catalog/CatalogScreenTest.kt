@@ -1,5 +1,6 @@
 package app.shkriuss.catalog
 
+import android.view.WindowManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -14,6 +15,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import app.shkriuss.core.design.ShkSpacing
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -66,6 +69,32 @@ class CatalogScreenTest {
             SemanticsMatcher.expectValue(SemanticsProperties.ContentDescription, listOf("Text, contrast 18.34 to 1")),
         ).performScrollTo().assertIsDisplayed()
     }
+
+    @Test
+    fun theProtectionSwitchProtectsThePageAsAnAppProtectsTheScreens() {
+        listOf(CatalogPage.RecoveryKeyScreens, CatalogPage.AppLockScreens).forEach { page ->
+            compose.onNode(hasText(text(page.title))).performScrollTo().performClick()
+            val decor = compose.activity.window.decorView
+            assertFalse("${page.name}: off at first, so screenshots can be sent", isSecure())
+            assertFalse(decor.filterTouchesWhenObscured)
+
+            compose.onNode(hasText(text(R.string.recovery_key_block))).performScrollTo().performClick()
+            compose.waitForIdle()
+            assertTrue("${page.name}: screenshots blocked", isSecure())
+            assertTrue("${page.name}: a tap under another app's window does nothing", decor.filterTouchesWhenObscured)
+            assertTrue("${page.name}: only accessibility tools can read it", decor.isAccessibilityDataSensitive)
+
+            compose.onNode(hasText(text(R.string.recovery_key_block))).performClick()
+            compose.waitForIdle()
+            assertFalse(isSecure())
+            assertFalse(decor.filterTouchesWhenObscured)
+            assertFalse(decor.isAccessibilityDataSensitive)
+
+            compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        }
+    }
+
+    private fun isSecure() = compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
 
     private fun text(id: Int): String = compose.activity.getString(id)
 }

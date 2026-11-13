@@ -29,6 +29,7 @@ did:
 |---|---|---|
 | `app.shkriuss.catalog.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Catalog's manifest. `androidx.core` uses it only on Android 12 and older, and the minimum is Android 13. |
 | `android.permission.USE_BIOMETRIC` | `core/security` | Removed in Catalog's manifest. Catalog shows the recovery key screens with sample data, holds no keys and never shows the system prompt ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). |
+| `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | Removed in Catalog's manifest. Catalog has none of the screens that hide other apps' windows, and no app lock ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Its switch **Protect this page** does the rest of what the screens do, which needs no permission. |
 
 Other components that libraries add, none of them a permission:
 
@@ -113,26 +114,41 @@ receiver that runs before the first unlock, or another broadcast.
 
 `core/security` holds the recovery key screens, the security screen and
 the app lock ([security-screens.md](../architecture/security-screens.md)).
-Its manifest declares one permission and six screens. Every app that uses
-the module gets them when the app is built. No app uses it yet. The
+Its manifest declares two permissions and six screens. Every app that
+uses the module gets them when the app is built. No app uses it yet. The
 first one will be Water.
 
-An app does not get the permission unnoticed. The APK rules check fails
-the app until the owner allows it for that app (step 2.5 for Water), and
-this page then lists it under the app.
+An app does not get the permissions unnoticed. The APK rules check fails
+the app until the owner allows them for that app (step 2.5 for Water),
+and this page then lists them under the app.
 
-### Permission
+An app does not lose them unnoticed either:
+
+1. The unit test `ManifestTest` in `core/security` fails unless the
+   module's manifest asks for exactly these two permissions.
+2. From step 2.5, the APK rules check fails an app whose merged manifest
+   declares a screen of `core/security` but does not request both
+   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+3. Without `HIDE_OVERLAY_WINDOWS`, the screens still work. They only no
+   longer hide other apps' windows.
+
+### Permissions
 
 | Permission | Who grants it | Why |
 |---|---|---|
 | `android.permission.USE_BIOMETRIC` | Android, at install. The user is not asked and cannot take it away. | To show Android's own system prompt: a fingerprint, or the phone's PIN, pattern or password. Two keys need it for every use: the Recovery guard of the kept recovery key, and the Lock key of the app lock ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). |
+| `android.permission.HIDE_OVERLAY_WINDOWS` | Android, at install. The user is not asked and cannot take it away. | To hide the windows that other apps draw over other apps, while a screen of `core/security` shows and while the app is locked. A fake screen or a see-through window cannot then sit over the words or the lock screen ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). |
 
-What it does not allow:
+What they do not allow:
 
-- It gives no access to any data, and it cannot read a fingerprint. The
-  app learns only whether the user answered the prompt.
-- It cannot unlock anything by itself. Only the Keystore decides, after
-  the user answered.
+- Neither gives access to any data. `USE_BIOMETRIC` cannot read a
+  fingerprint. The app learns only whether the user answered the prompt.
+- `USE_BIOMETRIC` cannot unlock anything by itself. Only the Keystore
+  decides, after the user answered.
+- `HIDE_OVERLAY_WINDOWS` hides other apps' windows only while the app's
+  own screen shows. It cannot see, read or close other apps. Android's
+  own windows stay: the status bar, the keyboard, TalkBack,
+  notifications and the system prompt.
 
 ### Screens
 
@@ -150,6 +166,10 @@ What it does not allow:
   recording and the recent-apps preview, and keeps autofill and content
   capture away. The app lock screen follows the app's own setting, as
   every screen of the app does.
+- Every screen hides other apps' windows, ignores a tap under another
+  app's window, and on Android 14 and later speaks only to accessibility
+  tools
+  ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
 
 ### A receiver registered at runtime
 

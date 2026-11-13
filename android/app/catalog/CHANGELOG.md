@@ -3,6 +3,27 @@
 Catalog (`app.shkriuss.catalog`) is the design gallery used during
 development.
 
+## Unreleased
+
+- **Recovery key screens** and **App lock screens**: the switch is now
+  **Protect this page, as in an app**, under the heading **Protection**.
+  It does what the screens of `core/security` do in an app
+  ([security-screens.md](../../../docs/architecture/security-screens.md#overlays-and-accessibility-services)):
+  - Android refuses a screenshot, and the recent apps show Catalog
+    blank, as before.
+  - A tap where another app's window covers the page does nothing.
+  - On Android 14 and later, only accessibility tools, such as TalkBack,
+    can read the page or act on it. A dialog opened from a sample, such
+    as **Give up these files**, is protected in the same way.
+  - A line under the switch says so. In an app, these screens also hide
+    other apps' windows. Catalog cannot: that needs a permission it does
+    not have.
+- Turning the switch off now takes the protection away at once. Before,
+  the page stayed protected until it was closed.
+- Permissions: still none. Catalog also removes `HIDE_OVERLAY_WINDOWS`,
+  which `core/security` now asks for
+  ([ADR 0033](../../../docs/adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+
 ## 0.3.0 (2026-11-13)
 
 Released as `catalog-v0.3.0`.

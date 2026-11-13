@@ -28,6 +28,16 @@
         android:name="android.permission.USE_BIOMETRIC"
         tools:node="remove" />
 
+    <!--
+        core/security asks for this to hide other apps' windows over its
+        screens. Catalog removes those screens and has no app lock, so it
+        never hides them. Its switch "Protect this page" does the rest,
+        which needs no permission. Remove it (ADR 0033).
+    -->
+    <uses-permission
+        android:name="android.permission.HIDE_OVERLAY_WINDOWS"
+        tools:node="remove" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

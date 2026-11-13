@@ -1,8 +1,11 @@
 package app.shkriuss.core.security
 
+import android.app.Activity
+import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Bundle
 import android.os.Looper
 import android.os.PowerManager
 import android.view.WindowManager
@@ -220,6 +223,91 @@ class AppLockWatcherTest {
     }
 
     private fun ComponentActivity.isSecure() = window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
+
+    @Test
+    fun whileTheAppIsLockedEveryScreenOfItHidesOtherAppsWindows() {
+        app.allowHidingOtherAppsWindows(true)
+        turnOn()
+        val screen = screen()
+        assertFalse("unlocked: the app's screens leave other apps alone", screen.get().hidesOtherAppsWindows())
+
+        leave(screen)
+        assertLocked()
+        assertTrue(screen.get().hidesOtherAppsWindows())
+        assertTrue("a screen that starts while locked too", screen().get().hidesOtherAppsWindows())
+
+        app.crypto.appLock.beginUnlock().finish()
+        watcher.unlocked()
+        assertOpen()
+        assertFalse(screen.get().hidesOtherAppsWindows())
+    }
+
+    @Test
+    fun aLockOnTheWayBackHidesOtherAppsWindowsBeforeTheScreenStarts() {
+        app.allowHidingOtherAppsWindows(true)
+        turnOn()
+        watcher.lockAfter = LockAfter.FIVE_MINUTES
+        val screen = screen()
+        leave(screen)
+        assertFalse(screen.get().hidesOtherAppsWindows())
+        var hidingWhenStarted: Boolean? = null
+        app.registerActivityLifecycleCallbacks(
+            object : EmptyLifecycleCallbacks() {
+                // Called after the watcher's own, before onStart: Android has not drawn the screen again yet.
+                override fun onActivityPreStarted(activity: Activity) {
+                    hidingWhenStarted = activity.hidesOtherAppsWindows()
+                }
+            },
+        )
+
+        app.now += FIVE_MINUTES
+        comeBack(screen)
+
+        assertLocked()
+        assertEquals("set before the screen starts again and is drawn", true, hidingWhenStarted)
+    }
+
+    @Test
+    fun theScreensOfTheModuleHideOtherAppsWindowsAlsoWhileTheAppIsUnlocked() {
+        app.allowHidingOtherAppsWindows(true)
+        turnOn()
+        val words = Robolectric.buildActivity(EnterRecoveryKeyActivity::class.java).setup().get()
+        val settings = Robolectric.buildActivity(AppLockActivity::class.java).setup().get()
+
+        assertOpen()
+        assertTrue(words.hidesOtherAppsWindows())
+        assertTrue(settings.hidesOtherAppsWindows())
+    }
+
+    @Test
+    fun withoutThePermissionALockedAppStillShowsItsLockScreen() {
+        app.allowHidingOtherAppsWindows(false)
+        turnOn()
+        val screen = screen()
+
+        leave(screen)
+        comeBack(screen)
+
+        assertLocked()
+        assertFalse(screen.get().hidesOtherAppsWindows())
+    }
+
+    /** Lifecycle callbacks that do nothing, so a test overrides only the one it needs. */
+    private open class EmptyLifecycleCallbacks : Application.ActivityLifecycleCallbacks {
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+
+        override fun onActivityStarted(activity: Activity) = Unit
+
+        override fun onActivityResumed(activity: Activity) = Unit
+
+        override fun onActivityPaused(activity: Activity) = Unit
+
+        override fun onActivityStopped(activity: Activity) = Unit
+
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+
+        override fun onActivityDestroyed(activity: Activity) = Unit
+    }
 
     // Notifications.
 

@@ -1,12 +1,18 @@
 package app.shkriuss.core.security
 
+import android.Manifest
+import android.app.Activity
 import android.app.Application
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.ShkCrypto
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import java.io.File
 import java.util.concurrent.Executor
 import kotlinx.coroutines.Dispatchers
+import org.robolectric.Shadows.shadowOf
 
 /** The app name of the tests. Keys are derived for it as for Water. */
 internal val testAppName: AppName = AppName.of("water")
@@ -55,3 +61,38 @@ open class TestHostApp : Application(), SecurityHost {
 class ForgetfulHostApp : TestHostApp() {
     override fun startWatcher() = Unit
 }
+
+/** Gives the app `HIDE_OVERLAY_WINDOWS`, as Android does at install, or takes it away, as an app's manifest could. */
+internal fun Application.allowHidingOtherAppsWindows(allowed: Boolean) {
+    val app = shadowOf(this)
+    if (allowed) {
+        app.grantPermissions(Manifest.permission.HIDE_OVERLAY_WINDOWS)
+    } else {
+        app.denyPermissions(Manifest.permission.HIDE_OVERLAY_WINDOWS)
+    }
+}
+
+/**
+ * True if Android hides other apps' windows while this window shows. The
+ * flag that `Window.setHideOverlayWindows` sets is not public, so the test
+ * reads it by reflection.
+ */
+internal fun Activity.hidesOtherAppsWindows(): Boolean {
+    val params = WindowManager.LayoutParams::class.java
+    val flags = params.getField("privateFlags").getInt(window.attributes)
+    val hide = params.getField("SYSTEM_FLAG_HIDE_NON_SYSTEM_OVERLAY_WINDOWS").getInt(null)
+    return flags and hide != 0
+}
+
+/**
+ * True if the window whose root view this is ignores covered taps, and
+ * every view in it, Compose's own view too, speaks only to accessibility
+ * tools (`shieldWindow`).
+ */
+internal fun View.isShielded(): Boolean = filterTouchesWhenObscured && everyView().all { it.isAccessibilityDataSensitive }
+
+/** True if the window whose root view this is ignores no tap and speaks to every accessibility service. */
+internal fun View.isNotShielded(): Boolean = !filterTouchesWhenObscured && everyView().none { it.isAccessibilityDataSensitive }
+
+private fun View.everyView(): List<View> =
+    listOf(this) + if (this is ViewGroup) (0 until childCount).flatMap { getChildAt(it).everyView() } else emptyList()

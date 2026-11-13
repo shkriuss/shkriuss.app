@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.HardwareKeyKind
@@ -150,6 +151,7 @@ private fun RepairSection(state: SecurityState, actions: SecurityActions) {
             ),
             dismissAction = ShkDialogAction(stringResource(R.string.sec_cancel), { asking = false }),
             onDismissRequest = { asking = false },
+            modifier = Modifier.shieldedLike(LocalView.current),
         )
     }
 }
@@ -168,6 +170,7 @@ private fun StartOverDialog(actions: SecurityActions, onDismiss: () -> Unit) {
         ),
         dismissAction = ShkDialogAction(stringResource(R.string.sec_cancel), onDismiss),
         onDismissRequest = onDismiss,
+        modifier = Modifier.shieldedLike(LocalView.current),
         content = {
             ShkTonalButton(
                 text = stringResource(R.string.sec_start_over_enter),

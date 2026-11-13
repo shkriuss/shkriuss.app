@@ -27,6 +27,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -65,6 +66,29 @@ class SecurityActivitiesTest {
                 View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS,
                 activity.window.decorView.importantForContentCapture,
             )
+        }
+    }
+
+    @Test
+    fun everyScreenIgnoresCoveredTapsSpeaksOnlyToAccessibilityToolsAndHidesOtherAppsWindows() {
+        compose.activity.application.allowHidingOtherAppsWindows(true)
+        everyScreen.forEach { type ->
+            val activity: ComponentActivity = Robolectric.buildActivity(type).setup().get()
+            val name = type.simpleName
+            assertTrue("$name: covered taps ignored, every view only for accessibility tools", activity.window.decorView.isShielded())
+            assertTrue("$name: other apps' windows hidden", activity.hidesOtherAppsWindows())
+        }
+    }
+
+    @Test
+    fun withoutThePermissionEveryScreenStillStartsAndKeepsTheRestOfItsProtection() {
+        compose.activity.application.allowHidingOtherAppsWindows(false)
+        everyScreen.forEach { type ->
+            val activity: ComponentActivity = Robolectric.buildActivity(type).setup().get()
+            val name = type.simpleName
+            assertFalse("$name: Android would refuse, so nothing is asked", activity.hidesOtherAppsWindows())
+            assertTrue(name, activity.window.decorView.isShielded())
+            if (activity is WordsScreen) assertTrue(name, activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
         }
     }
 
@@ -179,5 +203,15 @@ class SecurityActivitiesTest {
 
     private companion object {
         const val MIN_TOUCH_DP = 48f
+
+        /** The six screens of the module. */
+        val everyScreen: List<Class<out ComponentActivity>> = listOf(
+            SecurityActivity::class.java,
+            CreateRecoveryKeyActivity::class.java,
+            EnterRecoveryKeyActivity::class.java,
+            ShowRecoveryKeyActivity::class.java,
+            AppLockActivity::class.java,
+            TurnOnAppLockActivity::class.java,
+        )
     }
 }

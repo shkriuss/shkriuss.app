@@ -7,7 +7,9 @@ them. They build on `core/crypto` and follow
 "The app lock".
 
 Built in Phase 1, step 7: the recovery key screens in session A, the
-app lock in session B ([The app lock](#the-app-lock)).
+app lock in session B ([The app lock](#the-app-lock)). Step 1.10 added
+the protection against other apps
+([Overlays and accessibility services](#overlays-and-accessibility-services)).
 
 ## What an app does
 
@@ -24,10 +26,11 @@ app lock in session B ([The app lock](#the-app-lock)).
      start.
    - `enterIntent`: enter the words of a recovery key the user has.
    - `appLockIntent`: the app lock screen, from the app's settings.
-3. It gets the permission `USE_BIOMETRIC` and the six screens through
-   the module's manifest
+3. It gets the permissions `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`
+   and the six screens through the module's manifest
    ([permissions.md](../security/permissions.md#apps-that-use-coresecurity),
-   [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)).
+   [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md),
+   [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
 
 ## The screens
 
@@ -44,7 +47,8 @@ Each flow is an activity of its own. None is exported.
 
 Why activities and not screens inside the app's own window:
 
-- The window gets `FLAG_SECURE` in `onCreate`, before anything is drawn.
+- The window gets `FLAG_SECURE` and the shield against other apps in
+  `onCreate`, before anything is drawn.
 - A flow's ViewModel, and the recovery key with it, ends when its
   activity finishes.
 - A turn of the phone keeps the key in the ViewModel. It is never in a
@@ -74,13 +78,103 @@ Why activities and not screens inside the app's own window:
    under it at once, as its error, which TalkBack reads
    (`WordInput.startsNoWord`). The create flow's four fields and the
    entry field are the same `WordField`.
-6. Dialogs inherit `FLAG_SECURE` from the screen.
+6. Dialogs inherit `FLAG_SECURE` from the screen, and take its shield
+   against other apps
+   ([Overlays and accessibility services](#overlays-and-accessibility-services)).
 7. The words leave the show screen when it stops: the phone's screen
    turns off or another app comes to the front. A new prompt shows them
    again. The create and enter flows keep the key while stopped, because
    nothing is stored yet and a screen times out while the user writes.
 8. A preview build shows a warning on every screen: never type your real
    recovery words into it.
+9. Other apps' windows are hidden, a tap under another app's window does
+   nothing, and on Android 14 and later only accessibility tools can read
+   the screen
+   ([Overlays and accessibility services](#overlays-and-accessibility-services)).
+
+## Overlays and accessibility services
+
+Decided by the owner in step 1.10, on 2026-11-13
+([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+The ADR says what Android 13 to 17 offers, and why these choices.
+
+| Where | Other apps' windows | A tap under another app's window | Accessibility services, Android 14 and later |
+|---|---|---|---|
+| The six screens | Hidden while the screen shows | Does nothing | Only accessibility tools |
+| Their four dialogs | Hidden: the screen behind still shows | Does nothing | Only accessibility tools |
+| The lock screen | Hidden while the app is locked | Reaches the screen | Every service |
+
+How it is built, in `WindowShield.kt`:
+
+1. `shieldWindow` sets `filterTouchesWhenObscured` on the window's root
+   view. On Android 14 and later it also calls
+   `setAccessibilityDataSensitive(YES)` there. Every view below inherits
+   both, Compose's own view too.
+   - `secureWindow` calls it, so the five screens that show or take the
+     words get it with the rest.
+   - The app lock screen calls it itself: whether it blocks screenshots
+     follows the app's setting.
+2. `hideOtherAppsWindows` calls Android's `Window.setHideOverlayWindows`.
+   - Each of the six screens calls it in `onCreate`.
+   - They are `ShieldedScreen`s, so the app lock watcher leaves that part
+     of their window alone.
+3. A dialog is a window of its own. `Modifier.shieldedLike` copies the
+   shield of the screen behind it onto the dialog's window when the
+   dialog is drawn.
+   - The four dialogs of the security screen and the app lock screen
+     pass it.
+   - A notice of the app lock over an app's screen passes it too. That
+     screen has no shield, so neither has the notice.
+4. While the gate is `LOCKED`, the watcher has every other window of the
+   app hide other apps' windows.
+   - It sets this when the lock comes, in Android's callback before the
+     screen starts again.
+   - It takes it away when the gate opens.
+5. Without `HIDE_OVERLAY_WINDOWS`, Android would throw.
+   `hideOtherAppsWindows` does nothing instead, and the screen keeps the
+   rest. Two checks make sure the permission is there:
+   - `ManifestTest` checks the module's manifest;
+   - the APK rules check is to check each app from step 2.5
+     ([Open](#open)).
+
+What the user sees:
+
+- While one of these screens shows, other apps' floating windows
+  disappear: screen dimmers, chat heads, the buttons of other apps'
+  screen recorders. They come back after. Android's own windows stay:
+  the status bar, the keyboard, TalkBack, notifications and the system
+  prompt.
+- A tap under another app's window does nothing, and nothing says so.
+  With other apps' windows hidden, it hardly ever happens. The user
+  guide says to close the app that draws over others.
+- On Android 14 and later, only accessibility services that declare
+  themselves accessibility tools can read these screens or act on them.
+  - An assistive app that does not declare itself an accessibility tool
+    cannot read these screens.
+  - A harmful service can falsely claim to be a tool
+    ([threat model](../security/threat-model.md#out-of-scope)).
+  - TalkBack must keep reading them. The owner checked on 2026-11-13:
+    on the Pixel 9 Pro, with the Catalog preview of pull request 35 and
+    the switch **Protect this page, as in an app** on, TalkBack read
+    everything in the steps of that pull request.
+- Android 13 has no way to keep a window from accessibility services that
+  are not tools. There, every accessibility service the user turned on
+  can read these screens.
+
+Not covered, as accepted deviations in the
+[threat model](../security/threat-model.md#platform):
+
+1. Android 13: no accessibility marking, as above.
+2. The lock screen takes a tap under another app's window and speaks to
+   every accessibility service. It shows only the app's name and
+   "Unlock", which opens the system prompt. It must stay usable with
+   every assistive app.
+3. A tap on a screen that another window covers only elsewhere is not
+   refused. That would refuse taps whenever a video in
+   picture-in-picture overlaps the screen.
+4. The other screens of the apps hide no other app's windows. They show
+   records, not keys, and a dimmer would vanish whenever the app is
+   open.
 
 ## The system prompt
 
@@ -156,6 +250,9 @@ class WaterActivity : ComponentActivity() {
 1. While locked, the screen's content is not composed. Nothing of it is
    drawn, and TalkBack cannot reach it. A test checks that not one frame
    of it is drawn on the way back.
+   - While locked, the window hides other apps' windows. No other app
+     can draw a fake system prompt over the lock screen
+     ([Overlays and accessibility services](#overlays-and-accessibility-services)).
 2. The content's saved state is kept by a `SaveableStateHolder`, and the
    screen's ViewModels live on. So after the prompt the screen is as it
    was.
@@ -265,6 +362,10 @@ guide says so.
      `FLAG_SECURE` to every window of the app, and a plain paragraph on
      what the app lock protects.
 5. It is not behind the gate: its own prompt does that job.
+6. Like the other screens of the module, it hides other apps' windows,
+   ignores a tap under another app's window, and on Android 14 and later
+   speaks only to accessibility tools. So no other app can steer a tap
+   onto "Turn off" or "Show the text in notifications".
 
 ### Turning it on
 
@@ -317,11 +418,13 @@ file says that.
 - Catalog shows each state of the app lock screens on the page "App
   lock screens": the lock screen, the app lock screen, its dialogs drawn
   in place, the notices, and turning it on.
-- Catalog's manifest removes `USE_BIOMETRIC` and the six screens. It
-  holds no keys and has no app lock.
-- A switch on the page turns the screenshot block on, to try it on a
-  phone. It is off by default, so that the owner can send screenshots of
-  the page.
+- Catalog's manifest removes `USE_BIOMETRIC`, `HIDE_OVERLAY_WINDOWS` and
+  the six screens. It holds no keys and has no app lock.
+- The switch **Protect this page, as in an app** on both pages calls
+  `secureWindow`, to try it on a phone. It blocks screenshots and shields
+  the page and the dialogs opened from it. It cannot hide other apps'
+  windows: Catalog has no permission. It is off by default, so that the
+  owner can send screenshots of the page.
 
 ## Tests
 
@@ -330,7 +433,10 @@ file says that.
   This includes start over, repair, giving files up and a phone with no
   screen lock.
 - `SecurityActivitiesTest`: every screen blocks screenshots and keeps
-  autofill and content capture away. A word is typed and picked. Letters
+  autofill and content capture away. Every screen ignores a covered tap,
+  every view of it is marked for accessibility tools only, and it hides
+  other apps' windows. Without the permission, every screen still starts
+  and keeps the rest. A word is typed and picked. Letters
   that start no word are named under the field at once, and the next key
   takes nothing. The list shows only the words entered and the current
   one. A paste never lands. The keyboard gets a password field with no
@@ -338,6 +444,10 @@ file says that.
   target.
 - `ConfirmWordsTest`: the four fields that confirm a new key name letters
   that start no word, each under its own field.
+- `DialogShieldTest`: the four dialogs take the shield of their screen. A
+  dialog over a screen without one has none.
+- `ManifestTest`: the module asks for exactly `USE_BIOMETRIC` and
+  `HIDE_OVERLAY_WINDOWS`, and its six screens are not exported.
 - `WordInputTest`: what a word field accepts and offers, and which
   letters start no word.
 - Catalog's `SecurityScreensScreenshotTest`: every state in the eight
@@ -347,7 +457,9 @@ file says that.
   it, a screen-off broadcast in time and late, a watcher that finds no
   keys in memory starting locked, a keyset write that drops the keys,
   the window flags, `hidesNotificationText`, `onTextHidden` and the
-  notices.
+  notices. While locked, every screen of the app hides other apps'
+  windows, set before the screen starts again. The six screens of the
+  module always do. Without the permission, the lock screen still shows.
 - `AppLockGateTest`: nothing of the screen while locked, not one frame
   drawn on the way back, the screen as it was after the prompt, a closed
   prompt, Back, a picker's result kept across a lock, and the reset
@@ -366,11 +478,18 @@ file says that.
   the words after a reset turned the app lock off.
 - Catalog's `AppLockScreensScreenshotTest`: every state of the app lock
   screens in the eight configurations.
+- Catalog's `CatalogScreenTest`: the switch on both pages protects the
+  page and takes the protection away again.
 
 What a unit test cannot show: `setRecentsScreenshotEnabled`, the real
 prompt, a real keyboard, a real picker, an app that Android stops while
 a picker is open, and how a real phone delivers the screen-off
-broadcast. They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+broadcast. Also: that Android really hides other apps' windows and drops
+a covered tap, and which accessibility services it lets read a screen.
+They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+TalkBack on the shielded screens was checked already: the owner's check
+with Catalog passed on 2026-11-13
+([Overlays and accessibility services](#overlays-and-accessibility-services)).
 
 ## Open
 
@@ -388,3 +507,9 @@ broadcast. They are checked on the owner's devices with Water ([emulator-tests.m
   ([PROMPTS.md](../development/PROMPTS.md#22-to-25-build-it)).
 - How an app shows files that were given up (open question 13 of
   crypto-design.md).
+- The check that every app that uses these screens requests
+  `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Step 2.5 adds it to the APK
+  rules check, which is owner-only, with Water's allow list
+  ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
+  point 5). Until then no app uses these screens, and Catalog removes
+  both the screens and the permissions.

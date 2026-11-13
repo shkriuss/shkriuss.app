@@ -19,7 +19,6 @@ import app.shkriuss.core.crypto.SecurityLevel
 import app.shkriuss.core.design.ShkCard
 import app.shkriuss.core.design.ShkListItem
 import app.shkriuss.core.design.ShkScreen
-import app.shkriuss.core.design.ShkSwitch
 import app.shkriuss.core.security.CreateActions
 import app.shkriuss.core.security.CreateConfirm
 import app.shkriuss.core.security.CreateContent
@@ -65,8 +64,9 @@ enum class SecuritySample(@param:StringRes val title: Int) {
  * The screens of the recovery key from `core/security`, each state with
  * sample data, full window. Catalog holds no keys, so nothing here makes,
  * stores or shows a real key. In an app these screens always block
- * screenshots; here a switch does, so that the owner can still send
- * screenshots of the page.
+ * screenshots, ignore taps under other apps' windows and speak only to
+ * accessibility tools; here a switch does, so that the owner can still
+ * send screenshots of the page.
  */
 @Composable
 fun RecoveryKeyScreensPage(modifier: Modifier = Modifier) {
@@ -74,8 +74,10 @@ fun RecoveryKeyScreensPage(modifier: Modifier = Modifier) {
     var blocked by rememberSaveable { mutableStateOf(false) }
     val activity = LocalActivity.current
     DisposableEffect(blocked, activity) {
-        if (activity != null && blocked) secureWindow(activity, on = true)
-        onDispose { if (activity != null && blocked) secureWindow(activity, on = false) }
+        // The value when the effect started: when the switch goes off, the state already reads false.
+        val protect = activity != null && blocked
+        if (protect) secureWindow(activity, on = true)
+        onDispose { if (protect) secureWindow(activity, on = false) }
     }
     val sample = open
     if (sample != null) {
@@ -85,12 +87,7 @@ fun RecoveryKeyScreensPage(modifier: Modifier = Modifier) {
         ShkScreen(modifier = modifier, scrollable = true) {
             PageTitle(stringResource(R.string.page_recovery_key_title))
             PageIntro(stringResource(R.string.recovery_key_intro))
-            SectionHeading(stringResource(R.string.recovery_key_block_heading))
-            ShkSwitch(
-                text = stringResource(R.string.recovery_key_block),
-                checked = blocked,
-                onCheckedChange = { blocked = it },
-            )
+            ProtectionSwitch(checked = blocked, onCheckedChange = { blocked = it })
             SectionHeading(stringResource(R.string.recovery_key_states_heading))
             ShkCard {
                 SecuritySample.entries.forEach { entry ->

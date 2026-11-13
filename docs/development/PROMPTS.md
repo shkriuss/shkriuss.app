@@ -808,9 +808,15 @@ Steps:
   For backup and restore, use `core/backup`: the screens call
   `Backups.export`, `Backups.check` and `Backups.restore`, and the app
   calls `Backups.start()` when it starts. Decide with me when a backup is
-  checked. I am the owner and I ask you to add
-  `android.permission.USE_BIOMETRIC` for Water to the allow list of the
-  APK rules check, and nothing else in that file.
+  checked. I am the owner and I ask you to make three changes to the APK
+  rules check, `CheckApkRulesTask.kt`, and nothing else in that file:
+  add `android.permission.USE_BIOMETRIC` for Water to the allow list;
+  add `android.permission.HIDE_OVERLAY_WINDOWS` for Water to the allow
+  list; and add a rule that fails the build of an app whose merged
+  manifest declares a screen of core/security unless it requests both
+  permissions (ADR 0033). I also ask you to add the test of that rule to
+  the test files of build-logic, and, if the test is in a new file, one
+  line for that file in .github/CODEOWNERS. Nothing else in those files.
 
 ### 2.6 Release preparation
 

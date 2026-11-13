@@ -16,7 +16,6 @@ import app.shkriuss.core.crypto.RecoveryWords
 import app.shkriuss.core.design.ShkCard
 import app.shkriuss.core.design.ShkListItem
 import app.shkriuss.core.design.ShkScreen
-import app.shkriuss.core.design.ShkSwitch
 import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.core.security.AppLockActions
 import app.shkriuss.core.security.AppLockAsking
@@ -69,8 +68,10 @@ enum class AppLockSample(@param:StringRes val title: Int) {
  * The app lock screens from `core/security`, each state with sample data,
  * full window: the lock screen, the app lock screen, its dialogs, and
  * turning the app lock on. Catalog holds no keys and has no app lock, so
- * nothing here locks, unlocks or shows the system prompt. The screens
- * that take words block screenshots in an app; here a switch does.
+ * nothing here locks, unlocks or shows the system prompt. In an app these
+ * screens ignore taps under other apps' windows and speak only to
+ * accessibility tools, and those that take words block screenshots; here
+ * a switch does.
  */
 @Composable
 fun AppLockScreensPage(modifier: Modifier = Modifier) {
@@ -78,8 +79,10 @@ fun AppLockScreensPage(modifier: Modifier = Modifier) {
     var blocked by rememberSaveable { mutableStateOf(false) }
     val activity = LocalActivity.current
     DisposableEffect(blocked, activity) {
-        if (activity != null && blocked) secureWindow(activity, on = true)
-        onDispose { if (activity != null && blocked) secureWindow(activity, on = false) }
+        // The value when the effect started: when the switch goes off, the state already reads false.
+        val protect = activity != null && blocked
+        if (protect) secureWindow(activity, on = true)
+        onDispose { if (protect) secureWindow(activity, on = false) }
     }
     val sample = open
     if (sample != null) {
@@ -89,12 +92,7 @@ fun AppLockScreensPage(modifier: Modifier = Modifier) {
         ShkScreen(modifier = modifier, scrollable = true) {
             PageTitle(stringResource(R.string.page_app_lock_title))
             PageIntro(stringResource(R.string.app_lock_intro))
-            SectionHeading(stringResource(R.string.recovery_key_block_heading))
-            ShkSwitch(
-                text = stringResource(R.string.recovery_key_block),
-                checked = blocked,
-                onCheckedChange = { blocked = it },
-            )
+            ProtectionSwitch(checked = blocked, onCheckedChange = { blocked = it })
             SectionHeading(stringResource(R.string.recovery_key_states_heading))
             ShkCard {
                 AppLockSample.entries.forEach { entry ->

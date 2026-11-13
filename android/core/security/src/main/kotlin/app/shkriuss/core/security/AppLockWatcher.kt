@@ -46,9 +46,11 @@ enum class AppLockNotice {
 /**
  * Decides when the optional app lock locks the app, and what every window
  * of the app hides (docs/architecture/security-screens.md, "When the app
- * locks"). The app class builds one and calls [start] in its `onCreate`,
- * and hands it out through [SecurityHost.appLock]. Every screen of the
- * app puts its content in [AppLockGate], which shows what [gate] says.
+ * locks"). While the app is locked, every window of the app hides other
+ * apps' windows ("Overlays and accessibility services"). The app class
+ * builds one and calls [start] in its `onCreate`, and hands it out
+ * through [SecurityHost.appLock]. Every screen of the app puts its
+ * content in [AppLockGate], which shows what [gate] says.
  *
  * It locks:
  *
@@ -238,8 +240,11 @@ class AppLockWatcher(
             known == AppLockState.ON && locked -> AppGate.LOCKED
             else -> AppGate.OPEN
         }
+        val lockChanged = (gateNow == AppGate.LOCKED) != (next == AppGate.LOCKED)
         gateNow = next
         gateFlow.value = next
+        // The lock screen hides other apps' windows, so it is set before the lock screen is drawn.
+        if (lockChanged) applyFlagsToAll()
     }
 
     /** Drops the file keys at once. With the app lock on, the gate shows the lock screen. */
@@ -274,6 +279,9 @@ class AppLockWatcher(
     }
 
     private fun applyFlags(activity: Activity) {
+        // While the lock screen shows, no other app may draw over it, for example a fake system prompt. The screens
+        // of this module hide other apps' windows themselves, always.
+        if (activity !is ShieldedScreen) hideOtherAppsWindows(activity, hide = gateNow == AppGate.LOCKED)
         // The recovery key screens block everything themselves (secureWindow).
         if (activity is WordsScreen) return
         val block = settings.blockScreenshots
@@ -326,4 +334,4 @@ class AppLockWatcher(
 }
 
 /** A screen of this module that shows or takes the recovery words and blocks everything itself with [secureWindow]. */
-internal interface WordsScreen
+internal interface WordsScreen : ShieldedScreen

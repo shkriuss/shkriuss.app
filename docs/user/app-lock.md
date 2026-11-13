@@ -77,6 +77,10 @@ ready.
 If you close the prompt, tap **Unlock** to open it again. Back on the
 lock screen leaves the app.
 
+While the app is locked, apps that draw over other apps disappear, so no
+other app can put a fake prompt over the lock screen. They come back
+when you unlock the app.
+
 ## When the app locks
 
 On the app lock screen, tap **Lock the app** and choose:
@@ -118,6 +122,15 @@ While the app lock is on, the app lock screen asks for the system prompt
 each time it opens, before it shows anything. If you close the prompt,
 the screen closes. So someone you hand the open app to cannot turn the
 app lock off, choose a longer time, or show the text of notifications.
+
+The app lock screen also keeps other apps away, as the screens of the
+recovery key do
+([Other apps on your phone](recovery-key.md#other-apps-on-your-phone)):
+
+1. Apps that draw over other apps disappear while it shows.
+2. A tap under another app's window does nothing.
+3. On Android 14 and later, only accessibility tools, such as TalkBack,
+   can read it.
 
 ## Notifications
 
