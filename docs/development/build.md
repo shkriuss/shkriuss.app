@@ -131,7 +131,8 @@ Two more rules are no task. They fail any Gradle command:
 
 - The bundled SQLite driver is refused in every module
   ([Convention plugins](#convention-plugins)).
-- `core/testing` is refused anywhere but in a test configuration
+- `core/testing` is refused anywhere but in a `test` or `androidTest`
+  configuration, test fixtures included
   ([Logging check](#logging-check)).
 
 The APK rules check also runs before every `assemble` task. So the PR
@@ -729,6 +730,12 @@ How it treats each kind of code:
   whose name does not start with `test` or `androidTest`, every Gradle
   command fails and names the module and the configuration. So
   `core/testing` can never reach an app (owner's decision in step 1.9).
+- **Test fixtures** may not declare `core/testing` either, so a
+  configuration whose name starts with `testFixtures` fails the rule too.
+  An app that wrongly depends on a module's test fixtures would take
+  `core/testing` with them (owner's decision on
+  [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
+  No module declares it there.
 - **`build-logic`** is not checked. It is the build's own code and never
   part of an app.
 
@@ -754,6 +761,9 @@ How it was tested, on 2026-11-13 in the cloud environment:
 5. `implementation(project(":core:testing"))` in Catalog's build file
    failed every Gradle command, naming `:app:catalog` and
    `implementation`.
+6. `CoreTestingGuardTest` failed when the rule was put back to let
+   `testFixtures` configurations declare `core/testing`, and passed with
+   the rule as it is.
 
 ## Tests of the build checks
 
@@ -782,7 +792,7 @@ The owner asked for them in step 1.9.
 | Test | What it shows |
 |---|---|
 | `NoLoggingCheckTest` | Each of the 13 forms fails in main code, also in a comment or in quotes. The ten forms of the replaced test are all there. `main`, `debug`, `release`, `preview` and a new folder are main code. The test folders are not checked. A module with no main code is found. |
-| `CoreTestingGuardTest` | `core/testing` in `implementation`, `api` or `debugImplementation` fails. In `testImplementation` and `androidTestImplementation` it passes. |
+| `CoreTestingGuardTest` | `core/testing` in `implementation`, `api`, `debugImplementation`, `testFixturesImplementation` or `testFixturesApi` fails. In `testImplementation` and `androidTestImplementation` it passes. |
 | `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. |
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. |

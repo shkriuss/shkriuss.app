@@ -74,7 +74,10 @@ private fun Project.registerNoLoggingCheck() {
  * Fails the build if any configuration that is not a test configuration
  * declares `core/testing`. Its main code logs on purpose, for the emulator
  * tests, and the logging check does not read it. So it may only ever be a
- * test dependency, and with this rule it can never reach an app.
+ * test dependency, and with this rule it can never reach an app. Test
+ * fixtures do not count as tests here: an app that wrongly depends on a
+ * module's fixtures would take `core/testing` with them (owner's decision
+ * on pull request 34).
  *
  * `core/testing` itself is left out: the Android Gradle Plugin adds a
  * module to the classpaths of its own tests, such as
@@ -100,8 +103,15 @@ internal fun Project.refuseCoreTestingOutsideTests() {
     }
 }
 
-/** True for a configuration of test code: its name starts with `test` or `androidTest`. */
-internal fun isTestConfiguration(name: String): Boolean = name.startsWith("test") || name.startsWith("androidTest")
+/**
+ * True for a configuration of tests that never reach an app: its name starts
+ * with `test` or `androidTest`, but not with `testFixtures`.
+ */
+internal fun isTestConfiguration(name: String): Boolean =
+    (name.startsWith("test") && !name.startsWith(TEST_FIXTURES)) || name.startsWith("androidTest")
+
+/** The start of the name of every configuration of a module's test fixtures. */
+private const val TEST_FIXTURES = "testFixtures"
 
 /** The module of test helpers, which only tests may use. */
 internal const val CORE_TESTING = ":core:testing"

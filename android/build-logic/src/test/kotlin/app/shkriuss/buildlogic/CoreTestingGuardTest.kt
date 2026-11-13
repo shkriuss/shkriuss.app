@@ -9,7 +9,8 @@ import org.junit.Test
 
 /**
  * Shows that `core/testing`, which the logging check does not read, can be
- * declared only by test configurations ([refuseCoreTestingOutsideTests]).
+ * declared only by test configurations ([refuseCoreTestingOutsideTests]),
+ * and not by those of test fixtures, which an app could depend on.
  */
 class CoreTestingGuardTest {
     private class Modules(val app: Project, val testing: Project)
@@ -19,8 +20,10 @@ class CoreTestingGuardTest {
         val core = ProjectBuilder.builder().withName("core").withParent(root).build()
         val testing = ProjectBuilder.builder().withName("testing").withParent(core).build()
         val app = ProjectBuilder.builder().withName("app").withParent(root).build()
-        listOf("implementation", "api", "debugImplementation", "testImplementation", "androidTestImplementation")
-            .forEach { app.configurations.create(it) }
+        listOf(
+            "implementation", "api", "debugImplementation", "testFixturesImplementation", "testFixturesApi",
+            "testImplementation", "androidTestImplementation",
+        ).forEach { app.configurations.create(it) }
         app.refuseCoreTestingOutsideTests()
         return Modules(app, testing)
     }
@@ -51,6 +54,12 @@ class CoreTestingGuardTest {
     }
 
     @Test
+    fun testFixturesRefuseCoreTesting() {
+        assertRefused("testFixturesImplementation")
+        assertRefused("testFixturesApi")
+    }
+
+    @Test
     fun testConfigurationsMayUseCoreTesting() {
         assertEquals(null, declare("testImplementation"))
         assertEquals(null, declare("androidTestImplementation"))
@@ -65,10 +74,12 @@ class CoreTestingGuardTest {
     }
 
     @Test
-    fun testConfigurationsAreTheOnesStartingWithTestOrAndroidTest() {
-        listOf("testImplementation", "testDebugImplementation", "testFixturesImplementation", "androidTestImplementation", "androidTestDebugImplementation")
+    fun testConfigurationsAreTheOnesStartingWithTestOrAndroidTestButNotTestFixtures() {
+        listOf("testImplementation", "testDebugImplementation", "testRuntimeOnly", "androidTestImplementation", "androidTestDebugImplementation")
             .forEach { assertTrue(it, isTestConfiguration(it)) }
-        listOf("implementation", "api", "compileOnly", "runtimeOnly", "debugImplementation", "releaseImplementation", "kspTest")
-            .forEach { assertTrue(it, !isTestConfiguration(it)) }
+        listOf(
+            "implementation", "api", "compileOnly", "runtimeOnly", "debugImplementation", "releaseImplementation", "kspTest",
+            "testFixturesImplementation", "testFixturesApi", "testFixturesDebugImplementation", "testFixturesRuntimeOnly",
+        ).forEach { assertTrue(it, !isTestConfiguration(it)) }
     }
 }
