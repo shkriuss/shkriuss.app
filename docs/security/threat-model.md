@@ -1383,7 +1383,8 @@ Open until its step is done.
 11. What to do if the signing key is stolen.
     **Step 2.7**: the restore and rotation rehearsal with a throwaway
     key (ADR 0013, point 8), and the decision record for a rotation and
-    for a stolen key.
+    for a stolen key. It can run at any time, and is done before the
+    first data app is released.
 12. Whether the recovery words alone can add a device to the sync
     server (Phase 5).
     **Step 5.1.**

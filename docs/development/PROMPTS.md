@@ -596,8 +596,11 @@ Read CLAUDE.md, docs/security/threat-model.md (the points 1, 2 and 3
 under "Found while writing this page") and the build checks that exist:
 CheckApkRulesTask.kt, CheckRoomSchemasTask.kt and CheckDaoRulesTask.kt
 in android/build-logic, with docs/development/build.md. Build these
-checks. They run in `./gradlew check`, and a pull request cannot pass
-without them.
+checks. They run in the CI job "Check", which is a required check, so a
+pull request cannot pass without them. The APK rules are not part of
+`./gradlew check`: CI runs them as `:app:<name>:checkReleaseApkRules`
+for every app. Say in docs/development/ci.md and build.md which check
+runs where. If a check needs a change to `ci.yml`, stop and ask me.
 
 1. Every app's merged manifest turns Android's own backup and device
    transfer off. Fail with the app's name and the attribute that is
@@ -609,10 +612,15 @@ without them.
    APK, like the other APK rules. If a library that ships in an app
    today trips it, stop. Do not allow it, do not exclude it. Tell me
    which library, which app and which class, and wait.
-3. One check for all modules that main code does not log: no call of
-   `android.util.Log` or `println` in main source sets, in any module.
-   The test of core/crypto that does this today is replaced by this
-   check, not weakened. Say how the check treats test code and
+3. One check for all modules that main code does not log, in every
+   module. The test `theModuleNeverLogsOrPrints` in core/crypto
+   forbids ten forms today: `android.util.Log`, `Log.`, `println`,
+   `print(`, `printStackTrace`, `System.out`, `System.err`,
+   `java.util.logging`, `Logger` and `Timber`. The new check forbids at
+   least all of these, in the main source sets of every module. That
+   test is replaced by the new check, never weakened. The other test of
+   that class, which shows that no key, word or plaintext is shown or
+   logged, stays as it is. Say how the check treats test code and
    Catalog. Hard rule 10 is the reason: user content must never reach a
    log.
 
@@ -629,6 +637,8 @@ plugins that connect the checks to the build
 (AndroidApplicationConventionPlugin.kt, and AndroidCommon.kt if the
 logging check needs it), and .github/CODEOWNERS, to list every new check
 file as owner-only. Change only the lines these checks need in each.
+Do not change ci.yml or any other file under .github/ except CODEOWNERS.
+If a check needs one of them, stop and ask me.
 ```
 
 ### 1.10 Overlays and accessibility data on the security screens
@@ -702,7 +712,7 @@ Decided on 2026-11-13:
    | 5 | Decided now: no forced update. Step 5.1 decides again for the Sync app. |
    | 6, 12 | Step 5.1 |
    | 7 | New step 1.10, before step 2.5 |
-   | 11 | New step 2.7, before the Phase 2 gate |
+   | 11 | New step 2.7, any time from now, and done before the first data app is released |
 
 ---
 
@@ -823,8 +833,10 @@ docs/security/threat-model.md:
 
 ### 2.7 Restore and rotation rehearsal
 
-Model: `opus`. Effort: `xhigh`. Mode: **Plan** first. Run it after step
-2.6 and before the Phase 2 gate. It answers point 11 under "Found while
+Model: `opus`. Effort: `xhigh`. Mode: **Plan** first. It can run at any
+time from now, and it must be done before the first data app (Water) is
+released. Catalog 0.1.0 and 0.2.0 were released before it. It answers
+point 11 under "Found while
 writing this page" in
 [threat-model.md](../security/threat-model.md#found-while-writing-this-page).
 
@@ -866,7 +878,7 @@ other two devices, use the app daily for two weeks, then run the release.
 
 Also at this gate: decide again whether "Emulator (Android 17)" becomes a
 required check ([ci.md](ci.md#the-emulator-jobs)). Do the rehearsal of step
-2.7 before you run the release.
+2.7 before you run the release of Water, if it is not done yet.
 
 ---
 
