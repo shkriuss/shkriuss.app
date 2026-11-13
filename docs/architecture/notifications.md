@@ -276,3 +276,10 @@ three devices.
 4. The checks on a GrapheneOS device: after a reboot, in a secondary
    profile and in Private Space
    ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices-reminders)).
+5. What a notification shows while the app lock is on. Today a
+   notification shows its title and text whether the app is locked or
+   not. Decided in Phase 1, step 7, session B, with the app lock.
+6. What the user sees when an app's alarm handler fails. Today the
+   reminder is marked as fired and is lost without a word
+   ([How alarms are kept right](#how-alarms-are-kept-right)). Decided in
+   Phase 2, step 4, with the reminders of Water.

@@ -31,8 +31,8 @@ decisions of 2026-11-12. Its detail is in
 from the same step: how the tests of other modules get real keys, with
 the owner's decisions of 2026-11-12. Record 0030 comes from Phase 1, step 6:
 how `core/notify` keeps alarms and what it adds to an app. Claude
-proposed it in pull request 26, and it is Proposed until the owner
-accepts it.
+proposed it in pull request 26, and the owner accepted it in the review
+of that pull request.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -68,4 +68,4 @@ How a record may be edited or replaced is in point 7 of
 | 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |
 | 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted |
 | 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |
-| 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Proposed |
+| 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |

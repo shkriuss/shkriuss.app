@@ -1,12 +1,12 @@
 # 0030 How core/notify keeps alarms, and what it adds to an app
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 1, step 6 ([PROMPTS.md](../development/PROMPTS.md)),
   [pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26).
-  Claude proposed it while building `core/notify`. The owner accepts it,
-  or changes it, in the review of that pull request. Point 10 is the
-  owner's decision of 2026-11-13 in that session.
+  Claude proposed it while building `core/notify`. The owner accepted
+  it in the review of that pull request, on 2026-11-13. Point 10 is the
+  owner's own decision of the same day, in that session.
 
 ## Context
 

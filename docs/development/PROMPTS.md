@@ -550,6 +550,9 @@ as a shared piece that every app can turn on:
 - File keys require user authentication as designed. Database rows are behind
   an access gate only; say so honestly in the user guide.
 - An option to hide the app in the recent-apps view and block screenshots.
+- Decide with me what a notification shows while the app lock is on. It is
+  an open question in docs/architecture/notifications.md. Record the
+  decision there.
 - Catalog page, screenshot tests, user guide page.
 
 I am the owner and I ask you to add the include lines for the new
@@ -640,12 +643,12 @@ Steps:
   `Notify.state` says. Water gets three permissions from `core/notify`.
   List them under Water in docs/security/permissions.md. Write the
   reminder steps of docs/development/emulator-tests.md with the app's
-  real button names.
-  - Before you paste this step: the APK rules check allows no permission
-    today, and its files are owner-only. Add a sentence of your own
-    here that asks Claude to allow the three permissions for Water in
-    `CheckApkRulesTask.kt`, as the sentence in step 2.2 does for the
-    include lines. Without it, Claude stops at the failing check.
+  real button names. Decide with me what the user sees when the app's
+  alarm handler fails: today the reminder is marked as fired and is lost
+  without a word. It is an open question in
+  docs/architecture/notifications.md. Record the decision there. I am
+  the owner and I ask you to allow the three permissions of core/notify
+  for Water in the APK rules check, and nothing else in those files.
 - 2.5 Backup, restore, app lock and settings. The settings get a screen
   that shows the notices of all third-party material in the app. Complete
   `docs/development/third-party.md` with everything that ships in the app.

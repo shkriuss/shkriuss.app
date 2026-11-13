@@ -159,3 +159,6 @@ Open: the three cases above (after a restart, in Private Space, in
 another user profile) follow from how Android and the code work. They
 are tested on a GrapheneOS phone before the first app with reminders is
 released. This page is corrected if a phone shows something else.
+
+Checked on a GrapheneOS phone on 2026-11-13: the name and the place of
+the setting **Send notifications to current user**.
