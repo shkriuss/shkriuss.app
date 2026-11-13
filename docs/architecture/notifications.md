@@ -240,7 +240,7 @@ These are not choices of the suite. The page for users is
 | After a reboot, before the first unlock | The app's storage is locked. Nothing runs, no alarm is registered, nothing fires. After the unlock, Android sends `BOOT_COMPLETED`, the alarms are registered again, and a missed reminder that the app still names fires late. The opt-in mode of [ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md), point 5, is not built. |
 | Private Space, locked | Android stops every app in it. They cannot run and cannot show notifications. When it is unlocked, its apps are told as after a reboot. |
 | A secondary profile | Its apps run only while the profile is running. After a reboot it is not running until the user switches to it and unlocks it. "End session" stops it. While it runs in the background, alarms fire, and the notification belongs to that profile. |
-| An alarm for the next few seconds | Android fires no alarm sooner than about 5 seconds after it was set. An alarm for an earlier moment, or for the past, fires then. Two alarms that become due together can arrive in either order ([emulator-tests.md](../development/emulator-tests.md#what-the-notify-tests-showed)). |
+| An alarm for the next few seconds | Android fires no alarm sooner than 5 seconds after it was set. An alarm for an earlier moment, or for the past, fires then. Two alarms that become due together can arrive in either order ([emulator-tests.md](../development/emulator-tests.md#what-the-notify-tests-showed)). |
 | Deep sleep | The alarm wakes the device. Android limits how many such alarms one app may fire in an hour while the device sleeps deeply. Reminders stay far below that. |
 | "Force stop" | See the table above. |
 

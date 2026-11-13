@@ -232,7 +232,7 @@ How the tests reach what an app cannot:
 
 ### What the notify tests showed
 
-First runs on 2026-11-12, in
+First runs on 2026-11-12 and 2026-11-13, in
 [pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26), on
 AOSP emulators. Each run has 10 tests. On Android 13, 14 and 15 all of
 them pass. On Android 17 the run does not get to its end
@@ -247,18 +247,18 @@ them pass. On Android 17 the run does not get to its end
 | Exact alarms with `USE_EXACT_ALARM` | `AlarmManager.canScheduleExactAlarms` is true. The user is not asked. |
 | The receivers, which are not exported | Android reaches both: the alarm's own broadcast, `TIME_SET` and `TIMEZONE_CHANGED`. |
 | An alarm fires | The app's handler runs, never before the alarm's time, and the notification is shown with the alarm's time. |
-| **The shortest wait** | Android fires no alarm sooner than about 5 seconds after it was set. An alarm set 3 seconds ahead fired 2.0 seconds after its time, on all three versions. An alarm whose time had passed fired 5 seconds after it was set. This is Android's own limit for every app. |
-| **Two alarms that are due together** | They arrive in either order. Two alarms one second apart, both inside the 5 seconds, came together, on Android 13 and 15 the later one first. The handler ran once for each. |
+| **How exact an alarm is** | An alarm set 7 seconds ahead reached the app's handler 2 to 3 milliseconds after its time, on all three versions. The emulator was awake. |
+| **The shortest wait** | Android fires no alarm sooner than 5 seconds after it was set. In the first runs an alarm set 3 seconds ahead fired 2.0 seconds after its time, on all three versions. An alarm whose time had passed fired 5.0 seconds after it was set. This is Android's own limit for every app. |
+| **Two alarms that are due together** | They arrive in either order. In the first runs two alarms one second apart, both inside the 5 seconds, came together, on Android 13 and 15 the later one first. The handler ran once for each. Two alarms two seconds apart, both more than 5 seconds ahead, came in their order. |
 | An alarm that is no longer wanted | Does not fire. |
 | The clock is set eleven minutes ahead | `cmd alarm set-time` sets it. Android fires the alarm that is now due and sends `TIME_SET`. The app is asked for its alarms once for each. |
 | The time zone is changed | `cmd alarm set-timezone` sets it. Android sends `TIMEZONE_CHANGED`, and the app is asked for its alarms again. |
 
-After these runs the tests set their alarms seven seconds ahead, so
-that they measure the alarm and not the 5 seconds.
-
-Open: how late an alarm is that is set more than 5 seconds ahead. The
-runs write it down in a `NOTE`. This page gets the numbers after the
-next run.
+After the first runs the tests set their alarms seven seconds ahead,
+so that they measure the alarm and not the 5 seconds. What this showed
+changed the code: a sync after a change in the app no longer sets an
+alarm again that already waits at Android
+([notifications.md](../architecture/notifications.md#how-alarms-are-kept-right)).
 
 #### Android 17: the run is stopped
 
