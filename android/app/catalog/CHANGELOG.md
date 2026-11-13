@@ -5,21 +5,63 @@ development.
 
 ## Unreleased
 
-- A third group on the start screen, **Shared screens**, with the page
-  **Recovery key screens**: every state of the recovery key screens and
-  the security screen of `core/security`, with sample words that are no
-  real key. Tap a state to see it full window. Back returns to the list.
-  A switch blocks screenshots on the page, as the screens do in an app.
-- A second page under **Shared screens**, **App lock screens**: the lock
-  screen, the app lock screen with its dialogs and notices, and turning
-  the app lock on, with sample data. Catalog has no app lock: nothing on
-  the page locks, unlocks or shows the system prompt.
-- **Recovery key screens**: the security screen shows the app lock, and
-  a new state shows the end of entering the words after the app lock
-  was turned off.
-- Permissions: still none. Catalog removes `USE_BIOMETRIC`, which
+### 0.3.0
+
+The recovery key screens and the app lock screens that every app shares,
+drawn with sample data, in a new group on the start screen. From pull
+requests [28](https://github.com/shkriuss/shkriuss.app/pull/28) and
+[29](https://github.com/shkriuss/shkriuss.app/pull/29). The pages for
+the tokens and the components are as in 0.2.0.
+
+Start screen:
+
+- The start screen lists 24 pages in three groups: Tokens, Components
+  and Shared screens. Shared screens holds the two pages below.
+
+Shared screens:
+
+- Recovery key screens: every state of the recovery key screens and the
+  security screen of `core/security`, 13 in all, with sample words that
+  are no real key. Tap a state to see it full window. Back returns to
+  the list.
+  - The security screen with no recovery key yet; set up and kept, with
+    the app lock on and the keys in StrongBox; with no screen lock and
+    the keys in software; and with a stopped setup and damaged key
+    files, in a preview build.
+  - Creating a key: before the words, the 24 words, four words to
+    confirm, keeping it on this phone after the prompt was closed, and
+    done.
+  - Entering a key: the words with suggestions, words that could start
+    over, and done after the app lock was turned off.
+  - Showing the words again.
+  - Two states take typed letters, to try: "Create: four words to
+    confirm" and "Enter: the words, with suggestions". Nothing can be
+    pasted into them. The third field to confirm starts with "abj", and
+    the message under it says that no word starts with these letters.
+- App lock screens: every state of the app lock screens, 19 in all,
+  with sample data: the lock screen, the app lock screen with its
+  dialogs and notices, and turning the app lock on. Catalog has no app
+  lock: nothing on the page locks, unlocks or shows the system prompt.
+- Both pages have the switch **Block screenshots, as in an app**. It is
+  off when the page opens. When it is on, Android refuses a screenshot
+  and the recent apps show Catalog blank, as on these screens in an app.
+
+Permissions and version:
+
+- Still no permissions. Catalog removes `USE_BIOMETRIC`, which
   `core/security` asks for, and the six screens of that module. Catalog
-  holds no keys and never shows the system prompt.
+  holds no keys and never shows the system prompt. Android backup and
+  device-to-device transfer are still off.
+- Version code 300900, from the version code rule in
+  [ADR 0021](../../../docs/adr/0021-version-names-and-version-codes.md).
+  It installs as an update over 0.2.0, which has 200900.
+
+Inside the APK:
+
+- The sample words come from the English word list of the recovery key,
+  in `core/crypto`. The list and its MIT licence file are now in the APK
+  ([third-party.md](../../../docs/development/third-party.md)). Tink is
+  not: Catalog never calls it, and R8 removes it.
 
 ## 0.2.0 (2026-11-12)
 
