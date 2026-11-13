@@ -4,6 +4,49 @@ Copied from the [release checklist](../../development/release-checklist.md)
 for this release. Tell Claude what you checked, and Claude ticks the
 boxes in the pull request that records the release.
 
+## Result
+
+Done. Catalog 0.3.0 was published as `catalog-v0.3.0` on 2026-11-13.
+
+- Parts 1 to 3: the owner did them on the preview of
+  [pull request 32](https://github.com/shkriuss/shkriuss.app/pull/32),
+  before the merge, and reported in the session: no faults and nothing
+  disliked. Everything works and looks good. All three commits of that
+  pull request build the same app.
+  - Part 1, on the Pixel 9 Pro: the GrapheneOS settings, every page and
+    all 32 states once, TalkBack on the ten states, the secondary user
+    and Private Space.
+  - Part 2, on the Pixel Tablet and the Pixel 6a: the sample in both
+    settings, and the screenshot switch.
+  - Part 3: the preview is uninstalled on all three devices.
+  - So nothing was fixed in 0.3.0, and no change waits for the next
+    version ([What happens to what you find](#what-happens-to-what-you-find)).
+- This pass was also the look of the
+  [Phase 1 gate](../../development/PROMPTS.md#phase-1-gate-you) at the
+  shared screens.
+- Parts 4 and 5: the owner reported that everything matched the steps.
+  Obtainium showed the update and installed it over 0.2.0. AppVerifier
+  shows the right fingerprint. **App info** shows version 0.3.0. The
+  start screen lists 24 pages in three groups.
+- Claude checked on GitHub: the release is built from commit `4c6740d`
+  on `main`, the merge of pull request 32. The tag `catalog-v0.3.0`
+  points at that commit. The release is not a pre-release, and it is
+  immutable. Its notes say the two builds made the same APK. The
+  certificate SHA-256 in its notes is the one in
+  [fingerprints.md](../../security/fingerprints.md).
+- Claude checked the published `catalog-v0.3.0.apk` (part 5, step 5.4):
+  - Its SHA-256 is the one in `SHA256SUMS` and in the notes.
+  - Version code 300900, version 0.3.0. No permissions and no native
+    libraries.
+  - Its signing certificate is the one in
+    [fingerprints.md](../../security/fingerprints.md).
+  - `english.txt` and `LICENSE.txt` are both in it.
+    `english.txt` has the SHA-256 that
+    [third-party.md](../../development/third-party.md) records.
+    `LICENSE.txt` is the same as in the repository.
+  - No class of Tink, with the Protocol Buffers inside it, of Gson,
+    JSR-305 or Error Prone, and none of Google Play services.
+
 | | |
 |---|---|
 | App | Catalog, `app.shkriuss.catalog` |
@@ -111,11 +154,11 @@ The owner decided this on 2026-11-13.
 
 Before you merge the pull request that added this page.
 
-1. [ ] Install Catalog preview from that pull request
+1. [x] Install Catalog preview from that pull request
    ([Install a preview](../../development/test-a-pull-request.md#install-a-preview)).
    It installs next to the real Catalog. Leave Catalog 0.2.0 as it is on
    every device, for part 5.
-2. [ ] Hardened memory allocator on, memory tagging on, secure app
+2. [x] Hardened memory allocator on, memory tagging on, secure app
    spawning on.
    1. Long-press the Catalog preview icon and tap **App info**. Scroll
       down to **Exploit protection**.
@@ -125,22 +168,22 @@ Before you merge the pull request that added this page.
    4. **Memory tagging** says Enabled.
    5. **Secure app spawning** says Enabled
       ([ADR 0025](../../adr/0025-secure-app-spawning-in-grapheneos-checklist.md)).
-3. [ ] Dynamic code loading via memory restricted, and via storage
+3. [x] Dynamic code loading via memory restricted, and via storage
    restricted. In the same section, **Dynamic code loading via memory**
    and **Dynamic code loading via storage** both say Restricted.
-4. [ ] Native code debugging blocked, WebView JIT restricted. In the same
+4. [x] Native code debugging blocked, WebView JIT restricted. In the same
    section, **Native code debugging** says Blocked, and **WebView JIT**
    says Disabled. Catalog has no WebView, so WebView JIT changes nothing
    for it.
-5. [ ] Network permission revoked. On **App info**, tap **Permissions**.
+5. [x] Network permission revoked. On **App info**, tap **Permissions**.
    The page **App permissions** opens. Catalog asks for no permissions,
    so Network is not listed, and **Allowed** says "No permissions
    allowed". This is new to check in 0.3.0: `core/security` asks for
    `USE_BIOMETRIC`, and Catalog removes it.
-6. [ ] Sensors permission revoked. On **App permissions**, **Sensors** is
+6. [x] Sensors permission revoked. On **App permissions**, **Sensors** is
    under **Not allowed**. If it is under **Allowed**, tap it and change
    it.
-7. [ ] With all of these set, Catalog still works.
+7. [x] With all of these set, Catalog still works.
    1. On **App info**, tap **Force stop**, so the settings apply.
    2. Open Catalog preview and open **everything**, once. Nothing
       crashes, and no page or state is empty.
@@ -148,34 +191,34 @@ Before you merge the pull request that added this page.
       ten states of **the sample** and move through each one. TalkBack
       reads every button, field and switch with a name. Then turn
       TalkBack off.
-8. [ ] Works in a secondary user profile.
+8. [x] Works in a secondary user profile.
    1. In the Owner user, open Settings, tap **System**, then **Users**.
    2. Tap the secondary user, then **Install available apps**. The page
       **Choose apps to install** opens.
    3. Turn on the switch next to Catalog preview.
    4. Go back and tap **Switch to user**. Open Catalog preview and open
       **the short sample**.
-9. [ ] Works in Private Space.
+9. [x] Works in Private Space.
    1. In Settings, tap **Security and privacy**, then **Private space**.
    2. Tap **Install available apps**, and turn on the switch next to
       Catalog preview, as in step 8.
    3. Open Catalog preview in Private Space and open **the short
       sample**.
-10. [ ] Reminders: does not apply. Catalog has no reminders.
+10. [x] Reminders: does not apply. Catalog has no reminders.
 
 ## Part 2: Layout, on the Pixel Tablet and the Pixel 6a
 
 Before you merge the pull request.
 
-1. [ ] Install Catalog preview on both devices.
-2. [ ] On each, open **the sample** twice:
+1. [x] Install Catalog preview on both devices.
+2. [x] On each, open **the sample** twice:
    1. first in the light theme, at the default font size, upright;
    2. then in the dark theme, at the largest font size, turned sideways.
 
    In Settings, search for **Dark theme** and for **Font size**.
-3. [ ] No text is cut off, clipped or on top of other text, and nothing
+3. [x] No text is cut off, clipped or on top of other text, and nothing
    sits under the system bars.
-4. [ ] The screenshot switch, on one of the two devices. It is the one
+4. [x] The screenshot switch, on one of the two devices. It is the one
    thing on the new pages that unit tests cannot check.
    1. Open **Recovery key screens** and turn on **Block screenshots, as
       in an app**.
@@ -186,29 +229,29 @@ Before you merge the pull request.
 
 ## Part 3: Keys, on all three devices
 
-1. [ ] Create a recovery key: does not apply. Catalog holds no keys. Its
+1. [x] Create a recovery key: does not apply. Catalog holds no keys. Its
    manifest removes the screens of `core/security`, so it cannot create
    or keep a recovery key.
-2. [ ] StrongBox on the security screen: does not apply, for the same
+2. [x] StrongBox on the security screen: does not apply, for the same
    reason. The security screen samples on **Recovery key screens** show
    rows such as **StrongBox: a separate security chip**. They are sample
    data, not the keys of your phone.
-3. [ ] Uninstall Catalog preview on all three devices when you are done
+3. [x] Uninstall Catalog preview on all three devices when you are done
    ([Install a newer preview](../../development/test-a-pull-request.md#install-a-newer-preview),
    step 1). Catalog 0.2.0 is not touched.
 
 ## Part 4: Release
 
-1. [ ] Merge the pull request. Merge nothing else that changes Catalog,
+1. [x] Merge the pull request. Merge nothing else that changes Catalog,
    a module it is built from (`core/design`, `core/security`,
    `core/crypto`) or the build (`android/build-logic`, `android/gradle`)
    before step 5.
-2. [ ] CI is green on the newest commit of `main`
+2. [x] CI is green on the newest commit of `main`
    ([Run a release](../../development/release.md#run-a-release), "Before
    you start").
-3. [ ] Run the release workflow with app `catalog` and version `0.3.0`.
+3. [x] Run the release workflow with app `catalog` and version `0.3.0`.
    Approve **Sign** ([Run a release](../../development/release.md#run-a-release)).
-4. [ ] Check the draft `catalog-v0.3.0`
+4. [x] Check the draft `catalog-v0.3.0`
    ([Check and publish the draft](../../development/release.md#check-and-publish-the-draft),
    steps 1 to 3):
    1. **Build** showed the package `app.shkriuss.catalog` and version
@@ -216,8 +259,8 @@ Before you merge the pull request.
    2. The files are `catalog-v0.3.0.apk`, `catalog-v0.3.0-mapping.txt`
       and `SHA256SUMS`.
    3. It does not say "Pre-release".
-5. [ ] Publish the draft (the same section, steps 4 to 6).
-6. [ ] Open `github.com/shkriuss/shkriuss.app/tags`. The tag
+5. [x] Publish the draft (the same section, steps 4 to 6).
+6. [x] Open `github.com/shkriuss/shkriuss.app/tags`. The tag
    `catalog-v0.3.0` is there, on the commit from the notes.
 
 ## Part 5: After publishing
@@ -225,17 +268,17 @@ Before you merge the pull request.
 The only look after publishing. The pass for the Phase 1 gate was parts
 1 and 2.
 
-1. [ ] On a phone with Catalog 0.2.0 from Obtainium, open Obtainium. It
+1. [x] On a phone with Catalog 0.2.0 from Obtainium, open Obtainium. It
    shows an update for Catalog. Tap Catalog, then **Update**. Android
    installs it as an update, without uninstalling 0.2.0 first. Catalog
    stores no data, so there is no data to keep.
-2. [ ] Check Catalog with AppVerifier
+2. [x] Check Catalog with AppVerifier
    ([Verify with AppVerifier](../../user/verify.md)).
-3. [ ] Long-press the Catalog icon and tap **App info**. It shows version
+3. [x] Long-press the Catalog icon and tap **App info**. It shows version
    0.3.0.
-4. [ ] Open Catalog. The start screen lists 24 pages in three groups:
+4. [x] Open Catalog. The start screen lists 24 pages in three groups:
    Tokens, Components and Shared screens.
-5. [ ] Tell Claude in a session that Catalog 0.3.0 is published, and what
+5. [x] Tell Claude in a session that Catalog 0.3.0 is published, and what
    did not match these steps. Claude then records the release:
    1. the changelog's 0.3.0 heading and date, "Released: 0.3.0" on the
       [apps page](../../user/apps.md), the status in the README, and the

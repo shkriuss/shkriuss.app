@@ -6,7 +6,7 @@ example `app.shkriuss.catalog`.
 
 | App | What it is | Status |
 |---|---|---|
-| Catalog | A gallery of the shared design components and, from 0.3.0, the shared screens, for development. Most people do not need it. | Released: 0.2.0 |
+| Catalog | A gallery of the shared design components and screens, for development. Most people do not need it. | Released: 0.3.0 |
 | Water | The pilot app. | Planned |
 | Reminders | | Planned |
 | Tasks | | Planned |

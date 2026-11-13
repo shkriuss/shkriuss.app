@@ -4,8 +4,8 @@ An open-source suite of native Android apps, built from shared core modules.
 Every app has an ID of the form `app.shkriuss.<name>`.
 
 **Status: early development.** The only app released so far is Catalog, a
-gallery of the design components for development. Its newest version is
-0.2.0. No app is ready for daily use yet.
+gallery of the design components and shared screens for development. Its
+newest version is 0.3.0. No app is ready for daily use yet.
 
 ## What it is
 

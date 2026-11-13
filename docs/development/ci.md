@@ -457,9 +457,9 @@ The owner's decision at the Phase 1 gate, on 2026-11-13, after
 left the question open:
 
 - "Emulator (Android 13)", "Emulator (Android 14)" and "Emulator (Android
-  15)" become required checks. The owner turns them on in the ruleset
-  (the steps are below). Until the owner has done that, a red emulator
-  job does not block a merge. Read it all the same.
+  15)" become required checks. The owner turned them on in the ruleset
+  on 2026-11-13, with the steps below. Since then, a red one blocks a
+  merge.
 - "Emulator (Android 17)" stays **not required**. Its system image
   crashes Android's own system process when a screen of the tests closes
   ([emulator-tests.md](emulator-tests.md#what-the-tests-showed), point

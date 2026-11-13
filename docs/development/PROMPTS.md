@@ -679,13 +679,18 @@ as an accepted deviation with the reason.
 
 ### Phase 1 gate (you)
 
+Complete on 2026-11-13, with Catalog 0.2.0 and 0.3.0. The owner said so
+on [pull request 33](https://github.com/shkriuss/shkriuss.app/pull/33):
+the look at the shared screens is done, the decisions below are
+recorded, and the three emulator checks are in the ruleset.
+
 The owner made these decisions on 2026-11-13.
 
 The design part was done on 2026-11-12 with Catalog 0.2.0, on the Pixel
 9 Pro, the Pixel Tablet and the Pixel 6a. It covers the tokens and
 components of steps 1.1 and 1.2. The teal accent and the six text styles
 stay as they are ([ADR 0017](../adr/0017-design-system-tokens.md)). The
-rest of the gate waits for steps 1.3 to 1.7.
+rest of the gate waited for steps 1.3 to 1.7.
 
 The look at Catalog on the three devices, for the shared screens of steps
 1.3 to 1.7, is done with Catalog 0.3.0. The owner decided on 2026-11-13
@@ -694,7 +699,13 @@ to make it one pass with the release: parts 1 and 2 of the
 on the preview of the pull request that prepares it
 ([pull request 32](https://github.com/shkriuss/shkriuss.app/pull/32)),
 before the merge. After publishing, nothing is looked at again except
-part 5 of that checklist. These steps stay open until they are done:
+part 5 of that checklist.
+
+Done on 2026-11-13, before the merge of pull request 32. The owner found
+no faults and nothing to dislike, so nothing was fixed in 0.3.0 and no
+change waits for the next version
+([Result](../apps/catalog/release-checklist-0.3.0.md#result)). The steps
+were:
 
 1. Install the Catalog preview of that pull request on the Pixel 9 Pro,
    Pixel Tablet and Pixel 6a.
@@ -712,9 +723,9 @@ Decided on 2026-11-13:
 
 4. The emulator jobs. "Emulator (Android 13)", "(Android 14)" and
    "(Android 15)" become required checks. "Emulator (Android 17)" does
-   not, while its image crashes Android's system process. The owner turns
-   the three on in the ruleset
-   ([ci.md](ci.md#the-emulator-jobs)) and decides again at the Phase 2
+   not, while its image crashes Android's system process. The owner
+   turned the three on in the ruleset on 2026-11-13
+   ([ci.md](ci.md#the-emulator-jobs)), and decides again at the Phase 2
    gate.
 5. A step for each point under "Found while writing this page" in
    [threat-model.md](../security/threat-model.md#found-while-writing-this-page):
@@ -849,9 +860,8 @@ docs/security/threat-model.md:
 
 Model: `opus`. Effort: `xhigh`. Mode: **Plan** first. It can run at any
 time from now, and it must be done before the first data app (Water) is
-released. Catalog 0.1.0 and 0.2.0 were released before it. It answers
-point 11 under "Found while
-writing this page" in
+released. Catalog 0.1.0, 0.2.0 and 0.3.0 were released before it. It
+answers point 11 under "Found while writing this page" in
 [threat-model.md](../security/threat-model.md#found-while-writing-this-page).
 
 ```text
