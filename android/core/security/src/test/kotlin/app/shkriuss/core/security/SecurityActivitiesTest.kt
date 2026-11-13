@@ -12,6 +12,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -19,9 +21,11 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -85,6 +89,24 @@ class SecurityActivitiesTest {
         compose.onNodeWithText("1. abandon").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("2. not entered yet").performScrollTo().assertIsDisplayed()
         compose.onNode(hasText("3.", substring = true)).assertDoesNotExist()
+    }
+
+    @Test
+    fun lettersThatStartNoWordAreNamedUnderTheFieldAtOnce() {
+        val message = compose.activity.getString(R.string.sec_word_starts_no_word)
+        compose.onNode(field).performTextInput("a")
+        compose.onNode(field).performTextInput("b")
+        compose.onNode(field).assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
+
+        compose.onNode(field).performTextInput("j")
+        compose.onNode(field).assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, message))
+
+        compose.onNode(field).performImeAction()
+        assertEquals("the next key takes nothing", "abj", typed())
+        compose.onNodeWithText("1. not entered yet").assertIsDisplayed()
+
+        compose.onNode(field).performTextReplacement("ab")
+        compose.onNode(field).assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
     }
 
     @Test

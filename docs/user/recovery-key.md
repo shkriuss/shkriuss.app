@@ -36,6 +36,8 @@ updated then.
 4. Tap **I wrote them down**.
 5. The app asks for four of the words. Type each one and pick it from
    the list under the field. Tap **Check**.
+   - If your letters start no word of the list, the field says so at
+     once. Check that word on your paper.
    - If one does not match, the app shows the words again. Check your
      paper and try again.
 6. The app stores its keys. Then the system prompt asks for your
@@ -54,6 +56,9 @@ this phone again:
 2. Type the first word. The words of the list that start with your
    letters show under the field. Tap the right one, or press the
    keyboard's next key once you have typed four letters.
+   - If your letters start no word of the list, the field says so at
+     once, and the next key does nothing. Check that word on your
+     paper, and delete the letters that are wrong.
 3. The next word comes next. To change a word, tap it in the list of
    numbered words.
 4. When all 24 are in, tap **Check the words**.

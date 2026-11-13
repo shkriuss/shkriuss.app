@@ -64,7 +64,10 @@ Why activities and not screens inside the app's own window:
    lands, also not through the paste action TalkBack offers.
 5. The words of the list that start with what is typed show as buttons
    under the field, in the screen itself. A popup would be a second
-   window.
+   window. When the letters start no word of the list, the field says so
+   under it at once, as its error, which TalkBack reads
+   (`WordInput.startsNoWord`). The create flow's four fields and the
+   entry field are the same `WordField`.
 6. Dialogs inherit `FLAG_SECURE` from the screen.
 7. The words leave the show screen when it stops: the phone's screen
    turns off or another app comes to the front. A new prompt shows them
@@ -113,10 +116,16 @@ Why activities and not screens inside the app's own window:
   This includes start over, repair, giving files up and a phone with no
   screen lock.
 - `SecurityActivitiesTest`: every screen blocks screenshots and keeps
-  autofill and content capture away. A word is typed and picked. A paste
-  never lands. The keyboard gets a password field with no suggestions and
-  no learning. Every button has a label and a 48 dp target.
-- `WordInputTest`: what a word field accepts and offers.
+  autofill and content capture away. A word is typed and picked. Letters
+  that start no word are named under the field at once, and the next key
+  takes nothing. The list shows only the words entered and the current
+  one. A paste never lands. The keyboard gets a password field with no
+  suggestions and no learning. Every button has a label and a 48 dp
+  target.
+- `ConfirmWordsTest`: the four fields that confirm a new key name letters
+  that start no word, each under its own field.
+- `WordInputTest`: what a word field accepts and offers, and which
+  letters start no word.
 - Catalog's `SecurityScreensScreenshotTest`: every state in the eight
   configurations.
 

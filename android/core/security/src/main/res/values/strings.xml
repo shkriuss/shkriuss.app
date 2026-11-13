@@ -3,6 +3,7 @@
     <!-- Shared by every screen of the recovery key. -->
     <string name="sec_preview_warning">This is a preview build. Never type your real recovery words into it. Make a new recovery key here to test.</string>
     <string name="sec_word_numbered">%1$d. %2$s</string>
+    <string name="sec_word_starts_no_word">No word in the word list starts with these letters. Check this word on your paper.</string>
     <string name="sec_done">Done</string>
     <string name="sec_try_again">Try again</string>
     <string name="sec_working">Storing the keys</string>

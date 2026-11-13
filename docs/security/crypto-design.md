@@ -1188,7 +1188,9 @@ That text fits the QR alphanumeric mode and is at most 228 characters.
 ### Entering it
 
 1. The user types 24 words. The field offers words from the list. The
-   first four letters of a word are enough to know it.
+   first four letters of a word are enough to know it. When the typed
+   letters start no word of the list, the field says so at once, under
+   it (the owner's review of pull request 28).
 2. The app trims spaces, makes the text lower case, and splits it at
    spaces. Any run of white space counts as one space. Lower case is made
    the same way in every app language. Only whole words count: the first

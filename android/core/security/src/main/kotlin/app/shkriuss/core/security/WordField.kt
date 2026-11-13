@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,6 +64,13 @@ internal object WordInput {
     fun suggestions(typed: String): List<String> =
         if (typed.length < SUGGEST_FROM) emptyList() else RecoveryWords.list.filter { it.startsWith(typed) }.take(MOST_SUGGESTIONS)
 
+    /**
+     * True when [typed] holds letters that start no word of the list, such
+     * as "abj". Then no suggestion shows and the keyboard's action key does
+     * nothing, so the field says why ([WordField]).
+     */
+    fun startsNoWord(typed: String): Boolean = typed.isNotEmpty() && RecoveryWords.list.none { it.startsWith(typed) }
+
     /** The word [typed] stands for: itself if it is a word, or the one word it starts once four letters are typed. */
     fun completion(typed: String): String? = when {
         typed in known -> typed
@@ -75,6 +83,9 @@ internal object WordInput {
  * A field for one recovery word, with the words of the list that start
  * with what is typed shown under it as buttons. Picking one, or pressing
  * the keyboard's action key on a word that is known, calls [onWord].
+ * When the letters start no word of the list, the field says so under it
+ * at once, as its error ([WordInput.startsNoWord]). That message comes
+ * before [errorText].
  *
  * The keyboard is asked for a password field that shows its letters, with
  * no suggestions and no learning ([NoLearningKeyboard]): it offers no
@@ -94,6 +105,7 @@ internal fun WordField(
     errorText: String? = null,
     imeAction: ImeAction = ImeAction.Next,
 ) {
+    val startsNoWord = if (WordInput.startsNoWord(value)) stringResource(R.string.sec_word_starts_no_word) else null
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ShkSpacing.Small)) {
         CompositionLocalProvider(LocalTextToolbar provides NoTextToolbar) {
             NoLearningKeyboard {
@@ -101,7 +113,7 @@ internal fun WordField(
                     value = value,
                     onValueChange = { new -> WordInput.accept(value, new)?.let(onValueChange) },
                     label = label,
-                    errorText = errorText,
+                    errorText = startsNoWord ?: errorText,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.None,
                         autoCorrectEnabled = false,

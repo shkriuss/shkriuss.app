@@ -164,11 +164,15 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
     }
 }
 
-/** The four words to confirm. The fields can be typed into, so the owner can try them. */
+/**
+ * The four words to confirm. The fields can be typed into, so the owner
+ * can try them. They start as a word, two letters with their suggestions,
+ * letters that start no word with the message under them, and empty.
+ */
 @OptIn(SecurityScreenSamples::class)
 @Composable
 private fun ConfirmSample(onBack: () -> Unit, modifier: Modifier) {
-    var confirm by remember { mutableStateOf(CreateConfirm(listOf(3, 9, 15, 22), listOf(sampleWords[2], "ab", "", ""))) }
+    var confirm by remember { mutableStateOf(CreateConfirm(listOf(3, 9, 15, 22), listOf(sampleWords[2], "ab", "abj", ""))) }
     CreateContent(
         screen = confirm,
         previewBuild = false,

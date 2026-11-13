@@ -370,7 +370,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has three test classes with 25 tests
+- `core/security` has four test classes with 29 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -379,6 +379,9 @@ second build must write the same mapping file, or the release stops. See
   - `SecurityActivitiesTest` starts the four screens under Robolectric,
     with the app class `TestHostApp`, a `SecurityHost`. It reads the
     window's flags and what the field tells the keyboard.
+  - `ConfirmWordsTest` draws the screen with the four words that confirm
+    a new key in a plain activity, which it adds to Robolectric's
+    package manager first, as the tests of `core/design` do.
   - `WordInputTest` checks what a word field accepts, with no Android.
 
 ### Instrumented tests

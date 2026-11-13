@@ -1,6 +1,7 @@
 package app.shkriuss.core.security
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,6 +31,20 @@ class WordInputTest {
         assertTrue(ab.all { it.startsWith("ab") })
         assertEquals(listOf("abandon"), WordInput.suggestions("aban"))
         assertEquals(emptyList<String>(), WordInput.suggestions("xq"))
+    }
+
+    @Test
+    fun lettersThatStartNoWordAreFound() {
+        assertFalse("nothing typed yet", WordInput.startsNoWord(""))
+        assertFalse(WordInput.startsNoWord("a"))
+        assertFalse(WordInput.startsNoWord("ab"))
+        assertFalse("a whole word", WordInput.startsNoWord("abandon"))
+        assertFalse(WordInput.startsNoWord("zoo"))
+        assertTrue(WordInput.startsNoWord("abj"))
+        assertTrue("no word of the list starts with x", WordInput.startsNoWord("x"))
+        assertTrue("a word with one letter too many", WordInput.startsNoWord("abandonx"))
+        assertEquals("then nothing can be picked", emptyList<String>(), WordInput.suggestions("abj"))
+        assertNull("and the next key takes nothing", WordInput.completion("abj"))
     }
 
     @Test
