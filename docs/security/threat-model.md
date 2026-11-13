@@ -10,7 +10,8 @@ does not. It ends with the OWASP MASVS controls and every open question.
   [docs/adr](../adr/README.md).
 - This page adds no decision of its own. It says what other pages
   decided, and where. The owner's decisions on this page are under
-  [Decided on pull request 30](#decided-on-pull-request-30). Where
+  [Decided on pull request 30](#decided-on-pull-request-30) and
+  [Decided on pull request 35](#decided-on-pull-request-35). Where
   nothing is decided, it says **Open**. Every open point is listed at
   the [end](#open-questions).
 - What exists today: Catalog and the core modules
@@ -1330,6 +1331,18 @@ page above.
 | Required checks | The emulator jobs for Android 13, 14 and 15 become required. The job for Android 17 does not, for now. The owner decides again at the Phase 2 gate ([ci.md](../development/ci.md#the-emulator-jobs)). |
 | The seventh deviation | No forced update (MASVS-CODE-2). Accepted by the owner on 2026-11-13. Step 5.1 decides again for the Sync app. |
 | The name of Claude's machine account | `shkriuss-bot`. It has worked since Phase 0. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
+
+## Decided on pull request 35
+
+The owner's decisions of 2026-11-13 on step 1.10, overlays and
+accessibility services
+([pull request 35](https://github.com/shkriuss/shkriuss.app/pull/35)).
+Each is built into the page above.
+
+| Question | Decision |
+|---|---|
+| MASVS-CODE-1 | **Met.** The overlay gaps that remain are deviations under PLATFORM-3, not CODE-1. |
+| The deviations for overlays and accessibility services: no accessibility marking on Android 13; the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted. Confirmed by the owner on 2026-11-13 ([PLATFORM-3](#platform)). |
 
 ## Open questions
 

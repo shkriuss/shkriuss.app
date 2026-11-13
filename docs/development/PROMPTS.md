@@ -814,7 +814,9 @@ Steps:
   add `android.permission.HIDE_OVERLAY_WINDOWS` for Water to the allow
   list; and add a rule that fails the build of an app whose merged
   manifest declares a screen of core/security unless it requests both
-  permissions (ADR 0033).
+  permissions (ADR 0033). I also ask you to add the test of that rule to
+  the test files of build-logic, and, if the test is in a new file, one
+  line for that file in .github/CODEOWNERS. Nothing else in those files.
 
 ### 2.6 Release preparation
 
