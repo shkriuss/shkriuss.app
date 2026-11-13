@@ -63,16 +63,21 @@ Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)):
 - the wrapper, and the verification metadata and keyring,
 - both `settings.gradle.kts` files, which hold the repositories,
 - the two build checks, `CheckApkRulesTask.kt` and
-  `CheckGraphicsPathUseTask.kt`,
+  `CheckGraphicsPathUseTask.kt`, and the two readers the APK rules check
+  uses, `ApkResourceReader.kt` and `DexMethodReferences.kt`,
 - `AndroidApplicationConventionPlugin.kt`, which connects both checks to
-  the build.
+  the build and runs the tests of the build checks in `check`,
 - `r8/app-rules.pro`, the R8 rules every app shares, which the APK rules
   check depends on (owner's decision on pull request 25),
 - the two checks of the record rules, `CheckRoomSchemasTask.kt` and
   `CheckDaoRulesTask.kt`, and `AndroidRoomConventionPlugin.kt`, which
   connects them to the build (owner's decision on pull request 21),
 - `AndroidCommon.kt`, the settings every module shares, which refuse the
-  bundled SQLite driver (owner's decision on pull request 21).
+  bundled SQLite driver (owner's decision on pull request 21), register
+  the logging check and refuse `core/testing` outside tests,
+- the logging check, `CheckNoLoggingTask.kt`, the tests of the build
+  checks in `build-logic/src/test/`, and `build-logic/build.gradle.kts`,
+  which sets those tests up (owner's decisions in step 1.9).
 
 ## Commands
 
@@ -81,7 +86,7 @@ Claude runs these from `android/`. The same list is in
 
 | Command | What it does |
 |---|---|
-| `./gradlew check` | Unit tests, Android Lint, and the schema, DAO rules and instrumented test suite checks, for all modules. |
+| `./gradlew check` | Unit tests, Android Lint, and the schema, DAO rules, instrumented test suite and logging checks, for all modules. Also the tests of the build checks. |
 | `./gradlew :app:<name>:assembleDebug` | Builds one app. |
 | `./gradlew verifyRoborazziDebug` | Compares screenshots with the committed ones. |
 | `./gradlew recordRoborazziDebug` | Records screenshots again after an intended UI change. |
@@ -89,6 +94,8 @@ Claude runs these from `android/`. The same list is in
 | `./gradlew checkRoomSchemas` | Checks that the committed schema files match the code. Part of `check`. |
 | `./gradlew checkDaoRules` | Checks that DAOs only read and that only `RecordWriter` writes records. Part of `check`. |
 | `./gradlew checkInstrumentedTestSuite` | Checks that the suite the emulator runs lists every test class. Part of `check`. |
+| `./gradlew checkNoLogging` | Checks that no module's main code logs or prints. Part of `check`. |
+| `./gradlew :build-logic:test` | Runs the tests of the build checks. Part of `check`. |
 | `./gradlew :app:<name>:assembleRelease` | Builds the unsigned release APK. |
 | `./gradlew :app:<name>:assemblePreview` | Builds the unsigned preview APK. |
 | `./gradlew :core:crypto:assembleDebugAndroidTest` | Builds a module's test APK for the emulator. It checks that the instrumented tests compile. The tests themselves run only in CI ([emulator-tests.md](emulator-tests.md)). |
@@ -99,7 +106,38 @@ The commands after a dependency change are in
 CI runs `./gradlew check verifyRoborazziDebug` together with
 `:app:<name>:checkReleaseApkRules` and
 `:app:<name>:checkReleaseGraphicsPathUse` for every app. See
-[ci.md](ci.md#job-check).
+[ci.md](ci.md#job-check), and the next section for which check runs
+where.
+
+## Which check runs where
+
+CI's job "Check" is a required check. It runs one Gradle command:
+`check verifyRoborazziDebug`, plus two release checks for every app,
+named one by one ([ci.md](ci.md#job-check)). So every check below runs
+on every pull request, either inside `check` or by name.
+
+| Check | Task | In `./gradlew check` | How CI runs it | What it reads |
+|---|---|---|---|---|
+| [Room schemas](#room-schemas) | `checkRoomSchemas` | Yes | Inside `check` | Modules with the Room plugin |
+| [DAO rules](#dao-rules-check) | `checkDaoRules` | Yes | Inside `check` | Modules with the Room plugin, main and test classes |
+| [Instrumented test suite](#instrumented-test-suite-check) | `checkInstrumentedTestSuite` | Yes | Inside `check` | Modules with tests on an emulator |
+| [Logging](#logging-check) (hard rule 10) | `checkNoLogging` | Yes | Inside `check` | The main code and test fixtures of every Android module but `core/testing` |
+| [Tests of the build checks](#tests-of-the-build-checks) | `:build-logic:test` | Yes | Inside `check` | `build-logic` |
+| [APK rules](#apk-rules-check) 1 to 6: permissions, native code, emoji loader, Play services, test fixtures, backup | `check<Variant>ApkRules` | No | By name, `:app:<name>:checkReleaseApkRules`, and CI checks its report | Every APK that is built: release, preview and debug |
+| [APK rules](#apk-rules-check) 7 to 9: WebView and code loading | The same task | No | The same | Only the APKs that ship: release and preview |
+| [Graphics path](#the-graphics-path-check) | `check<Variant>GraphicsPathUse` | Debug only | By name, `:app:<name>:checkReleaseGraphicsPathUse`, and CI checks its report | Every class an app runs |
+
+Two more rules are no task. They fail any Gradle command:
+
+- The bundled SQLite driver is refused in every module
+  ([Convention plugins](#convention-plugins)).
+- `core/testing` is refused anywhere but in a `test` or `androidTest`
+  configuration, test fixtures included
+  ([Logging check](#logging-check)).
+
+The APK rules check also runs before every `assemble` task. So the PR
+preview workflow, which builds the preview APK, runs rules 1 to 9 on it
+too.
 
 ## Repositories
 
@@ -120,7 +158,7 @@ CI runs `./gradlew check verifyRoborazziDebug` together with
 
 | Plugin | What it does |
 |---|---|
-| `shkriuss.android.application` | Apps: SDK levels, build types, lint, warnings as errors, reproducible-build settings, the APK rules check and the graphics-path check. |
+| `shkriuss.android.application` | Apps: SDK levels, build types, lint, warnings as errors, reproducible-build settings, the APK rules check and the graphics-path check. `check` also runs the [tests of the build checks](#tests-of-the-build-checks). |
 | `shkriuss.android.library` | Libraries: SDK levels, lint, warnings as errors. |
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
 | `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
@@ -132,6 +170,10 @@ CI runs `./gradlew check verifyRoborazziDebug` together with
 Every module refuses the bundled SQLite driver, `androidx.sqlite:sqlite-bundled`.
 Resolving it fails the build, with a message that names hard rule 2. The
 setting is in `AndroidCommon.kt`.
+
+Every module also runs the [logging check](#logging-check) in `check`,
+and refuses `core/testing` outside its tests. Both are in
+`AndroidCommon.kt` too.
 
 Compiler warnings are errors in every module and in `build-logic` itself.
 KSP's warnings, which include Room's, are errors too.
@@ -430,6 +472,12 @@ Test helpers that the tests of other modules may use
      decrypts as an app does.
 5. Fixtures are never part of an app. For those of `core/crypto`, the
    APK rules check makes sure ([The test fixtures rule](#the-test-fixtures-rule)).
+   A limit: only the fixtures of `core/crypto` are kept out of apps by a
+   check today. A module that adds fixtures later needs the same care: a
+   rule of its own in the APK rules check, decided with the owner. The
+   [logging check](#logging-check) reads every module's fixtures as main
+   code, for the case that an app wrongly depends on them (owner's
+   decision on [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
 6. Android Gradle Plugin 9.5.1 still marks test fixtures as incubating.
    What this project needs was checked on 2026-11-12 in the cloud
    environment:
@@ -636,6 +684,142 @@ How it was tested, on 2026-11-12, in `core/crypto`:
    inside quotes: the check passed.
 6. With all of that undone, the check passed on the 19 files of
    `core/crypto`.
+
+## Logging check
+
+Hard rule 10: user content must never reach a log. So main code never
+logs or prints. The task `checkNoLogging` fails the build when it does.
+It runs in `check` for every Android module. The owner asked for it in
+step 1.9
+([threat model](../security/threat-model.md#found-while-writing-this-page),
+point 3). It replaced the test `theModuleNeverLogsOrPrints` in
+`core/crypto`, which checked that one module only.
+
+What it reads:
+
+1. Every `.kt` and `.java` file in every folder under the module's
+   `src/` that is not test code: `main`, `debug`, `release`, `preview`,
+   `testFixtures`, and any folder added later.
+2. Test code is a folder whose name starts with `test` (such as `test`
+   and `testDebug`) but not with `testFixtures`, or starts with
+   `androidTest`, and the folder `sharedTest`.
+
+What it forbids: any of these 13 forms, anywhere in the text, comments
+and text in quotes included:
+
+- the ten forms of the test it replaced: `android.util.Log`, `Log.`,
+  `println`, `print(`, `printStackTrace`, `System.out`, `System.err`,
+  `java.util.logging`, `Logger` and `Timber`,
+- three more: `Log::` and `::print`, a function reference to a log or
+  print function, which names neither `Log.` nor `print(`, and
+  `dumpStack`, as in `Thread.dumpStack()`, which prints to the standard
+  error.
+
+It reads the text exactly as the replaced test did, so it is never
+weaker. A comment that names one of the forms fails too. Write it
+another way.
+
+It fails if a module has no main code at all, so it never passes by
+reading nothing. The failure message names each file, line and form.
+The report is written to `build/reports/no-logging/`.
+
+How it treats each kind of code:
+
+- **Test code** is not checked. It never ships in an app, and it holds
+  only test data. Some tests must print or capture the output, such as
+  `NoSecretsTest` in `core/crypto`.
+- **Test fixtures** are checked as main code. They are meant for tests
+  only, but an app that wrongly depends on them would ship them (owner's
+  decision on [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
+  See the limit in [Test fixtures](#test-fixtures), point 5.
+- **Catalog** is checked like every app. It ships to users.
+- **`core/testing`** is not checked. It is a module of test helpers, and
+  its test runner logs on purpose, so that the emulator job's log holds
+  each test's result. A rule in `AndroidCommon.kt` makes sure it stays
+  test code: if any module declares `core/testing` in a configuration
+  whose name does not start with `test` or `androidTest`, every Gradle
+  command fails and names the module and the configuration. So
+  `core/testing` can never reach an app (owner's decision in step 1.9).
+- **Test fixtures** may not declare `core/testing` either, so a
+  configuration whose name starts with `testFixtures` fails the rule too.
+  An app that wrongly depends on a module's test fixtures would take
+  `core/testing` with them (owner's decision on
+  [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
+  No module declares it there.
+- **`build-logic`** is not checked. It is the build's own code and never
+  part of an app.
+
+Only Android modules are checked. `AndroidCommon.kt` registers the check,
+and only the application and library plugins call it. A module that is
+not an Android module, such as a plain Kotlin module, would not be
+checked. Such a module must not be added without covering it by this
+check first (owner's decision in step 1.9).
+
+Its limit: it reads text. A call written so that it shows none of the
+forms, for example through reflection, is not seen. Review keeps that.
+
+How it was tested, on 2026-11-13 in the cloud environment:
+
+1. Before the change, the forms appeared in main code in one place only:
+   the test runner in `core/testing`.
+2. With the check in place, all seven checked modules passed. They read
+   9 to 29 files each, 29 in `core/crypto`: its 27 main files and its
+   two test fixtures. The fixtures held none of the forms, so they did not
+   change.
+3. A line `android.util.Log.d("probe", title)` added to a main file of
+   `core/design` failed the check, which named the file, the line and
+   the forms `android.util.Log` and `Log.`.
+4. The same line in a test file of `core/design` passed.
+5. `implementation(project(":core:testing"))` in Catalog's build file
+   failed every Gradle command, naming `:app:catalog` and
+   `implementation`.
+6. `CoreTestingGuardTest` failed when the rule was put back to let
+   `testFixtures` configurations declare `core/testing`, and passed with
+   the rule as it is.
+7. `NoLoggingCheckTest` failed in four tests when the check was put back
+   to leave `testFixtures` folders out, and passed with the check as it
+   is.
+
+## Tests of the build checks
+
+Each build check added in step 1.9 has unit tests. They show that it
+fails on a sample that breaks its rule, and passes on one that does not.
+The owner asked for them in step 1.9.
+
+1. They are in `build-logic/src/test/kotlin/`, and run on the JVM with
+   JUnit 4. `build-logic/build.gradle.kts` sets them up. JUnit 4.13.2 is
+   the version every module's tests use. It was already in the version
+   catalog and in the dependency verification, so nothing new is
+   downloaded.
+2. `build-logic` is a build of its own, so the main build's `check`
+   would not run them. The application plugin makes every app's `check`
+   depend on `:build-logic:test`. So CI's `check` runs them on every pull
+   request.
+3. The tests write their own samples: binary XML, resource tables, dex
+   files and APKs, with small writers in the test folder.
+   No binary file is in the repository. That the readers also read what
+   the real tools write is shown by the checks themselves, on Catalog's
+   APKs, on every pull request. A file they cannot read fails the check.
+4. The forbidden names, forms and domains are written out in the tests,
+   not taken from the checks. So a check with a shorter list fails a
+   test.
+
+| Test | What it shows |
+|---|---|
+| `NoLoggingCheckTest` | Each of the 13 forms fails in main code, also in a comment or in quotes. The ten forms of the replaced test are all there. `main`, `debug`, `release`, `preview`, `testFixtures` and a new folder are main code, and logging in the fixtures fails. The test folders are not checked. A module with no main code is found. |
+| `CoreTestingGuardTest` | `core/testing` in `implementation`, `api`, `debugImplementation`, `testFixturesImplementation` or `testFixturesApi` fails. In `testImplementation` and `androidTestImplementation` it passes. |
+| `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. |
+| `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
+| `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. |
+
+How the tests were checked: on 2026-11-13, the checks were weakened on
+purpose, all at once: `allowBackup` true let through, `WebView` allowed,
+`Runtime.exec` taken off the list, and `dumpStack` taken off the list.
+Seven tests failed. With the checks restored, all passed.
+
+The older checks (Room schemas, DAO rules, the instrumented test suite,
+the graphics path, and APK rules 1 to 5) were tested by hand, as their
+sections say. They have no unit tests yet.
 
 ## Lint
 
@@ -857,7 +1041,18 @@ and fails the build if:
 5. one of its dex files names a class under
    `app.shkriuss.core.crypto.fixtures`, the test fixtures of
    `core/crypto` ([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md),
-   see below).
+   see below),
+6. Android's own backup or device transfer is not off
+   ([The backup rule](#the-backup-rule)),
+7. in an APK that ships, its code names a WebView class,
+8. in an APK that ships, its code names a class loader that reads code,
+9. in an APK that ships, its code calls `System.load`, `Runtime.load`,
+   `Runtime.exec` or `ProcessBuilder.start`
+   ([The WebView and code loading rules](#the-webview-and-code-loading-rules)).
+
+An APK that ships is one of every build type but `debug`: `release` and
+`preview` today. The failure message names the app and its application
+ID, then each problem.
 
 The report is written to `build/reports/apk-rules/`. A library can add any
 of these without anyone noticing. The check makes sure someone does.
@@ -996,6 +1191,174 @@ then the name of the first is gone. The Play services class rule reads
 names the same way. So the owner decided on pull request 25 that it gets
 an R8 rule of its own
 ([The Play services class rule](#the-play-services-class-rule)).
+
+### The backup rule
+
+Rule 6. [crypto-design.md](../security/crypto-design.md) asks every app
+to turn Android's own backup and device transfer off ("Where keys are
+stored", point 1). The owner asked for this check in step 1.9
+([threat model](../security/threat-model.md#found-while-writing-this-page),
+point 1). It reads what ships: the APK itself, not the source files.
+
+What it reads, from each APK:
+
+1. The compiled `AndroidManifest.xml`. In `<application>`:
+   - `android:allowBackup` must be the literal `false`. If it is
+     missing, the rule fails: Android's default is `true`. A value taken
+     from a resource fails too. On Android 12 and later this attribute
+     stops cloud backup only, not a transfer to a new device.
+   - `android:backupAgent` must not be set.
+   - `android:dataExtractionRules` must name an XML resource. On
+     Android 12 and later only these rules turn device transfer off.
+2. `resources.arsc`, the resource table. It lists every copy of that
+   resource, one for each configuration, such as `xml` and `xml-v35`,
+   with the file's path in the APK. A release APK keeps its files under
+   short names, such as `res/0E.xml`. The table says which is which.
+3. Every copy of the rules file. Each must have:
+   - the root `<data-extraction-rules>`,
+   - exactly one `<cloud-backup>` and one `<device-transfer>`, and
+     nothing else. So `<cross-platform-transfer>` fails. Since
+     Android 16 QPR2, that section lets an app opt in to a transfer to
+     another platform, such as an iPhone,
+   - in each section, only `<exclude>`, with
+     `<exclude domain="..." path="."/>` for each of the nine domains:
+     `root`, `file`, `database`, `sharedpref`, `external`,
+     `device_root`, `device_file`, `device_database` and
+     `device_sharedpref`.
+
+Why the APK and not the source folders: a library can bring its own copy
+of the rules file for one configuration, for example `xml-v36`. The build
+keeps it next to the app's copy, and Android 16 would use it. No source
+folder of the app holds it. The APK holds every copy.
+
+How it reads them: the APK holds the manifest and the rules as binary
+XML, and the resource table in a binary format of its own.
+`ApkResourceReader.kt` reads both. It follows AOSP's `ResourceTypes.h`
+and needs no library. A file or a layout it cannot read fails the check
+with a message, so the rule never passes by reading nothing.
+
+It does not read `android:fullBackupContent`. Android uses it only on
+Android 11 and older, and the minimum is Android 13.
+
+The rule runs on every APK, `debug` too. Catalog passes: its manifest and
+`res/xml/data_extraction_rules.xml` turn everything off.
+
+How it was tested, on 2026-11-13 in the cloud environment. Each of these
+temporary changes to Catalog failed the check, which named the app and
+the attribute or the file. With each change undone, all three variants
+passed.
+
+1. `android:allowBackup="true"`. The release and the debug check each
+   said "android:allowBackup is true. It must be false".
+2. `android:allowBackup` removed.
+3. `android:dataExtractionRules` removed.
+4. The `<exclude>` of the domain `external` removed from
+   `<device-transfer>`.
+5. A `<cross-platform-transfer platform="ios">` section added.
+6. A second copy in `res/xml-v35/` with an `<include>`. The debug check
+   named `res/xml-v35/data_extraction_rules.xml`. The release check
+   named `res/L6.xml`, the short name of the same file in the release
+   APK. Lint also refused that file in a release build. For this one
+   probe, the release check ran with lint left out, to see the check
+   itself.
+7. `android:backupAgent` set.
+
+The [tests of the build checks](#tests-of-the-build-checks) cover each
+of these, and more, on every pull request.
+
+### The WebView and code loading rules
+
+Rules 7, 8 and 9. Hard rule 1 and
+[ADR 0019](../adr/0019-no-webview-no-runtime-code-loading.md): no
+WebView, no code loaded at run time. The owner asked for them in step 1.9
+([threat model](../security/threat-model.md#found-while-writing-this-page),
+point 2).
+
+1. Rule 7, WebView: every class of `android.webkit`, of `androidx.webkit`
+   (AndroidX WebKit) and of `org.mozilla.geckoview` (GeckoView, another
+   web engine). Two classes of `android.webkit` are allowed, by the
+   owner's decision in step 1.9: `MimeTypeMap` and `URLUtil`. They only
+   turn text into text and need no WebView. `FileProvider` in
+   `androidx.core` uses `MimeTypeMap`.
+2. Rule 8, class loaders that read code from a file, from memory or from
+   the network: `dalvik.system.DexClassLoader`, `PathClassLoader`,
+   `InMemoryDexClassLoader`, `DelegateLastClassLoader`,
+   `BaseDexClassLoader` and `DexFile`, and `java.net.URLClassLoader`,
+   with their nested classes. A class that extends one of them names it
+   as its superclass, so it is caught too.
+3. Rule 9, calls that load native code from any path, or run a program:
+   `System.load`, `Runtime.load`, `Runtime.exec` and
+   `ProcessBuilder.start`. `loadLibrary` is not on the list, by the
+   owner's decision in step 1.9. It loads only from the APK's own library
+   folder, which rule 2 keeps empty. Compose's graphics-path library
+   calls it (see "What today's APKs hold" below).
+
+How rules 7 and 8 search: every dex file is searched for each name in
+two forms.
+
+- As a class the dex file names, such as `Landroid/webkit/WebView;`. This
+  is the search of [the Play services class rule](#the-play-services-class-rule).
+- As dotted text, such as `dalvik.system.DexClassLoader`. That is the
+  form code uses to load a class by its name, with `Class.forName`. The
+  byte before a match is not looked at, because in a dex file it is often
+  the length of the string, which can be any letter. So a longer name
+  that ends the same way also fails. That can fail a build that need not
+  fail, but it never passes one that must.
+
+All these classes belong to Android or Java and are never inside an APK.
+R8 cannot rename them or fold them away, so no R8 rule is needed.
+
+How rule 9 searches: `DexMethodReferences.kt` reads the dex file's table
+of method references. A method that code calls is always in that table,
+so the table decides pass or fail. The reader reads nothing else. To name
+the class that makes the call, it would have to read the instructions of
+every method, so it leaves the caller out (owner's decision in step 1.9).
+The failure message says how to find it: in a cloud session, run the
+SDK's `dexdump -d` on that dex file and search for the method. A dex file
+the reader cannot read, such as a newer format, fails the check.
+
+Where they run: only on the APKs that ship, every build type but
+`debug`, so `release` and `preview` today (owner's decision in step
+1.9). R8 has shrunk those APKs, so they hold only code an app can run. A
+`debug` APK holds every class of every library, used or not.
+
+What today's APKs hold. Before the rules were written, Catalog's three
+APKs were searched on 2026-11-13 with the SDK's `dexdump` and a search of
+the dex bytes:
+
+| APK | WebView and class loaders | Calls that load or run code |
+|---|---|---|
+| release | None | `System.loadLibrary` in the static block of `androidx.graphics.path.PathIteratorPreApi34Impl` |
+| preview | None | The same |
+| debug | `android.webkit.WebView`, in `androidx.core.text.util.LinkifyCompat.findAddress` (`androidx.core`). `android.webkit.MimeTypeMap`, in `androidx.core.content.FileProvider`. `dalvik.system.ZipPathValidator$Callback`, a stub that D8 adds by itself for a class of Android 14. It is no class loader. | `System.loadLibrary` in the static block of `androidx.graphics.path.PathIteratorImpl` |
+
+No APK called `System.load`, `Runtime.load`, `Runtime.loadLibrary`,
+`Runtime.exec` or `ProcessBuilder.start`. The graphics-path library is
+left out of every APK, and the graphics-path check fails the build if any
+code can reach it ([Native code from Compose](#native-code-from-compose)).
+
+Limits:
+
+- `Context.createPackageContext` with `CONTEXT_INCLUDE_CODE` gives code
+  of another app. It is caught only if the code then names one of the
+  class loaders.
+- `ClassLoader.defineClass` cannot load code on Android. It throws there.
+- A class name put together from pieces at run time is not text in the
+  dex file.
+
+How it was tested, on 2026-11-13 in the cloud environment:
+
+1. Catalog got a temporary file with one function, called from its
+   activity, that made a `WebView`, made a `DexClassLoader`, loaded
+   `dalvik.system.InMemoryDexClassLoader` by its name with
+   `Class.forName`, and called `Runtime.exec`.
+2. The release and the preview check each failed and named all four:
+   the class `android.webkit.WebView` (rule 7), the class
+   `dalvik.system.DexClassLoader` (rule 8), the name
+   `dalvik.system.InMemoryDexClassLoader` as text (rule 8), and a call to
+   `java.lang.Runtime.exec` (rule 9).
+3. The debug check passed, as decided.
+4. With the file removed, all three passed.
 
 ## Native code from Compose
 

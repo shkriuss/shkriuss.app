@@ -229,26 +229,6 @@ class NoSecretsTest {
     }
 
     @Test
-    fun theModuleNeverLogsOrPrints() {
-        val sources = File("src/main/kotlin").walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
-        assertTrue("the test must read this module's sources, and found ${sources.size}", sources.size >= 20)
-        val forbidden = listOf(
-            "android.util.Log",
-            "Log.",
-            "println",
-            "print(",
-            "printStackTrace",
-            "System.out",
-            "System.err",
-            "java.util.logging",
-            "Logger",
-            "Timber",
-        )
-        val found = sources.flatMap { file -> forbidden.filter { it in file.readText() }.map { "${file.name}: $it" } }
-        assertEquals("core/crypto never logs", emptyList<String>(), found)
-    }
-
-    @Test
     fun onlyClassesWithoutSecretsAreDataClasses() {
         // A data class writes its fields into its toString. Nothing that holds a key may be one.
         val sources = File("src/main/kotlin").walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()

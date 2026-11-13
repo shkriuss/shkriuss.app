@@ -863,12 +863,18 @@ Status: **Partly met.**
 **MASVS-STORAGE-2: The app prevents leakage of sensitive data.**
 Status: **Partly met.**
 
-- MASWE-0005, logs: no code that ships in an app logs anything today.
-  Only `core/crypto` has a test that forbids logging. Everywhere else,
-  hard rule 10 is kept by review.
-- MASWE-0006, backups: Android's own backup and device transfer are off
-  in Catalog. crypto-design.md asks this of every app ("Where keys are
-  stored", point 1). No build check enforces it.
+- MASWE-0005, logs: met. The logging check, part of `check`, fails the
+  build when the main code of any module logs or prints (hard rule 10;
+  [build.md](../development/build.md#logging-check)). `core/testing`,
+  whose test runner logs on purpose, is not checked, and a build rule
+  refuses it anywhere but in tests.
+- MASWE-0006, backups: met. crypto-design.md asks every app to turn
+  Android's own backup and device transfer off ("Where keys are stored",
+  point 1). Rule 6 of the APK rules check fails every APK that does not.
+  It reads the compiled manifest and every copy of the data extraction
+  rules from the APK itself, and it also refuses the opt-in transfer to
+  another platform
+  ([build.md](../development/build.md#the-backup-rule)).
 - MASWE-0001 and 0002: as STORAGE-1.
 - MASWE-0018 and 0029 to 0032: as PLATFORM-1. MASWE-0033 and 0034: as
   PLATFORM-2. MASWE-0036 to 0040: as PLATFORM-3.
@@ -1034,7 +1040,9 @@ Status: **Does not apply.**
 - No app has a WebView (hard rule 1,
   [ADR 0019](../adr/0019-no-webview-no-runtime-code-loading.md)).
   MASWE-0033 to 0035 do not apply.
-- Review keeps the rule. No build check refuses a WebView.
+- Rule 7 of the APK rules check fails every APK that ships (release
+  and preview) if its code names a WebView class, as a class or as text
+  ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
 
 **MASVS-PLATFORM-3: The app uses the user interface securely.**
 Status: **Partly met.**
@@ -1132,8 +1140,12 @@ Status: **Met for what is built.**
 - MASWE-0029, deep links: there are none. MASWE-0034 and 0035: there is
   no WebView.
 - MASWE-0049, loading code at runtime: there is none (hard rule 1,
-  [ADR 0019](../adr/0019-no-webview-no-runtime-code-loading.md)). No
-  build check refuses it.
+  [ADR 0019](../adr/0019-no-webview-no-runtime-code-loading.md)). Rules
+  8 and 9 of the APK rules check fail every APK that ships if its code
+  names a class loader that reads code, as a class or as text, or calls
+  `System.load`, `Runtime.load`, `Runtime.exec` or
+  `ProcessBuilder.start`
+  ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
 - MASWE-0045: as CODE-3.
 - Open: what the Sync app takes in (Phase 5). File ciphertext that
   arrives while an app is locked is checked only when the file is first
@@ -1345,16 +1357,23 @@ The owner decided a step for each point at the Phase 1 gate, on
 [PROMPTS.md](../development/PROMPTS.md#phase-1-gate-you). A point stays
 Open until its step is done.
 
-1. No build check makes sure that every app turns Android's own backup
+1. No build check made sure that every app turns Android's own backup
    and device transfer off (STORAGE-2).
-   **Step 1.9**, "Build checks from the threat model".
-2. No build check refuses a WebView or code loaded at runtime (hard
+   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): rule 6 of the APK rules check
+   ([build.md](../development/build.md#the-backup-rule)).
+2. No build check refused a WebView or code loaded at runtime (hard
    rule 1; PLATFORM-2, CODE-4).
-   **Step 1.9.** If a library that ships today trips the check, the
-   session stops and tells the owner which.
-3. Logging of user content is tested only in `core/crypto`
+   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): rules 7 to 9 of the APK rules check, on the
+   APKs that ship
+   ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
+   No library that ships today trips them. In the debug APK, which never
+   ships, `androidx.core` names `WebView`; the owner decided that the
+   rules run on the APKs that ship only.
+3. Logging of user content was tested only in `core/crypto`
    (STORAGE-2).
-   **Step 1.9**: one check for all modules that main code does not log.
+   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): the logging check, for the main code of every
+   module ([build.md](../development/build.md#logging-check)). It
+   replaced the test in `core/crypto`.
 4. Nothing scans the dependencies for known vulnerabilities (CODE-3).
    **Step 2.6** decides how, before Water's first release. It first
    tries what GitHub offers by itself.

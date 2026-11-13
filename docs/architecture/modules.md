@@ -77,7 +77,10 @@ module. Feature modules never depend on each other.
   loop: the tests of a module are not part of the module.
 - Other modules add `core/testing` only as a test dependency
   (`testImplementation`, and `androidTestImplementation` for tests on an
-  emulator), never to their main code.
+  emulator), never to their main code or their test fixtures. The build
+  enforces it: any other configuration that declares `core/testing`
+  fails every Gradle command
+  ([build.md](../development/build.md#logging-check)).
 - A module with tests on an emulator applies the
   `shkriuss.android.instrumented-test` plugin
   ([emulator-tests.md](../development/emulator-tests.md#how-a-module-gets-instrumented-tests)).

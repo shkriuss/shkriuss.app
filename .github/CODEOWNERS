@@ -12,11 +12,29 @@
 /android/settings.gradle.kts                 @shkriuss
 /android/build-logic/settings.gradle.kts     @shkriuss
 
-# Build checks that enforce hard rules 2, 3 and 4, and the plugin that
-# connects them to the build.
+# Build checks that enforce hard rules 1, 2, 3 and 4 and that Android's
+# own backup and device transfer are off, the readers the APK rules check
+# uses, and the plugin that connects them to the build.
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckApkRulesTask.kt                   @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/ApkResourceReader.kt                   @shkriuss
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/DexMethodReferences.kt                 @shkriuss
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckGraphicsPathUseTask.kt            @shkriuss
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidApplicationConventionPlugin.kt  @shkriuss
+
+# The build check that enforces hard rule 10 (main code never logs). It
+# is connected to the build in AndroidCommon.kt, below.
+/android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckNoLoggingTask.kt                  @shkriuss
+
+# The tests of the build checks, and the build file of build-logic, which
+# sets those tests up (step 1.9).
+/android/build-logic/build.gradle.kts                                                               @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/NoLoggingCheckTest.kt                  @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/CoreTestingGuardTest.kt                @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/ApkResourceReaderTest.kt               @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/BackupRulesTest.kt                     @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/WebViewAndCodeLoadingRulesTest.kt      @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/BinaryResourceWriter.kt                @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/DexWriter.kt                           @shkriuss
 
 # The R8 rules every app shares. The APK rules check depends on them: they
 # keep the names of classes, and they keep classes of Google Play services
@@ -39,7 +57,8 @@
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/CheckInstrumentedTestSuiteTask.kt              @shkriuss
 
 # Settings every Android module shares, including the refusal of the
-# bundled SQLite driver (hard rule 2, ADR 0004).
+# bundled SQLite driver (hard rule 2, ADR 0004), the logging check and
+# the refusal of core/testing outside tests (hard rule 10).
 /android/build-logic/src/main/kotlin/app/shkriuss/buildlogic/AndroidCommon.kt                       @shkriuss
 
 # Signing configuration and key material, wherever they appear.

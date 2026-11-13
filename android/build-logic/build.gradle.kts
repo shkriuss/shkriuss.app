@@ -35,6 +35,13 @@ dependencies {
     implementation(libs.roborazzi.gradle.plugin)
     implementation(libs.room.gradle.plugin)
     implementation(libs.ksp.gradle.plugin)
+    // The tests of the build checks (docs/development/build.md, "Tests of
+    // the build checks"). JUnit 4 is the version every module's tests use.
+    testImplementation(libs.junit)
+}
+
+tasks.named<Test>("test") {
+    useJUnit()
 }
 
 gradlePlugin {

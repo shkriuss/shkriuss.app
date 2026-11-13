@@ -3,13 +3,16 @@ package app.shkriuss.buildlogic
 import com.android.build.api.dsl.CommonExtension
 import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.kotlin.dsl.findByType
+import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 
 /**
  * Settings every Android module shares: SDK levels, bytecode level, lint
- * and compiler warnings. Called by the application and library plugins.
+ * and compiler warnings, and the logging check. Called by the application
+ * and library plugins.
  */
 internal fun Project.configureAndroidCommon(android: CommonExtension) {
     android.compileSdk = ShkBuild.COMPILE_SDK
@@ -44,7 +47,74 @@ internal fun Project.configureAndroidCommon(android: CommonExtension) {
     }
 
     refuseBundledSqlite()
+    registerNoLoggingCheck()
+    refuseCoreTestingOutsideTests()
 }
+
+/**
+ * Fails `check` when the module's main code could write to a log (hard
+ * rule 10, [CheckNoLoggingTask]). `core/testing` holds test helpers only, so
+ * it is test code and is not checked. [refuseCoreTestingOutsideTests] makes
+ * sure it never reaches an app (owner's decision in step 1.9).
+ */
+private fun Project.registerNoLoggingCheck() {
+    val module = path
+    if (module == CORE_TESTING) return
+    val check = tasks.register<CheckNoLoggingTask>("checkNoLogging") {
+        group = "verification"
+        description = "Checks that the module's main code never logs or prints (hard rule 10)."
+        modulePath.set(module)
+        sourceRoot.set(layout.projectDirectory.dir("src"))
+        report.set(layout.buildDirectory.file("reports/no-logging/check.txt"))
+    }
+    tasks.named { it == "check" }.configureEach { dependsOn(check) }
+}
+
+/**
+ * Fails the build if any configuration that is not a test configuration
+ * declares `core/testing`. Its main code logs on purpose, for the emulator
+ * tests, and the logging check does not read it. So it may only ever be a
+ * test dependency, and with this rule it can never reach an app. Test
+ * fixtures do not count as tests here: an app that wrongly depends on a
+ * module's fixtures would take `core/testing` with them (owner's decision
+ * on pull request 34).
+ *
+ * `core/testing` itself is left out: the Android Gradle Plugin adds a
+ * module to the classpaths of its own tests, such as
+ * `debugAndroidTestCompileClasspath`. That is the module under test, not a
+ * use of it.
+ */
+internal fun Project.refuseCoreTestingOutsideTests() {
+    val module = path
+    if (module == CORE_TESTING) return
+    configurations.configureEach {
+        val configuration = name
+        if (!isTestConfiguration(configuration)) {
+            dependencies.configureEach {
+                if (this is ProjectDependency && path == CORE_TESTING) {
+                    throw GradleException(
+                        "$module declares $CORE_TESTING in '$configuration'. $CORE_TESTING holds test helpers " +
+                            "that log, and it may only be used by tests: testImplementation or " +
+                            "androidTestImplementation. See docs/development/build.md, \"Logging check\".",
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * True for a configuration of tests that never reach an app: its name starts
+ * with `test` or `androidTest`, but not with `testFixtures`.
+ */
+internal fun isTestConfiguration(name: String): Boolean =
+    (name.startsWith("test") && !name.startsWith(TEST_FIXTURES)) || name.startsWith("androidTest")
+
+/** The start of the name of every configuration of a module's test fixtures. */
+private const val TEST_FIXTURES = "testFixtures"
+
+/** The module of test helpers, which only tests may use. */
+internal const val CORE_TESTING = ":core:testing"
 
 /**
  * Fails dependency resolution if anything asks for the bundled SQLite
