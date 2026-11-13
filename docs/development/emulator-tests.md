@@ -234,11 +234,15 @@ How the tests reach what an app cannot:
 
 First runs on 2026-11-12 and 2026-11-13, in
 [pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26), on
-AOSP emulators. Each run has 10 tests. On Android 13, 14 and 15 all of
-them pass. On Android 17 the first runs did not get to their end
+AOSP emulators with Android 13, 14, 15 and 17. Each run has 10 tests,
+and all of them pass on every version. On Android 17 the first runs did
+not get to their end, until the job waited for Android
 ([below](#android-17-the-job-waits-for-android)).
 
-| What | Result on Android 13, 14 and 15 |
+Android behaved the same on every version. The numbers of the first
+runs are from Android 13, 14 and 15.
+
+| What | Result |
 |---|---|
 | A newly installed app | Android shows none of its notifications, and the state is "never asked". |
 | The permission is granted | Android shows notifications at once. The state is "ready". |
@@ -247,7 +251,7 @@ them pass. On Android 17 the first runs did not get to their end
 | Exact alarms with `USE_EXACT_ALARM` | `AlarmManager.canScheduleExactAlarms` is true. The user is not asked. |
 | The receivers, which are not exported | Android reaches both: the alarm's own broadcast, `TIME_SET` and `TIMEZONE_CHANGED`. |
 | An alarm fires | The app's handler runs, never before the alarm's time, and the notification is shown with the alarm's time. |
-| **How exact an alarm is** | An alarm set 7 seconds ahead reached the app's handler 2 to 3 milliseconds after its time, on all three versions. The emulator was awake. |
+| **How exact an alarm is** | An alarm set 7 seconds ahead reached the app's handler 2 to 3 milliseconds after its time, on all four versions. The emulator was awake. |
 | **The shortest wait** | Android fires no alarm sooner than 5 seconds after it was set. In the first runs an alarm set 3 seconds ahead fired 2.0 seconds after its time, on all three versions. An alarm whose time had passed fired 5.0 seconds after it was set. This is Android's own limit for every app. |
 | **Two alarms that are due together** | They arrive in either order. In the first runs two alarms one second apart, both inside the 5 seconds, came together, on Android 13 and 15 the later one first. The handler ran once for each. Two alarms two seconds apart, both more than 5 seconds ahead, came in their order. |
 | An alarm that is no longer wanted | Does not fire. |
@@ -282,8 +286,21 @@ after a few tests, with "INSTRUMENTATION_ABORTED: System has crashed".
   log says when Android started again.
 - No test was left out or changed for it.
 
-Open: what the first run with the wait showed. This page gets it after
-that run.
+What the first run with the wait showed, on 2026-11-13:
+
+| Android | What the log said | The tests of `core/notify` |
+|---|---|---|
+| 13, 14, 15 | "Waited 10 seconds before the next test APK. Android did not start again." | All 10 pass, as before. |
+| 17 | A warning: "Android 17 started again after the tests of `app.shkriuss.core.crypto.test` ... The job waited 20 seconds until it answered." | All 10 pass. |
+
+- On Android 17, Android answered again within the first 10 seconds
+  after the crash. The other 10 seconds are the pause the job adds
+  after a restart.
+- The wait makes each job about 10 seconds longer, and about 20 on
+  Android 17.
+- The warning shows on the page of the run, above the jobs. It will
+  show on every run for as long as the Android 17 image has this
+  fault. If a later image fixes it, the warning stops by itself.
 
 ## What an emulator cannot check
 
