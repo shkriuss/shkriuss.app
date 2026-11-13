@@ -13,19 +13,85 @@ boxes in the pull request that records the release.
 | Tag | `catalog-v0.3.0` |
 | What changed | [Catalog changelog](../../../android/app/catalog/CHANGELOG.md), 0.3.0 |
 
-"Every screen" means the start screen and all 24 pages it lists. Tap a
-page to open it, and Back to return. On each page, also try the samples
-under "Try it". On the two pages under **Shared screens**, tap every
-state: 13 on **Recovery key screens** and 19 on **App lock screens**.
-Back returns to the list.
-
 The names in part 1 are the ones GrapheneOS shows. A value may start
 with "Default", for example "Default (Blocked)".
 
-This checklist is only for the release. The look at the shared screens
-for the Phase 1 gate also uses Catalog 0.3.0, once it is published
-([PROMPTS.md](../../development/PROMPTS.md#phase-1-gate-you), steps 1
-to 3).
+## What to open, and why
+
+The shared checklist asks for every screen, everywhere. For 0.3.0 that
+would be 24 pages and 32 states, on three devices, in eight settings.
+The owner chose this sampling instead, on 2026-11-13, in
+[pull request 32](https://github.com/shkriuss/shkriuss.app/pull/32).
+
+Why it is enough:
+
+1. The 22 pages under **Tokens** and **Components** did not change since
+   0.2.0. `core/design` is the same, and so are their screenshots: since
+   0.2.0, the only Catalog screenshots that changed are the eight of the
+   start screen. These pages had the full pass with 0.2.0. So they are
+   opened once, on the Pixel 9 Pro, and nowhere else. That includes
+   Navigation and List and detail, which 0.2.0 also checked on the
+   Pixel Tablet.
+2. The screenshot tests capture every state of the two new pages in the
+   light and the dark theme, at font scale 1.0 and 2.0: on a phone held
+   upright, and on the Pixel Tablet held sideways. So part 2 needs two
+   settings, not eight.
+3. Steps 8 and 9 of part 1 show that the app runs in a secondary user and
+   in Private Space, not how it is laid out.
+
+The three sets used below:
+
+- **Everything:** the start screen, each of the 22 pages under Tokens
+  and Components, and all 32 states of the two pages under **Shared
+  screens**: 13 on **Recovery key screens** and 19 on **App lock
+  screens**. Once, on the Pixel 9 Pro, in part 1, step 7. On each old
+  page, also try the samples under "Try it".
+- **The sample:** the start screen, the two pages under **Shared
+  screens**, and these ten states.
+  - On **Recovery key screens**:
+    1. Security screen, setup stopped and damaged key files, preview
+       build
+    2. Create: the 24 words
+    3. Create: four words to confirm
+    4. Enter: the words, with suggestions
+    5. Show: the words again
+  - On **App lock screens**:
+    1. Lock screen
+    2. App lock screen, on, five minutes, screenshots blocked
+    3. Dialog: when the app locks
+    4. Turn on: the warning, in an app that keeps the key
+    5. Turn on: all 24 words
+- **The short sample:** the start screen, any one page under Tokens or
+  Components, and one state of each page under **Shared screens**.
+
+Tap a page to open it, and a state to see it full window. Back returns.
+
+Typing: two states take letters, "Create: four words to confirm" and
+"Enter: the words, with suggestions". Wherever you open them, type a few
+letters with the keyboard open. "Turn on: all 24 words" shows a word
+field too, but Catalog takes no letters there: its sample has nothing to
+type into. That is expected.
+
+"Screenshots blocked" in the state "App lock screen, on, five minutes,
+screenshots blocked" is only the setting the sample shows. In Catalog,
+only the switch at the top of the page blocks screenshots (part 2,
+step 4).
+
+## The Phase 1 gate
+
+This pass is also the look at the shared screens for the
+[Phase 1 gate](../../development/PROMPTS.md#phase-1-gate-you), steps 1
+to 3. The owner decided on 2026-11-13 to make it one pass, not two:
+
+- TalkBack is part of it: part 1, step 7.3.
+- Write what you dislike as a comment on the pull request that added
+  this page. Use prompt R3 to change it
+  ([PROMPTS.md](../../development/PROMPTS.md#r3-change-something-you-saw-on-the-phone)).
+- After publishing, nothing is looked at again except part 5.
+
+Open: whether a change you ask for with prompt R3 goes into 0.3.0, so
+that parts 1 to 3 run again on the new preview, or waits for the next
+version.
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
 
@@ -62,20 +128,25 @@ Before you merge the pull request that added this page.
    it.
 7. [ ] With all of these set, Catalog still works.
    1. On **App info**, tap **Force stop**, so the settings apply.
-   2. Open Catalog preview and use every screen. Nothing crashes, and no
-      page or state is empty.
+   2. Open Catalog preview and open **everything**, once. Nothing
+      crashes, and no page or state is empty.
+   3. Turn on TalkBack (in Settings, search for **TalkBack**). Open the
+      ten states of **the sample** and move through each one. TalkBack
+      reads every button, field and switch with a name. Then turn
+      TalkBack off.
 8. [ ] Works in a secondary user profile.
    1. In the Owner user, open Settings, tap **System**, then **Users**.
    2. Tap the secondary user, then **Install available apps**. The page
       **Choose apps to install** opens.
    3. Turn on the switch next to Catalog preview.
-   4. Go back and tap **Switch to user**. Open Catalog preview and use
-      every screen.
+   4. Go back and tap **Switch to user**. Open Catalog preview and open
+      **the short sample**.
 9. [ ] Works in Private Space.
    1. In Settings, tap **Security and privacy**, then **Private space**.
    2. Tap **Install available apps**, and turn on the switch next to
       Catalog preview, as in step 8.
-   3. Open Catalog preview in Private Space and use every screen.
+   3. Open Catalog preview in Private Space and open **the short
+      sample**.
 10. [ ] Reminders: does not apply. Catalog has no reminders.
 
 ## Part 2: Layout, on the Pixel Tablet and the Pixel 6a
@@ -83,18 +154,14 @@ Before you merge the pull request that added this page.
 Before you merge the pull request.
 
 1. [ ] Install Catalog preview on both devices.
-2. [ ] On each, open every screen:
-   1. in the light theme and in the dark theme (in Settings, search for
-      **Dark theme**),
-   2. at the default font size and at the largest (search for **Font
-      size**),
-   3. upright and turned sideways.
+2. [ ] On each, open **the sample** twice:
+   1. first in the light theme, at the default font size, upright;
+   2. then in the dark theme, at the largest font size, turned sideways.
+
+   In Settings, search for **Dark theme** and for **Font size**.
 3. [ ] No text is cut off, clipped or on top of other text, and nothing
    sits under the system bars.
-4. [ ] On the Pixel Tablet, and on a phone held sideways, Navigation
-   shows a rail. On the Pixel Tablet held sideways, List and detail shows
-   two panes.
-5. [ ] The screenshot switch, on one of the two devices. It is the one
+4. [ ] The screenshot switch, on one of the two devices. It is the one
    thing on the new pages that unit tests cannot check.
    1. Open **Recovery key screens** and turn on **Block screenshots, as
       in an app**.
@@ -141,6 +208,9 @@ Before you merge the pull request.
 
 ## Part 5: After publishing
 
+The only look after publishing. The pass for the Phase 1 gate was parts
+1 and 2.
+
 1. [ ] On a phone with Catalog 0.2.0 from Obtainium, open Obtainium. It
    shows an update for Catalog. Tap Catalog, then **Update**. Android
    installs it as an update, without uninstalling 0.2.0 first. Catalog
@@ -156,12 +226,15 @@ Before you merge the pull request.
    1. the changelog's 0.3.0 heading and date, "Released: 0.3.0" on the
       [apps page](../../user/apps.md), the status in the README, and the
       ticks on this page;
-   2. Catalog 0.3.0 in the lists of releases made before the key
+   2. the look of the Phase 1 gate as done, in
+      [PROMPTS.md](../../development/PROMPTS.md#phase-1-gate-you), with
+      what you reported from parts 1 and 2;
+   3. Catalog 0.3.0 in the lists of releases made before the key
       rehearsal, in
       [ADR 0013](../../adr/0013-signing-key-custody-and-rotation.md),
       point 8, and in step 2.7 of
       [PROMPTS.md](../../development/PROMPTS.md#27-restore-and-rotation-rehearsal);
-   3. a look inside the published APK, as
+   4. a look inside the published APK, as
       [third-party.md](../../development/third-party.md) asks of the
       first release APK that uses `core/crypto`: the word list and its
       licence file are both in it.
