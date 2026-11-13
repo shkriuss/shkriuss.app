@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The manifest of the test APK of core/notify. It is installed only on the
+  emulator in CI and is never part of an app.
+
+  The test APK is set up the way an app that uses core/notify is: its app
+  class is a NotifyHost. The three permissions and the two receivers come
+  from the module's own manifest, as they do in an app.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application android:name="app.shkriuss.core.notify.DeviceApp">
+        <!-- An empty screen: what a tap on a notification of the tests would open. -->
+        <activity
+            android:name="app.shkriuss.core.notify.OpenedScreen"
+            android:exported="false" />
+    </application>
+
+</manifest>

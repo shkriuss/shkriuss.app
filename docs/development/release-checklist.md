@@ -80,7 +80,9 @@ value.
    3. Open the app in Private Space and use every screen.
 10. [ ] Reminders fire on time with the screen off, after a reboot, and
     after the first unlock. Only for an app with reminders. Open: the
-    exact steps come with the first app that has reminders.
+    exact steps come with the first app that has reminders. What they
+    must cover is already listed in
+    [emulator-tests.md](emulator-tests.md#steps-for-the-three-devices-reminders).
 
 ## Part 2: Layout, on the Pixel Tablet and the Pixel 6a
 

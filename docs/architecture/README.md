@@ -12,6 +12,11 @@ Pages:
   what an app puts into it, and how a backup is written, checked and
   restored.
 
+- [Notifications and alarms](notifications.md): how `core/notify` sets
+  exact alarms, keeps them right after a reboot, an update and a change
+  of the time or the time zone, shows notifications, and what a screen
+  shows when the user does not allow them.
+
 What else belongs here:
 
 - The database schema of each app, when the app exists.

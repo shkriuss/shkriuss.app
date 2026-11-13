@@ -345,11 +345,32 @@ second build must write the same mapping file, or the release stops. See
   section headers as headings, the loading state as "in progress", and
   the loading and error states to try as polite live regions.
 
+- `core/notify` has five test classes with 65 tests
+  ([notifications.md](../architecture/notifications.md#tests)).
+  - `AlarmSyncTest` runs the rules for alarms with `TestClock` of
+    `core/testing` and a stand-in for Android's alarms. No test waits
+    for real time.
+  - `AlarmManagerSchedulerTest` and `NotifyTest` use Robolectric's
+    `AlarmManager` and `NotificationManager`. Robolectric offers the
+    broadcast of a waiting alarm only as a field it marks as
+    deprecated. Two small helpers of the tests read it, and silence
+    that one compiler warning there.
+  - `NotifyTest` runs with the app class `TestApp`, a `NotifyHost`, set
+    with `@Config(application = ...)`.
+  - `ManifestTest` reads the module's `AndroidManifest.xml`.
+  - `NotifyBoundaryTest` reads the source of every other module under
+    `android/`, and fails if a file names `android.app.AlarmManager`,
+    a class that starts with `android.app.Notification` or
+    `androidx.core.app.Notification`, `androidx.core.app.AlarmManagerCompat`,
+    imports `android.app.*` or `androidx.core.app.*` with a star, or
+    names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
+    of `CryptoBoundaryTest` above.
+
 ### Instrumented tests
 
 Tests that need a real Android run on an emulator, in the job "Emulator"
-of CI. Today those are the tests of the hardware keys in `core/crypto`.
-They cannot run in a cloud session, which has no emulator. What they
+of CI. Today those are the tests of the hardware keys in `core/crypto`
+and the tests of the alarms in `core/notify`. They cannot run in a cloud session, which has no emulator. What they
 are, how they run and what they found is in
 [emulator-tests.md](emulator-tests.md).
 
@@ -583,11 +604,20 @@ How it was tested, on 2026-11-12, in `core/crypto`:
 ## Lint
 
 1. Android Lint runs in `check`. Warnings are errors.
-2. Lint findings are fixed, not hidden. One single line is suppressed, with
-   its reason next to it: `MissingClass` on
-   `androidx.startup.InitializationProvider` in Catalog's manifest. The
-   class comes from a library Compose uses only at run time, so lint cannot
-   see it. It is in the APK.
+2. Lint findings are fixed, not hidden. Two single places are suppressed,
+   each with its reason next to it:
+   - `MissingClass` on `androidx.startup.InitializationProvider` in
+     Catalog's manifest. The class comes from a library Compose uses only
+     at run time, so lint cannot see it. It is in the APK.
+   - `MissingPermission` on the one function that sets an exact alarm,
+     `AlarmManagerScheduler.set` in `core/notify`. Lint 32.5.1 does not
+     know the permission `USE_EXACT_ALARM`, which the module's manifest
+     declares. It accepts only `SCHEDULE_EXACT_ALARM`, which ADR 0010
+     rejected. The owner decided this
+     ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md), point
+     10). `ManifestTest` and the emulator tests check the permission
+     instead. After an update of the Android Gradle Plugin, the build is
+     tried without it (prompt R5 in [PROMPTS.md](PROMPTS.md)).
 3. Compose and Activity ask for Lifecycle 2.9. Its built-in lint checks no
    longer load in this version of lint ("Library lint checks reference
    invalid APIs"). A version constraint lifts Lifecycle to 2.11.0, whose

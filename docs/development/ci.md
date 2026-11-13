@@ -142,7 +142,8 @@ environment.
 Four jobs side by side, one for each Android version: "Emulator (Android
 13)", "(Android 14)", "(Android 15)" and "(Android 17)". Each runs the
 instrumented tests of every module that has a folder `src/androidTest/`.
-Today that is `core/crypto`, with the tests of the hardware keys
+Today that is `core/crypto`, with the tests of the hardware keys, and
+`core/notify`, with the tests of the alarms
 ([emulator-tests.md](emulator-tests.md)). One version that fails does not
 stop the others.
 
@@ -169,6 +170,16 @@ Each job waits for "Gradle wrapper". Then:
 8. It installs each test APK with `adb` and runs it with
    `am instrument -w`. The project's own runner writes one line per test
    ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
+   - Before each test APK after the first, it waits until Android
+     answers again: 10 seconds, and then until a broadcast and the
+     package manager answer. On the Android 17 image Android starts
+     again when a test APK's run ends
+     ([emulator-tests.md](emulator-tests.md#android-17-the-job-waits-for-android)).
+   - The wait has a limit of 5 minutes. If Android does not come back,
+     the job fails and says after which tests.
+   - The log says how long the job waited. If Android started again, the
+     line is a warning that shows on the run's page, so a restart is
+     never hidden.
 9. `am instrument` ends without an error also when a test fails. So only
    the runner's last line counts: `INSTRUMENTED_TESTS_PASSED`. The job
    fails without it. It also fails if an installed test APK does not use

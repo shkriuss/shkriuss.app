@@ -16,6 +16,7 @@ module. Feature modules never depend on each other.
 | `core/data` | Library | The base for every app database: `systemSqliteDatabaseBuilder` on the system SQLite, the record fields `RecordFields` and `Record`, the change counter `ChangeCounter`, `RecordDao`, `RecordWriter`, which stamps every write, gives it a change number and only marks deletes, `Clock` and `IdSource`, the "changed since" query (`RecordSql`, `BEFORE_FIRST_CHANGE`), and the marker `PurgesDeletedRecords`. See [data.md](data.md). | Room runtime, `androidx.sqlite` framework driver |
 | `core/crypto` | Library | All cryptography of the suite, as [crypto-design.md](../security/crypto-design.md) says: the entry point `ShkCrypto`, sealed records (`RecordSealer`), file keys and file streams (`FileCrypto`, `FileKey`), backup streams (`BackupCrypto`), the recovery key and its words (`RecoveryKey`, `RecoveryWords`, `KeySetup`), the app lock (`AppLock`), one step for one system prompt (`PromptStep`), what the security screen shows (`KeyStatus`), the answers of a reader (`BlobException`, `BlobAnswer`), and the app name (`AppName`). The BIP-39 word list is in its resources. | Tink (`tink-android`) |
 | `core/backup` | Library | The backup file of an app, as [backup-format.md](backup-format.md) says: `Backups`, which writes a backup to a document, checks one and restores one; the interface each app implements, `BackupContent`, with `BackupSink`, `BackupRecord`, `CheckedBackup` and `CheckedFile`; the results `ExportResult`, `CheckResult`, `RestoreResult` and the answers `BackupAnswer`; and `BackupDocuments`, the two intents of the system file picker. | `core/crypto`, `core/data` |
+| `core/notify` | Library | Alarms and notifications of an app, as [notifications.md](notifications.md) says: the entry point `Notify`, the interface of the app class `NotifyHost`, what the app names and gets back (`Alarm`, `AlarmId`, `AlarmSource`, `AlarmHandler`), the small interface in front of Android's alarms `AlarmScheduler`, channels (`NotifyChannel`, `ChannelImportance`), `Notifications` and `ShkNotification`, the state for a screen `NotifyState`, and the two receivers `AlarmReceiver` and `SystemEventReceiver`. Its manifest declares three permissions and the two receivers ([permissions.md](../security/permissions.md#apps-that-use-corenotify)). | `core/data` |
 | `core/testing` | Library, used only in tests | Shared test helpers: `TestClock`, `TestIdSource`, `inMemoryTestDatabaseBuilder`, the migration test rule `MigrationTestRule`, and the checks `recordConventionProblems` and `changeNumberProblems`. See [data.md](data.md#migration-tests). For tests on an emulator: the runner `InstrumentedTestRunner` and `TestDevice`. See [emulator-tests.md](../development/emulator-tests.md). | `core/data`, JUnit, Room testing |
 | `app/catalog` | App, `app.shkriuss.catalog` | The design gallery: a start screen, one page each for colours, type, shape and spacing, and one page each for buttons, floating action buttons, chips, text fields, selection controls, sliders, cards, lists, the empty, loading and error states, top bars, navigation, list and detail, dialogs, bottom sheets, snackbars, menus, date pickers and time pickers. | `core/design`, Activity Compose |
 
@@ -54,6 +55,18 @@ module. Feature modules never depend on each other.
   its records and files over through `BackupContent`.
 - `core/backup` reads and writes a backup only through a `content:` URI
   that the system file picker gave. It asks for no permission.
+- Only `core/notify` uses Android's `AlarmManager` and
+  `NotificationManager`, and it adds no library for them. A unit test in
+  `core/notify`, `NotifyBoundaryTest`, reads the source of every other
+  module and fails if one of them names an alarm or notification class
+  of Android or AndroidX.
+- `core/notify` depends on `core/data` only for the `Clock`, and exposes
+  it. It knows no table and no record type of any app: an app names its
+  alarms through `AlarmSource` and shows its notifications in
+  `AlarmHandler`.
+- Every app that uses `core/notify` gets its three permissions and two
+  receivers through the module's manifest
+  ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md)).
 - `core/testing` depends on `core/data` for the `Clock` and `IdSource` it
   fakes. `core/data`'s own tests depend on `core/testing`. That is no
   loop: the tests of a module are not part of the module.
@@ -70,6 +83,6 @@ module. Feature modules never depend on each other.
 
 ## Modules to come
 
-From the repository map in CLAUDE.md: `core/notify`,
-`core/sync-client`, `feature/<app>/...` and one `app/<app>`
-module per app. Each is added by the phase that needs it.
+From the repository map in CLAUDE.md: `core/sync-client`,
+`feature/<app>/...` and one `app/<app>` module per app. Each is added by
+the phase that needs it.

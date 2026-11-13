@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What core/notify adds to every app that uses it: three permissions and
+    two receivers. See docs/architecture/notifications.md,
+    docs/security/permissions.md and ADR 0030.
+
+    Neither receiver is exported, so no other app can reach them. Android
+    itself still can. Neither is directBootAware: nothing here runs between
+    a reboot and the first unlock (ADR 0010).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        To show a notification. Android asks the user, and only when a
+        screen of the app starts the question. Until the user says yes,
+        Android drops every notification of the app.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        To set an alarm for an exact time, so that a reminder comes at its
+        minute and not when Android next finds it convenient. Granted at
+        install. It is meant for calendar and alarm apps (ADR 0010).
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+    <!--
+        To be told that the device, or the profile the app lives in, has
+        started and was unlocked. Android forgets every alarm when it
+        stops. Granted at install.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application>
+
+        <!-- Android starts it when an alarm of this app is due. Only this app's own AlarmManager entry names it. -->
+        <receiver
+            android:name="app.shkriuss.core.notify.AlarmReceiver"
+            android:exported="false" />
+
+        <!--
+            The moments after which the alarms must be registered again:
+            Android forgets them at a reboot and at an app update, and a
+            new time or time zone moves the reminders. Only Android can
+            send these four.
+        -->
+        <receiver
+            android:name="app.shkriuss.core.notify.SystemEventReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

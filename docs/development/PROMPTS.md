@@ -550,6 +550,9 @@ as a shared piece that every app can turn on:
 - File keys require user authentication as designed. Database rows are behind
   an access gate only; say so honestly in the user guide.
 - An option to hide the app in the recent-apps view and block screenshots.
+- Decide with me what a notification shows while the app lock is on. It is
+  an open question in docs/architecture/notifications.md. Record the
+  decision there.
 - Catalog page, screenshot tests, user guide page.
 
 I am the owner and I ask you to add the include lines for the new
@@ -632,7 +635,20 @@ Steps:
   you to add the include lines for the new modules to
   android/settings.gradle.kts, and nothing else in that file.
 - 2.3 Screens: all screens from the spec with the `Shk*` components.
-- 2.4 Reminders: through `core/notify`, with the permission flow.
+- 2.4 Reminders: through `core/notify`, with the permission flow. Follow
+  docs/architecture/notifications.md: the app class is a `NotifyHost`
+  and calls `Notify.start()`, the app names its alarms in an
+  `AlarmSource`, shows the notification in an `AlarmHandler`, and calls
+  `Notify.sync()` after every change. The reminder screen shows what
+  `Notify.state` says. Water gets three permissions from `core/notify`.
+  List them under Water in docs/security/permissions.md. Write the
+  reminder steps of docs/development/emulator-tests.md with the app's
+  real button names. Decide with me what the user sees when the app's
+  alarm handler fails: today the reminder is marked as fired and is lost
+  without a word. It is an open question in
+  docs/architecture/notifications.md. Record the decision there. I am
+  the owner and I ask you to allow the three permissions of core/notify
+  for Water in the APK rules check, and nothing else in those files.
 - 2.5 Backup, restore, app lock and settings. The settings get a screen
   that shows the notices of all third-party material in the app. Complete
   `docs/development/third-party.md` with everything that ships in the app.
@@ -862,6 +878,10 @@ One pull request per group that belongs together. For each update: read the
 release notes, say what changed that matters to us, update the catalog and
 the verification metadata together, and run all checks. Never trust a key or
 checksum without saying where it comes from. Skip pre-releases.
+
+After an Android Gradle Plugin update, try the build without the lint
+suppression on `AlarmManagerScheduler.set` in `core/notify`, and remove it if
+lint passes (ADR 0030, point 10).
 ```
 
 ### R6 Prepare a release
