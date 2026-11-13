@@ -1,15 +1,17 @@
 # 0036 An app's settings are records
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 2, step 2.1, the specification of Water
   ([spec.md](../apps/water/spec.md#table-settings)). Water is the first
   app with settings of its own, so point 4 of
   [0004](0004-room-on-system-sqlite-no-sqlcipher.md) is decided again
   here, as [0032](0032-app-lock-settings-in-android-preferences.md)
-  asked. Claude proposes this in the pull request of that step. The
-  owner added on 2026-11-13 that the sync design decides which settings
-  are per device.
+  asked. Claude proposed it in
+  [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36),
+  and the owner accepted it in the review of that pull request, on
+  2026-11-13. The owner added on the same day that the sync design
+  decides which settings are per device.
 
 ## Context
 
@@ -68,10 +70,10 @@
   backup with the app's data version.
 - A restore brings the settings back, with the restore rule: the newest
   edit wins.
-- On acceptance, the status of
-  [0004](0004-room-on-system-sqlite-no-sqlcipher.md) says that point 4 is
-  superseded by this record, and the consequences of
-  [0032](0032-app-lock-settings-in-android-preferences.md) point here.
+- Point 4 of [0004](0004-room-on-system-sqlite-no-sqlcipher.md) is
+  superseded by this record. Its status says so.
+  [0032](0032-app-lock-settings-in-android-preferences.md) points here,
+  and stays as it is: its file is state of one phone, as point 3 says.
 - Step 5.1 decides which settings sync and which stay per device.
 - Water is the first app that follows this record
   ([spec.md](../apps/water/spec.md#table-settings)).

@@ -315,9 +315,9 @@ three devices.
    has none yet. They come with the first app that needs them. Water
    has two, **Drank** and **Later**
    ([spec.md](../apps/water/spec.md#buttons-on-a-reminder)). The rules
-   for every app are proposed in
-   [ADR 0034](../adr/0034-notification-buttons.md). Built in Phase 2,
-   step 4.
+   for every app are in
+   [ADR 0034](../adr/0034-notification-buttons.md), accepted on
+   2026-11-13. Built in Phase 2, step 4.
 3. A notification that is not a reminder, for example progress in the
    Sync app. Today every app that uses `core/notify` gets all three
    permissions and both receivers.

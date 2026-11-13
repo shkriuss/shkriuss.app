@@ -1,13 +1,15 @@
 # 0034 Buttons on notifications
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 2, step 2.1, the specification of Water
   ([spec.md](../apps/water/spec.md#buttons-on-a-reminder)). The owner
   decided on 2026-11-13 that Water's reminder has two buttons, **Drank**
   and **Later**. The owner asked for rules for the buttons, proposed for
-  every later app. Claude proposes these in the pull request of that
-  step.
+  every later app. Claude proposed these rules in
+  [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36),
+  and the owner accepted them in the review of that pull request, on
+  2026-11-13.
 
 ## Context
 

@@ -47,7 +47,9 @@ come from Phase 2, step 2.1, the specification of Water
 ([spec.md](../apps/water/spec.md)): buttons on notifications, the
 recovery key when it is first needed, and an app's settings as records.
 The owner decided the core of 0034 and 0035 in that session. Claude
-proposed the details and 0036 in the pull request of that step.
+proposed the details and 0036 in pull request 36, and the owner accepted
+all three in the review of that pull request, on 2026-11-13. 0036
+supersedes point 4 of 0004.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -57,7 +59,7 @@ How a record may be edited or replaced is in point 7 of
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
 | 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025 |
 | 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031 |
-| 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027 |
+| 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027; point 4 superseded by 0036 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md |
 | 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md |
@@ -85,8 +87,8 @@ How a record may be edited or replaced is in point 7 of
 | 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |
 | 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |
 | 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |
-| 0032 | [The settings of the app lock in Android's preferences file](0032-app-lock-settings-in-android-preferences.md) | Accepted |
+| 0032 | [The settings of the app lock in Android's preferences file](0032-app-lock-settings-in-android-preferences.md) | Accepted; point 4 decided by 0036 |
 | 0033 | [The permission HIDE_OVERLAY_WINDOWS for the security screens](0033-hide-overlay-windows-for-the-security-screens.md) | Accepted |
-| 0034 | [Buttons on notifications](0034-notification-buttons.md) | Proposed |
-| 0035 | [The recovery key comes when it is first needed](0035-recovery-key-when-first-needed.md) | Proposed |
-| 0036 | [An app's settings are records](0036-app-settings-as-records.md) | Proposed |
+| 0034 | [Buttons on notifications](0034-notification-buttons.md) | Accepted |
+| 0035 | [The recovery key comes when it is first needed](0035-recovery-key-when-first-needed.md) | Accepted |
+| 0036 | [An app's settings are records](0036-app-settings-as-records.md) | Accepted |

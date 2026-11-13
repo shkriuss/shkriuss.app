@@ -1,14 +1,17 @@
 # 0035 The recovery key comes when it is first needed
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 2, step 2.1, the specification of Water
   ([spec.md](../apps/water/spec.md#the-recovery-key-when-first-needed)).
   The owner decided on 2026-11-13 that Water opens straight on Today and
   creates the recovery key only when it is first needed, and that this
   is the pattern for every later app. The owner asked what the user sees
-  at that moment and what Settings shows before it. Claude proposes the
-  details in the pull request of that step.
+  at that moment and what Settings shows before it. Claude proposed the
+  details in
+  [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36),
+  and the owner accepted them in the review of that pull request, on
+  2026-11-13.
 
 ## Context
 

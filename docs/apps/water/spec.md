@@ -7,16 +7,18 @@ what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
   ([PROMPTS.md](../../development/PROMPTS.md#21-specification)). The
   owner answered four questions and added notes on the same day
   ([Decided by the owner](#decided-by-the-owner)). Everything else this
-  page chose is listed under [Assumptions](#assumptions), for the owner
-  to read.
+  page chose is listed under [Assumptions](#assumptions). The owner
+  accepted them, and the three decision records below, on
+  [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36),
+  on 2026-11-13.
 - Not built yet. No code exists for Water.
 - If this page is wrong or silent, the fix is a change to this page
   first, agreed with the owner ("If the spec is wrong or silent, stop and
   ask" in the prompt of steps 2.2 to 2.5).
 - Package name: `app.shkriuss.water`. App name in keys and backups:
   `water`.
-- Three decision records come from this page. All three are proposed,
-  not yet accepted:
+- Three decision records come from this page. The owner accepted all
+  three on pull request 36, on 2026-11-13:
   - [0034](../../adr/0034-notification-buttons.md): buttons on
     notifications, for every app.
   - [0035](../../adr/0035-recovery-key-when-first-needed.md): the
@@ -468,6 +470,15 @@ Water stores no files and has no table with a wrapped file key.
    the app has its keys from a recovery key, it calls
    `finishFileKeyMove()` at once. No row of Water holds a file key, so
    there is nothing to move.
+4. **Only because Water stores no files.** Water may finish a pending
+   move at once only because no row of Water holds a wrapped file key. A
+   later version of Water that stores files must take this call out
+   first. It must seal every file key again under the new `file-key`, as
+   [crypto-design.md](../../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key)
+   says, before it calls `finishFileKeyMove()`. Otherwise the files
+   sealed with the old key can never be opened again: they are lost.
+5. The code carries the same warning, as a comment on the call to
+   `finishFileKeyMove()` (step 2.5).
 
 ## Units
 
@@ -589,8 +600,8 @@ The channel:
 ### Buttons on a reminder
 
 Two buttons. They follow
-[ADR 0034](../../adr/0034-notification-buttons.md), which proposes the
-same rules for every app.
+[ADR 0034](../../adr/0034-notification-buttons.md), which sets the same
+rules for every app.
 
 **Drank 250 ml**:
 
@@ -706,8 +717,8 @@ Every setting, its default, and where it is kept.
 ## The recovery key when first needed
 
 The owner decided: Water opens straight on Today, and the recovery key
-comes only when something needs it. This is proposed as the rule for
-every app in [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md).
+comes only when something needs it. This is the rule for every app, in
+[ADR 0035](../../adr/0035-recovery-key-when-first-needed.md).
 
 Logging drinks, reminders and everything on Today and History need no
 recovery key. Three things do:
@@ -1012,7 +1023,7 @@ Water needs these. Each is built in the step named, not on this page.
 | 2.2 | The database, the repositories, the rules of [the goal of a day](#the-goal-of-a-day), [the settings in use](#the-settings-in-use), [units](#units) and [the next reminder](#when-the-next-reminder-comes) as plain code with unit tests, the view models, the backup content readers and writers, and the check that every screen is behind the app lock |
 | 2.3 | Every screen of [Screens](#screens) except backup and restore, and `ShkProgressBar` |
 | 2.4 | Reminders: `AlarmSource`, `AlarmHandler`, the buttons, the permission question, and the `core/notify` changes |
-| 2.5 | Backup and restore screens, the first-need dialog, the app lock in Settings, the file key move of [Files](#files), and the Licences screen |
+| 2.5 | Backup and restore screens, the first-need dialog, the app lock in Settings, the file key move of [Files](#files) with its warning as a comment on the call, and the Licences screen |
 | 2.6 | The user guide `docs/user/water.md`, the changelog, the release checklist |
 
 ## Decided by the owner
@@ -1023,14 +1034,17 @@ On 2026-11-13, in the planning session of this step.
 |---|---|
 | The first start | Straight to Today. No setup screens. The recovery key comes when it is first needed. This is the pattern for every later app. The owner asked what the user sees at that moment, and what Settings shows before it ([The recovery key when first needed](#the-recovery-key-when-first-needed), [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md)). |
 | How reminders are timed | Every chosen interval inside the reminder hours, counted from the last drink. None once the goal is met. One alarm at a time. The owner asked for the exact next time in each case ([When the next reminder comes](#when-the-next-reminder-comes)). |
-| Buttons on a reminder | **Drank** with the first quick amount, and **Later** for 15 minutes. The owner asked for rules on the app lock, the lock screen, the amount and undo, proposed for every later app ([Buttons on a reminder](#buttons-on-a-reminder), [ADR 0034](../../adr/0034-notification-buttons.md)). |
+| Buttons on a reminder | **Drank** with the first quick amount, and **Later** for 15 minutes. The owner asked for rules on the app lock, the lock screen, the amount and undo, for every later app ([Buttons on a reminder](#buttons-on-a-reminder), [ADR 0034](../../adr/0034-notification-buttons.md)). |
 | Missed reminders | Skipped. Never shown late. |
 | Reminder settings and sync | Reminder settings are a record, so with sync they would reach every device, and every device would remind. The sync design decides which settings are per device ([Open](#open), item 6). |
+| The decision records and the assumptions (on [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36)) | [ADR 0034](../../adr/0034-notification-buttons.md), [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md) and [ADR 0036](../../adr/0036-app-settings-as-records.md) accepted. The 18 [assumptions](#assumptions) accepted as written. |
+| The file key move (on pull request 36) | Water may finish a pending move at once only because it stores no files. A later version that stores files must take this call out first, or files sealed with the old key are lost. The spec says so under [Files](#files), and the code carries the same warning as a comment on that call. |
 
 ## Assumptions
 
 Choices this page made without a decision by the owner on that point.
-The owner reads them in the pull request of this step.
+The owner read them on pull request 36 and accepted them as written, on
+2026-11-13. A later reader may still object to each one.
 
 1. Three destinations: Today, History, Settings.
 2. Defaults: goal 2,000 ml, quick amounts 150, 250 and 500 ml,
@@ -1063,7 +1077,8 @@ The owner reads them in the pull request of this step.
     but is not in the build.
 16. The backup type names are the table names.
 17. Water finishes a pending file key move at once, because it has no
-    files.
+    files. A version that stores files must take this out first
+    ([Files](#files)).
 18. The percentage is rounded down.
 
 ## Open

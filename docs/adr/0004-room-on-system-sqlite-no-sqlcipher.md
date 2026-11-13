@@ -1,6 +1,7 @@
 # 0004 Room on system SQLite, no SQLCipher
 
-- Status: Accepted
+- Status: Accepted. Point 4 superseded by
+  [0036](0036-app-settings-as-records.md).
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decisions 3 and 7), 3, 5
   and 17, and the owner's review of
@@ -24,6 +25,10 @@
    exception, in Android's preferences file, until the first app builds
    its own settings and this point is decided again
    ([0032](0032-app-lock-settings-in-android-preferences.md)).
+   - Superseded by [0036](0036-app-settings-as-records.md), on
+     2026-11-13: settings that are part of the user's data are records
+     in the app's database. State of one phone stays in Android's
+     preferences file. No DataStore.
 5. Every record has `id` (random UUID), `createdAt`, `updatedAt` and
    `deletedAt`. Synced records are never hard-deleted.
 6. The database schema carries a version number, a migration path and

@@ -44,6 +44,10 @@
    `AppLockSettings`.
 4. Point 4 of 0004 is decided again when the first app builds its own
    settings. This record makes no promise about what that decision is.
+   - Decided in [0036](0036-app-settings-as-records.md), on 2026-11-13:
+     state of one phone, such as these three settings, stays in
+     Android's preferences file. Settings that are the user's data are
+     records.
 
 ## Options rejected
 
@@ -60,7 +64,9 @@
 - An app that uses `core/security` gets the file when the user first
   changes a setting of the app lock.
 - [0004](0004-room-on-system-sqlite-no-sqlcipher.md), point 4, has this
-  exception until the first app's own settings decide again.
+  exception until the first app's own settings decide again. They did,
+  in [0036](0036-app-settings-as-records.md), which keeps this file as
+  it is.
 - A restore does not bring the settings of the app lock back. The app
   lock itself is not in a backup either
   ([backup.md](../user/backup.md)).
