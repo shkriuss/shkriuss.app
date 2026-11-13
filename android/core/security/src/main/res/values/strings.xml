@@ -116,4 +116,88 @@
     <string name="sec_show_not_kept">This phone does not keep the recovery key any more. Maybe the screen lock was removed. Enter the words once to keep it here again.</string>
     <string name="sec_show_damaged">The recovery key kept on this phone is damaged. Enter your 24 words to repair it.</string>
     <string name="sec_show_enter">Enter the words</string>
+
+    <!-- The end of the enter flow, when storing the keys turned the app lock off. -->
+    <string name="sec_done_app_lock_off">The app lock is off now. Turn it on again on the app lock screen.</string>
+    <string name="sec_app_lock_button">App lock</string>
+
+    <!-- The app lock on the security screen. -->
+    <string name="sec_section_app_lock">App lock</string>
+    <string name="sec_security_lock_on">The app lock is on.</string>
+    <string name="sec_security_lock_off">The app lock is off.</string>
+    <string name="sec_security_lock_reset">The app lock was reset, because the phone\'s screen lock was removed. Enter your 24 words to open this app\'s files again.</string>
+
+    <!-- The lock screen. -->
+    <string name="sec_lock_title">%1$s is locked</string>
+    <string name="sec_lock_text">Unlock it with your fingerprint, or your phone\'s PIN, pattern or password.</string>
+    <string name="sec_lock_unlock">Unlock</string>
+    <string name="sec_lock_not_now">The app cannot be unlocked right now. Try again in a moment.</string>
+    <string name="sec_lock_damaged">The key file of the app lock is damaged. Enter your 24 recovery words to repair it. The app lock is then off, and you can turn it on again.</string>
+    <string name="sec_prompt_unlock">Unlock the app</string>
+
+    <!-- The app lock screen. -->
+    <string name="sec_app_lock_title">App lock</string>
+    <string name="sec_app_lock_asking">Confirm that it is you to see the app lock settings.</string>
+    <string name="sec_prompt_app_lock">Open the app lock settings</string>
+    <string name="sec_app_lock_on">The app lock is on. This app asks for your fingerprint, or your phone\'s PIN, pattern or password, before it shows anything.</string>
+    <string name="sec_app_lock_off">The app lock is off.</string>
+    <string name="sec_app_lock_reset">The app lock was reset, because the phone\'s screen lock was removed. The files of this app stay closed until you enter your 24 recovery words. Records, sync and reminders go on.</string>
+    <string name="sec_app_lock_protects">What the app lock protects: your files and attachments need the system prompt for their keys. Your records are only hidden behind the lock screen. They are not encrypted by the app lock. Android\'s own encryption protects them while the phone is locked.</string>
+    <string name="sec_cannot_no_screen_lock">The app lock needs a screen lock. Set a PIN, pattern or password in Android\'s settings first.</string>
+    <string name="sec_cannot_no_key">The app lock needs a recovery key first. Your 24 words bring the app\'s files back if the key of the app lock is ever lost.</string>
+    <string name="sec_cannot_unfinished">Setting up the recovery key stopped half way. Finish it on the security screen first.</string>
+    <string name="sec_cannot_moving">The app is still moving the keys of its files under your recovery key. Try again in a moment.</string>
+    <string name="sec_cannot_not_now">The app lock cannot be turned on right now. Try again in a moment.</string>
+    <string name="sec_turn_on">Turn on the app lock</string>
+    <string name="sec_turn_off">Turn off the app lock</string>
+    <string name="sec_turn_off_title">Turn off the app lock?</string>
+    <string name="sec_turn_off_text">The app then opens without the system prompt, and its files no longer need it.</string>
+    <string name="sec_turn_off_confirm">Turn off</string>
+    <string name="sec_turn_off_failed">The app lock could not be turned off right now. Try again in a moment.</string>
+    <string name="sec_section_lock_after">When it locks</string>
+    <string name="sec_lock_after_label">Lock the app</string>
+    <string name="sec_lock_after_leaving">When it leaves the screen</string>
+    <plurals name="sec_lock_after_minutes">
+        <item quantity="one">%1$d minute after it leaves the screen</item>
+        <item quantity="other">%1$d minutes after it leaves the screen</item>
+    </plurals>
+    <plurals name="sec_lock_after_hours">
+        <item quantity="one">%1$d hour after it leaves the screen</item>
+        <item quantity="other">%1$d hours after it leaves the screen</item>
+    </plurals>
+    <string name="sec_lock_after_screen_off">The app also locks when the phone\'s screen turns off with the app on it, and after Android stopped the app. If you switch to another app and then turn the screen off, the app may stay unlocked until the time you chose has passed. Choose \"When it leaves the screen\" if it must lock every time.</string>
+    <string name="sec_section_notifications">Notifications</string>
+    <string name="sec_notification_text_switch">Show the text in notifications</string>
+    <string name="sec_notification_text_help">While this is off, a notification shows only its kind, such as \"Reminders\", and no text.</string>
+    <string name="sec_section_screenshots">Screenshots and recent apps</string>
+    <string name="sec_block_switch">Hide in recent apps and block screenshots</string>
+    <string name="sec_block_help">Every screen of this app then blocks screenshots and screen recording, and shows blank in the list of recent apps. While the app lock is on, the app shows blank in the list of recent apps anyway.</string>
+    <string name="sec_later">Later</string>
+    <string name="sec_ok">OK</string>
+    <string name="sec_notice_reset_title">The app lock was reset</string>
+    <string name="sec_notice_reset_text">The phone\'s screen lock was removed, so the app lock is off. The files of this app stay closed until you enter your 24 recovery words. Records, sync and reminders go on.</string>
+    <string name="sec_notice_off_title">The app lock is off</string>
+    <string name="sec_notice_off_text">The app lock was turned off, because the phone\'s screen lock was removed. Your files are still open. Set a screen lock, then turn the app lock on again.</string>
+
+    <!-- Turning the app lock on. -->
+    <string name="sec_turn_on_title">Turn on the app lock</string>
+    <string name="sec_turn_on_what">With the app lock on, this app asks for your fingerprint, or your phone\'s PIN, pattern or password, before it shows anything.</string>
+    <string name="sec_turn_on_files">Files and attachments are encrypted with a key that needs this. Your records are not encrypted by the app lock. They are only hidden behind the lock screen.</string>
+    <string name="sec_turn_on_warning">Read this first. If the phone\'s screen lock is removed, Android deletes the key of the app lock. Then only your 24 recovery words open this app\'s files on this phone again. If you have also lost the words, these files can never be opened again on this phone.</string>
+    <string name="sec_turn_on_keeper">Next, confirm that it is you. Then enter four of your recovery words from your paper. This shows that your paper copy exists.</string>
+    <string name="sec_turn_on_not_keeper">Next, enter all 24 words from your paper. This phone does not keep your recovery key, so this is how the app checks your paper. The words are not kept here.</string>
+    <string name="sec_turn_on_continue">I understand, continue</string>
+    <string name="sec_turn_on_reading">Confirm that it is you. Then the app asks for four of your words.</string>
+    <string name="sec_turn_on_read">Confirm that it is you</string>
+    <string name="sec_prompt_check_words">Check your recovery words</string>
+    <string name="sec_turn_on_mismatch">A word does not match. Check your paper and try again. If your paper is wrong, show the recovery key on the security screen and write it down again.</string>
+    <string name="sec_turn_on_not_this_app">These are not the words of this app\'s recovery key. Check each word on your paper.</string>
+    <string name="sec_turn_on_kept_unreadable">This phone could not read the recovery key it keeps. Enter all 24 words from your paper instead.</string>
+    <string name="sec_turn_on_locking">Confirm that it is you once more. This makes the key of the app lock.</string>
+    <string name="sec_prompt_turn_on">Turn on the app lock</string>
+    <string name="sec_turn_on_cancelled">The app lock is still off.</string>
+    <string name="sec_turn_on_done_title">The app lock is on</string>
+    <string name="sec_turn_on_done_text">This app now asks for your fingerprint, or your phone\'s PIN, pattern or password, before it shows anything. Keep your paper with the 24 words safe.</string>
+    <string name="sec_turn_on_not_allowed">The app lock cannot be turned on now. Open the app lock screen again to see why.</string>
+    <string name="sec_turn_on_damaged">A key file of this app is damaged. Repair it on the security screen first.</string>
 </resources>

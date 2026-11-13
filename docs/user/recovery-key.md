@@ -67,6 +67,10 @@ this phone again:
      swapped. Check each word.
 5. The app stores its keys, and asks to keep the recovery key, as when
    you create one.
+6. If the app lock was on and these words repaired its key file, or the
+   app lock was reset because the screen lock was removed, the end of
+   the screen says that the app lock is off now. Tap **App lock** to
+   turn it on again ([The app lock](app-lock.md)).
 
 You cannot paste the words. The field takes one letter at a time, so
 the words never end up in the clipboard, where other apps could read
@@ -104,6 +108,9 @@ It shows:
     phones.
 
   No key can be copied out of the phone.
+
+It also says whether the app lock is on, and its button **App lock**
+opens the app lock screen ([The app lock](app-lock.md)).
 
 Screenshots and screen recordings are blocked on every one of these
 screens, and the app shows blank in the list of recent apps.

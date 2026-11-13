@@ -634,8 +634,14 @@ changelog.
 Steps:
 
 - 2.2 Data and logic: tables, repository, view models, unit tests, exported
-  schema. Create `feature/water` and `app/water`. I am the owner and I ask
-  you to add the include lines for the new modules to
+  schema. Create `feature/water` and `app/water`. Before the first screen of
+  step 2.3, add the check that every screen of an app is behind the app
+  lock (docs/architecture/security-screens.md, "Open"): a test that starts
+  every activity of the app's merged manifest, except those of
+  core/security, with the app lock on and locked, and fails unless the
+  lock screen shows and the screen's content does not. Decide where the
+  shared helper lives; every later app copies the test. I am the owner and
+  I ask you to add the include lines for the new modules to
   android/settings.gradle.kts, and nothing else in that file.
 - 2.3 Screens: all screens from the spec with the `Shk*` components.
 - 2.4 Reminders: through `core/notify`, with the permission flow. Follow

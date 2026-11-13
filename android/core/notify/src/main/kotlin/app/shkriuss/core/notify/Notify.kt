@@ -33,8 +33,12 @@ interface NotifyHost {
  * - A screen learns from [state] whether the user allows that
  *   notification.
  *
- * [channels] are all channels of the app. [worker] runs everything that
- * reads the app's records, one piece at a time. The default is one
+ * [channels] are all channels of the app. [hidesText] answers whether a
+ * notification must hide its title and text now, because the app lock
+ * is on. It has no default, so that no app can forget it: an app with
+ * the app lock passes `AppLockWatcher.hidesNotificationText`, an app
+ * without one passes `{ false }` and says so. [worker] runs everything
+ * that reads the app's records, one piece at a time. The default is one
  * background thread. The design is in
  * docs/architecture/notifications.md.
  */
@@ -44,6 +48,7 @@ class Notify(
     source: AlarmSource,
     handler: AlarmHandler,
     clock: Clock,
+    hidesText: () -> Boolean,
     scheduler: AlarmScheduler = AlarmManagerScheduler(context.applicationContext),
     private val worker: Executor = Executors.newSingleThreadExecutor { Thread(it, "core-notify") },
 ) {
@@ -51,7 +56,7 @@ class Notify(
     private val preferences = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
 
     /** Shows and removes notifications. */
-    val notifications = Notifications(app)
+    val notifications = Notifications(app, hidesText)
 
     private val alarms = AlarmSync(source, handler, notifications, scheduler, AlarmRegistry(preferences), clock)
 
@@ -76,6 +81,16 @@ class Notify(
      * [AlarmSource] and makes Android's alarms match, on [worker].
      */
     fun sync() = worker.execute { alarms.sync(setAll = false) }
+
+    /**
+     * Call when the notifications must hide their text from now on: the
+     * app lock was turned on, or the user turned its notification text
+     * off. The notifications already shown are posted again in the hidden
+     * form, so no old text stays in the notification shade. It runs on
+     * [worker], after any alarm handler that is running, and does nothing
+     * if `hidesText` says no by then.
+     */
+    fun hideShownText() = worker.execute { notifications.hideShown(channels) }
 
     /** What a screen shows about notifications of [channel]. See [NotifyState]. */
     fun state(channel: NotifyChannel): NotifyState = when {

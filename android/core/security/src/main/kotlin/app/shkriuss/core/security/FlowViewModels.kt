@@ -2,12 +2,12 @@ package app.shkriuss.core.security
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.BlobAnswer
 import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.KeySetupResult
 import app.shkriuss.core.crypto.KeyStatus
 import app.shkriuss.core.crypto.RecoveryKey
-import app.shkriuss.core.crypto.RecoveryWords
 import app.shkriuss.core.crypto.RecoveryWordsResult
 import app.shkriuss.core.crypto.ShkCrypto
 import kotlin.random.Random
@@ -18,12 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-/** The number of words the user confirms ("Creating it", step 3, in crypto-design.md). */
-private const val WORDS_TO_CONFIRM = 4
-
-/** The number of words of a recovery key. */
-private const val WORD_COUNT = 24
 
 /**
  * Creating a recovery key: the words, four of them to confirm, then the
@@ -58,8 +52,7 @@ class CreateViewModel internal constructor(
 
     /** The user wrote the words down: ask for four of them, at positions picked at random. */
     fun onWordsWritten() {
-        val positions = (1..WORD_COUNT).shuffled(random).take(WORDS_TO_CONFIRM).sorted()
-        show(CreateConfirm(positions, List(WORDS_TO_CONFIRM) { "" }))
+        show(CreateConfirm(confirmPositions(random), List(WORDS_TO_CONFIRM) { "" }))
     }
 
     /** The user typed [text] for the answer at [index]. */
@@ -109,12 +102,19 @@ class CreateViewModel internal constructor(
  * crypto-design.md): one word at a time, then the check, then the keys
  * are stored, a damaged keyset is repaired, and the key is kept. With
  * [startOver], the words start a setup that stopped over.
+ *
+ * Storing can turn the app lock off: a repaired `file-key` that was
+ * under the Lock key, or the words after the app lock was reset. The end
+ * of the flow then says so, and [onAppLockChanged] runs, on the main
+ * thread, so that the app's `AppLockWatcher` knows without a notice of
+ * its own.
  */
 class EnterViewModel internal constructor(
     crypto: ShkCrypto,
     private val startOver: Boolean,
     background: CoroutineDispatcher = Dispatchers.IO,
-) : FlowViewModel<EnterScreen>(crypto, background, emptyWords()) {
+    private val onAppLockChanged: () -> Unit = {},
+) : FlowViewModel<EnterScreen>(crypto, background, WordEntry.empty()) {
     /** The entered recovery key, while the screen offers to start over with it. */
     @Volatile
     private var entered: RecoveryKey? = null
@@ -124,33 +124,27 @@ class EnterViewModel internal constructor(
     /** The user typed [text] for the current word. */
     fun onTyped(text: String) {
         val words = state.value as? EnterWords ?: return
-        show(words.copy(typed = text, notInList = null, doNotBelong = false))
+        show(WordEntry.typed(words, text))
     }
 
     /** The user picked [word] for the current word. The next empty word comes next. */
     fun onWord(word: String) {
         val screen = state.value as? EnterWords ?: return
-        val words = screen.words.toMutableList().also { it[screen.current] = word }
-        val next = (screen.current + 1 until WORD_COUNT).firstOrNull { words[it].isEmpty() }
-            ?: words.indexOfFirst { it.isEmpty() }.takeIf { it >= 0 }
-            ?: screen.current
-        show(EnterWords(words, next, typed = if (words[next].isEmpty()) "" else words[next]))
+        show(WordEntry.picked(screen, word))
     }
 
     /** The user wants to change the word at [index]. */
     fun onEditWord(index: Int) {
         val screen = state.value as? EnterWords ?: return
-        show(screen.copy(current = index, typed = screen.words[index], notInList = null, doNotBelong = false))
+        show(WordEntry.edit(screen, index))
     }
 
     /** Checks the 24 words: each in the list, and the checksum. Then the keys are stored. */
     fun onCheck() {
         val screen = state.value as? EnterWords ?: return
-        when (val result = RecoveryWords.parse(screen.words.joinToString(" "))) {
-            is RecoveryWordsResult.WordNotInList ->
-                show(screen.copy(current = result.position - 1, typed = "", notInList = result.position))
-            RecoveryWordsResult.DoNotBelongTogether -> show(screen.copy(doNotBelong = true))
+        when (val result = WordEntry.check(screen)) {
             is RecoveryWordsResult.Accepted -> store(result.recoveryKey)
+            else -> show(WordEntry.problem(screen, result))
         }
     }
 
@@ -161,8 +155,15 @@ class EnterViewModel internal constructor(
                 startOverWith(key)
                 return@work
             }
+            val lockBefore = crypto.appLock.state()
             when (crypto.setup.storeDerivedKeys(key)) {
-                KeySetupResult.STORED -> keep(key)
+                KeySetupResult.STORED -> {
+                    if (lockBefore != AppLockState.OFF && crypto.appLock.state() == AppLockState.OFF) {
+                        appLockWentOff = true
+                        withContext(Dispatchers.Main.immediate) { onAppLockChanged() }
+                    }
+                    keep(key)
+                }
                 KeySetupResult.OLDER_RECOVERY_KEY -> show(EnterOlderKey)
                 KeySetupResult.KEY_ID_IN_USE -> show(FlowFailed(SecurityProblem.KEY_ID_IN_USE))
                 KeySetupResult.DIFFERENT_RECOVERY_KEY -> {
@@ -194,16 +195,12 @@ class EnterViewModel internal constructor(
     /** Back to the words, all empty. */
     fun onEnterOther() {
         entered = null
-        show(emptyWords())
+        show(WordEntry.empty())
     }
 
     override fun onCleared() {
         entered = null
         super.onCleared()
-    }
-
-    private companion object {
-        fun emptyWords() = EnterWords(List(WORD_COUNT) { "" }, current = 0, typed = "")
     }
 }
 
@@ -323,5 +320,6 @@ class SecurityViewModel internal constructor(
         keys = status.hardwareKeys.map { KeyRow(it.kind, it.level) },
         needsRepair = status.needsRepair,
         filesCanBeGivenUp = status.filesCanBeGivenUp,
+        appLock = status.appLock,
     )
 }

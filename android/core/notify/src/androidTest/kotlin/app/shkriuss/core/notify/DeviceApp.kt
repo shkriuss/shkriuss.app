@@ -18,7 +18,15 @@ class DeviceApp : Application(), NotifyHost {
     /** The reminders of this small app. The tests add and remove them. */
     val reminders = DeviceReminders(this)
 
-    override val notify: Notify by lazy { Notify(this, listOf(DeviceReminders.CHANNEL), reminders, reminders, Clock.System) }
+    override val notify: Notify by lazy { Notify(
+            this,
+            listOf(DeviceReminders.CHANNEL),
+            reminders,
+            reminders,
+            Clock.System,
+            // The test app has no app lock: its notifications always show their text.
+            hidesText = { false },
+        ) }
 
     override fun onCreate() {
         super.onCreate()

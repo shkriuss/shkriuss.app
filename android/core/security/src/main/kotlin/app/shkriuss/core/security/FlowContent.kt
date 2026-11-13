@@ -25,6 +25,8 @@ class FlowStepActions(
     val onKeep: () -> Unit = {},
     val onSkipKeeping: () -> Unit = {},
     val onDone: () -> Unit = {},
+    /** Opens the app lock screen, after storing the keys turned the app lock off. */
+    val onAppLock: () -> Unit = {},
 )
 
 /** What the user can do while creating a recovery key. */
@@ -77,22 +79,7 @@ fun CreateContent(screen: CreateScreen, previewBuild: Boolean, actions: CreateAc
             }
             is CreateConfirm -> {
                 Paragraph(stringResource(R.string.sec_confirm_intro))
-                screen.positions.forEachIndexed { index, position ->
-                    WordField(
-                        value = screen.answers[index],
-                        onValueChange = { actions.onAnswerChange(index, it) },
-                        onWord = { actions.onAnswerChange(index, it) },
-                        label = stringResource(R.string.sec_confirm_label, position),
-                        imeAction = if (index == screen.positions.lastIndex) ImeAction.Done else ImeAction.Next,
-                    )
-                }
-                Buttons {
-                    ShkFilledButton(
-                        text = stringResource(R.string.sec_check),
-                        onClick = actions.onCheck,
-                        enabled = screen.answers.none { it.isEmpty() },
-                    )
-                }
+                ConfirmWordsFields(screen.positions, screen.answers, actions.onAnswerChange, actions.onCheck)
             }
             is FlowStep -> FlowStepContent(screen, actions.step)
         }
@@ -129,8 +116,38 @@ fun EnterContent(screen: EnterScreen, previewBuild: Boolean, actions: EnterActio
     }
 }
 
+/**
+ * The fields for four of the words, at [positions], and the button that
+ * checks them. Creating a key and turning the app lock on use them.
+ */
 @Composable
-private fun EnterWordsContent(screen: EnterWords, actions: EnterActions) {
+internal fun ConfirmWordsFields(
+    positions: List<Int>,
+    answers: List<String>,
+    onAnswerChange: (index: Int, text: String) -> Unit,
+    onCheck: () -> Unit,
+) {
+    positions.forEachIndexed { index, position ->
+        WordField(
+            value = answers[index],
+            onValueChange = { onAnswerChange(index, it) },
+            onWord = { onAnswerChange(index, it) },
+            label = stringResource(R.string.sec_confirm_label, position),
+            imeAction = if (index == positions.lastIndex) ImeAction.Done else ImeAction.Next,
+        )
+    }
+    Buttons {
+        ShkFilledButton(text = stringResource(R.string.sec_check), onClick = onCheck, enabled = answers.none { it.isEmpty() })
+    }
+}
+
+/**
+ * The screen that takes all 24 words, one at a time. Entering a recovery
+ * key and turning the app lock on in an app that does not keep the key
+ * use it.
+ */
+@Composable
+internal fun EnterWordsContent(screen: EnterWords, actions: EnterActions) {
     Paragraph(stringResource(R.string.sec_enter_intro))
     Paragraph(stringResource(R.string.sec_enter_no_paste))
     WordField(
@@ -223,18 +240,24 @@ private fun FlowStepContent(step: FlowStep, actions: FlowStepActions) {
                 }
             }
         }
-        is FlowDone -> ShkEmptyState(
-            title = stringResource(R.string.sec_done_title),
-            body = stringResource(
-                when (step.kept) {
-                    Kept.KEPT -> R.string.sec_done_kept
-                    Kept.NOT_KEPT -> R.string.sec_done_not_kept
-                    Kept.NO_SCREEN_LOCK -> R.string.sec_done_no_lock
-                },
-            ),
-            action = ShkStateAction(stringResource(R.string.sec_done), actions.onDone),
-            announce = true,
-        )
+        is FlowDone -> {
+            ShkEmptyState(
+                title = stringResource(R.string.sec_done_title),
+                body = stringResource(
+                    when (step.kept) {
+                        Kept.KEPT -> R.string.sec_done_kept
+                        Kept.NOT_KEPT -> R.string.sec_done_not_kept
+                        Kept.NO_SCREEN_LOCK -> R.string.sec_done_no_lock
+                    },
+                ),
+                action = ShkStateAction(stringResource(R.string.sec_done), actions.onDone),
+                announce = true,
+            )
+            if (step.appLockOff) {
+                Paragraph(stringResource(R.string.sec_done_app_lock_off))
+                Buttons { ShkTonalButton(stringResource(R.string.sec_app_lock_button), actions.onAppLock) }
+            }
+        }
         is FlowFailed -> ShkErrorState(
             title = stringResource(R.string.sec_failed_title),
             body = stringResource(

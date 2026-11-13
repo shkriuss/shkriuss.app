@@ -101,7 +101,7 @@ class BlobAnswersTest {
         // The app is locked.
         val locked = appWithKeys()
         val wrapped = locked.open().let { it.files.wrap(recordId, it.files.newFileKey()) }
-        locked.open().appLock.beginTurnOn().finish()
+        locked.open().appLock.beginTurnOn(WordsProof()).finish()
         assertEquals(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW, refusal { locked.open().files.unwrap(recordId, wrapped) }.answer)
     }
 

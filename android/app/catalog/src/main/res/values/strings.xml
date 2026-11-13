@@ -62,6 +62,8 @@
     <string name="page_time_pickers_summary">Choosing a time of day by typing the hour and the minute.</string>
     <string name="page_recovery_key_title">Recovery key screens</string>
     <string name="page_recovery_key_summary">Creating, entering and showing the recovery key, and the security screen.</string>
+    <string name="page_app_lock_title">App lock screens</string>
+    <string name="page_app_lock_summary">The lock screen, the app lock screen, and turning the app lock on.</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
@@ -481,7 +483,7 @@
     <string name="recovery_key_block">Block screenshots, as in an app</string>
     <string name="recovery_key_states_heading">States</string>
     <string name="sample_security_no_key">Security screen, no recovery key yet</string>
-    <string name="sample_security_set_up">Security screen, set up and kept, keys in StrongBox</string>
+    <string name="sample_security_set_up">Security screen, set up and kept, app lock on, keys in StrongBox</string>
     <string name="sample_security_no_screen_lock">Security screen, no screen lock, keys in software</string>
     <string name="sample_security_problems">Security screen, setup stopped and damaged key files, preview build</string>
     <string name="sample_create_intro">Create: before the words</string>
@@ -492,4 +494,25 @@
     <string name="sample_enter_words">Enter: the words, with suggestions</string>
     <string name="sample_enter_start_over">Enter: words that could start over</string>
     <string name="sample_show_words">Show: the words again</string>
+    <string name="sample_enter_done_app_lock_off">Enter: done, and the app lock turned off</string>
+    <string name="app_lock_intro">The screens of the app lock that every app shares, from core/security. Each state shows with sample data. Catalog has no app lock: nothing here locks, unlocks or shows the system prompt. Back returns to this list.</string>
+    <string name="sample_lock_locked">Lock screen</string>
+    <string name="sample_lock_failed">Lock screen, the prompt failed</string>
+    <string name="sample_lock_damaged">Lock screen, the key file is damaged</string>
+    <string name="sample_lock_settings_asking">App lock screen, before the prompt</string>
+    <string name="sample_lock_settings_off">App lock screen, off, can be turned on</string>
+    <string name="sample_lock_settings_no_screen_lock">App lock screen, no screen lock</string>
+    <string name="sample_lock_settings_no_key">App lock screen, no recovery key, preview build</string>
+    <string name="sample_lock_settings_on">App lock screen, on, five minutes, screenshots blocked</string>
+    <string name="sample_lock_settings_reset">App lock screen, reset</string>
+    <string name="sample_lock_dialog_lock_after">Dialog: when the app locks</string>
+    <string name="sample_lock_dialog_turn_off">Dialog: turn off the app lock</string>
+    <string name="sample_lock_notice_reset">Notice: the app lock was reset</string>
+    <string name="sample_lock_notice_turned_off">Notice: the app lock is off</string>
+    <string name="sample_lock_turn_on_keeper">Turn on: the warning, in an app that keeps the key</string>
+    <string name="sample_lock_turn_on_not_keeper">Turn on: the warning, in an app that does not keep the key</string>
+    <string name="sample_lock_turn_on_four">Turn on: four words, one did not match</string>
+    <string name="sample_lock_turn_on_all">Turn on: all 24 words</string>
+    <string name="sample_lock_turn_on_prompt">Turn on: the last prompt was closed</string>
+    <string name="sample_lock_turn_on_done">Turn on: done</string>
 </resources>

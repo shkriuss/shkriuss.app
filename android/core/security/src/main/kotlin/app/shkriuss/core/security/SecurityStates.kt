@@ -1,5 +1,6 @@
 package app.shkriuss.core.security
 
+import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.HardwareKeyKind
 import app.shkriuss.core.crypto.SecurityLevel
 
@@ -77,8 +78,12 @@ data object FlowWorking : FlowStep
  */
 data class FlowKeeping(val prompt: PromptRequest? = null, val note: KeepNote? = null) : FlowStep
 
-/** The flow is done. */
-data class FlowDone(val kept: Kept) : FlowStep
+/**
+ * The flow is done. [appLockOff] is true when storing the keys turned the
+ * app lock off: a repaired key file of the app lock, or the words after
+ * the app lock was reset. The screen then says how to turn it on again.
+ */
+data class FlowDone(val kept: Kept, val appLockOff: Boolean = false) : FlowStep
 
 /** The flow stopped. Nothing was stored, or what was stored is whole. */
 data class FlowFailed(val problem: SecurityProblem) : FlowStep
@@ -158,6 +163,8 @@ data class SecurityState(
     val keys: List<KeyRow> = emptyList(),
     val needsRepair: Boolean = false,
     val filesCanBeGivenUp: Boolean = false,
+    /** Whether the app lock is on, off, or was reset because the screen lock was removed. */
+    val appLock: AppLockState = AppLockState.OFF,
     /** True if the keys could not be read now. */
     val failed: Boolean = false,
 ) {

@@ -54,6 +54,7 @@ class SecurityActivitiesTest {
             CreateRecoveryKeyActivity::class.java,
             EnterRecoveryKeyActivity::class.java,
             ShowRecoveryKeyActivity::class.java,
+            TurnOnAppLockActivity::class.java,
         ).forEach { type ->
             val activity: ComponentActivity = Robolectric.buildActivity(type).setup().get()
             val name = type.simpleName
@@ -154,6 +155,17 @@ class SecurityActivitiesTest {
             val height = with(compose.density) { tallest.toDp() }
             assertTrue("$text takes touches on ${height.value}dp", height.value >= MIN_TOUCH_DP)
         }
+    }
+
+    @Test
+    fun theAppLockScreenFollowsTheAppsOwnSettingForScreenshots() {
+        val app = compose.activity.application as TestHostApp
+        val screen: ComponentActivity = Robolectric.buildActivity(AppLockActivity::class.java).setup().get()
+        assertEquals(0, screen.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE)
+
+        app.appLock.blocksScreenshots = true
+
+        assertTrue(screen.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
     }
 
     /** The view that the keyboard talks to: Compose's own view, while a field has the focus. */

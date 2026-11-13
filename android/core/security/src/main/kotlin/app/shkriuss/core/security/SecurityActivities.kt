@@ -4,11 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import app.shkriuss.core.crypto.ShkCrypto
 import app.shkriuss.core.design.ShkTheme
 
@@ -19,15 +19,12 @@ import app.shkriuss.core.design.ShkTheme
  */
 private inline fun <reified T : ViewModel> ComponentActivity.flowViewModel(crossinline make: (ShkCrypto) -> T): T {
     val crypto = securityHost.crypto
-    val factory = object : ViewModelProvider.Factory {
-        override fun <V : ViewModel> create(modelClass: Class<V>): V = modelClass.cast(make(crypto))!!
-    }
-    return ViewModelProvider(this, factory)[T::class.java]
+    return viewModelOf { make(crypto) }
 }
 
 /** The security screen. Its window blocks screenshots like every screen of this module. */
 @OptIn(SecurityScreenSamples::class)
-class SecurityActivity : ComponentActivity() {
+class SecurityActivity : ComponentActivity(), WordsScreen {
     private lateinit var model: SecurityViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,6 +41,7 @@ class SecurityActivity : ComponentActivity() {
             onShow = { startActivity(SecurityScreens.showIntent(this)) },
             onGiveUpFiles = model::onGiveUpFiles,
             onRetry = model::refresh,
+            onAppLock = { startActivity(SecurityScreens.appLockIntent(this)) },
         )
         setContent {
             ShkTheme {
@@ -61,7 +59,7 @@ class SecurityActivity : ComponentActivity() {
 
 /** Creating a recovery key. With the extra of [SecurityScreens.startOverIntent], it starts a stopped setup over. */
 @OptIn(SecurityScreenSamples::class)
-class CreateRecoveryKeyActivity : ComponentActivity() {
+class CreateRecoveryKeyActivity : ComponentActivity(), WordsScreen {
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
         enableEdgeToEdge()
@@ -93,13 +91,14 @@ class CreateRecoveryKeyActivity : ComponentActivity() {
 
 /** Entering the words. With the extra of [SecurityScreens.startOverIntent], they start a stopped setup over. */
 @OptIn(SecurityScreenSamples::class)
-class EnterRecoveryKeyActivity : ComponentActivity() {
+class EnterRecoveryKeyActivity : ComponentActivity(), WordsScreen {
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val startOver = intent.getBooleanExtra(SecurityScreens.EXTRA_START_OVER, false)
-        val model = flowViewModel { EnterViewModel(it, startOver) }
+        val watcher = securityHost.appLock
+        val model = flowViewModel { EnterViewModel(it, startOver, onAppLockChanged = { watcher.refresh(announce = false) }) }
         val actions = EnterActions(
             onBack = ::finish,
             onTyped = model::onTyped,
@@ -108,7 +107,15 @@ class EnterRecoveryKeyActivity : ComponentActivity() {
             onCheck = model::onCheck,
             onStartOverWithThese = model::onStartOverWithThese,
             onEnterOther = model::onEnterOther,
-            step = FlowStepActions(onKeep = model::onKeepAgain, onSkipKeeping = model::onSkipKeeping, onDone = ::finish),
+            step = FlowStepActions(
+                onKeep = model::onKeepAgain,
+                onSkipKeeping = model::onSkipKeeping,
+                onDone = ::finish,
+                onAppLock = {
+                    startActivity(SecurityScreens.appLockIntent(this))
+                    finish()
+                },
+            ),
         )
         setContent {
             ShkTheme {
@@ -127,7 +134,7 @@ class EnterRecoveryKeyActivity : ComponentActivity() {
 
 /** Showing the kept recovery key again. The words leave the screen when it stops. */
 @OptIn(SecurityScreenSamples::class)
-class ShowRecoveryKeyActivity : ComponentActivity() {
+class ShowRecoveryKeyActivity : ComponentActivity(), WordsScreen {
     private lateinit var model: ShowViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,5 +167,102 @@ class ShowRecoveryKeyActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         model.onStop()
+    }
+}
+
+/**
+ * The app lock screen. While the app lock is on, it asks for the system
+ * prompt each time it opens, and again after the app locked, before it
+ * shows anything. Closing that prompt closes the screen. The window
+ * follows the app's settings, as every screen of the app does.
+ */
+@OptIn(SecurityScreenSamples::class)
+class AppLockActivity : ComponentActivity() {
+    private lateinit var model: AppLockViewModel
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        val watcher = securityHost.appLock
+        model = flowViewModel { AppLockViewModel(it, watcher) }
+        val actions = AppLockActions(
+            onBack = ::finish,
+            onTurnOn = { startActivity(SecurityScreens.turnOnIntent(this)) },
+            onTurnOff = model::onTurnOff,
+            onLockAfter = model::onLockAfter,
+            onBlockScreenshots = model::onBlockScreenshots,
+            onNotificationText = model::onNotificationText,
+            onSecurity = { startActivity(SecurityScreens.securityIntent(this)) },
+            onEnterWords = { startActivity(SecurityScreens.enterIntent(this)) },
+            onRetry = model::refresh,
+        )
+        setContent {
+            ShkTheme {
+                val state by model.state.collectAsState()
+                // The watcher locks in Android's callback before this screen starts again. Its state is read here
+                // directly, so the first frame after a lock shows nothing of the settings.
+                val screen = if (watcher.gateNow == AppGate.LOCKED && state is AppLockSettingsScreen) AppLockAsking() else state
+                LaunchedEffect(screen) {
+                    when (screen) {
+                        is AppLockAsking -> if (screen.prompt == null) model.onAsk()
+                        AppLockClosed -> finish()
+                        else -> Unit
+                    }
+                }
+                AppLockContent(screen, isPreviewBuild, actions)
+                SystemPrompt(
+                    request = (screen as? AppLockAsking)?.prompt,
+                    title = stringResource(R.string.sec_prompt_app_lock),
+                    subtitle = stringResource(R.string.sec_prompt_subtitle),
+                    onResult = model::onPromptResult,
+                )
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        model.refresh()
+    }
+}
+
+/** Turning the app lock on. It takes recovery words, so its window blocks screenshots like the recovery key screens. */
+@OptIn(SecurityScreenSamples::class)
+class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        secureWindow(this)
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        val watcher = securityHost.appLock
+        val model = flowViewModel { TurnOnViewModel(it, onTurnedOn = watcher::turnedOn) }
+        val actions = TurnOnActions(
+            onBack = ::finish,
+            onContinue = model::onContinue,
+            onRead = model::onRead,
+            onAnswerChange = model::onAnswerChange,
+            onCheckFour = model::onCheckFour,
+            words = EnterActions(
+                onBack = ::finish,
+                onTyped = model::onTyped,
+                onWord = model::onWord,
+                onEditWord = model::onEditWord,
+                onCheck = model::onCheckAll,
+            ),
+            onLockAgain = model::onLockAgain,
+            onDone = ::finish,
+        )
+        setContent {
+            ShkTheme {
+                val screen by model.state.collectAsState()
+                TurnOnContent(screen, isPreviewBuild, actions)
+                val reading = screen as? TurnOnReading
+                SystemPrompt(
+                    request = reading?.prompt ?: (screen as? TurnOnLocking)?.prompt,
+                    title = stringResource(if (reading != null) R.string.sec_prompt_check_words else R.string.sec_prompt_turn_on),
+                    subtitle = stringResource(R.string.sec_prompt_subtitle),
+                    onResult = model::onPromptResult,
+                )
+            }
+        }
     }
 }

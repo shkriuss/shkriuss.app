@@ -35,7 +35,9 @@ proposed it in pull request 26, and the owner accepted it in the review
 of that pull request. Record 0031 comes from Phase 1, step 7, session A:
 the permission for Android's system prompt, with the owner's decisions of
 2026-11-13. Claude proposed it in pull request 28, and the owner accepted
-it in the review of that pull request.
+it in the review of that pull request. Record 0032 comes from Phase 1,
+step 7, session B: where the settings of the app lock are kept, with the
+owner's decision of 2026-11-13.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -73,3 +75,4 @@ How a record may be edited or replaced is in point 7 of
 | 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |
 | 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |
 | 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |
+| 0032 | [The settings of the app lock in Android's preferences file](0032-app-lock-settings-in-android-preferences.md) | Proposed |

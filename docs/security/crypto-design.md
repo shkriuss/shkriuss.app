@@ -25,10 +25,17 @@ follows this page.
   The code came first, in its own pull request. The recovery key screens
   followed in a second one, in `android/core/security`
   ([security-screens.md](../architecture/security-screens.md)).
-- Not built yet: the app lock screens (step 1.7, session B), the
-  handover between apps (step 3.0), sealing file keys again in the
-  database (the first app that stores files), and a new recovery key
-  (Phase 5).
+- Step 1.7, session B, on 2026-11-13: the app lock screens, in
+  `android/core/security`
+  ([security-screens.md](../architecture/security-screens.md#the-app-lock)).
+  The owner decided how the words are checked in an app that does not
+  keep the recovery key, what notifications show, and when the app
+  locks. "Keys in memory", point 5, was corrected to what Android
+  really does with an app that waits in the background
+  ([Decided in step 1.7, session B](#decided-in-step-17-session-b)).
+- Not built yet: the handover between apps (step 3.0), sealing file
+  keys again in the database (the first app that stores files), and a
+  new recovery key (Phase 5).
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -47,8 +54,9 @@ follows this page.
 
 The page ends with every [assumption](#assumptions), the owner's
 [decisions on pull request 22](#decided-on-pull-request-22),
-[in session B](#decided-in-session-b) and
-[in step 1.7, session A](#decided-in-step-17-session-a), and every
+[in session B](#decided-in-session-b),
+[in step 1.7, session A](#decided-in-step-17-session-a) and
+[in step 1.7, session B](#decided-in-step-17-session-b), and every
 [open question](#open-questions) that is left.
 
 ## At a glance
@@ -680,9 +688,24 @@ When the app gets its recovery-key-derived keys:
 4. The `file-key` keyset is loaded when a file is opened or added. With
    the app lock on it is loaded by the prompt and dropped when the app
    locks.
-5. Every keyset except `record` is dropped when the screen turns off. A
-   backup, a restore or a file that is being read or written at that
-   moment may finish. Nothing new starts.
+5. Every keyset except `record` is dropped when the phone's screen
+   turns off while the app is on the screen. The app sees this as its
+   screen stops, while the phone is no longer interactive. With the app
+   lock off, the app also drops them whenever it leaves the screen. They
+   load again without a prompt. A backup, a restore or a file that is
+   being read or written at that moment may finish. Nothing new starts.
+   - An app that waits in the background with the app lock on and a
+     timer keeps `file-key` in memory until it comes back or locks.
+     Android 14 and later hold the screen-off broadcast back while such
+     an app waits, and work after a screen stopped is not sure to run.
+     `ACTION_SCREEN_OFF` cannot be declared in a manifest. So such an app
+     may not learn in time that the screen was off.
+   - A screen-off broadcast that arrives after the screen is on again is
+     ignored. A lock then would show the app's content first and lock
+     after.
+   - With "When it leaves the screen", the keys are dropped as the app
+     leaves, so nothing waits. The user guide says so
+     ([app-lock.md](../user/app-lock.md#when-the-app-locks)).
 6. Kotlin cannot wipe memory for certain. Dropping references is the best
    the app can do. Keys are held as Tink objects, never as text.
 7. Every keyset in memory is dropped when any keyset file is written or
@@ -968,11 +991,21 @@ with no files. So the prompt always unlocks a real hardware key.
    - the phone has a screen lock,
    - the app has its recovery-key-derived keys,
    - `file-key-old` does not exist.
-2. Turning it on asks for four of the recovery words again, at positions
-   the app picks at random. That proves the paper copy exists before the
-   app depends on it. A keeper app can check them. Until the handover
-   between apps exists, every app is a keeper. How an app that is not a
-   keeper checks them is decided in the handover step.
+2. Turning it on checks the recovery words first. That proves the paper
+   copy exists before the app depends on it.
+   - A keeper app asks for four of the words, at positions it picks at
+     random, and compares them with the kept recovery key.
+   - An app that does not keep the recovery key asks for all 24 words, on
+     the screen of "Entering it". Words that give this app's own `record`
+     key are the proof: they must be the current recovery key of the
+     stored `record`. It asks for no four words on top. The key is not
+     kept by this check. Keeping stays the user's own choice on the
+     security screen. The owner decided this in step 1.7, session B.
+   - `core/crypto` enforces the check: turning on needs a `WordsProof`,
+     which only `checkFourWords` and `checkAllWords` make. Both store
+     nothing and drop no key from memory.
+   - Whether a keeper can do the check for another app is decided in the
+     handover step (3.0).
 3. Why rule 1: the Lock key is removed when the screen lock is removed.
    The `file-key` keyset is then gone from the phone. Because it derives
    from the recovery key, the words bring it back. A random keyset could
@@ -994,8 +1027,10 @@ with no files. So the prompt always unlocks a real hardware key.
 
 Turn on:
 
-1. Check four of the recovery words. In a keeper app this reads the kept
-   recovery key, so it is one prompt of the Recovery guard.
+1. Check the recovery words (rule 2). In a keeper app this reads the
+   kept recovery key, so it is one prompt of the Recovery guard, and
+   then four words. In an app that does not keep the key, it is all 24
+   words and no prompt.
 2. Make a new key of the kind that wraps `file-key` now (the Unlocked
    key, or the Background key on Android 13 and 14). Move the other
    keysets of the old one to it. `file-key` stays under the old key for
@@ -1008,7 +1043,8 @@ Turn on:
    the keyset file that is still somewhere on the phone's storage could
    be opened without the prompt.
 
-So turning the lock on shows two prompts in a keeper app.
+So turning the lock on shows two prompts in a keeper app, and one in an
+app that does not keep the key.
 
 The order is the owner's decision in session B. The page first made the
 Lock key and wrapped `file-key`, and only then replaced the old key. A
@@ -1056,7 +1092,7 @@ helps only if the app was unlocked when the screen lock was removed.
 | Take in sealed records and write them to the database | Works | Works |
 | Hand out and take in file ciphertext | Works. No key is needed. | Works |
 | Records of files, in both directions | Work. The file key travels wrapped. | Work |
-| Alarms and notifications | Work. They need rows only. | Work |
+| Alarms and notifications | Work. They need rows only. While the app lock is on they show no text, unless the user asks ([notifications.md](../architecture/notifications.md#while-the-app-lock-is-on)). | Work |
 | Open or add a file | Needs the prompt | No |
 | Backup and restore | Started in the app, so the app is unlocked | No |
 | Show the recovery key, set up another app | Needs its own prompt | No |
@@ -1828,6 +1864,14 @@ constructor, and the tests pass a software one with the same byte layout.
 12. Step 1.7, session A: every keyset in memory is dropped after a write,
     so that a change that failed half way leaves nothing stale behind.
     In `StartOverTest`.
+13. Step 1.7, session B: the checks of the words before the app lock.
+    Four words of the kept key, and all 24 words, give a proof; a wrong
+    word, another recovery key, three or five positions and an app with
+    no recovery key do not; the checks store nothing and keep the app
+    unlocked; a `record` that cannot be judged stops them. In
+    `WordsProofTest`. When the app locks, and the screens, are tested in
+    `core/security`
+    ([security-screens.md](../architecture/security-screens.md#tests)).
 
 ## Assumptions
 
@@ -2066,16 +2110,32 @@ session B. Each is fixed and tested:
 5. Keeping a recovery key trusted its caller. Now the app keeps only the
    current recovery key of its stored `record`.
 
+## Decided in step 1.7, session B
+
+The owner's decisions of 2026-11-13, in step 1.7, session B, with the
+app lock screens. Each is built into the page above, or into
+[security-screens.md](../architecture/security-screens.md#the-app-lock)
+and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on).
+
+| Question | Decision |
+|---|---|
+| Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. Whether a keeper can check for another app stays open for step 3.0. |
+| Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. |
+| When the app locks | When it leaves the screen (the default), or after 1, 5 or 15 minutes or 1 hour away. Time away is counted with a clock the user cannot change. The app always locks when the screen turns off with the app on it, and after Android stopped it. |
+| What a waiting app learns of a screen that turned off | Nothing sure. The screen-off broadcast is held back on Android 14 and later, and a late one is ignored. "Keys in memory", point 5, says what happens; the user guide says it plainly. |
+| What a notification shows while the app lock is on | Only its channel's name and a fixed text, unless the user turns on "Show the text in notifications". Turning the app lock on posts the shown notifications again in that form. If the state cannot be read, the text is hidden. |
+| The app lock screen | It asks for the system prompt each time it opens while the app lock is on, before it shows anything. Closing the prompt closes the screen. |
+
 ## Open questions
 
 What is left, with the step that decides it.
 
 1. **Checking the paper copy in an app that is not a keeper**, before
-   the app lock is turned on. It cannot compare single words. Proposal:
-   it asks for all 24 words, derives the `record` key and compares it
-   with its own. That needs no prompt and is exact. Or the keeper does
-   the check. Decided in the handover step (3.0). Until then every app
-   is a keeper.
+   the app lock is turned on. Decided in step 1.7, session B, for an app
+   that does not keep the key: it asks for all 24 words, and words that
+   give its own `record` key are the proof (rule 2 of "The app lock").
+   Still open for the handover step (3.0): whether a keeper can do the
+   check for another app.
 2. **The handover interface**: its screen, its signature permission and
    its decision record. Also what happens when the asking app already
    has keys, or has its app lock on. The handover step (3.0).

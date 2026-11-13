@@ -258,7 +258,7 @@ class RepairTest {
     fun aFileKeyUnderTheAppLockThatAPromptFoundDamagedIsStoredAgainAndTheAppLockIsOff() {
         val fixture = appWithKeys()
         val app = fixture.app
-        app.open().appLock.beginTurnOn().finish()
+        app.open().appLock.beginTurnOn(WordsProof()).finish()
         val lockKey = app.keyOf(KeysetName.FILE_KEY)!!
         assertEquals(HardwareKeyKind.LOCK, lockKey.kind)
         val damaged = damage(File(app.folder, "file-key"))
