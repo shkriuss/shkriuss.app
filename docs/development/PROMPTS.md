@@ -875,6 +875,10 @@ One pull request per group that belongs together. For each update: read the
 release notes, say what changed that matters to us, update the catalog and
 the verification metadata together, and run all checks. Never trust a key or
 checksum without saying where it comes from. Skip pre-releases.
+
+After an Android Gradle Plugin update, try the build without the lint
+suppression on `AlarmManagerScheduler.set` in `core/notify`, and remove it if
+lint passes (ADR 0030, point 10).
 ```
 
 ### R6 Prepare a release

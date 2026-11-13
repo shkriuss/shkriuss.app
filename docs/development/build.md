@@ -604,11 +604,20 @@ How it was tested, on 2026-11-12, in `core/crypto`:
 ## Lint
 
 1. Android Lint runs in `check`. Warnings are errors.
-2. Lint findings are fixed, not hidden. One single line is suppressed, with
-   its reason next to it: `MissingClass` on
-   `androidx.startup.InitializationProvider` in Catalog's manifest. The
-   class comes from a library Compose uses only at run time, so lint cannot
-   see it. It is in the APK.
+2. Lint findings are fixed, not hidden. Two single places are suppressed,
+   each with its reason next to it:
+   - `MissingClass` on `androidx.startup.InitializationProvider` in
+     Catalog's manifest. The class comes from a library Compose uses only
+     at run time, so lint cannot see it. It is in the APK.
+   - `MissingPermission` on the one function that sets an exact alarm,
+     `AlarmManagerScheduler.set` in `core/notify`. Lint 32.5.1 does not
+     know the permission `USE_EXACT_ALARM`, which the module's manifest
+     declares. It accepts only `SCHEDULE_EXACT_ALARM`, which ADR 0010
+     rejected. The owner decided this
+     ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md), point
+     10). `ManifestTest` and the emulator tests check the permission
+     instead. After an update of the Android Gradle Plugin, the build is
+     tried without it (prompt R5 in [PROMPTS.md](PROMPTS.md)).
 3. Compose and Activity ask for Lifecycle 2.9. Its built-in lint checks no
    longer load in this version of lint ("Library lint checks reference
    invalid APIs"). A version constraint lifts Lifecycle to 2.11.0, whose
@@ -627,14 +636,6 @@ How it was tested, on 2026-11-12, in `core/crypto`:
      another one needs the owner's decision too (hard rule 9).
    - The setting, with the same reason, is in `build-logic`,
      `AndroidCommon.kt`.
-
-5. Open: lint 32.5.1 does not know the permission `USE_EXACT_ALARM`.
-   Its check `MissingPermission` fails the one call in `core/notify`
-   that sets an exact alarm, although the module's manifest declares
-   the permission that Android asks for. Until the owner decides,
-   `./gradlew check` fails for `core/notify` at `lintDebug`. The facts
-   and the two options are in
-   [ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md#open).
 
 ## Dependency verification
 

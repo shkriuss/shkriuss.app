@@ -5,7 +5,8 @@
 - Source: Phase 1, step 6 ([PROMPTS.md](../development/PROMPTS.md)),
   [pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26).
   Claude proposed it while building `core/notify`. The owner accepts it,
-  or changes it, in the review of that pull request.
+  or changes it, in the review of that pull request. Point 10 is the
+  owner's decision of 2026-11-13 in that session.
 
 ## Context
 
@@ -68,6 +69,25 @@
 9. **No library.** Notifications are built with Android's own
    `Notification.Builder`. The minimum is Android 13, so nothing from
    AndroidX is needed.
+10. **One lint check is suppressed on one function.** Decided by the
+    owner.
+    - Android Lint 32.5.1, which comes with the Android Gradle Plugin
+      9.5.1, does not know `USE_EXACT_ALARM`. Its check
+      `MissingPermission` fails the call `setExactAndAllowWhileIdle`
+      unless the manifest declares `SCHEDULE_EXACT_ALARM`, the
+      permission that [0010](0010-exact-alarms-and-reminder-storage.md)
+      rejected. Warnings are errors, so `./gradlew check` failed for
+      `core/notify`.
+    - `MissingPermission` is suppressed on `AlarmManagerScheduler.set`
+      and nowhere else. The comment next to it names the lint version
+      and the reason.
+    - What stands in for the check: `ManifestTest` fails if the module's
+      manifest does not declare `USE_EXACT_ALARM`. `AlarmsOnAndroidTest`
+      shows on an emulator that Android allows the alarm and fires it.
+    - After every update of the Android Gradle Plugin, the build is
+      tried without the suppression. It is removed as soon as lint
+      passes without it (prompt R5 in
+      [PROMPTS.md](../development/PROMPTS.md)).
 
 ## Options rejected
 
@@ -95,6 +115,15 @@
   cases and does not nag.
 - **`NotificationCompat` of AndroidX.** A new direct dependency for
   what the platform does itself from Android 13.
+- **For lint: `SCHEDULE_EXACT_ALARM` with `android:maxSdkVersion="32"`
+  in the manifest.** Lint passes with it. Android reads that entry only
+  up to Android 12L, and the minimum is Android 13, so it changes
+  nothing on any device. But every app with reminders would then list,
+  in its manifest, the permission that 0010 rejected, and a tool that
+  reads manifests would show it. The owner chose the suppression.
+- **For lint: other ways that were tried.** `USE_EXACT_ALARM` in the
+  module's manifest alone, and catching the `SecurityException` around
+  the call: lint still fails with both.
 
 ## Consequences
 
@@ -108,40 +137,12 @@
   the app still names it. Each app decides that.
 - The first app with reminders needs the owner to allow the three
   permissions in the APK rules check, which is owner-only.
+- Lint no longer checks the permission of the one call that sets an
+  alarm. Two tests do instead (point 10). Hard rule 9 stays as it is:
+  this is one decision of the owner, not a precedent.
 - An app that wants a notification but no reminders would get all three
   permissions and both receivers today. That needs its own decision
   when such an app comes (the Sync app, for example).
 - The docs for users explain what happens before the first unlock, in
   Private Space and in a secondary profile
   ([reminders.md](../user/reminders.md)).
-
-## Open
-
-Open: Android Lint. Lint 32.5.1, which comes with the Android Gradle
-Plugin 9.5.1, does not know `USE_EXACT_ALARM`. Its check
-`MissingPermission` fails the call `setExactAndAllowWhileIdle` unless
-the manifest declares `SCHEDULE_EXACT_ALARM`. Warnings are errors, so
-`./gradlew check` fails for `core/notify`.
-
-What was tried:
-
-- `USE_EXACT_ALARM` in the module's manifest: lint still fails.
-- Catching the `SecurityException` around the call: lint still fails.
-- `SCHEDULE_EXACT_ALARM` with `android:maxSdkVersion="32"` next to
-  `USE_EXACT_ALARM`: lint passes.
-
-The options, for the owner:
-
-1. **Suppress `MissingPermission` on the one function that sets the
-   alarm**, with the reason next to it. Hard rule 9 forbids it unless
-   the owner asks. `ManifestTest` proves that the permission is
-   declared, and the emulator tests prove on Android 13, 14, 15 and 17
-   that Android allows and fires the alarms.
-2. **Declare `SCHEDULE_EXACT_ALARM` with `android:maxSdkVersion="32"`.**
-   Android reads that entry only up to Android 12L, and the minimum is
-   Android 13. So it changes nothing on any device. But every app with
-   reminders then lists, in its manifest, the permission that
-   [0010](0010-exact-alarms-and-reminder-storage.md) rejected, and a
-   tool that reads manifests shows it.
-
-Claude recommends option 1.

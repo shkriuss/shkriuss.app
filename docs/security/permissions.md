@@ -71,10 +71,6 @@ What they do not allow:
 - The other permission for exact alarms, `SCHEDULE_EXACT_ALARM`, is not
   declared. Android denies it until the user allows it on a special
   page ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)).
-  Open: one way to satisfy Android Lint would add it for Android 12 and
-  older only, where it has no effect
-  ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md#open)). The
-  owner decides.
 
 What happens when the user says no to notifications is in
 [notifications.md](../architecture/notifications.md#the-permission-and-the-states)

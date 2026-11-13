@@ -413,13 +413,58 @@ jobs:
             "$adb" install -r -t "$apk" > /dev/null
           done
 
+          # One answer of the emulator, as text. Empty if it does not answer.
+          # It must not read this script's input: the loop below reads its
+          # lines from there.
+          ask_android() { timeout 30 "$adb" shell "$@" < /dev/null 2> /dev/null | tr -d '\r' || true; }
+
+          # Waits until Android answers again, before a further test APK
+          # runs. On the Android 17 image, Android's system process crashes
+          # when the last screen of a test APK closes at the end of its run,
+          # and Android then starts again by itself
+          # (docs/development/emulator-tests.md). Without the wait, that
+          # crash stops the tests of the next test APK.
+          # - The wait has a limit. If Android does not come back, the job
+          #   fails and says so.
+          # - The log says how long the job waited and whether Android
+          #   started again, so a restart is never hidden.
+          wait_for_android() {
+            local after_tests_of="$1" system_process_before="$2"
+            local started="$SECONDS" limit=300
+            # The crash comes a moment after a run ends.
+            sleep 10
+            until [[ "$(ask_android am broadcast -a app.shkriuss.ci.ANDROID_ANSWERS)" == *"Broadcast completed"* ]] \
+              && [[ "$(ask_android pm path android)" == package:* ]]; do
+              if [ $((SECONDS - started)) -ge "$limit" ]; then
+                echo "::error::Android $ANDROID_VERSION did not answer again within $((limit / 60)) minutes after the tests of $after_tests_of. The test APKs after it did not run."
+                exit 1
+              fi
+              sleep 5
+            done
+            if [ "$(ask_android pidof system_server)" != "$system_process_before" ]; then
+              # Give the new start a moment to finish, then unlock the
+              # screen again, as the step "Start the emulator" did.
+              sleep 10
+              ask_android input keyevent KEYCODE_WAKEUP > /dev/null
+              ask_android wm dismiss-keyguard > /dev/null
+              echo "::warning::Android $ANDROID_VERSION started again after the tests of $after_tests_of. The job waited $((SECONDS - started)) seconds until it answered."
+            else
+              echo "Waited $((SECONDS - started)) seconds before the next test APK. Android did not start again."
+            fi
+          }
+
           runner_pattern='^instrumentation:(app\.shkriuss\.[a-z0-9.]+\.test/app\.shkriuss\.core\.testing\.InstrumentedTestRunner) '
           runs=0
           failed=0
+          previous=""
+          system_process=""
           while IFS= read -r line; do
             if ! [[ "$line" =~ $runner_pattern ]]; then continue; fi
             component="${BASH_REMATCH[1]}"
             runs=$((runs + 1))
+            if [ "$runs" -gt 1 ]; then wait_for_android "$previous" "$system_process"; fi
+            previous="$component"
+            system_process="$(ask_android pidof system_server)"
             output="$RUNNER_TEMP/tests-$runs.txt"
             echo "::group::$component"
             timeout 1500 "$adb" shell am instrument -w "$component" < /dev/null | tr -d '\r' | tee "$output" || true

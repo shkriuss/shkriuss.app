@@ -16,6 +16,7 @@ Built in Phase 1, step 6. No app uses it yet. Water is the first
 | Alarms | Android's `AlarmManager`, `setExactAndAllowWhileIdle` with `RTC_WAKEUP`: at the exact time on the wall clock, also when the device sleeps |
 | Notifications | Android's `NotificationManager` and `Notification.Builder`. No library. |
 | Permissions | `POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, in the module's manifest ([permissions.md](../security/permissions.md#apps-that-use-corenotify)) |
+| Lint | `MissingPermission` is suppressed on the one function that sets an alarm, because lint does not know `USE_EXACT_ALARM` ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md), point 10) |
 | Receivers | Two, in the module's manifest. Neither is exported. |
 | Where the reminders are | In the app's own database. `core/notify` stores no reminder. |
 | What `core/notify` stores | The ids and times of the alarms it registered, and whether the user was asked for the permission. No title, no text. |
@@ -266,17 +267,12 @@ three devices.
 
 ## Open
 
-1. Lint. Android Lint 32.5.1 does not know `USE_EXACT_ALARM`. It fails
-   the call that sets an exact alarm unless the manifest declares
-   `SCHEDULE_EXACT_ALARM`, the permission that ADR 0010 rejected. The
-   owner decides how to answer it
-   ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md#open)).
-2. The screen for the permission, and its words (Phase 2, step 4).
-3. Buttons on a notification, such as "Done" or "Later". `core/notify`
+1. The screen for the permission, and its words (Phase 2, step 4).
+2. Buttons on a notification, such as "Done" or "Later". `core/notify`
    has none yet. They come with the first app that needs them.
-4. A notification that is not a reminder, for example progress in the
+3. A notification that is not a reminder, for example progress in the
    Sync app. Today every app that uses `core/notify` gets all three
    permissions and both receivers.
-5. The checks on a GrapheneOS device: after a reboot, in a secondary
+4. The checks on a GrapheneOS device: after a reboot, in a secondary
    profile and in Private Space
    ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices-reminders)).

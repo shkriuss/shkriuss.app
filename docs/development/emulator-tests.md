@@ -235,8 +235,8 @@ How the tests reach what an app cannot:
 First runs on 2026-11-12 and 2026-11-13, in
 [pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26), on
 AOSP emulators. Each run has 10 tests. On Android 13, 14 and 15 all of
-them pass. On Android 17 the run does not get to its end
-([below](#android-17-the-run-is-stopped)).
+them pass. On Android 17 the first runs did not get to their end
+([below](#android-17-the-job-waits-for-android)).
 
 | What | Result on Android 13, 14 and 15 |
 |---|---|
@@ -260,24 +260,30 @@ changed the code: a sync after a change in the app no longer sets an
 alarm again that already waits at Android
 ([notifications.md](../architecture/notifications.md#how-alarms-are-kept-right)).
 
-#### Android 17: the run is stopped
+#### Android 17: the job waits for Android
 
-Open. On the Android 17 image the run of `core/notify` is stopped after
-a few tests with "INSTRUMENTATION_ABORTED: System has crashed".
+On the Android 17 image the first runs of `core/notify` were stopped
+after a few tests, with "INSTRUMENTATION_ABORTED: System has crashed".
 
 - The cause is fault 3 of
   [What the job and the tests had to learn](#what-the-job-and-the-tests-had-to-learn).
   The tests of `core/crypto` leave their one screen open until their
   run ends. When the run ends the screen closes, and Android's system
-  process aborts in `TaskSnapshotPersister`, 0.2 seconds later.
-- Until now no test APK ran after `core/crypto`, so nobody saw it. The
+  process aborts in `TaskSnapshotPersister`, 0.2 seconds later. Android
+  then starts again by itself.
+- Until then no test APK ran after `core/crypto`, so nobody saw it. The
   job runs the test APKs in the order of their names, and
   `core/notify` comes second.
-- Nothing in `core/notify` can prevent it. Its tests are stopped from
+- Nothing in `core/notify` can prevent it. Its tests were stopped from
   outside.
-- A fix belongs in the job: before each test APK, wait until Android
-  answers again. That is a change to `.github/workflows/ci.yml`, which
-  is owner-only. The owner decides.
+- The fix is in the job, and the owner asked for it: before each test
+  APK after the first, the job waits until Android answers again
+  ([ci.md](ci.md#job-emulator), step 8). The wait has a limit, and the
+  log says when Android started again.
+- No test was left out or changed for it.
+
+Open: what the first run with the wait showed. This page gets it after
+that run.
 
 ## What an emulator cannot check
 
