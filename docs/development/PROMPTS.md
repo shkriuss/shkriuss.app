@@ -679,13 +679,18 @@ as an accepted deviation with the reason.
 
 ### Phase 1 gate (you)
 
+Complete on 2026-11-13, with Catalog 0.2.0 and 0.3.0. The owner said so
+on [pull request 33](https://github.com/shkriuss/shkriuss.app/pull/33):
+the look at the shared screens is done, the decisions below are
+recorded, and the three emulator checks are in the ruleset.
+
 The owner made these decisions on 2026-11-13.
 
 The design part was done on 2026-11-12 with Catalog 0.2.0, on the Pixel
 9 Pro, the Pixel Tablet and the Pixel 6a. It covers the tokens and
 components of steps 1.1 and 1.2. The teal accent and the six text styles
 stay as they are ([ADR 0017](../adr/0017-design-system-tokens.md)). The
-rest of the gate waits for steps 1.3 to 1.7.
+rest of the gate waited for steps 1.3 to 1.7.
 
 The look at Catalog on the three devices, for the shared screens of steps
 1.3 to 1.7, is done with Catalog 0.3.0. The owner decided on 2026-11-13
@@ -718,9 +723,9 @@ Decided on 2026-11-13:
 
 4. The emulator jobs. "Emulator (Android 13)", "(Android 14)" and
    "(Android 15)" become required checks. "Emulator (Android 17)" does
-   not, while its image crashes Android's system process. The owner turns
-   the three on in the ruleset
-   ([ci.md](ci.md#the-emulator-jobs)) and decides again at the Phase 2
+   not, while its image crashes Android's system process. The owner
+   turned the three on in the ruleset on 2026-11-13
+   ([ci.md](ci.md#the-emulator-jobs)), and decides again at the Phase 2
    gate.
 5. A step for each point under "Found while writing this page" in
    [threat-model.md](../security/threat-model.md#found-while-writing-this-page):

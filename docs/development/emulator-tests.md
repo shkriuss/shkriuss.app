@@ -623,8 +623,9 @@ The owner's decisions on
    "Emulator (Android 13)", "(Android 14)" and "(Android 15)" become
    required checks. "Emulator (Android 17)" does not, while its image
    crashes Android's system process (point 3 of
-   [What the tests showed](#what-the-tests-showed)). The owner decides
-   again at the Phase 2 gate ([ci.md](ci.md#the-emulator-jobs)).
+   [What the tests showed](#what-the-tests-showed)). The owner turned
+   the three on in the ruleset on 2026-11-13, and decides again at the
+   Phase 2 gate ([ci.md](ci.md#the-emulator-jobs)).
 3. **Pinning.** The emulator and the system images are not pinned to a
    revision. `sdkmanager` takes the newest, and the job writes the
    installed revisions into its log. A new revision can fix a fault,
