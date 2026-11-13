@@ -43,6 +43,18 @@ class AlarmSyncTest {
         return AlarmSync(app, app, Notifications(context), android, AlarmRegistry(context.notifyStore()), clock)
     }
 
+    /** The app changed its reminders and says so. */
+    private fun appChanged() = sync.sync(setAll = false)
+
+    /** A new start of the app, or one of Android's four broadcasts: every alarm is set again. */
+    private fun androidMayHaveDroppedTheAlarms() = sync.sync(setAll = true)
+
+    /** The app starts again, in a new process. */
+    private fun appStarts() {
+        sync = newSync()
+        androidMayHaveDroppedTheAlarms()
+    }
+
     /** Time passes: the clock moves, and Android fires what is due. */
     private fun advanceBy(millis: Long) {
         clock.advanceBy(millis)
@@ -54,7 +66,7 @@ class AlarmSyncTest {
         app.reminders += TestReminder.Once(a, start + HOUR)
         app.reminders += TestReminder.Once(b, start + 2 * HOUR)
 
-        sync.sync()
+        appChanged()
 
         assertEquals(mapOf(a to start + HOUR, b to start + 2 * HOUR), android.waiting)
     }
@@ -62,7 +74,7 @@ class AlarmSyncTest {
     @Test
     fun anAlarmFiresOnceAtItsTime() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
 
         advanceBy(HOUR - 1)
         assertEquals(emptyList<Alarm>(), app.handled)
@@ -71,7 +83,7 @@ class AlarmSyncTest {
         assertEquals(listOf(Alarm(a, start + HOUR)), app.handled)
 
         advanceBy(DAY)
-        sync.sync()
+        appChanged()
         advanceBy(DAY)
         assertEquals(1, app.handled.size)
         assertTrue(android.waiting.isEmpty())
@@ -80,7 +92,7 @@ class AlarmSyncTest {
     @Test
     fun aBroadcastBeforeTheTimeIsDroppedAndTheAlarmStays() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
 
         sync.fired(a)
 
@@ -93,7 +105,7 @@ class AlarmSyncTest {
     @Test
     fun aBroadcastThatComesTwiceRunsTheHandlerOnce() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
         clock.advanceBy(HOUR)
 
         sync.fired(a)
@@ -104,7 +116,7 @@ class AlarmSyncTest {
 
     @Test
     fun aBroadcastForAnAlarmNobodyKnowsIsDropped() {
-        sync.sync()
+        appChanged()
 
         sync.fired(AlarmId("unknown"))
 
@@ -114,10 +126,10 @@ class AlarmSyncTest {
     @Test
     fun aChangedTimeReplacesTheAlarm() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
 
         app.reminders[0] = TestReminder.Once(a, start + 3 * HOUR)
-        sync.sync()
+        appChanged()
 
         assertEquals(mapOf(a to start + 3 * HOUR), android.waiting)
         advanceBy(2 * HOUR)
@@ -130,10 +142,10 @@ class AlarmSyncTest {
     fun anAlarmTheAppNoLongerWantsIsRemoved() {
         app.reminders += TestReminder.Once(a, start + HOUR)
         app.reminders += TestReminder.Once(b, start + HOUR)
-        sync.sync()
+        appChanged()
 
         app.reminders.removeAt(0)
-        sync.sync()
+        appChanged()
 
         assertEquals(mapOf(b to start + HOUR), android.waiting)
         assertTrue("cancel a" in android.calls)
@@ -144,7 +156,7 @@ class AlarmSyncTest {
     @Test
     fun aReminderThatRepeatsGetsItsNextTimeWhenItFired() {
         app.reminders += TestReminder.Daily(a, LocalTime.of(9, 0))
-        sync.sync()
+        appChanged()
         assertEquals(mapOf(a to start + 9 * HOUR), android.waiting)
 
         advanceBy(9 * HOUR)
@@ -161,10 +173,10 @@ class AlarmSyncTest {
     fun anAlarmTheAppStillNamesAfterItFiredDoesNotFireAgain() {
         app.keepsNamingDoneReminders = true
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
         advanceBy(HOUR)
 
-        repeat(3) { sync.sync() }
+        repeat(3) { appChanged() }
         advanceBy(DAY)
 
         assertEquals(listOf(Alarm(a, start + HOUR)), app.handled)
@@ -175,11 +187,10 @@ class AlarmSyncTest {
     fun afterARebootEveryAlarmIsRegisteredAgain() {
         app.reminders += TestReminder.Once(a, start + HOUR)
         app.reminders += TestReminder.Daily(b, LocalTime.of(9, 0))
-        sync.sync()
+        appChanged()
 
         android.forgetEverything()
-        sync = newSync()
-        sync.sync()
+        appStarts()
 
         assertEquals(mapOf(a to start + HOUR, b to start + 9 * HOUR), android.waiting)
     }
@@ -187,7 +198,7 @@ class AlarmSyncTest {
     @Test
     fun anAlarmMissedWhileTheDeviceWasOffFiresLateAndOnce() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
 
         // The device is off from before the alarm until three hours after it.
         android.forgetEverything()
@@ -195,12 +206,11 @@ class AlarmSyncTest {
         assertEquals(emptyList<Alarm>(), app.handled)
 
         // It starts and is unlocked: the alarms are registered again.
-        sync = newSync()
-        sync.sync()
+        appStarts()
         android.fireDue(clock, sync::fired)
 
         assertEquals(listOf(Alarm(a, start + HOUR)), app.handled)
-        sync.sync()
+        appChanged()
         android.fireDue(clock, sync::fired)
         assertEquals(1, app.handled.size)
     }
@@ -209,12 +219,11 @@ class AlarmSyncTest {
     fun anAlarmThatFiredBeforeARebootDoesNotFireAgainAfterIt() {
         app.keepsNamingDoneReminders = true
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
         advanceBy(HOUR)
 
         android.forgetEverything()
-        sync = newSync()
-        sync.sync()
+        appStarts()
         advanceBy(HOUR)
 
         assertEquals(1, app.handled.size)
@@ -224,11 +233,11 @@ class AlarmSyncTest {
     fun afterTheClockIsSetForwardTheAlarmsThatAreNowDueFire() {
         app.reminders += TestReminder.Once(a, start + HOUR)
         app.reminders += TestReminder.Once(b, start + 5 * HOUR)
-        sync.sync()
+        appChanged()
 
         // The user sets the clock two hours ahead. Android tells the app, and fires what is due.
         clock.advanceBy(2 * HOUR)
-        sync.sync()
+        androidMayHaveDroppedTheAlarms()
         android.fireDue(clock, sync::fired)
 
         assertEquals(listOf(Alarm(a, start + HOUR)), app.handled)
@@ -239,13 +248,13 @@ class AlarmSyncTest {
     fun afterTheClockIsSetBackAnAlarmThatFiredIsDueAgain() {
         app.keepsNamingDoneReminders = true
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
         advanceBy(HOUR)
         assertEquals(1, app.handled.size)
 
         // The clock goes back to half an hour before the alarm.
         clock.advanceBy(-30 * MINUTE)
-        sync.sync()
+        androidMayHaveDroppedTheAlarms()
 
         assertEquals(mapOf(a to start + HOUR), android.waiting)
         advanceBy(30 * MINUTE)
@@ -255,12 +264,12 @@ class AlarmSyncTest {
     @Test
     fun aDailyReminderFollowsANewTimeZone() {
         app.reminders += TestReminder.Daily(a, LocalTime.of(9, 0))
-        sync.sync()
+        appChanged()
         assertEquals(mapOf(a to start + 9 * HOUR), android.waiting)
 
         // Tbilisi is four hours ahead of UTC: 09:00 there is 05:00 UTC.
         app.zone = ZoneId.of("Asia/Tbilisi")
-        sync.sync()
+        androidMayHaveDroppedTheAlarms()
 
         assertEquals(mapOf(a to start + 5 * HOUR), android.waiting)
         advanceBy(5 * HOUR)
@@ -271,12 +280,12 @@ class AlarmSyncTest {
     @Test
     fun aNewTimeZoneThatPutsTheReminderInThePastFiresItAtOnce() {
         app.reminders += TestReminder.Daily(a, LocalTime.of(9, 0))
-        sync.sync()
+        appChanged()
         clock.advanceBy(6 * HOUR)
 
         // 06:00 UTC is 10:00 in Tbilisi: today's 09:00 has passed there.
         app.zone = ZoneId.of("Asia/Tbilisi")
-        sync.sync()
+        androidMayHaveDroppedTheAlarms()
         android.fireDue(clock, sync::fired)
 
         assertEquals(listOf(Alarm(a, start + 5 * HOUR)), app.handled)
@@ -287,7 +296,7 @@ class AlarmSyncTest {
     fun onlyTheSoonestHundredWaitAtAndroidAndTheRestFollowInOrder() {
         // 150 reminders, one a minute, named in the wrong order.
         repeat(150) { number -> app.reminders += TestReminder.Once(AlarmId("r$number"), start + (150 - number) * MINUTE) }
-        sync.sync()
+        appChanged()
 
         assertEquals(100, android.waiting.size)
         assertEquals(start + 100 * MINUTE, android.waiting.values.max())
@@ -307,21 +316,20 @@ class AlarmSyncTest {
         app.reminders += TestReminder.Once(a, start + HOUR)
         app.reminders += TestReminder.Once(a, start + 2 * HOUR)
 
-        assertThrows(IllegalArgumentException::class.java) { sync.sync() }
+        assertThrows(IllegalArgumentException::class.java) { appChanged() }
     }
 
     @Test
     fun aHandlerThatFailsDoesNotFailAgainForTheSameAlarm() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
         clock.advanceBy(HOUR)
         app.failure = IllegalStateException("the record cannot be read")
 
         assertThrows(IllegalStateException::class.java) { android.fireDue(clock, sync::fired) }
 
         // The app starts again. The alarm is still named, and is done.
-        sync = newSync()
-        sync.sync()
+        appStarts()
         android.fireDue(clock, sync::fired)
         assertEquals(1, app.handled.size)
     }
@@ -329,7 +337,7 @@ class AlarmSyncTest {
     @Test
     fun theHandlerGetsTheTimeTheAlarmWasSetFor() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
 
         // The device slept through the time and fires 20 minutes late.
         advanceBy(HOUR + 20 * MINUTE)
@@ -338,14 +346,55 @@ class AlarmSyncTest {
     }
 
     @Test
-    fun everySyncSetsTheAlarmsAgainBecauseAndroidMayHaveDroppedThem() {
+    fun aStartOfTheAppSetsEveryAlarmAgainBecauseAndroidMayHaveDroppedThem() {
         app.reminders += TestReminder.Once(a, start + HOUR)
-        sync.sync()
+        appChanged()
 
-        // "Force stop": Android drops the alarms and tells nobody.
+        // "Force stop": Android drops the alarms and tells nobody. Later the user opens the app.
         android.forgetEverything()
-        sync.sync()
+        appStarts()
 
+        assertEquals(mapOf(a to start + HOUR), android.waiting)
+    }
+
+    @Test
+    fun aChangeInTheAppLeavesTheOtherAlarmsAlone() {
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        appChanged()
+
+        // Another reminder is added, one second before the first one is due.
+        clock.advanceBy(HOUR - 1_000)
+        app.reminders += TestReminder.Once(b, start + 2 * HOUR)
+        appChanged()
+
+        // Setting an alarm again that is almost due would make it late: Android waits five seconds after a set.
+        assertEquals(listOf("set a ${start + HOUR}", "set b ${start + 2 * HOUR}"), android.calls)
+    }
+
+    @Test
+    fun anAlarmThatFiredDoesNotSetTheOthersAgain() {
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        app.reminders += TestReminder.Once(b, start + HOUR + 1_000)
+        appChanged()
+        android.calls.clear()
+
+        advanceBy(HOUR)
+
+        assertEquals(listOf(Alarm(a, start + HOUR)), app.handled)
+        assertEquals(emptyList<String>(), android.calls)
+        assertEquals(mapOf(b to start + HOUR + 1_000), android.waiting)
+    }
+
+    @Test
+    fun aBroadcastThatIsDroppedSetsEveryAlarmAgain() {
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        appChanged()
+
+        // Android fired the alarm, so it is gone there. On the app's clock it is not due: the clock went back in between.
+        android.forgetEverything()
+        sync.fired(a)
+
+        assertEquals(emptyList<Alarm>(), app.handled)
         assertEquals(mapOf(a to start + HOUR), android.waiting)
     }
 

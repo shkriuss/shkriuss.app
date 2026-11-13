@@ -55,9 +55,9 @@ class ClockChangesOnAndroidTest {
 
     /** Sets the emulator's time zone. True if it is [zone] afterwards. */
     private fun setTimeZone(zone: String): Boolean = listOf(
+        "cmd alarm set-timezone $zone",
         "cmd time_zone_detector set_manual_time_zone --zone_id $zone",
         "cmd time_zone_detector suggest_manual_time_zone --zone_id $zone",
-        "cmd alarm set-timezone $zone",
     ).any { command ->
         TestDevice.shell(command)
         TestDevice.waitUntil(SHORT_WAIT_MILLIS) { timeZone() == zone }.also { worked ->

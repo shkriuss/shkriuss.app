@@ -212,7 +212,7 @@ permissions and the two receivers come from the module's manifest.
 | Test class | What it checks |
 |---|---|
 | `PermissionOnAndroidTest` | A newly installed app shows no notifications, and the state is "never asked". After the answer "no" it is "denied". After the permission is granted it is "ready". The app has the three permissions of the module's manifest and no other. `Notify.start` made the channel, with its name, description and importance. |
-| `AlarmsOnAndroidTest` | Android allows exact alarms with `USE_EXACT_ALARM`, without asking the user. An alarm set three seconds ahead fires, not before its time, through the receiver that is not exported, and the app's notification is shown. Two alarms with two ids both fire. An alarm that is no longer wanted does not fire. An alarm whose time has passed fires at once. |
+| `AlarmsOnAndroidTest` | Android allows exact alarms with `USE_EXACT_ALARM`, without asking the user. An alarm set seven seconds ahead fires, not before its time, through the receiver that is not exported, and the app's notification is shown. Two alarms with two ids both fire. An alarm that is no longer wanted does not fire. An alarm whose time has passed fires within seconds. |
 | `ClockChangesOnAndroidTest` | The time zone is changed: Android tells the receiver, and the app is asked for its alarms again. The clock is set eleven minutes ahead: an alarm that is now due fires, and the app is asked again. |
 
 How the tests reach what an app cannot:
@@ -232,8 +232,52 @@ How the tests reach what an app cannot:
 
 ### What the notify tests showed
 
-Open: filled in after the first run in
-[pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26).
+First runs on 2026-11-12, in
+[pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26), on
+AOSP emulators. Each run has 10 tests. On Android 13, 14 and 15 all of
+them pass. On Android 17 the run does not get to its end
+([below](#android-17-the-run-is-stopped)).
+
+| What | Result on Android 13, 14 and 15 |
+|---|---|
+| A newly installed app | Android shows none of its notifications, and the state is "never asked". |
+| The permission is granted | Android shows notifications at once. The state is "ready". |
+| The permissions of the test APK | Exactly the three of the module's manifest. No library added another. |
+| The channel | Made by `Notify.start`, with its name, description and importance. |
+| Exact alarms with `USE_EXACT_ALARM` | `AlarmManager.canScheduleExactAlarms` is true. The user is not asked. |
+| The receivers, which are not exported | Android reaches both: the alarm's own broadcast, `TIME_SET` and `TIMEZONE_CHANGED`. |
+| An alarm fires | The app's handler runs, never before the alarm's time, and the notification is shown with the alarm's time. |
+| **The shortest wait** | Android fires no alarm sooner than about 5 seconds after it was set. An alarm set 3 seconds ahead fired 2.0 seconds after its time, on all three versions. An alarm whose time had passed fired 5 seconds after it was set. This is Android's own limit for every app. |
+| **Two alarms that are due together** | They arrive in either order. Two alarms one second apart, both inside the 5 seconds, came together, on Android 13 and 15 the later one first. The handler ran once for each. |
+| An alarm that is no longer wanted | Does not fire. |
+| The clock is set eleven minutes ahead | `cmd alarm set-time` sets it. Android fires the alarm that is now due and sends `TIME_SET`. The app is asked for its alarms once for each. |
+| The time zone is changed | `cmd alarm set-timezone` sets it. Android sends `TIMEZONE_CHANGED`, and the app is asked for its alarms again. |
+
+After these runs the tests set their alarms seven seconds ahead, so
+that they measure the alarm and not the 5 seconds.
+
+Open: how late an alarm is that is set more than 5 seconds ahead. The
+runs write it down in a `NOTE`. This page gets the numbers after the
+next run.
+
+#### Android 17: the run is stopped
+
+Open. On the Android 17 image the run of `core/notify` is stopped after
+a few tests with "INSTRUMENTATION_ABORTED: System has crashed".
+
+- The cause is fault 3 of
+  [What the job and the tests had to learn](#what-the-job-and-the-tests-had-to-learn).
+  The tests of `core/crypto` leave their one screen open until their
+  run ends. When the run ends the screen closes, and Android's system
+  process aborts in `TaskSnapshotPersister`, 0.2 seconds later.
+- Until now no test APK ran after `core/crypto`, so nobody saw it. The
+  job runs the test APKs in the order of their names, and
+  `core/notify` comes second.
+- Nothing in `core/notify` can prevent it. Its tests are stopped from
+  outside.
+- A fix belongs in the job: before each test APK, wait until Android
+  answers again. That is a change to `.github/workflows/ci.yml`, which
+  is owner-only. The owner decides.
 
 ## What an emulator cannot check
 

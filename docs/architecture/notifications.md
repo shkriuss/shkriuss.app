@@ -68,9 +68,9 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
 2. Work out each time from the record and the time zone of this moment,
    with `java.time`. A reminder "every day at 09:00" then follows a new
    time zone and the change to summer time by itself.
-3. A time in the past is allowed. That alarm fires at once. This is how
-   a reminder that was missed while the device was off shows up late.
-   An app that does not want late reminders leaves them out.
+3. A time in the past is allowed. That alarm fires within seconds. This
+   is how a reminder that was missed while the device was off shows up
+   late. An app that does not want late reminders leaves them out.
 4. After the handler ran for an alarm, name its next time, or leave it
    out.
 5. It is called on a background thread, so it may read the database.
@@ -100,8 +100,9 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
 ## How alarms are kept right
 
 There is one way in for every cause. A sync asks the app's `AlarmSource`
-for everything it wants now and registers all of it again. A reboot, an
-update, a new time zone and a changed reminder all run the same code.
+for everything it wants now and makes Android's alarms match. A reboot,
+an update, a new time zone and a changed reminder all run the same
+code.
 
 A sync does this:
 
@@ -113,10 +114,16 @@ A sync does this:
    that fires ends in a sync, which registers the ones after it.
 4. It removes from Android every alarm it registered earlier that is no
    longer among them.
-5. It sets every one of them again, also those it already set. Android
-   may have dropped its alarms since, and setting an alarm twice leaves
-   one alarm.
-6. It writes the ids and times into its file.
+5. It sets every alarm that is new or has a new time.
+6. At a start of the app, and after one of Android's four broadcasts,
+   it sets all of them again, also those it already set. Android may
+   have dropped its alarms since, and setting an alarm twice leaves one
+   alarm.
+7. It writes the ids and times into its file.
+
+Why step 5 leaves the other alarms alone: Android fires no alarm sooner
+than about 5 seconds after it was set. Setting an alarm again that is
+almost due would make it late.
 
 When Android fires an alarm:
 
@@ -125,6 +132,8 @@ When Android fires an alarm:
    is dropped. So **the handler runs once for one id and time.**
 2. Then the alarm is written down as fired, and a sync follows. That
    sets the next time of a reminder that repeats.
+   - If the broadcast was dropped, that sync sets all alarms again.
+     Android's alarms and the file may differ then.
 3. "Fired" is written after the handler. If the app stops inside the
    handler, the alarm fires again at the next sync.
 4. "Fired" is written also when the handler fails. A reminder that
@@ -142,14 +151,14 @@ Two more rules:
 
 | Moment | What Android does | What `core/notify` does |
 |---|---|---|
-| The app starts | | `Notify.start()` makes the channels and runs a sync. |
-| The app changes a reminder | | The app calls `Notify.sync()`. |
-| An alarm fired | The alarm is gone. | The handler runs, then a sync. |
-| Reboot | Every alarm is forgotten. After the first unlock, Android sends `BOOT_COMPLETED`. | `SystemEventReceiver` runs a sync. |
+| The app starts | | `Notify.start()` makes the channels and runs a sync that sets all alarms again. |
+| The app changes a reminder | | The app calls `Notify.sync()`. New and changed alarms are set. |
+| An alarm fired | The alarm is gone. | The handler runs, then a sync as after a change. |
+| Reboot | Every alarm is forgotten. After the first unlock, Android sends `BOOT_COMPLETED`. | `SystemEventReceiver` runs a sync that sets all alarms again. |
 | The profile of the app starts (a secondary user, Private Space unlocked) | The same as a reboot, for that profile. | The same. |
-| App update | The app is stopped, and its alarms can be lost with it. Android sends `MY_PACKAGE_REPLACED`. | A sync. |
-| The time changed | Android sends `TIME_SET`, and fires what is now due. | A sync. |
-| The time zone changed | Android sends `TIMEZONE_CHANGED`. | A sync. The app works out its times again. |
+| App update | The app is stopped, and its alarms can be lost with it. Android sends `MY_PACKAGE_REPLACED`. | The same. |
+| The time changed | Android sends `TIME_SET`, and fires what is now due. | The same. |
+| The time zone changed | Android sends `TIMEZONE_CHANGED`. | The same. The app works out its times again. |
 | "Force stop" in Android's settings | Every alarm is dropped, and the app gets no broadcast until the user opens it. | Nothing can be done. The next start of the app runs a sync. |
 
 The change to and from summer time needs no broadcast. The app names the
@@ -231,6 +240,7 @@ These are not choices of the suite. The page for users is
 | After a reboot, before the first unlock | The app's storage is locked. Nothing runs, no alarm is registered, nothing fires. After the unlock, Android sends `BOOT_COMPLETED`, the alarms are registered again, and a missed reminder that the app still names fires late. The opt-in mode of [ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md), point 5, is not built. |
 | Private Space, locked | Android stops every app in it. They cannot run and cannot show notifications. When it is unlocked, its apps are told as after a reboot. |
 | A secondary profile | Its apps run only while the profile is running. After a reboot it is not running until the user switches to it and unlocks it. "End session" stops it. While it runs in the background, alarms fire, and the notification belongs to that profile. |
+| An alarm for the next few seconds | Android fires no alarm sooner than about 5 seconds after it was set. An alarm for an earlier moment, or for the past, fires then. Two alarms that become due together can arrive in either order ([emulator-tests.md](../development/emulator-tests.md#what-the-notify-tests-showed)). |
 | Deep sleep | The alarm wakes the device. Android limits how many such alarms one app may fire in an hour while the device sleeps deeply. Reminders stay far below that. |
 | "Force stop" | See the table above. |
 
@@ -240,7 +250,7 @@ Unit tests, on the JVM. They are in `core/notify/src/test/`:
 
 | Test class | What it checks |
 |---|---|
-| `AlarmSyncTest` | The rules of "How alarms are kept right", with a clock the test moves and a stand-in for Android's alarms: what is registered, that an alarm fires once and not before its time, changed and removed reminders, a reminder that repeats, a reboot, a missed alarm, the clock set forward and back, a new time zone, more than 100 alarms, a handler that fails. |
+| `AlarmSyncTest` | The rules of "How alarms are kept right", with a clock the test moves and a stand-in for Android's alarms: what is registered, that an alarm fires once and not before its time, changed and removed reminders, a reminder that repeats, a reboot, a missed alarm, the clock set forward and back, a new time zone, more than 100 alarms, a handler that fails, and that a change in the app does not set the other alarms again. |
 | `AlarmManagerSchedulerTest` | What is asked of `AlarmManager`: exact, on the wall clock, waking the device, one alarm for each id, a broadcast that only this app can send and that carries only the id. |
 | `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. |
 | `ManifestTest` | The module's manifest: the three permissions and no other, two receivers, not exported, nothing that runs before the first unlock, and exactly the four broadcasts. |

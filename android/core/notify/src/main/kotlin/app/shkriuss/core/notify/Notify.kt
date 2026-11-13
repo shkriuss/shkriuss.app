@@ -66,7 +66,8 @@ class Notify(
     fun start() {
         check(app is NotifyHost) { "The app class must implement NotifyHost" }
         notifications.createChannels(channels)
-        sync()
+        // Android may have dropped the alarms since the app last ran.
+        worker.execute { alarms.sync(setAll = true) }
     }
 
     /**
@@ -74,7 +75,7 @@ class Notify(
      * changed, done or deleted, or a backup was restored. It asks the
      * [AlarmSource] and makes Android's alarms match, on [worker].
      */
-    fun sync() = worker.execute(alarms::sync)
+    fun sync() = worker.execute { alarms.sync(setAll = false) }
 
     /** What a screen shows about notifications of [channel]. See [NotifyState]. */
     fun state(channel: NotifyChannel): NotifyState = when {
@@ -114,7 +115,7 @@ class Notify(
     /** Android forgot the alarms, or the time moved. [done] runs when they are registered again. */
     internal fun systemEvent(done: () -> Unit) = worker.execute {
         try {
-            alarms.sync()
+            alarms.sync(setAll = true)
         } finally {
             done()
         }

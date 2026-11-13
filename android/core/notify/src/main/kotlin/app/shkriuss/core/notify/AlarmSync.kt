@@ -7,8 +7,8 @@ import app.shkriuss.core.data.Clock
  * hands a fired alarm to the app once.
  *
  * There is one way in for every cause: [sync] asks the app's
- * [AlarmSource] for everything it wants now and registers all of it
- * again. So a reboot, an update, a new time zone and a changed reminder
+ * [AlarmSource] for everything it wants now and makes Android's alarms
+ * match. So a reboot, an update, a new time zone and a changed reminder
  * all run the same code. The rules are in
  * docs/architecture/notifications.md, "How alarms are kept right".
  *
@@ -23,8 +23,20 @@ internal class AlarmSync(
     private val registry: AlarmRegistry,
     private val clock: Clock,
 ) {
-    /** Registers what the app wants now, and removes what it no longer wants. */
-    fun sync() {
+    /**
+     * Registers what the app wants now, and removes what it no longer
+     * wants.
+     *
+     * With [setAll], every alarm is set again, also those the file
+     * already lists: Android may have dropped its alarms since, at a
+     * reboot, an update or a "Force stop". That is for the start of the
+     * app and for Android's own broadcasts. Without it, only an alarm
+     * that is new or has a new time is set. An alarm that waits at
+     * Android is then left alone, because Android fires no alarm sooner
+     * than about five seconds after it was set, and setting one that is
+     * almost due would make it late.
+     */
+    fun sync(setAll: Boolean) {
         val now = clock.nowMillis()
         val wanted = source.alarms()
         require(wanted.map { it.id }.toSet().size == wanted.size) { "An AlarmSource names each alarm id once" }
@@ -40,10 +52,8 @@ internal class AlarmSync(
         val next = wanted.filter { fired[it.id] != it.atMillis }.sortedBy { it.atMillis }.take(MOST_ALARMS)
 
         (before.registered.keys - next.map { it.id }.toSet()).forEach(scheduler::cancel)
-        // Always set again, also what the registry already lists: Android
-        // may have dropped its alarms since, at a reboot, an update or a
-        // "Force stop". Setting an alarm twice leaves one alarm.
-        next.forEach(scheduler::set)
+        // Setting an alarm twice leaves one alarm.
+        next.filter { setAll || before.registered[it.id] != it.atMillis }.forEach(scheduler::set)
         registry.write(AlarmState(registered = next.associate { it.id to it.atMillis }, fired = fired))
     }
 
@@ -57,7 +67,8 @@ internal class AlarmSync(
     fun fired(id: AlarmId) {
         val state = registry.read()
         val at = state.registered[id]
-        if (at != null && at <= clock.nowMillis()) {
+        val due = at != null && at <= clock.nowMillis()
+        if (at != null && due) {
             try {
                 handler.onAlarm(Alarm(id, at), notifications)
             } finally {
@@ -68,7 +79,10 @@ internal class AlarmSync(
                 registry.write(state.copy(registered = state.registered - id, fired = state.fired + (id to at)))
             }
         }
-        sync()
+        // A broadcast that was dropped can mean that Android's alarms and
+        // the file differ, for example after the clock was set back. Then
+        // everything is set again.
+        sync(setAll = !due)
     }
 
     private companion object {

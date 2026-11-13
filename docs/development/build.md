@@ -345,7 +345,7 @@ second build must write the same mapping file, or the release stops. See
   section headers as headings, the loading state as "in progress", and
   the loading and error states to try as polite live regions.
 
-- `core/notify` has five test classes with 62 tests
+- `core/notify` has five test classes with 65 tests
   ([notifications.md](../architecture/notifications.md#tests)).
   - `AlarmSyncTest` runs the rules for alarms with `TestClock` of
     `core/testing` and a stand-in for Android's alarms. No test waits

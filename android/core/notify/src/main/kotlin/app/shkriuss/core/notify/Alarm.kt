@@ -44,8 +44,9 @@ fun interface AlarmSource {
      * - Work out each time from the record and the time zone of this
      *   moment. A reminder "every day at 09:00" then follows a new time
      *   zone by itself.
-     * - A time in the past is allowed. That alarm fires at once. It is how
-     *   a reminder that was missed while the device was off shows up late.
+     * - A time in the past is allowed. That alarm fires within seconds. It
+     *   is how a reminder that was missed while the device was off shows
+     *   up late.
      * - After [AlarmHandler.onAlarm] ran for an alarm, return its next
      *   time, or leave it out.
      */

@@ -31,12 +31,18 @@
 1. **The app's database is the only place where reminders are.**
    `core/notify` asks the app for its alarms (`AlarmSource`) every time
    it registers them. An alarm is an id and a time, nothing else.
-2. **One way in.** A sync asks for all alarms and sets all of them
-   again. It runs when the app starts, when the app says something
-   changed, after each alarm that fired, and after the four broadcasts
-   `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET` and
+2. **One way in.** A sync asks for all alarms and makes Android's
+   alarms match. It runs when the app starts, when the app says
+   something changed, after each alarm that fired, and after the four
+   broadcasts `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET` and
    `TIMEZONE_CHANGED`. `TIME_SET` is added to the list of 0010: after
    the clock is set back, an alarm may be due a second time.
+   - At a start of the app and after the four broadcasts it sets every
+     alarm again, because Android may have dropped them.
+   - Otherwise it sets only an alarm that is new or has a new time.
+     Android fires no alarm sooner than about 5 seconds after it was
+     set, so setting one that is almost due would make it late. The
+     tests on the emulator showed this limit.
 3. **A small file of ids and times.** `core/notify` writes down which
    alarms it registered and which fired. With it, an alarm that is no
    longer wanted is removed, and the app's handler runs once for one id

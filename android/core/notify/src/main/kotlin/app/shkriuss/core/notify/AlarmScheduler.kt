@@ -12,7 +12,8 @@ import android.content.Context
 interface AlarmScheduler {
     /**
      * Registers [alarm] with Android. An alarm with the same id is
-     * replaced. A time that has passed fires at once.
+     * replaced. A time that has passed fires within seconds: Android
+     * fires no alarm sooner than about five seconds after it was set.
      */
     fun set(alarm: Alarm)
 

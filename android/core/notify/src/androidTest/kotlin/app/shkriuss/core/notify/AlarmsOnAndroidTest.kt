@@ -71,7 +71,7 @@ class AlarmsOnAndroidTest {
     fun twoAlarmsWithTwoIdsBothFire() {
         val now = System.currentTimeMillis()
         reminders.wanted += Alarm(AlarmId("one"), now + SOON_MILLIS)
-        reminders.wanted += Alarm(AlarmId("two"), now + SOON_MILLIS + 1_000)
+        reminders.wanted += Alarm(AlarmId("two"), now + SOON_MILLIS + 2_000)
         syncAndWait()
 
         val fired = TestDevice.waitUntil(WAIT_MILLIS) { reminders.handled.size == 2 }
@@ -79,7 +79,7 @@ class AlarmsOnAndroidTest {
         assertTrue("only ${reminders.handled.size} of two alarms fired", fired)
         // Android may deliver two alarms that are due together in either order.
         assertEquals(listOf("one", "two"), reminders.handled.map { it.first.id.value }.sorted())
-        if (reminders.handled.first().first.id.value == "two") TestDevice.note("Two alarms one second apart came in the other order.")
+        if (reminders.handled.first().first.id.value == "two") TestDevice.note("Two alarms two seconds apart came in the other order.")
     }
 
     @Test
@@ -96,20 +96,26 @@ class AlarmsOnAndroidTest {
     }
 
     @Test
-    fun anAlarmWhoseTimeHasPassedFiresAtOnce() {
+    fun anAlarmWhoseTimeHasPassedFiresWithinSeconds() {
         val alarm = Alarm(AlarmId("missed"), System.currentTimeMillis() - 60 * 60_000)
         reminders.wanted += alarm
+        val setAt = System.currentTimeMillis()
         syncAndWait()
 
         val fired = TestDevice.waitUntil(WAIT_MILLIS) { reminders.handled.isNotEmpty() }
 
         assertTrue("the missed alarm did not fire", fired)
         assertEquals(listOf(alarm), reminders.handled.map { it.first })
+        TestDevice.note("An alarm whose time had passed fired ${reminders.handled.single().second - setAt} ms after it was set.")
     }
 
     private companion object {
-        /** How far ahead a test sets its alarm. */
-        const val SOON_MILLIS = 3_000L
+        /**
+         * How far ahead a test sets its alarm. Android fires no alarm
+         * sooner than about five seconds after it was set, so a shorter
+         * time would measure that limit and not the alarm.
+         */
+        const val SOON_MILLIS = 7_000L
         const val WAIT_MILLIS = 30_000L
     }
 }
