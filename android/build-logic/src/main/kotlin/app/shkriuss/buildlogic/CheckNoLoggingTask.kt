@@ -20,9 +20,11 @@ import org.gradle.api.tasks.TaskAction
  *
  * It reads the text of every `.kt` and `.java` file in every folder under
  * the module's `src/` that is not test code: `main`, `debug`, `release`,
- * `preview`, and any folder added later. Test code is a folder whose name
- * starts with `test` or `androidTest`, or `sharedTest`. Tests never ship in
- * an app, and they may print.
+ * `preview`, `testFixtures`, and any folder added later. Test code is a
+ * folder whose name starts with `test` but not `testFixtures`, or starts
+ * with `androidTest`, or is `sharedTest`. Tests never ship in an app, and
+ * they may print. Test fixtures count as main code: an app that wrongly
+ * depends on them would ship them (owner's decision on pull request 34).
  *
  * It searches the raw text, comments and strings included, for each of
  * [FORBIDDEN]. That is how the test it replaced, `theModuleNeverLogsOrPrints`
@@ -103,16 +105,20 @@ abstract class CheckNoLoggingTask : DefaultTask() {
             "dumpStack",
         )
 
-        /** Source folders whose name starts with one of these hold test code. */
+        /** Source folders whose name starts with one of these hold test code, unless it starts with [FIXTURES]. */
         private val TEST_FOLDER_STARTS = listOf("test", "androidTest")
+
+        /** Test fixtures, whose folders start with `test` but count as main code. */
+        private const val FIXTURES = "testFixtures"
 
         /** Source folders with one of these names hold test code. */
         private val TEST_FOLDERS = setOf("sharedTest")
 
         private val SOURCE_EXTENSIONS = setOf("kt", "java")
 
-        /** True for a folder directly under `src/` that holds test code. */
-        fun isTestFolder(name: String): Boolean = name in TEST_FOLDERS || TEST_FOLDER_STARTS.any { name.startsWith(it) }
+        /** True for a folder directly under `src/` that holds test code. Test fixtures are not test code here. */
+        fun isTestFolder(name: String): Boolean =
+            name in TEST_FOLDERS || (!name.startsWith(FIXTURES) && TEST_FOLDER_STARTS.any { name.startsWith(it) })
 
         /** Every `.kt` and `.java` file under [sourceRoot] that is not in a test folder, sorted by path. */
         fun mainSourceFiles(sourceRoot: File): List<File> =

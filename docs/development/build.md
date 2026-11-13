@@ -121,7 +121,7 @@ on every pull request, either inside `check` or by name.
 | [Room schemas](#room-schemas) | `checkRoomSchemas` | Yes | Inside `check` | Modules with the Room plugin |
 | [DAO rules](#dao-rules-check) | `checkDaoRules` | Yes | Inside `check` | Modules with the Room plugin, main and test classes |
 | [Instrumented test suite](#instrumented-test-suite-check) | `checkInstrumentedTestSuite` | Yes | Inside `check` | Modules with tests on an emulator |
-| [Logging](#logging-check) (hard rule 10) | `checkNoLogging` | Yes | Inside `check` | The main code of every Android module but `core/testing` |
+| [Logging](#logging-check) (hard rule 10) | `checkNoLogging` | Yes | Inside `check` | The main code and test fixtures of every Android module but `core/testing` |
 | [Tests of the build checks](#tests-of-the-build-checks) | `:build-logic:test` | Yes | Inside `check` | `build-logic` |
 | [APK rules](#apk-rules-check) 1 to 6: permissions, native code, emoji loader, Play services, test fixtures, backup | `check<Variant>ApkRules` | No | By name, `:app:<name>:checkReleaseApkRules`, and CI checks its report | Every APK that is built: release, preview and debug |
 | [APK rules](#apk-rules-check) 7 to 9: WebView and code loading | The same task | No | The same | Only the APKs that ship: release and preview |
@@ -472,6 +472,12 @@ Test helpers that the tests of other modules may use
      decrypts as an app does.
 5. Fixtures are never part of an app. For those of `core/crypto`, the
    APK rules check makes sure ([The test fixtures rule](#the-test-fixtures-rule)).
+   A limit: only the fixtures of `core/crypto` are kept out of apps by a
+   check today. A module that adds fixtures later needs the same care: a
+   rule of its own in the APK rules check, decided with the owner. The
+   [logging check](#logging-check) reads every module's fixtures as main
+   code, for the case that an app wrongly depends on them (owner's
+   decision on [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
 6. Android Gradle Plugin 9.5.1 still marks test fixtures as incubating.
    What this project needs was checked on 2026-11-12 in the cloud
    environment:
@@ -693,10 +699,10 @@ What it reads:
 
 1. Every `.kt` and `.java` file in every folder under the module's
    `src/` that is not test code: `main`, `debug`, `release`, `preview`,
-   and any folder added later.
-2. Test code is a folder whose name starts with `test` (such as `test`,
-   `testDebug` and `testFixtures`) or with `androidTest`, and the folder
-   `sharedTest`.
+   `testFixtures`, and any folder added later.
+2. Test code is a folder whose name starts with `test` (such as `test`
+   and `testDebug`) but not with `testFixtures`, or starts with
+   `androidTest`, and the folder `sharedTest`.
 
 What it forbids: any of these 13 forms, anywhere in the text, comments
 and text in quotes included:
@@ -722,6 +728,10 @@ How it treats each kind of code:
 - **Test code** is not checked. It never ships in an app, and it holds
   only test data. Some tests must print or capture the output, such as
   `NoSecretsTest` in `core/crypto`.
+- **Test fixtures** are checked as main code. They are meant for tests
+  only, but an app that wrongly depends on them would ship them (owner's
+  decision on [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
+  See the limit in [Test fixtures](#test-fixtures), point 5.
 - **Catalog** is checked like every app. It ships to users.
 - **`core/testing`** is not checked. It is a module of test helpers, and
   its test runner logs on purpose, so that the emulator job's log holds
@@ -753,7 +763,9 @@ How it was tested, on 2026-11-13 in the cloud environment:
 1. Before the change, the forms appeared in main code in one place only:
    the test runner in `core/testing`.
 2. With the check in place, all seven checked modules passed. They read
-   9 to 29 files each, 27 in `core/crypto`.
+   9 to 29 files each, 29 in `core/crypto`: its 27 main files and its
+   two test fixtures. The fixtures held none of the forms, so they did not
+   change.
 3. A line `android.util.Log.d("probe", title)` added to a main file of
    `core/design` failed the check, which named the file, the line and
    the forms `android.util.Log` and `Log.`.
@@ -764,6 +776,9 @@ How it was tested, on 2026-11-13 in the cloud environment:
 6. `CoreTestingGuardTest` failed when the rule was put back to let
    `testFixtures` configurations declare `core/testing`, and passed with
    the rule as it is.
+7. `NoLoggingCheckTest` failed in four tests when the check was put back
+   to leave `testFixtures` folders out, and passed with the check as it
+   is.
 
 ## Tests of the build checks
 
@@ -791,7 +806,7 @@ The owner asked for them in step 1.9.
 
 | Test | What it shows |
 |---|---|
-| `NoLoggingCheckTest` | Each of the 13 forms fails in main code, also in a comment or in quotes. The ten forms of the replaced test are all there. `main`, `debug`, `release`, `preview` and a new folder are main code. The test folders are not checked. A module with no main code is found. |
+| `NoLoggingCheckTest` | Each of the 13 forms fails in main code, also in a comment or in quotes. The ten forms of the replaced test are all there. `main`, `debug`, `release`, `preview`, `testFixtures` and a new folder are main code, and logging in the fixtures fails. The test folders are not checked. A module with no main code is found. |
 | `CoreTestingGuardTest` | `core/testing` in `implementation`, `api`, `debugImplementation`, `testFixturesImplementation` or `testFixturesApi` fails. In `testImplementation` and `androidTestImplementation` it passes. |
 | `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. |
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |

@@ -98,9 +98,14 @@ class NoLoggingCheckTest {
             "release/kotlin/D.kt" to logging,
             "preview/kotlin/E.kt" to logging,
             "somethingNew/kotlin/F.kt" to logging,
+            "testFixtures/kotlin/G.kt" to logging,
+            "testFixturesRelease/kotlin/H.kt" to logging,
         )
         assertEquals(
-            listOf("debug/kotlin/C.kt", "main/java/B.java", "main/kotlin/A.kt", "preview/kotlin/E.kt", "release/kotlin/D.kt", "somethingNew/kotlin/F.kt"),
+            listOf(
+                "debug/kotlin/C.kt", "main/java/B.java", "main/kotlin/A.kt", "preview/kotlin/E.kt", "release/kotlin/D.kt",
+                "somethingNew/kotlin/F.kt", "testFixtures/kotlin/G.kt", "testFixturesRelease/kotlin/H.kt",
+            ),
             problemsIn(src).map { it.substringBefore(':') }.distinct(),
         )
     }
@@ -112,7 +117,6 @@ class NoLoggingCheckTest {
             "main/kotlin/A.kt" to clean,
             "test/kotlin/T.kt" to logging,
             "testDebug/kotlin/T.kt" to logging,
-            "testFixtures/kotlin/F.kt" to logging,
             "androidTest/kotlin/I.kt" to logging,
             "androidTestDebug/kotlin/I.kt" to logging,
             "sharedTest/kotlin/S.kt" to logging,
@@ -139,9 +143,24 @@ class NoLoggingCheckTest {
 
     @Test
     fun testFoldersAreTheOnlyOnesLeftOut() {
-        listOf("test", "testDebug", "testFixtures", "testFixturesRelease", "androidTest", "androidTestDebug", "sharedTest")
+        listOf("test", "testDebug", "androidTest", "androidTestDebug", "sharedTest")
             .forEach { assertTrue(it, CheckNoLoggingTask.isTestFolder(it)) }
-        listOf("main", "debug", "release", "preview", "screenshotTest", "shared")
+        listOf("main", "debug", "release", "preview", "screenshotTest", "shared", "testFixtures", "testFixturesRelease")
             .forEach { assertTrue(it, !CheckNoLoggingTask.isTestFolder(it)) }
+    }
+
+    @Test
+    fun loggingInTestFixturesFails() {
+        val src = module(
+            "main/kotlin/A.kt" to clean,
+            "testFixtures/kotlin/app/shkriuss/core/crypto/fixtures/Stand.kt" to "fun keep(key: String) = println(key)\n",
+        )
+        assertEquals(listOf("testFixtures/kotlin/app/shkriuss/core/crypto/fixtures/Stand.kt:1: println"), problemsIn(src))
+    }
+
+    @Test
+    fun aModuleWithOnlyTestFixturesHasMainCodeToRead() {
+        val src = module("testFixtures/kotlin/F.kt" to clean, "test/kotlin/T.kt" to clean)
+        assertEquals(listOf("testFixtures/kotlin/F.kt"), CheckNoLoggingTask.mainSourceFiles(src).map { it.relativeTo(src).invariantSeparatorsPath })
     }
 }
