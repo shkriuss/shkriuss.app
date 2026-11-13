@@ -28,12 +28,16 @@ What of this is in an app:
 
 - From version 0.3.0, Catalog uses `core/crypto` through `core/security`.
   Its sample recovery words come from the word list. So the word list
-  and its `LICENSE.txt` are in Catalog's APK.
+  and its `LICENSE.txt` are in Catalog's APK. Checked in the published
+  `catalog-v0.3.0.apk`, the first release APK that uses `core/crypto`:
+  `english.txt` has the SHA-256 recorded below, and `LICENSE.txt` is
+  byte for byte the one in the repository
+  ([its checklist](../apps/catalog/release-checklist-0.3.0.md#result)).
 - Tink, Protocol Buffers, Gson, JSR-305 and Error Prone are not.
   Catalog never calls them, and R8 removes them from the release APK.
-  Checked in Catalog's release build on 2026-11-13: no class of theirs
-  is in it. AndroidX Annotation is in it through Compose, which uses it
-  too.
+  Checked in Catalog's release build on 2026-11-13, and in the published
+  `catalog-v0.3.0.apk`: no class of theirs is in it. AndroidX Annotation
+  is in it through Compose, which uses it too.
 - All of it will be in every app that stores keys, from Water on.
 
 ## BIP-39 English word list
@@ -143,12 +147,6 @@ For Phase 2, before Water's first release:
   apps show. No jar above brings its licence text with it.
 - Confirm the licence of the JSR-305 annotations at their source. This
   page records only what the artifact's POM says.
-- Check that `english.txt` and `LICENSE.txt` are both inside the first
-  release APK that uses `core/crypto`. That is Catalog 0.3.0. Its
-  release build in the cloud environment had both on 2026-11-13, byte
-  for byte as in the repository. The published APK is checked when the
-  release is recorded
-  ([its checklist](../apps/catalog/release-checklist-0.3.0.md), part 5).
 
 ## How to add an entry
 

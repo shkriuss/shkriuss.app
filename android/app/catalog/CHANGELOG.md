@@ -3,9 +3,9 @@
 Catalog (`app.shkriuss.catalog`) is the design gallery used during
 development.
 
-## Unreleased
+## 0.3.0 (2026-11-13)
 
-### 0.3.0
+Released as `catalog-v0.3.0`.
 
 The recovery key screens and the app lock screens that every app shares,
 drawn with sample data, in a new group on the start screen. From pull

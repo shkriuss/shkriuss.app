@@ -694,7 +694,13 @@ to make it one pass with the release: parts 1 and 2 of the
 on the preview of the pull request that prepares it
 ([pull request 32](https://github.com/shkriuss/shkriuss.app/pull/32)),
 before the merge. After publishing, nothing is looked at again except
-part 5 of that checklist. These steps stay open until they are done:
+part 5 of that checklist.
+
+Done on 2026-11-13, before the merge of pull request 32. The owner found
+no faults and nothing to dislike, so nothing was fixed in 0.3.0 and no
+change waits for the next version
+([Result](../apps/catalog/release-checklist-0.3.0.md#result)). The steps
+were:
 
 1. Install the Catalog preview of that pull request on the Pixel 9 Pro,
    Pixel Tablet and Pixel 6a.
@@ -849,9 +855,8 @@ docs/security/threat-model.md:
 
 Model: `opus`. Effort: `xhigh`. Mode: **Plan** first. It can run at any
 time from now, and it must be done before the first data app (Water) is
-released. Catalog 0.1.0 and 0.2.0 were released before it. It answers
-point 11 under "Found while
-writing this page" in
+released. Catalog 0.1.0, 0.2.0 and 0.3.0 were released before it. It
+answers point 11 under "Found while writing this page" in
 [threat-model.md](../security/threat-model.md#found-while-writing-this-page).
 
 ```text
