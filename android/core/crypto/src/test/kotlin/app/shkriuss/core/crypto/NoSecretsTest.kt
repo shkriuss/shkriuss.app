@@ -200,7 +200,12 @@ class NoSecretsTest {
         show(app.vault.fileKeysets(create = false))
         File(app.folder, "record").let { it.writeBytes(it.readBytes().also { bytes -> bytes[bytes.size - 2] = 0 }) }
         failing { app.open().records.seal(recordId, plaintext.toByteArray()) }
-        failing { app.open().setup.storeDerivedKeys(key) }
+        // The words repair the damaged file. What it says, and the refusals around it.
+        show(app.open().setup.storeDerivedKeys(key))
+        show(app.open().setup.startOver(key))
+        failing { app.open().setup.giveUpDamagedFileKeys() }
+        failing { app.open().setup.beginKeepRecoveryKey(RecoveryKey.newRandom()) }
+        failing { TestApp(temporary.newFolder()).open().setup.finishFileKeyMove() }
         app.hardware.keystoreFails = true
         failing { app.open().backups.keyId() }
         failing { app.vault.newKey(HardwareKeyKind.LOCK) }

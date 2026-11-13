@@ -84,6 +84,28 @@ class KeysetFilesTest {
     }
 
     @Test
+    fun aSetAsideCopyGoesNextToTheFolderIsNumberedAndIsNeverWrittenOver() {
+        val folder = File(temporary.root, "shk-keys")
+        val setAside = File(temporary.root, "shk-keys-set-aside")
+        val files = KeysetFiles(folder)
+        files.replace(KeysetName.FILE_KEY, byteArrayOf(1))
+        files.replace(KeysetName.FILE_KEY_OLD, byteArrayOf(7))
+
+        files.setAside(KeysetName.FILE_KEY)
+        files.setAside(KeysetName.FILE_KEY)
+        files.replace(KeysetName.FILE_KEY, byteArrayOf(2))
+        files.setAside(KeysetName.FILE_KEY)
+        files.setAside(KeysetName.FILE_KEY_OLD)
+        files.setAside(KeysetName.RECORD)
+
+        assertEquals("the same bytes are copied once", listOf("file-key-1", "file-key-2", "file-key-old-1"), setAside.list()!!.sorted())
+        assertArrayEquals(byteArrayOf(1), File(setAside, "file-key-1").readBytes())
+        assertArrayEquals(byteArrayOf(2), File(setAside, "file-key-2").readBytes())
+        assertArrayEquals("the file itself stays", byteArrayOf(2), files.read(KeysetName.FILE_KEY))
+        assertTrue("start-up cleaning still sees only keyset files", files.tidy())
+    }
+
+    @Test
     fun aFolderThatDoesNotExistYetIsEmpty() {
         val files = KeysetFiles(File(temporary.root, "not-there"))
         assertTrue(files.tidy())

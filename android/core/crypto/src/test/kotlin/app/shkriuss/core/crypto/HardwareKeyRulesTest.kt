@@ -2,6 +2,7 @@ package app.shkriuss.core.crypto
 
 import app.shkriuss.core.crypto.fixtures.SoftwareHardwareKeys
 import java.io.File
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -101,15 +102,23 @@ class HardwareKeyRulesTest {
     }
 
     @Test
-    fun rule2ADamagedFileUnderALivingKeyIsNeverWrittenOver() {
+    fun rule2ADamagedFileUnderALivingKeyIsWrittenOverOnlyWithProvenWordsAndIsKeptAside() {
         val app = appWithKeys()
         val file = File(app.folder, "record")
         file.writeBytes(file.readBytes().also { it[it.size - 1] = (it[it.size - 1].toInt() xor 1).toByte() })
+        val damaged = file.readBytes()
         val before = app.snapshot()
 
-        assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { app.open().setup.storeDerivedKeys(recoveryKey) })
+        // Other words prove nothing: nothing is written.
         assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { app.open().records.seal(recordId, ByteArray(1)) })
+        assertEquals(KeySetupResult.DIFFERENT_RECOVERY_KEY, app.open().setup.storeDerivedKeys(RecoveryKey.newRandom()))
         assertEquals(before, app.snapshot())
+
+        // The right words, proven by the other keysets: the damaged file is kept aside and the keyset stored again.
+        assertEquals(KeySetupResult.STORED, app.open().setup.storeDerivedKeys(recoveryKey))
+        assertEquals(listOf("~record", "record"), app.store.changes)
+        assertArrayEquals(damaged, File(app.setAsideFolder, "record-1").readBytes())
+        assertNotNull(app.open().records.seal(recordId, ByteArray(1)))
     }
 
     @Test

@@ -50,8 +50,9 @@ internal object KeysetCodec {
 
     /**
      * Reads Tink's binary keyset and checks that it holds only enabled keys
-     * of [type], and a primary. A file key holds exactly [exactCount] 1 key.
-     * Throws [BlobException] "damaged or changed" for anything else.
+     * of [type], each under its own ID, and a primary. A file key holds
+     * exactly [exactCount] 1 key. Throws [BlobException] "damaged or
+     * changed" for anything else.
      */
     fun parse(bytes: ByteArray, type: KeysetType, exactCount: Int? = null): KeysetHandle {
         TinkSetup.ready()
@@ -59,6 +60,7 @@ internal object KeysetCodec {
             val keyset =
                 TinkProtoKeysetFormat.parseKeyset(bytes, InsecureSecretKeyAccess.get(), RegistryConfiguration.get())
             check(keyset.size() >= 1 && (exactCount == null || keyset.size() == exactCount))
+            check(keyIds(keyset).toSet().size == keyset.size())
             for (index in 0 until keyset.size()) {
                 val entry = keyset.getAt(index)
                 check(entry.status == KeyStatus.ENABLED && entry.key.parameters == type.parameters)
@@ -97,6 +99,44 @@ internal object KeysetCodec {
             val entry = wanted.getAt(index)
             (0 until stored.size()).any { stored.getAt(it).id == entry.id && stored.getAt(it).key.equalsKey(entry.key) }
         }
+    }
+
+    /** True if both keysets hold exactly the same keys under the same IDs, with the same primary. */
+    fun sameKeys(first: KeysetHandle, second: KeysetHandle): Boolean =
+        first.size() == second.size() && holdsAll(first, second)
+
+    /**
+     * True if a key ID is in both keysets with a different key. Then the
+     * two can never be one keyset, and a blob's key ID would not say which
+     * key sealed it. Null holds no keys.
+     */
+    fun clashes(first: KeysetHandle?, second: KeysetHandle?): Boolean {
+        if (first == null || second == null) return false
+        return (0 until first.size()).any { index ->
+            val entry = first.getAt(index)
+            (0 until second.size()).any { second.getAt(it).id == entry.id && !second.getAt(it).key.equalsKey(entry.key) }
+        }
+    }
+
+    /**
+     * One keyset with every key of [old] and every key of [added] that
+     * [old] does not hold, each under its own ID. The primary of [old]
+     * stays the primary. Null if [added] brings no new key. The caller
+     * has checked that the two do not [clash][clashes].
+     */
+    fun union(old: KeysetHandle, added: KeysetHandle): KeysetHandle? {
+        TinkSetup.ready()
+        val known = keyIds(old).toSet()
+        val newEntries = (0 until added.size()).map { added.getAt(it) }.filter { KeyId(it.id) !in known }
+        if (newEntries.isEmpty()) return null
+        val builder = KeysetHandle.newBuilder()
+        for (index in 0 until old.size()) {
+            val entry = old.getAt(index)
+            val copy = KeysetHandle.importKey(entry.key).withFixedId(entry.id)
+            builder.addEntry(if (entry.isPrimary) copy.makePrimary() else copy)
+        }
+        newEntries.forEach { builder.addEntry(KeysetHandle.importKey(it.key).withFixedId(it.id)) }
+        return builder.build()
     }
 
     /** Tink's AEAD for a [KeysetType.SEALING] keyset. */

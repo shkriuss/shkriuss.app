@@ -15,7 +15,10 @@ internal class StoppingStore(private val files: KeysetStore) : KeysetStore {
     /** The change to stop before, counting replacements and removals from 1. Null: never stop. */
     var stopBeforeChange: Int? = null
 
-    /** The changes that were made, in order: the keyset name, with `-` in front for a removal. */
+    /**
+     * The changes that were made, in order: the keyset name, with `-` in
+     * front for a removal and `~` for a copy to the set-aside folder.
+     */
     val changes = mutableListOf<String>()
 
     override fun read(name: KeysetName): ByteArray? = files.read(name)
@@ -30,6 +33,12 @@ internal class StoppingStore(private val files: KeysetStore) : KeysetStore {
         stopIfDue()
         files.delete(name)
         changes += "-${name.text}"
+    }
+
+    override fun setAside(name: KeysetName) {
+        stopIfDue()
+        files.setAside(name)
+        changes += "~${name.text}"
     }
 
     override fun tidy(): Boolean = files.tidy()
@@ -59,6 +68,9 @@ internal class TestApp(val folder: File, val hardware: SoftwareHardwareKeys = So
         vault = KeyVault(TestKeys.water, store, hardware)
         return ShkCrypto(vault).also { if (start) it.start() }
     }
+
+    /** Where damaged keyset files are copied, next to [folder]. */
+    val setAsideFolder: File get() = File(folder.path + KeysetFiles.SET_ASIDE_SUFFIX)
 
     /** The hardware key the stored keyset names, or null. */
     fun keyOf(name: KeysetName): HardwareKeyRef? = KeysetFiles(folder).read(name)?.let { WrappedKeyset.keyOf(it, name) }

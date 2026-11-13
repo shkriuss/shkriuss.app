@@ -22,6 +22,25 @@ class KeyStatus internal constructor(
     val hasScreenLock: Boolean,
     /** True while file keys are still sealed by a key that exists only on this phone. */
     val fileKeyMoveIsPending: Boolean,
+    /**
+     * True if a setup stopped half way: some derived keysets are stored,
+     * but not `record`. The same words finish it. A user who cannot give
+     * them can start over ([KeySetup.startOver]).
+     */
+    val setupIsUnfinished: Boolean,
+    /**
+     * True if a keyset file that the recovery words can bring back is
+     * damaged. Entering the words repairs it ([KeySetup.storeDerivedKeys],
+     * then [KeySetup.beginKeepRecoveryKey] for a kept key).
+     */
+    val needsRepair: Boolean,
+    /**
+     * True if a keyset that seals file keys is damaged and no words can
+     * bring it back. The user can give those files up
+     * ([KeySetup.giveUpDamagedFileKeys]). They can then never be opened,
+     * on any device.
+     */
+    val filesCanBeGivenUp: Boolean,
     /** The hardware keys that wrap this app's keysets, with the level of each. */
     val hardwareKeys: List<HardwareKeyStatus>,
 )

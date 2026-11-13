@@ -167,6 +167,7 @@ class KeySetupTest {
         val app = TestApp(temporary.newFolder())
         val crypto = app.open()
         val key = crypto.setup.createRecoveryKey()
+        crypto.setup.storeDerivedKeys(key)
         val step = crypto.setup.beginKeepRecoveryKey(key)!!
         step.finish()
         listOf({ step.finish() }, { step.cancel() }).forEach { again ->
@@ -250,6 +251,7 @@ class KeySetupTest {
         val app = TestApp(temporary.newFolder())
         val crypto = app.open()
         val key = crypto.setup.createRecoveryKey()
+        crypto.setup.storeDerivedKeys(key)
         crypto.setup.beginKeepRecoveryKey(key)!!.finish()
         // Another key under the same alias: the blob is refused.
         app.hardware.put(guard, ByteArray(32) { 1 })
