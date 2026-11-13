@@ -479,8 +479,9 @@
 
     <!-- The recovery key screens page. -->
     <string name="recovery_key_intro">The screens of the recovery key that every app shares, from core/security. Each state shows with sample words. They are no real key, and nothing here makes or stores one. Back returns to this list.</string>
-    <string name="recovery_key_block_heading">Screenshots</string>
-    <string name="recovery_key_block">Block screenshots, as in an app</string>
+    <string name="recovery_key_block_heading">Protection</string>
+    <string name="recovery_key_block">Protect this page, as in an app</string>
+    <string name="recovery_key_block_help">As in an app: screenshots are blocked, a tap under another app\'s window does nothing, and on Android 14 and later only accessibility tools such as TalkBack can read the page. An app also hides other apps\' windows over these screens. Catalog cannot, because that needs a permission it does not have.</string>
     <string name="recovery_key_states_heading">States</string>
     <string name="sample_security_no_key">Security screen, no recovery key yet</string>
     <string name="sample_security_set_up">Security screen, set up and kept, app lock on, keys in StrongBox</string>

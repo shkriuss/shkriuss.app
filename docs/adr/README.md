@@ -77,3 +77,4 @@ How a record may be edited or replaced is in point 7 of
 | 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |
 | 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |
 | 0032 | [The settings of the app lock in Android's preferences file](0032-app-lock-settings-in-android-preferences.md) | Accepted |
+| 0033 | [The permission HIDE_OVERLAY_WINDOWS for the security screens](0033-hide-overlay-windows-for-the-security-screens.md) | Proposed |

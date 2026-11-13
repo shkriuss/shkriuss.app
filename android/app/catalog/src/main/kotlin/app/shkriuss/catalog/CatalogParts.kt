@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.shkriuss.core.design.ShkShapes
 import app.shkriuss.core.design.ShkSpacing
+import app.shkriuss.core.design.ShkSwitch
 import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTextStyle
 import app.shkriuss.core.design.ShkTheme
@@ -44,6 +45,19 @@ fun PageTitle(text: String) {
 fun PageIntro(text: String) {
     Spacer(Modifier.height(ShkSpacing.Small))
     ShkText(text = text, color = ShkTheme.colors.textSecondary)
+}
+
+/**
+ * The switch of the two pages of shared screens. It protects the page as
+ * an app protects these screens (`secureWindow` of `core/security`), so
+ * that the owner can try it on a phone. It starts off, so that screenshots
+ * of the page can be sent. The line under it says what it does.
+ */
+@Composable
+fun ProtectionSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    SectionHeading(stringResource(R.string.recovery_key_block_heading))
+    ShkSwitch(text = stringResource(R.string.recovery_key_block), checked = checked, onCheckedChange = onCheckedChange)
+    ShkText(text = stringResource(R.string.recovery_key_block_help), color = ShkTheme.colors.textSecondary)
 }
 
 /** The heading of a section of a page, with the space of a new section above it. */

@@ -24,7 +24,7 @@ does not. It ends with the OWASP MASVS controls and every open question.
 | Attacker | What stops it | What does not |
 |---|---|---|
 | [A lost or stolen phone](#a-lost-or-stolen-phone) | Android's file-based encryption, keys in the phone's hardware, the optional app lock | All of it rests on the screen lock. Notification text on the lock screen while the app lock is off. |
-| [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported, keys per app | A malicious keyboard or accessibility service (out of scope) |
+| [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
 | [A network attacker](#a-network-attacker) | Data apps have no network permission. Everything synced is sealed. | Traffic analysis (out of scope). The Sync app's network settings are Open. |
 | [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing and the key ID. Replay and withholding wait for Phase 5. |
 | [Malicious dependencies or CI actions](#malicious-dependencies-or-ci-actions) | Dependency verification, pinned GitHub actions, secrets in one step, reproducible builds | Trust on first use. A harmful release signed by its real publisher. No scan for known vulnerabilities. |
@@ -231,7 +231,13 @@ What stops it:
    recording and the recent-apps picture. They turn off autofill and
    keyboard learning, and never use the clipboard
    ([security-screens.md](../architecture/security-screens.md#what-protects-the-words)).
-7. Apps of the suite are to share keys and data only through screens and
+7. The screens of `core/security` hide other apps' windows while they
+   show. So does every screen of an app while the app is locked. A tap
+   under another app's window does nothing on those six screens. On
+   Android 14 and later, only accessibility services that declare
+   themselves accessibility tools can read them or act on them
+   ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
+8. Apps of the suite are to share keys and data only through screens and
    interfaces that only apps signed with the suite key can open: the
    handover between apps (step 3.0) and the courier interface of sync
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
@@ -241,6 +247,8 @@ What does not:
 
 1. A malicious keyboard or accessibility service. It sees what the user
    types and what the screen shows. It is [out of scope](#out-of-scope).
+   A harmful service can falsely claim to be an accessibility tool, and
+   then reads the security screens too.
 2. An app that the user gives notification access reads the text of
    every notification, unless the app lock hides it.
 3. An app that the user lets record the screen captures every screen
@@ -253,6 +261,9 @@ What does not:
 5. The signature-protected interfaces trust every app signed with the
    suite key. Whoever has that key can build an app that passes them
    ([The owner's GitHub account](#the-owners-github-account)).
+6. An app that draws over other apps can still draw over the other
+   screens of the apps, which show records, not keys. An accepted
+   deviation ([PLATFORM-3](#platform)).
 
 Open:
 
@@ -606,6 +617,14 @@ reason below is the plain technical one.
    field asks the keyboard not to learn, but a harmful keyboard can
    ignore that
    ([security-screens.md](../architecture/security-screens.md#what-protects-the-words)).
+   - On Android 14 and later, the screens of `core/security` speak only to
+     accessibility services that declare themselves accessibility tools
+     ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
+   - An assistive app that does not declare itself an accessibility tool
+     cannot read these screens on Android 14 and later.
+   - A harmful service can falsely claim to be a tool. Android itself
+     does not check the claim. So this keeps the screens only from
+     services that do not make the claim.
 4. **Coercion.** No software can tell a forced unlock from a willing
    one. The app lock guide says so
    ([app-lock.md](../user/app-lock.md#what-it-protects-and-what-it-does-not)).
@@ -666,6 +685,9 @@ What it protects:
 2. **The screens.** While the app is locked, a screen's content is not
    composed. Nothing of it is drawn, and TalkBack cannot reach it
    ([security-screens.md](../architecture/security-screens.md#the-gate)).
+   Other apps' windows are hidden while the lock screen shows, so no
+   other app can draw a fake system prompt over it
+   ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
 3. **The recent-apps picture.** While the app lock is on, the app shows
    blank there.
 4. **Notification text.** While the app lock is on, a notification shows
@@ -708,8 +730,8 @@ What it does not protect:
 Also:
 
 - The recovery-key screens are not behind the gate. They protect
-  themselves: the window blocks capture, and showing the words needs its
-  own prompt
+  themselves: the window blocks capture and keeps other apps away, and
+  showing the words needs its own prompt
   ([security-screens.md](../architecture/security-screens.md#the-gate)).
 - Open: a check that every screen of an app puts its content behind the
   gate. Step 2.2 builds it
@@ -1063,18 +1085,60 @@ Status: **Partly met.**
   - While the app lock is on, the app is blank in recent apps.
   - Other screens block screenshots only with "Hide in recent apps and
     block screenshots", which is off by default.
-- MASWE-0039, overlays: not handled. Nothing in the docs or the code
-  protects a screen against an overlay (MASTG-TEST-0340). Open.
-- MASWE-0040, accessibility services: TalkBack reads the words aloud,
-  and the screen says so first. A malicious accessibility service is
-  [out of scope](#out-of-scope). The apps do not mark any view as
-  sensitive for accessibility services. Open.
+- MASWE-0039, overlays (MASTG-TEST-0340). Met on the screens of
+  `core/security` and on the lock screen. Built in step 1.10
+  ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services),
+  [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+  - Android 12 and later block a tap through another app's window that
+    is more than 80% opaque. This holds for every app, on every version
+    the suite runs on.
+  - The six screens of `core/security` hide other apps' windows while
+    they show. Every screen of an app hides them while the app is locked,
+    so no fake system prompt can sit over the lock screen.
+  - The six screens and their four dialogs ignore a tap under another
+    app's window. So does a see-through window that Android 12 lets
+    through.
+  - Without the permission `HIDE_OVERLAY_WINDOWS`, a screen still works,
+    but hides nothing.
+    - `ManifestTest` checks that `core/security` asks for it.
+    - From step 2.5, the APK rules check is to check each app.
+  - Accepted deviations, decided by the owner on 2026-11-13:
+    - The other screens of the apps hide no other app's windows. They
+      show records, not keys, and a dimmer or a floating button would
+      vanish whenever the app is open.
+    - The lock screen takes a tap under another app's window. Its only
+      button opens the system prompt.
+    - A tap is not refused when another window covers the screen only
+      elsewhere (`FLAG_WINDOW_IS_PARTIALLY_OBSCURED`). That would refuse
+      taps whenever a video in picture-in-picture overlaps the screen.
+- MASWE-0040, accessibility services. Met on Android 14 and later, on the
+  screens of `core/security`. Built in step 1.10, as above.
+  - On Android 14 and later, the six screens and their four dialogs
+    speak only to accessibility services that declare themselves
+    accessibility tools. Other services can neither read them nor act on
+    them. From Android 16, their gestures are blocked too.
+  - TalkBack reads the words aloud, and the screen says so first. The
+    owner checks that TalkBack still reads every label on these screens,
+    on the Pixel 9 Pro with Catalog, before the merge of step 1.10.
+  - An assistive app that does not declare itself an accessibility tool
+    cannot read these screens on Android 14 and later.
+  - A harmful service can falsely claim to be a tool. It stays
+    [out of scope](#out-of-scope).
+  - Accepted deviations, decided by the owner on 2026-11-13:
+    - Android 13 has no way to keep a window from services that are not
+      tools. There, every accessibility service the user turned on can
+      read these screens.
+    - The lock screen speaks to every accessibility service. It shows
+      only the app's name and "Unlock", and must stay usable with every
+      assistive app.
+    - The other screens of the apps speak to every accessibility
+      service. They show records, not keys.
 - MASWE-0023: as AUTH-3.
 
 ### Code
 
 **MASVS-CODE-1: The app requires an up-to-date platform version.**
-Status: **Partly met.**
+Status: **Met.**
 
 - MASWE-0041, a recent platform: met. The minimum is Android 13
   (API 33), which has every platform feature the design relies on. The
@@ -1083,8 +1147,13 @@ Status: **Partly met.**
   [crypto-design.md](crypto-design.md#android-13-and-14)).
 - MASWE-0042, the latest target: met. Target SDK 37
   ([build.md](../development/build.md#at-a-glance)).
-- MASWE-0039, overlays, also falls under this control. It is not handled
-  (PLATFORM-3).
+- MASWE-0039, overlays, also falls under this control. Met. The minimum,
+  Android 13, always has two things:
+  - Android 12's block of a tap through another app's window;
+  - the way to hide other apps' windows, which the security screens use.
+
+  Where the screens do not use them, that is counted as a deviation under
+  [PLATFORM-3](#platform).
 
 **MASVS-CODE-2: The app has a mechanism for enforcing app updates.**
 Status: **Not met.**
@@ -1285,18 +1354,23 @@ Phase 2, Water:
    second profile and in Private Space
    ([notifications.md](../architecture/notifications.md#open),
    question 4).
+6. The check that every app that uses `core/security` requests
+   `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Step 2.5, in the APK rules
+   check
+   ([security-screens.md](../architecture/security-screens.md#open),
+   [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
 
 The first app that stores files:
 
-6. How an app shows files whose keys were given up
+7. How an app shows files whose keys were given up
    ([crypto-design.md](crypto-design.md#open-questions), question 13).
-7. One snapshot of records and files in a backup
+8. One snapshot of records and files in a backup
    ([backup-format.md](../architecture/backup-format.md#open-questions),
    question 4).
 
 Step 3.0, the handover between apps:
 
-8. The handover interface, its signature permission, and what happens
+9. The handover interface, its signature permission, and what happens
    when the asking app already has keys. Whether a keeper can check the
    words for another app
    ([crypto-design.md](crypto-design.md#open-questions), questions 1
@@ -1304,50 +1378,50 @@ Step 3.0, the handover between apps:
 
 Phase 5, sync:
 
-9. The protocol: formats, cursors, conflicts, a hostile server, replay,
-   rollback and reordering, lost and revoked devices, and what the
-   server can still learn
-   ([ADR 0009](../adr/0009-sync-protocol-and-server.md),
-   [PROMPTS.md](../development/PROMPTS.md)).
-10. The courier interface between the data apps and the Sync app
+10. The protocol: formats, cursors, conflicts, a hostile server, replay,
+    rollback and reordering, lost and revoked devices, and what the
+    server can still learn
+    ([ADR 0009](../adr/0009-sync-protocol-and-server.md),
+    [PROMPTS.md](../development/PROMPTS.md)).
+11. The courier interface between the data apps and the Sync app
     ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
-11. A new recovery key, repair once a keyset holds keys of two recovery
+12. A new recovery key, repair once a keyset holds keys of two recovery
     keys, and backups made with an older key
     ([crypto-design.md](crypto-design.md#open-questions), questions 6
     and 14;
     [backup-format.md](../architecture/backup-format.md#open-questions),
     question 9).
-12. The sync signing key
+13. The sync signing key
     ([crypto-design.md](crypto-design.md#open-questions), question 7).
-13. The largest sealed record, and file ciphertext stored unchecked
+14. The largest sealed record, and file ciphertext stored unchecked
     until it is opened
     ([crypto-design.md](crypto-design.md#open-questions), questions 8
     and 9).
-14. Ties, purged deletion markers and old backups, and one encoding for
+15. Ties, purged deletion markers and old backups, and one encoding for
     records in backups and in sync
     ([backup-format.md](../architecture/backup-format.md#open-questions),
     questions 6 to 8; [data.md](../architecture/data.md#open)).
-15. A notification that is not a reminder, for example in the Sync app
+16. A notification that is not a reminder, for example in the Sync app
     ([notifications.md](../architecture/notifications.md#open),
     question 3).
-16. The QR code for the words, decided again in Phase 5
+17. The QR code for the words, decided again in Phase 5
     ([crypto-design.md](crypto-design.md#the-qr-code)).
 
 Other:
 
-17. An opt-in mode that keeps reminder times and a generic title
+18. An opt-in mode that keeps reminder times and a generic title
     readable before the first unlock. Deferred, not rejected
     ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md),
     point 5).
-18. The rehearsal of restoring and rotating the signing key, and the
+19. The rehearsal of restoring and rotating the signing key, and the
     decision record a rotation needs. Step 2.7
     ([ADR 0013](../adr/0013-signing-key-custody-and-rotation.md)).
-19. Whether the emulator job for Android 17 becomes required (decided
+20. Whether the emulator job for Android 17 becomes required (decided
     again at the Phase 2 gate), and the unpinned images
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
-20. The path of any signing configuration inside the Gradle project
+21. The path of any signing configuration inside the Gradle project
     ([CODEOWNERS](../../.github/CODEOWNERS)).
-21. Code scanning for Kotlin
+22. Code scanning for Kotlin
     ([plan section 17](../plan/PLAN.md#17-to-confirm-in-phase-0)).
 
 ### Found while writing this page
@@ -1386,8 +1460,17 @@ Open until its step is done.
    **Step 5.1.**
 7. Protection against overlays, and marking views as sensitive for
    accessibility services (PLATFORM-3, CODE-1).
-   **Step 1.10**, "Overlays and accessibility data on the security
-   screens". It decides with the owner. A new permission needs its ADR.
+   **Done in step 1.10**, "Overlays and accessibility data on the
+   security screens". The owner decided on 2026-11-13:
+   - The six screens of `core/security` hide other apps' windows. They
+     ignore a tap under another app's window. On Android 14 and later
+     they speak only to accessibility tools.
+   - Their dialogs take the same.
+   - The lock screen hides other apps' windows while the app is locked.
+   - The new permission `HIDE_OVERLAY_WINDOWS` has
+     [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md).
+   - What is not done is an accepted deviation under [PLATFORM-3](#platform).
+   - Step 2.5 adds the check that each app requests the permission.
 8. There is no privacy policy page (PRIVACY-3).
    **Step 2.6**: a privacy page in the user guide and on the hub site.
 9. How the owner's GitHub and Cloudflare accounts are protected, for

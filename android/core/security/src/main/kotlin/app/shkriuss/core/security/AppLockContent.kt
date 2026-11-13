@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.crypto.AppLockState
@@ -311,7 +312,8 @@ fun AppLockDialogSample(dialog: AppLockDialog, modifier: Modifier = Modifier, lo
 /**
  * A dialog of the app lock. [onConfirm] is the main action. After any
  * action, and after a tap outside or Back, the dialog calls [onDismiss].
- * [inPlace] draws it without its window, for the Catalog.
+ * [inPlace] draws it without its window, for the Catalog. In its window,
+ * it is shielded like the screen it opens over ([shieldedLike]).
  */
 @OptIn(ShkInPlace::class)
 @Composable
@@ -368,7 +370,8 @@ internal fun AppLockDialogView(
             title = title,
             confirmAction = confirm,
             onDismissRequest = onDismiss,
-            modifier = modifier,
+            // A real dialog is a window of its own. It takes the shield of the screen it opens over, if that has one.
+            modifier = modifier.shieldedLike(LocalView.current),
             text = text,
             dismissAction = dismiss,
             content = content,

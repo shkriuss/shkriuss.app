@@ -29,6 +29,7 @@ class SecurityActivity : ComponentActivity(), WordsScreen {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
+        hideOtherAppsWindows(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         model = flowViewModel { SecurityViewModel(it) }
@@ -62,6 +63,7 @@ class SecurityActivity : ComponentActivity(), WordsScreen {
 class CreateRecoveryKeyActivity : ComponentActivity(), WordsScreen {
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
+        hideOtherAppsWindows(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val startOver = intent.getBooleanExtra(SecurityScreens.EXTRA_START_OVER, false)
@@ -94,6 +96,7 @@ class CreateRecoveryKeyActivity : ComponentActivity(), WordsScreen {
 class EnterRecoveryKeyActivity : ComponentActivity(), WordsScreen {
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
+        hideOtherAppsWindows(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val startOver = intent.getBooleanExtra(SecurityScreens.EXTRA_START_OVER, false)
@@ -139,6 +142,7 @@ class ShowRecoveryKeyActivity : ComponentActivity(), WordsScreen {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
+        hideOtherAppsWindows(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         model = flowViewModel { ShowViewModel(it) }
@@ -173,14 +177,19 @@ class ShowRecoveryKeyActivity : ComponentActivity(), WordsScreen {
 /**
  * The app lock screen. While the app lock is on, it asks for the system
  * prompt each time it opens, and again after the app locked, before it
- * shows anything. Closing that prompt closes the screen. The window
- * follows the app's settings, as every screen of the app does.
+ * shows anything. Closing that prompt closes the screen. Whether the
+ * window blocks screenshots follows the app's settings, as for every
+ * screen of the app. Like the other screens of this module, it ignores
+ * covered taps, speaks only to accessibility tools and hides other apps'
+ * windows.
  */
 @OptIn(SecurityScreenSamples::class)
-class AppLockActivity : ComponentActivity() {
+class AppLockActivity : ComponentActivity(), ShieldedScreen {
     private lateinit var model: AppLockViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        shieldWindow(this)
+        hideOtherAppsWindows(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val watcher = securityHost.appLock
@@ -233,6 +242,7 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
+        hideOtherAppsWindows(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val watcher = securityHost.appLock

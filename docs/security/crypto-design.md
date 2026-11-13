@@ -1281,6 +1281,13 @@ That text fits the QR alphanumeric mode and is at most 228 characters.
    it shows them.
 5. The recovery key is never in a log, a crash, a notification, a backup
    file, Android's own backup, or a sealed record.
+6. Other apps cannot draw over these screens: Android hides their
+   windows while a screen shows. A tap under another app's window does
+   nothing
+   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+7. On Android 14 and later, only accessibility services that declare
+   themselves accessibility tools, such as TalkBack, can read these
+   screens or act on them. Android 13 has no way to say this.
 
 How `core/security` does this is in
 [security-screens.md](../architecture/security-screens.md):
@@ -1294,6 +1301,10 @@ How `core/security` does this is in
 - The field's text menu shows nothing. A change of more than one letter
   at once is refused, so a paste never lands, also not through TalkBack.
 - Suggestions are drawn in the screen, never in a popup window.
+- The window hides other apps' windows (`setHideOverlayWindows`), drops
+  a tap under another app's window (`filterTouchesWhenObscured`), and on
+  Android 14 and later is marked `accessibilityDataSensitive`. Its
+  dialogs take the same.
 - The recovery key lives in the screen's ViewModel, never in a saved
   state. It ends with the screen. The shown words leave memory when the
   screen stops.
