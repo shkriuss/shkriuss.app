@@ -1359,11 +1359,11 @@ Open until its step is done.
 
 1. No build check made sure that every app turns Android's own backup
    and device transfer off (STORAGE-2).
-   **Done in step 1.9**: rule 6 of the APK rules check
+   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): rule 6 of the APK rules check
    ([build.md](../development/build.md#the-backup-rule)).
 2. No build check refused a WebView or code loaded at runtime (hard
    rule 1; PLATFORM-2, CODE-4).
-   **Done in step 1.9**: rules 7 to 9 of the APK rules check, on the
+   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): rules 7 to 9 of the APK rules check, on the
    APKs that ship
    ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
    No library that ships today trips them. In the debug APK, which never
@@ -1371,7 +1371,7 @@ Open until its step is done.
    rules run on the APKs that ship only.
 3. Logging of user content was tested only in `core/crypto`
    (STORAGE-2).
-   **Done in step 1.9**: the logging check, for the main code of every
+   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): the logging check, for the main code of every
    module ([build.md](../development/build.md#logging-check)). It
    replaced the test in `core/crypto`.
 4. Nothing scans the dependencies for known vulnerabilities (CODE-3).
