@@ -1460,8 +1460,9 @@ Open until its step is done.
    **Step 5.1.**
 7. Protection against overlays, and marking views as sensitive for
    accessibility services (PLATFORM-3, CODE-1).
-   **Done in step 1.10**, "Overlays and accessibility data on the
-   security screens". The owner decided on 2026-11-13:
+   **Done in step 1.10** ([pull request 35](https://github.com/shkriuss/shkriuss.app/pull/35)),
+   "Overlays and accessibility data on the security screens". The owner
+   decided on 2026-11-13:
    - The six screens of `core/security` hide other apps' windows. They
      ignore a tap under another app's window. On Android 14 and later
      they speak only to accessibility tools.

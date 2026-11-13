@@ -5,7 +5,8 @@
 - Source: Phase 1, step 1.10
   ([PROMPTS.md](../development/PROMPTS.md#110-overlays-and-accessibility-data-on-the-security-screens)).
   The owner decided the points below in that session, before any code.
-  Claude wrote them down in the pull request of step 1.10.
+  Claude wrote them down in
+  [pull request 35](https://github.com/shkriuss/shkriuss.app/pull/35).
 
 ## Context
 
