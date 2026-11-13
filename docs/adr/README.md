@@ -38,7 +38,11 @@ the permission for Android's system prompt, with the owner's decisions of
 it in the review of that pull request. Record 0032 comes from Phase 1,
 step 7, session B: where the settings of the app lock are kept, with the
 owner's decision of 2026-11-13. Claude proposed it in pull request 29, and
-the owner accepted it in the review of that pull request.
+the owner accepted it in the review of that pull request. Record 0033
+comes from Phase 1, step 1.10: hiding other apps' windows over the
+security screens, with the owner's decisions of 2026-11-13. Claude
+proposed it in pull request 35, and the owner accepted it after the
+TalkBack check on that pull request passed.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -77,4 +81,4 @@ How a record may be edited or replaced is in point 7 of
 | 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |
 | 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |
 | 0032 | [The settings of the app lock in Android's preferences file](0032-app-lock-settings-in-android-preferences.md) | Accepted |
-| 0033 | [The permission HIDE_OVERLAY_WINDOWS for the security screens](0033-hide-overlay-windows-for-the-security-screens.md) | Proposed |
+| 0033 | [The permission HIDE_OVERLAY_WINDOWS for the security screens](0033-hide-overlay-windows-for-the-security-screens.md) | Accepted |

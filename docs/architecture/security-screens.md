@@ -153,8 +153,10 @@ What the user sees:
     cannot read these screens.
   - A harmful service can falsely claim to be a tool
     ([threat model](../security/threat-model.md#out-of-scope)).
-  - TalkBack must keep reading them. The owner checks that on the Pixel
-    9 Pro with the Catalog preview, before the merge of step 1.10.
+  - TalkBack must keep reading them. The owner checked on 2026-11-13:
+    on the Pixel 9 Pro, with the Catalog preview of pull request 35 and
+    the switch **Protect this page, as in an app** on, TalkBack read
+    everything in the steps of that pull request.
 - Android 13 has no way to keep a window from accessibility services that
   are not tools. There, every accessibility service the user turned on
   can read these screens.
@@ -484,7 +486,10 @@ prompt, a real keyboard, a real picker, an app that Android stops while
 a picker is open, and how a real phone delivers the screen-off
 broadcast. Also: that Android really hides other apps' windows and drops
 a covered tap, and which accessibility services it lets read a screen.
-The owner checks TalkBack with Catalog before the merge of step 1.10. They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+TalkBack on the shielded screens was checked already: the owner's check
+with Catalog passed on 2026-11-13
+([Overlays and accessibility services](#overlays-and-accessibility-services)).
 
 ## Open
 

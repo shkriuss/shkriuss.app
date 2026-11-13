@@ -1119,8 +1119,10 @@ Status: **Partly met.**
     accessibility tools. Other services can neither read them nor act on
     them. From Android 16, their gestures are blocked too.
   - TalkBack reads the words aloud, and the screen says so first. The
-    owner checks that TalkBack still reads every label on these screens,
-    on the Pixel 9 Pro with Catalog, before the merge of step 1.10.
+    owner checked on 2026-11-13 that TalkBack still reads every label on
+    these screens: on the Pixel 9 Pro, with the Catalog preview of pull
+    request 35 and its protection switch on, TalkBack read everything in
+    the steps of that pull request.
   - An assistive app that does not declare itself an accessibility tool
     cannot read these screens on Android 14 and later.
   - A harmful service can falsely claim to be a tool. It stays
@@ -1343,6 +1345,7 @@ Each is built into the page above.
 |---|---|
 | MASVS-CODE-1 | **Met.** The overlay gaps that remain are deviations under PLATFORM-3, not CODE-1. |
 | The deviations for overlays and accessibility services: no accessibility marking on Android 13; the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted. Confirmed by the owner on 2026-11-13 ([PLATFORM-3](#platform)). |
+| The TalkBack check, and the accessibility marking | Passed on 2026-11-13, on the Pixel 9 Pro with the Catalog preview. The marking stays. [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md) is accepted. |
 
 ## Open questions
 

@@ -1,12 +1,14 @@
 # 0033 The permission HIDE_OVERLAY_WINDOWS for the security screens
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 1, step 1.10
   ([PROMPTS.md](../development/PROMPTS.md#110-overlays-and-accessibility-data-on-the-security-screens)).
   The owner decided the points below in that session, before any code.
   Claude wrote them down in
   [pull request 35](https://github.com/shkriuss/shkriuss.app/pull/35).
+  The owner accepted the record on 2026-11-13, after the TalkBack check
+  of point 7 passed.
 
 ## Context
 
@@ -88,6 +90,10 @@
    preview of the pull request. If TalkBack cannot read them, the screens
    are marked "not sensitive" instead, and this record and the threat
    model say so.
+   - Passed on 2026-11-13. On the Pixel 9 Pro, with the Catalog preview of
+     pull request 35 and the switch "Protect this page, as in an app" on,
+     TalkBack read everything in the steps of that pull request. The
+     marking stays.
 8. What is not done is written as accepted deviations in the
    [threat model](../security/threat-model.md#platform), under PLATFORM-3.
 
