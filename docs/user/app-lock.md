@@ -7,6 +7,11 @@ lock. It is off until you turn it on.
 No released app has it yet. The first one will be Water. This page says
 what is already fixed. It was written on 2026-11-13, with the screens.
 
+To see the screens before then: from version 0.3.0, the
+[Catalog app](apps.md) shows every state of them with sample data. Open
+**App lock screens** under **Shared screens**. Catalog has no app lock:
+nothing there locks, unlocks or shows the system prompt.
+
 Open: the name of the button that opens the app lock screen in an app,
 and where it is. It is set when the first app gets it. The security
 screen has a button **App lock** too.

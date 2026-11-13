@@ -24,8 +24,17 @@ and its notice.
 | [Error Prone annotations](#error-prone-annotations) | 2.41.0 | Apache-2.0 | Tink, Gson |
 | [AndroidX Annotation](#androidx-annotation) | 1.8.2 | Apache-2.0 | Tink |
 
-No app uses `core/crypto` yet. So none of this is in a released APK today.
-It will be in every app that stores keys, from Water on.
+What of this is in an app:
+
+- From version 0.3.0, Catalog uses `core/crypto` through `core/security`.
+  Its sample recovery words come from the word list. So the word list
+  and its `LICENSE.txt` are in Catalog's APK.
+- Tink, Protocol Buffers, Gson, JSR-305 and Error Prone are not.
+  Catalog never calls them, and R8 removes them from the release APK.
+  Checked in Catalog's release build on 2026-11-13: no class of theirs
+  is in it. AndroidX Annotation is in it through Compose, which uses it
+  too.
+- All of it will be in every app that stores keys, from Water on.
 
 ## BIP-39 English word list
 
@@ -135,7 +144,11 @@ For Phase 2, before Water's first release:
 - Confirm the licence of the JSR-305 annotations at their source. This
   page records only what the artifact's POM says.
 - Check that `english.txt` and `LICENSE.txt` are both inside the first
-  release APK that uses `core/crypto`.
+  release APK that uses `core/crypto`. That is Catalog 0.3.0. Its
+  release build in the cloud environment had both on 2026-11-13, byte
+  for byte as in the repository. The published APK is checked when the
+  release is recorded
+  ([its checklist](../apps/catalog/release-checklist-0.3.0.md), part 5).
 
 ## How to add an entry
 

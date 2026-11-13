@@ -688,11 +688,25 @@ stay as they are ([ADR 0017](../adr/0017-design-system-tokens.md)). The
 rest of the gate waits for steps 1.3 to 1.7.
 
 The look at Catalog on the three devices, for the shared screens of steps
-1.3 to 1.7, waits for Catalog 0.3.0. These steps stay open until then:
+1.3 to 1.7, is done with Catalog 0.3.0. The owner decided on 2026-11-13
+to make it one pass with the release: parts 1 and 2 of the
+[Catalog 0.3.0 release checklist](../apps/catalog/release-checklist-0.3.0.md),
+on the preview of the pull request that prepares it
+([pull request 32](https://github.com/shkriuss/shkriuss.app/pull/32)),
+before the merge. After publishing, nothing is looked at again except
+part 5 of that checklist. These steps stay open until they are done:
 
-1. Install Catalog 0.3.0 on the Pixel 9 Pro, Pixel Tablet and Pixel 6a.
-2. Look at every page in light and dark, with large font, with TalkBack.
-3. Write what you dislike as a comment. Use prompt R3 to change it.
+1. Install the Catalog preview of that pull request on the Pixel 9 Pro,
+   Pixel Tablet and Pixel 6a.
+2. Do parts 1 and 2 of the checklist. They sample the pages and states:
+   light and dark, the default and the largest font size, and TalkBack
+   on the Pixel 9 Pro. The checklist says what is opened where, and
+   why.
+3. Write what you dislike as a comment on that pull request. A change
+   waits for the next Catalog version: use prompt R3 after 0.3.0 is
+   published. A fault that breaks a rule of CLAUDE.md or makes a state
+   unusable is fixed in 0.3.0 instead
+   ([What happens to what you find](../apps/catalog/release-checklist-0.3.0.md#what-happens-to-what-you-find)).
 
 Decided on 2026-11-13:
 

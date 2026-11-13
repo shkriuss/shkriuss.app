@@ -8,6 +8,12 @@ No released app has these screens yet. The first one will be Water. This
 page says what is already fixed. It was written on 2026-11-13, with the
 screens.
 
+To see them before then: from version 0.3.0, the
+[Catalog app](apps.md) shows every state of these screens with sample
+words. Open **Recovery key screens** under **Shared screens**. The
+sample words are no real key, and nothing there makes, keeps or shows
+one.
+
 Open: the names of the buttons that open these screens in an app, and
 where they are. They are set when the first app gets them. This page is
 updated then.
