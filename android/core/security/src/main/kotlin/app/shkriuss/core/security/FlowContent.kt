@@ -3,6 +3,7 @@ package app.shkriuss.core.security
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -140,9 +141,11 @@ private fun EnterWordsContent(screen: EnterWords, actions: EnterActions) {
         errorText = screen.notInList?.let { stringResource(R.string.sec_enter_not_in_list, it) },
     )
     if (screen.doNotBelong) Paragraph(stringResource(R.string.sec_enter_do_not_belong), error = true)
+    // Only the words entered so far and the current one. "Word n of 24" shows how far along it is.
+    val shown = screen.words.indices.filter { screen.words[it].isNotEmpty() || it == screen.current }
     val columns = if (ShkWindowWidth.current == ShkWindowWidth.Compact) 2 else 4
     Column(verticalArrangement = Arrangement.spacedBy(ShkSpacing.ExtraSmall)) {
-        screen.words.indices.chunked(columns).forEach { row ->
+        shown.chunked(columns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(ShkSpacing.Small)) {
                 row.forEach { index ->
                     val word = screen.words[index]
@@ -158,6 +161,8 @@ private fun EnterWordsContent(screen: EnterWords, actions: EnterActions) {
                         ShkTextButton(text = text, onClick = { actions.onEditWord(index) }, modifier = slot)
                     }
                 }
+                // A short last row keeps the width of its buttons.
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

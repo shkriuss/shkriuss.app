@@ -1,12 +1,13 @@
 # 0031 The permission USE_BIOMETRIC for Android's system prompt
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 1, step 7, session A
   ([PROMPTS.md](../development/PROMPTS.md)). The owner decided the points
-  below in that session, before any code. Claude wrote them down in the
-  pull request that adds the recovery key screens. The record is Accepted
-  when the owner accepts that pull request.
+  below in that session, before any code. Claude wrote them down in
+  [pull request 28](https://github.com/shkriuss/shkriuss.app/pull/28),
+  which adds the recovery key screens. The owner accepted the record in
+  the review of that pull request, on 2026-11-13.
 
 ## Context
 

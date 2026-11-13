@@ -34,8 +34,8 @@ how `core/notify` keeps alarms and what it adds to an app. Claude
 proposed it in pull request 26, and the owner accepted it in the review
 of that pull request. Record 0031 comes from Phase 1, step 7, session A:
 the permission for Android's system prompt, with the owner's decisions of
-2026-11-13. It is Proposed until the owner accepts the pull request of
-the recovery key screens.
+2026-11-13. Claude proposed it in pull request 28, and the owner accepted
+it in the review of that pull request.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -72,4 +72,4 @@ How a record may be edited or replaced is in point 7 of
 | 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted |
 | 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |
 | 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |
-| 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Proposed |
+| 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |

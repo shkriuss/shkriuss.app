@@ -75,6 +75,19 @@ class SecurityActivitiesTest {
     }
 
     @Test
+    fun theListShowsOnlyTheWordsEnteredAndTheCurrentOne() {
+        compose.onNodeWithText("1. not entered yet").assertIsDisplayed()
+        compose.onNode(hasText("2.", substring = true)).assertDoesNotExist()
+
+        "aban".forEach { letter -> compose.onNode(field).performTextInput(letter.toString()) }
+        compose.onNode(hasText("abandon") and hasClickAction()).performClick()
+
+        compose.onNodeWithText("1. abandon").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("2. not entered yet").performScrollTo().assertIsDisplayed()
+        compose.onNode(hasText("3.", substring = true)).assertDoesNotExist()
+    }
+
+    @Test
     fun aPasteNeverLands() {
         compose.onNode(field).performTextInput("abandon ability")
         assertEquals("a phrase at once is refused", "", typed())
