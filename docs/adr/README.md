@@ -42,7 +42,12 @@ the owner accepted it in the review of that pull request. Record 0033
 comes from Phase 1, step 1.10: hiding other apps' windows over the
 security screens, with the owner's decisions of 2026-11-13. Claude
 proposed it in pull request 35, and the owner accepted it after the
-TalkBack check on that pull request passed.
+TalkBack check on that pull request passed. Records 0034, 0035 and 0036
+come from Phase 2, step 2.1, the specification of Water
+([spec.md](../apps/water/spec.md)): buttons on notifications, the
+recovery key when it is first needed, and an app's settings as records.
+The owner decided the core of 0034 and 0035 in that session. Claude
+proposed the details and 0036 in the pull request of that step.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -82,3 +87,6 @@ How a record may be edited or replaced is in point 7 of
 | 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |
 | 0032 | [The settings of the app lock in Android's preferences file](0032-app-lock-settings-in-android-preferences.md) | Accepted |
 | 0033 | [The permission HIDE_OVERLAY_WINDOWS for the security screens](0033-hide-overlay-windows-for-the-security-screens.md) | Accepted |
+| 0034 | [Buttons on notifications](0034-notification-buttons.md) | Proposed |
+| 0035 | [The recovery key comes when it is first needed](0035-recovery-key-when-first-needed.md) | Proposed |
+| 0036 | [An app's settings are records](0036-app-settings-as-records.md) | Proposed |

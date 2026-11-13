@@ -494,7 +494,11 @@ with Catalog passed on 2026-11-13
 ## Open
 
 - The names of the buttons that open these screens in an app, and where
-  they are. Set with Water.
+  they are. Set with Water. Named in Water's
+  [specification](../apps/water/spec.md#settings-screen): "Recovery key"
+  and "App lock" in the Security section of Settings, and the dialog of
+  [ADR 0035](../adr/0035-recovery-key-when-first-needed.md) when the key
+  is first needed. Built in step 2.5.
 - "The recovery key is kept in Water" for an app that is not a keeper.
   It needs the handover between apps (step 3.0).
 - A check that every screen of an app puts its content in
