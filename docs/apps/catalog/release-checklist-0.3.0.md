@@ -85,13 +85,27 @@ to 3. The owner decided on 2026-11-13 to make it one pass, not two:
 
 - TalkBack is part of it: part 1, step 7.3.
 - Write what you dislike as a comment on the pull request that added
-  this page. Use prompt R3 to change it
-  ([PROMPTS.md](../../development/PROMPTS.md#r3-change-something-you-saw-on-the-phone)).
+  this page.
 - After publishing, nothing is looked at again except part 5.
 
-Open: whether a change you ask for with prompt R3 goes into 0.3.0, so
-that parts 1 to 3 run again on the new preview, or waits for the next
-version.
+## What happens to what you find
+
+The owner decided this on 2026-11-13.
+
+1. A change you ask for waits for the next Catalog version. Ask for it
+   with prompt R3
+   ([PROMPTS.md](../../development/PROMPTS.md#r3-change-something-you-saw-on-the-phone))
+   after 0.3.0 is published.
+2. One exception: a fault that breaks a rule of
+   [CLAUDE.md](../../../CLAUDE.md) or makes a state unusable. For
+   example, text cut off at the largest font, a missing TalkBack label,
+   or a crash. That is fixed in 0.3.0, in the pull request that added
+   this page, so that the preview you check is what is released.
+3. After such a fix, check again only the states that changed: on the
+   device where the fault showed, and on one other. The bot's comment
+   on the pull request names the screenshots that changed. Install the
+   new preview first
+   ([Install a newer preview](../../development/test-a-pull-request.md#install-a-newer-preview)).
 
 ## Part 1: GrapheneOS, on the Pixel 9 Pro
 

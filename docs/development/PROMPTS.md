@@ -702,7 +702,11 @@ part 5 of that checklist. These steps stay open until they are done:
    light and dark, the default and the largest font size, and TalkBack
    on the Pixel 9 Pro. The checklist says what is opened where, and
    why.
-3. Write what you dislike as a comment. Use prompt R3 to change it.
+3. Write what you dislike as a comment on that pull request. A change
+   waits for the next Catalog version: use prompt R3 after 0.3.0 is
+   published. A fault that breaks a rule of CLAUDE.md or makes a state
+   unusable is fixed in 0.3.0 instead
+   ([What happens to what you find](../apps/catalog/release-checklist-0.3.0.md#what-happens-to-what-you-find)).
 
 Decided on 2026-11-13:
 
