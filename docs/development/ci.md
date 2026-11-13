@@ -106,7 +106,9 @@ checked. Then:
 5. It runs one Gradle command:
    `./gradlew check verifyRoborazziDebug`, plus, for every app,
    `:app:<name>:checkReleaseApkRules` and
-   `:app:<name>:checkReleaseGraphicsPathUse`.
+   `:app:<name>:checkReleaseGraphicsPathUse`. Which build check runs
+   inside `check` and which by name is below and in
+   [build.md](build.md#which-check-runs-where).
 6. It checks that both release checks wrote their report for every app.
 7. It checks every app's version: the `versionCode` must follow from the
    `versionName` by the rule in
@@ -118,9 +120,22 @@ checked. Then:
    are any.
 9. On `main`, it saves the downloads for later runs.
 
+Which build check runs where:
+
+- Inside `check`: the Room schema check, the DAO rules check, the
+  instrumented test suite check, the logging check in every Android
+  module, and the tests of the build checks in `build-logic`
+  (`:build-logic:test`).
+- By name, the two release checks below. The APK rules check reads the
+  release APK: rules 1 to 6 for every APK, and rules 7 to 9 (WebView and
+  code loading) for the APKs that ship.
+- In every Gradle command: the refusal of the bundled SQLite driver, and
+  the refusal of `core/testing` outside tests.
+
 Why the release checks are named one by one:
 
-- The two checks guard hard rules 2, 3 and 4 in [CLAUDE.md](../../CLAUDE.md).
+- The two checks guard hard rules 1 to 4 in [CLAUDE.md](../../CLAUDE.md),
+  and that Android's own backup and device transfer are off.
   They are described in [build.md](build.md#apk-rules-check) and
   [build.md](build.md#the-graphics-path-check).
 - They run before every `assemble`, but `check` alone runs only the debug

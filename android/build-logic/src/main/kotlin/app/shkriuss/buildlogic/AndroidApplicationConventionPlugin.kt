@@ -23,8 +23,9 @@ import org.gradle.kotlin.dsl.register
  *   signs it with a throwaway key (section 13 of docs/plan/PLAN.md).
  *
  * Every assembled APK is checked by [CheckApkRulesTask], and every app's
- * classes by [CheckGraphicsPathUseTask]. The reproducible-build settings
- * are explained in docs/development/build.md.
+ * classes by [CheckGraphicsPathUseTask]. `check` also runs the tests of the
+ * build checks in `build-logic`. The reproducible-build settings are
+ * explained in docs/development/build.md.
  */
 class AndroidApplicationConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
@@ -79,12 +80,26 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
 
             registerApkRulesCheck()
             registerGraphicsPathUseCheck()
+            runBuildCheckTestsInCheck()
         }
     }
 
     private companion object {
         /** The R8 rules every app shares, relative to `android/`. */
         const val R8_RULES = "build-logic/r8/app-rules.pro"
+
+        /** The included build that holds the convention plugins and the tests of the build checks. */
+        const val BUILD_LOGIC = "build-logic"
+    }
+
+    /**
+     * The build checks have their own tests in `build-logic`, a build of its
+     * own. `check` runs them, so CI's `check` fails when a check no longer
+     * fails on a sample that breaks its rule.
+     */
+    private fun Project.runBuildCheckTestsInCheck() {
+        val buildCheckTests = gradle.includedBuild(BUILD_LOGIC).task(":test")
+        tasks.named { it == "check" }.configureEach { dependsOn(buildCheckTests) }
     }
 
     private fun Project.registerGraphicsPathUseCheck() {
@@ -108,15 +123,21 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
     }
 
     private fun Project.registerApkRulesCheck() {
+        val app = name
         extensions.configure<ApplicationAndroidComponentsExtension> {
             onVariants { variant ->
                 val variantName = variant.name.replaceFirstChar { it.uppercase() }
                 val check = tasks.register<CheckApkRulesTask>("check${variantName}ApkRules") {
                     group = "verification"
-                    description = "Checks the ${variant.name} APK for permissions, native code and Play services."
+                    description = "Checks the ${variant.name} APK for permissions, native code, Play services, " +
+                        "backup and, in an APK that ships, WebView and code loading."
                     apkFolder.set(variant.artifacts.get(SingleArtifact.APK))
                     builtArtifactsLoader.set(variant.artifacts.getBuiltArtifactsLoader())
                     mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+                    appName.set(app)
+                    applicationId.set(variant.applicationId)
+                    // Every build type but debug ships: release and preview today.
+                    shipped.set(variant.buildType != ShkBuild.TEST_BUILD_TYPE)
                     report.set(layout.buildDirectory.file("reports/apk-rules/${variant.name}.txt"))
                 }
                 tasks.named { it == "assemble$variantName" }.configureEach { dependsOn(check) }
