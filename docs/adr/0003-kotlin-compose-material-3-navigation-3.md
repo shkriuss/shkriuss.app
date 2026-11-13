@@ -33,7 +33,13 @@
 4. Other libraries:
    - kotlinx.coroutines and kotlinx.serialization.
    - WorkManager, in the Sync app only.
-   - AndroidX Biometric, for the app lock.
+   - AndroidX Biometric, for the app lock. Not used: the app lock and
+     the recovery key use Android's own system prompt
+     ([0006](0006-tink-and-key-hierarchy.md),
+     [0031](0031-use-biometric-for-the-system-prompt.md)).
+   - AndroidX Lifecycle ViewModel, for the state of each screen, as
+     CLAUDE.md asks. Activity brings it to every app already; the
+     version catalog names it since step 1.7, session A.
 5. Build: the latest stable Android Gradle Plugin (9.5.1 on 2026-11-10),
    with the Gradle version it needs through the wrapper (9.6.0 worked in a
    test build), and JDK 21.

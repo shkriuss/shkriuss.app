@@ -32,7 +32,10 @@ from the same step: how the tests of other modules get real keys, with
 the owner's decisions of 2026-11-12. Record 0030 comes from Phase 1, step 6:
 how `core/notify` keeps alarms and what it adds to an app. Claude
 proposed it in pull request 26, and the owner accepted it in the review
-of that pull request.
+of that pull request. Record 0031 comes from Phase 1, step 7, session A:
+the permission for Android's system prompt, with the owner's decisions of
+2026-11-13. Claude proposed it in pull request 28, and the owner accepted
+it in the review of that pull request.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -41,7 +44,7 @@ How a record may be edited or replaced is in point 7 of
 |---|---|---|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
 | 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025 |
-| 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024 |
+| 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031 |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md |
@@ -69,3 +72,4 @@ How a record may be edited or replaced is in point 7 of
 | 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted |
 | 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |
 | 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |
+| 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |

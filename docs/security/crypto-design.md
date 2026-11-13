@@ -22,10 +22,13 @@ follows this page.
   stopped, repairing a damaged keyset file, and giving up file keys that
   no words can bring back, with fixes to the code of session B
   ([Decided in step 1.7, session A](#decided-in-step-17-session-a)).
-  The code came first, in its own pull request.
-- Not built yet: the screens (step 1.7), the handover between apps
-  (step 3.0), sealing file keys again in the database (the first app
-  that stores files), and a new recovery key (Phase 5).
+  The code came first, in its own pull request. The recovery key screens
+  followed in a second one, in `android/core/security`
+  ([security-screens.md](../architecture/security-screens.md)).
+- Not built yet: the app lock screens (step 1.7, session B), the
+  handover between apps (step 3.0), sealing file keys again in the
+  database (the first app that stores files), and a new recovery key
+  (Phase 5).
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -273,10 +276,13 @@ owner decided this on pull request 22.
    `core/crypto` gets no new dependency for this.
 5. Showing the prompt needs the permission
    `android.permission.USE_BIOMETRIC`. Android grants it to every app
-   that declares it. It is still a permission: the step that first shows
-   a prompt writes its decision record, adds it to
-   [permissions.md](permissions.md), and needs a change to the APK rules
-   check. See the [open questions](#open-questions).
+   that declares it. It is still a permission:
+   [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md) records
+   it, and [permissions.md](permissions.md) lists it. `core/security`,
+   which shows the prompt, declares it. The APK rules check allows it per
+   app, from Water on (steps 2.4 and 2.5).
+6. Only `core/security` shows the prompt. When the screen goes away, it
+   cancels the prompt and the step; the user taps again for a new one.
 
 ## Keys
 
@@ -1162,21 +1168,29 @@ gone. Starting again makes a new one.
 
 ### The QR code
 
-Not built for now. The owner decided on pull request 22: words only, and
-the QR code is decided when the recovery key screens are built (step 1.7,
-session A in [PROMPTS.md](../development/PROMPTS.md)). Until then nothing
-draws or scans a QR code, and session B builds nothing for it.
+Not built. The owner decided in step 1.7, session A: words only for now.
+Nothing draws or scans a QR code.
 
-Open for that step: what the code holds, what draws it, and what scans
-it. Scanning needs the camera permission and a decoder. A proposal for
-what it holds: the text `SHKRIUSS-RK1`, one space, then the 24 words in
-upper case with one space between them. That text fits the QR
-alphanumeric mode and is at most 228 characters.
+Why:
+
+1. A QR code on a screen gives the whole account to one photo. Words
+   must be written down one by one.
+2. Scanning would add the camera permission to every data app, and a
+   decoder: each a decision record, and a library in every app.
+3. The words already work. A QR code saves typing mainly when a new
+   phone is set up from an old one, and that comes with sync.
+
+Decided again in Phase 5, when a new phone is set up through sync. The
+proposal stays written down for then: the text `SHKRIUSS-RK1`, one
+space, then the 24 words in upper case with one space between them.
+That text fits the QR alphanumeric mode and is at most 228 characters.
 
 ### Entering it
 
 1. The user types 24 words. The field offers words from the list. The
-   first four letters of a word are enough to know it.
+   first four letters of a word are enough to know it. When the typed
+   letters start no word of the list, the field says so at once, under
+   it (the owner's review of pull request 28).
 2. The app trims spaces, makes the text lower case, and splits it at
    spaces. Any run of white space counts as one space. Lower case is made
    the same way in every app language. Only whole words count: the first
@@ -1195,8 +1209,12 @@ alphanumeric mode and is at most 228 characters.
      older recovery key of the keyset, a different one, or a key whose
      key ID is in use
      ([The recovery key and its key ID](#the-recovery-key-and-its-key-id),
-     point 5). For the last three nothing is stored. What the screen
-     says then belongs to step 1.7.
+     point 5). For the last three nothing is stored. The screen says:
+     "these are the words of an older recovery key of this app", "this
+     app has its keys from another recovery key", with its key ID, or
+     that the words cannot be used here. In a setup that stopped, other
+     words offer to start over instead
+     ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
    - Entered words whose key ID is 0 are accepted. Only a new recovery
      key with that ID is made again.
 6. Then as "Creating it" from step 4. The app stores each derived keyset
@@ -1218,13 +1236,30 @@ alphanumeric mode and is at most 228 characters.
 5. The recovery key is never in a log, a crash, a notification, a backup
    file, Android's own backup, or a sealed record.
 
+How `core/security` does this is in
+[security-screens.md](../architecture/security-screens.md):
+
+- Each screen is an activity of its own. Its window gets `FLAG_SECURE`
+  in `onCreate`, before anything is drawn. Autofill and content capture
+  are off for the whole window.
+- The keyboard is asked for a password field that shows its letters,
+  with `IME_FLAG_NO_PERSONALIZED_LEARNING` and
+  `TYPE_TEXT_FLAG_NO_SUGGESTIONS`.
+- The field's text menu shows nothing. A change of more than one letter
+  at once is refused, so a paste never lands, also not through TalkBack.
+- Suggestions are drawn in the screen, never in a popup window.
+- The recovery key lives in the screen's ViewModel, never in a saved
+  state. It ends with the screen. The shown words leave memory when the
+  screen stops.
+
 ### Showing it again
 
 1. Only a keeper app can. The user asks for it in the app's settings.
 2. The app starts a decrypt operation with the Recovery guard and shows
    the system prompt. One prompt, one showing.
-3. It shows the words. When the screen closes, the key is dropped from
-   memory.
+3. It shows the words. When the screen closes, or stops because the
+   phone's screen turns off or another app comes to the front, the key
+   is dropped from memory. A new prompt shows the words again.
 
 ### Keeper apps and other apps
 
@@ -1468,10 +1503,10 @@ pull request 22. The app-lock screen and the user guide say it plainly.
    hardware keys wrap only keysets, and why `core/crypto` uses them one
    at a time.
 8. The owner's three test devices all have StrongBox. An emulator has
-   none. So the release checklist of the first app that stores keys gets
-   a line: on each of the three devices, the security screen shows
-   StrongBox for every key. The step that builds the security screen
-   adds the line (step 1.7, session A).
+   none. So the release checklist of every app that holds keys checks,
+   on each of the three devices, that the security screen shows
+   StrongBox for every key. Step 1.7, session A added it as part 3 of
+   [release-checklist.md](../development/release-checklist.md).
 
 ## Key rotation
 
@@ -1998,9 +2033,10 @@ The owner approved these readings with the plan of session B:
 
 ## Decided in step 1.7, session A
 
-The owner's decisions of 2026-11-13, in step 1.7, session A, when the
-code for open questions 11 and 12 was built. Each is built into the page
-above. The recovery key screens follow in the next pull request.
+The owner's decisions of 2026-11-13, in step 1.7, session A. The code
+for open questions 11 and 12 came first, in its own pull request; the
+recovery key screens, with open questions 3, 4 and 5, came in the next.
+Each is built into the page above.
 
 | Question | Decision |
 |---|---|
@@ -2008,6 +2044,9 @@ above. The recovery key screens follow in the next pull request.
 | A keyset file that is damaged while its hardware key lives (open question 12) | Repair with proven words: an exact match of another stored keyset. The damaged file is copied aside and kept, never deleted, and the keyset is stored again ([A damaged keyset file](#a-damaged-keyset-file)). |
 | A damaged keyset that no words can bring back | "Give up these files", offered only when `file-key-old`, or the `file-key` of an app without `record`, is damaged. A plain warning comes first: those files can then not be opened on any device. |
 | `file-key` damaged under the app lock | Repaired in this step, under a key that needs no prompt. The app lock is then off. The message to the user comes with the app lock screens in session B. |
+| The QR code (open question 3) | Words only for now. Nothing draws or scans a QR code. Decided again in Phase 5 ([The QR code](#the-qr-code)). |
+| The permission `USE_BIOMETRIC` (open question 4) | [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md): `core/security` declares it, Catalog removes it, and the APK rules check allows it per app from Water on (steps 2.4 and 2.5). No owner-only file changed in step 1.7. |
+| AndroidX Biometric (open question 5) | Used nowhere. The app lock uses Android's own prompt too. ADR 0003, point 4, says so. |
 
 The independent review of this step found five things in the code of
 session B. Each is fixed and tested:
@@ -2040,17 +2079,12 @@ What is left, with the step that decides it.
 2. **The handover interface**: its screen, its signature permission and
    its decision record. Also what happens when the asking app already
    has keys, or has its app lock on. The handover step (3.0).
-3. **The QR code**: whether to build it, what it holds, what draws it,
-   and what scans it. Scanning needs the camera permission and a
-   decoder, so a decision record. Step 1.7, session A.
-4. **The permission `USE_BIOMETRIC`** for the system prompt. It needs a
-   decision record, an entry in [permissions.md](permissions.md), and
-   the APK rules check must allow it, which is an owner-only file. The
-   step that first shows a prompt: step 1.7, session A.
-5. **AndroidX Biometric is then not needed anywhere.**
-   [ADR 0003](../adr/0003-kotlin-compose-material-3-navigation-3.md)
-   names it for the app lock. Proposal: step 1.7 uses Android's own
-   prompt too and notes it in that record.
+3. **The QR code.** Decided in step 1.7, session A: words only for now,
+   decided again in Phase 5 ([The QR code](#the-qr-code)).
+4. **The permission `USE_BIOMETRIC`.** Decided in step 1.7, session A
+   ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)).
+5. **AndroidX Biometric.** Decided in step 1.7, session A: used nowhere
+   ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)).
 6. **A new recovery key.** The whole flow: how other devices, other apps
    and the server learn of it, when old keys are dropped, how old sealed
    records are sealed again, and how sealing file keys again fits "last

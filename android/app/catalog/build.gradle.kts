@@ -17,5 +17,9 @@ android {
 
 dependencies {
     implementation(project(":core:design"))
+    // The recovery key screens, shown with sample data. Catalog holds no
+    // keys: its manifest removes the permission and the screens of the
+    // module (docs/security/permissions.md).
+    implementation(project(":core:security"))
     implementation(libs.activity.compose)
 }

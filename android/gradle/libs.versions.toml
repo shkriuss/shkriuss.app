@@ -26,10 +26,11 @@ ksp = "2.3.13"
 # Tink for Java, the only cryptography library (ADR 0006). Only core/crypto
 # uses it. The Android artifact holds no native code and no network code.
 tink = "1.24.0"
-# Not direct dependencies. Used as version constraints only.
 # Compose and Activity ask for Lifecycle 2.9, whose lint checks no longer
-# load in this lint version. 2.11.0 fixes them.
+# load in this lint version. 2.11.0 fixes them. A version constraint holds
+# every Lifecycle library at it. core/security uses its ViewModel directly.
 lifecycle = "2.11.0"
+# Not direct dependencies. Used as version constraints only.
 # Compose UI tests ask for Espresso 3.5, which fails on the Android 17
 # image. 3.7.0 works.
 espresso = "3.7.0"
@@ -50,6 +51,9 @@ compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity" }
 lifecycle-runtime = { module = "androidx.lifecycle:lifecycle-runtime", version.ref = "lifecycle" }
+# The ViewModel that holds a screen's state (CLAUDE.md). Activity brings
+# it to every app already, at this version.
+lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel", version.ref = "lifecycle" }
 room-runtime = { module = "androidx.room3:room3-runtime", version.ref = "room" }
 sqlite-framework = { module = "androidx.sqlite:sqlite-framework", version.ref = "sqlite" }
 tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }

@@ -3,6 +3,17 @@
 Catalog (`app.shkriuss.catalog`) is the design gallery used during
 development.
 
+## Unreleased
+
+- A third group on the start screen, **Shared screens**, with the page
+  **Recovery key screens**: every state of the recovery key screens and
+  the security screen of `core/security`, with sample words that are no
+  real key. Tap a state to see it full window. Back returns to the list.
+  A switch blocks screenshots on the page, as the screens do in an app.
+- Permissions: still none. Catalog removes `USE_BIOMETRIC`, which
+  `core/security` asks for, and the screens of that module. Catalog holds
+  no keys and never shows the system prompt.
+
 ## 0.2.0 (2026-11-12)
 
 Released as `catalog-v0.2.0`.

@@ -11,7 +11,9 @@ and has its own decision record ([CLAUDE.md](../../CLAUDE.md)).
 - No storage permissions. Files come and go only through the system
   pickers.
 - Every APK build fails if the app's final manifest declares or requests a
-  permission it is not allowed. Today no app is allowed any. The check is
+  permission it is not allowed. Today no app is allowed any. A per-app
+  allow list comes with Water (steps 2.4 and 2.5 in
+  [PROMPTS.md](../development/PROMPTS.md)). The check is
   described in [build.md](../development/build.md#apk-rules-check).
 
 ## Apps
@@ -26,8 +28,12 @@ did:
 | Permission | Added by | What happens to it |
 |---|---|---|
 | `app.shkriuss.catalog.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Catalog's manifest. `androidx.core` uses it only on Android 12 and older, and the minimum is Android 13. |
+| `android.permission.USE_BIOMETRIC` | `core/security` | Removed in Catalog's manifest. Catalog shows the recovery key screens with sample data, holds no keys and never shows the system prompt ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). |
 
 Other components that libraries add, none of them a permission:
+
+- The four screens of `core/security`: removed in Catalog's manifest,
+  for the same reason. Catalog draws their content on a page of its own.
 
 - `androidx.startup.InitializationProvider`: not exported. Starts
   libraries when the app starts.
@@ -101,6 +107,44 @@ The unit test `ManifestTest` in `core/notify` fails if the module's
 manifest declares another permission, a receiver that is exported, a
 receiver that runs before the first unlock, or another broadcast.
 
+## Apps that use `core/security`
+
+`core/security` holds the recovery key screens and the security screen
+([security-screens.md](../architecture/security-screens.md)). Its
+manifest declares one permission and four screens. Every app that uses
+the module gets them when the app is built. No app uses it yet. The
+first one will be Water.
+
+An app does not get the permission unnoticed. The APK rules check fails
+the app until the owner allows it for that app (step 2.5 for Water), and
+this page then lists it under the app.
+
+### Permission
+
+| Permission | Who grants it | Why |
+|---|---|---|
+| `android.permission.USE_BIOMETRIC` | Android, at install. The user is not asked and cannot take it away. | To show Android's own system prompt: a fingerprint, or the phone's PIN, pattern or password. Two keys need it for every use: the Recovery guard of the kept recovery key, and the Lock key of the app lock ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). |
+
+What it does not allow:
+
+- It gives no access to any data, and it cannot read a fingerprint. The
+  app learns only whether the user answered the prompt.
+- It cannot unlock anything by itself. Only the Keystore decides, after
+  the user answered.
+
+### Screens
+
+| Screen | Exported | What it does |
+|---|---|---|
+| `app.shkriuss.core.security.SecurityActivity` | No | The security screen. |
+| `app.shkriuss.core.security.CreateRecoveryKeyActivity` | No | Creating a recovery key. |
+| `app.shkriuss.core.security.EnterRecoveryKeyActivity` | No | Entering the 24 words. |
+| `app.shkriuss.core.security.ShowRecoveryKeyActivity` | No | Showing the kept recovery key again, after the system prompt. |
+
+- No screen is exported. Only the app itself can open them.
+- Every screen blocks screenshots, screen recording and the recent-apps
+  preview, and keeps autofill and content capture away.
+
 ## Test APKs
 
 A test APK is built from a module's `src/androidTest/` folder. It is
@@ -114,7 +158,6 @@ at it.
 | `app.shkriuss.core.crypto.test` | `android.permission.USE_BIOMETRIC` | Android's own system prompt needs it. The tests of the Lock key and the Recovery guard show the prompt and answer it with the emulator's PIN. |
 | `app.shkriuss.core.notify.test` | `android.permission.POST_NOTIFICATIONS`, `android.permission.USE_EXACT_ALARM`, `android.permission.RECEIVE_BOOT_COMPLETED` | The three permissions of `core/notify`, from the module's own manifest, as an app gets them. The tests set real alarms and show real notifications on the emulator. The test APK also has the module's two receivers. |
 
-No app gets `USE_BIOMETRIC` from the test APK. The step that first shows
-the prompt in an app writes the decision record for it
-([crypto-design.md](crypto-design.md#open-questions), step 1.7,
-session A).
+No app gets `USE_BIOMETRIC` from the test APK. Apps get it from
+`core/security`
+([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)).

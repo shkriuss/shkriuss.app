@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The Catalog app declares no permissions. See docs/security/permissions.md.
+    The Catalog app declares no permissions, and removes those its libraries
+    ask for. See docs/security/permissions.md.
     Catalog stores no data, so Android backup and device-to-device transfer
     are turned off.
 -->
@@ -16,6 +17,15 @@
         tools:node="remove" />
     <uses-permission
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        tools:node="remove" />
+
+    <!--
+        core/security asks for this to show the system prompt. Catalog shows
+        its screens with sample data only and holds no keys, so it never
+        shows the prompt. Remove it (ADR 0031).
+    -->
+    <uses-permission
+        android:name="android.permission.USE_BIOMETRIC"
         tools:node="remove" />
 
     <application
@@ -34,6 +44,23 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            The screens of core/security work only with keys. Catalog draws
+            their content on its own page instead, so they are removed.
+        -->
+        <activity
+            android:name="app.shkriuss.core.security.SecurityActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.CreateRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.EnterRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.ShowRecoveryKeyActivity"
+            tools:node="remove" />
 
         <!--
             Emoji support would look for a downloadable font from a system

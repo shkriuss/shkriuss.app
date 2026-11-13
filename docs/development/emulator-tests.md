@@ -340,9 +340,12 @@ a device:
 For the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a.
 
 These steps cannot be done today. They need an app that holds keys and
-has the recovery key screens and the security screen. Step 1.7 builds
-those screens, and Water is the first app that holds keys. Catalog holds
-none. The steps name what a screen does, not its final title.
+has the recovery key screens and the security screen. Step 1.7 built
+those screens in `core/security`
+([security-screens.md](../architecture/security-screens.md)). Water is
+the first app that holds keys and uses them. Catalog holds none: it shows
+the screens with sample data only. The steps name what a screen does,
+not its final title.
 
 Before you start:
 
