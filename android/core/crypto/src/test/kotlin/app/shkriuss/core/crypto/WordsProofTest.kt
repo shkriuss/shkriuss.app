@@ -133,6 +133,40 @@ class WordsProofTest {
     }
 
     @Test
+    fun aProofNamesTheRecordKeyItWasCheckedAgainst() {
+        val crypto = keeper().open()
+        val kept = crypto.setup.beginShowRecoveryKey().finish()
+
+        assertEquals(key.keyId, crypto.setup.checkAllWords(key)!!.keyId)
+        assertEquals(key.keyId, crypto.setup.checkFourWords(kept, fourOf(words, 1, 2, 3, 4))!!.keyId)
+        assertEquals(crypto.status().keyId, crypto.setup.checkAllWords(key)!!.keyId)
+    }
+
+    @Test
+    fun aProofForAnotherRecordKeyIsRefusedAndNothingChanges() {
+        val app = appWithKeys()
+        val other = TestApp(temporary.newFolder())
+        assertEquals(KeySetupResult.STORED, other.open().setup.storeDerivedKeys(otherKey))
+        val proofOfTheOther = other.open().setup.checkAllWords(otherKey)!!
+        val crypto = app.open()
+        val before = app.snapshot()
+        val made = app.hardware.made.toList()
+
+        try {
+            crypto.appLock.beginTurnOn(proofOfTheOther)
+            fail("turned the app lock on with words of another recovery key")
+        } catch (_: IllegalStateException) {
+            // The keys are not the ones the words were checked against.
+        }
+
+        assertEquals("no keyset file changed", before, app.snapshot())
+        assertEquals("no hardware key was made", made, app.hardware.made)
+        assertEquals(AppLockState.OFF, crypto.appLock.state())
+        crypto.appLock.beginTurnOn(crypto.setup.checkAllWords(key)!!).finish()
+        assertEquals("the right proof still works", AppLockState.ON, crypto.appLock.state())
+    }
+
+    @Test
     fun aRecordKeysetThatCannotBeJudgedStopsTheCheck() {
         val hardware = SoftwareHardwareKeys()
         val app = appWithKeys(hardware)

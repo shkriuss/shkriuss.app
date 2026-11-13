@@ -1,10 +1,13 @@
 package app.shkriuss.core.security
 
+import android.os.Looper
 import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.RecoveryKey
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import java.io.File
+import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
+import kotlinx.coroutines.CoroutineDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -16,6 +19,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 
 /**
  * The lock screen, the app lock screen and turning the app lock on,
@@ -295,6 +299,101 @@ class AppLockViewModelsTest {
         assertEquals(AppLockState.ON, app.crypto.appLock.state())
     }
 
+    /** The kept recovery key the turn-on screen holds now, read from the ViewModel itself. */
+    private fun keptKeyOf(model: TurnOnViewModel): Any? =
+        TurnOnViewModel::class.java.getDeclaredField("kept").apply { isAccessible = true }.get(model)
+
+    /** A keeper app, up to the four words. Returns the model. */
+    private fun upToFourWords(app: SoftwareKeysApp, model: TurnOnViewModel = turnOnModel(app)): TurnOnViewModel {
+        model.onContinue()
+        answer(model, PromptOutcome.SUCCEEDED)
+        assertTrue(model.state.value is TurnOnFourWords)
+        assertNotNull(keptKeyOf(model))
+        return model
+    }
+
+    @Test
+    fun leavingTheScreenDuringTheFourWordsDropsTheKeptKeyAndThePromptAsksAgainOnTheWayBack() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        keep(app, key)
+        val model = upToFourWords(app)
+        model.onAnswerChange(0, "abandon")
+
+        model.onStop(changingConfigurations = false)
+
+        assertNull("the kept key left memory", keptKeyOf(model))
+        assertEquals("back to the step before the prompt", TurnOnReading(), model.state.value)
+        model.onCheckFour()
+        assertEquals("nothing is checked without the key", TurnOnReading(), model.state.value)
+
+        model.onStart()
+        assertNotNull("the prompt asks again on the way back", (model.state.value as TurnOnReading).prompt)
+        answer(model, PromptOutcome.SUCCEEDED)
+        val four = model.state.value as TurnOnFourWords
+        four.positions.forEachIndexed { index, position -> model.onAnswerChange(index, key.words()[position - 1]) }
+        model.onCheckFour()
+        answer(model, PromptOutcome.SUCCEEDED)
+        assertEquals(TurnOnDone, model.state.value)
+    }
+
+    @Test
+    fun aTurnOfThePhoneKeepsTheFourWordsAndAsksNothing() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        keep(app, key)
+        val model = upToFourWords(app)
+        val four = model.state.value as TurnOnFourWords
+        four.positions.forEachIndexed { index, position -> model.onAnswerChange(index, key.words()[position - 1]) }
+        val typed = model.state.value
+
+        model.onStop(changingConfigurations = true)
+        model.onStart()
+
+        assertEquals(typed, model.state.value)
+        assertNotNull(keptKeyOf(model))
+        model.onCheckFour()
+        assertTrue(model.state.value is TurnOnLocking)
+    }
+
+    @Test
+    fun aStopWhileThePromptReadsTheKeptKeyKeepsNothing() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        keep(app, key)
+        val queued = QueuedDispatcher()
+        val model = TurnOnViewModel(app.crypto, {}, queued, Random(7))
+        queued.runAll()
+        model.onContinue()
+        queued.runAll()
+        val reading = (model.state.value as TurnOnReading).prompt!!
+
+        model.onPromptResult(reading, PromptOutcome.SUCCEEDED)
+        model.onStop(changingConfigurations = false)
+        queued.runAll()
+
+        assertNull("the key read after the stop is not kept", keptKeyOf(model))
+        assertEquals(TurnOnReading(), model.state.value)
+        model.onStart()
+        queued.runAll()
+        assertNotNull((model.state.value as TurnOnReading).prompt)
+    }
+
+    @Test
+    fun aStopWithNoKeptKeyChangesNothing() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        val model = turnOnModel(app)
+        model.onContinue()
+        enterAll(model, key.words())
+        val locking = model.state.value
+
+        model.onStop(changingConfigurations = false)
+        model.onStart()
+
+        assertEquals(locking, model.state.value)
+    }
+
     @Test
     fun aClosedPromptLeavesTheAppLockOffAndCanBeOpenedAgain() {
         val (app, _) = newApp()
@@ -356,5 +455,20 @@ class AppLockViewModelsTest {
         app.screenLock = false
 
         assertEquals(TurnOnFailed(TurnOnProblem.NOT_ALLOWED), turnOnModel(app).state.value)
+    }
+}
+
+/** Holds background work until the test runs it, so that a test can stop the screen while work is under way. */
+private class QueuedDispatcher : CoroutineDispatcher() {
+    private val tasks = ArrayDeque<Runnable>()
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        tasks += block
+    }
+
+    /** Runs the work that waits, and what it hands back to the main thread. */
+    fun runAll() {
+        while (tasks.isNotEmpty()) tasks.removeFirst().run()
+        shadowOf(Looper.getMainLooper()).idle()
     }
 }

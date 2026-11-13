@@ -385,7 +385,7 @@ class KeySetup internal constructor(private val vault: KeyVault) {
         require(answers.size == WORDS_TO_CHECK && answers.keys.all { it in 1..Bip39.WORD_COUNT }) {
             "Four words at positions 1 to 24 are checked"
         }
-        if (isOwnRecoveryKey(kept) && kept.hasWordsAt(answers)) WordsProof() else null
+        if (isOwnRecoveryKey(kept) && kept.hasWordsAt(answers)) WordsProof(kept.keyId) else null
     }
 
     /**
@@ -401,7 +401,7 @@ class KeySetup internal constructor(private val vault: KeyVault) {
      * cannot be judged now or is damaged.
      */
     fun checkAllWords(entered: RecoveryKey): WordsProof? = vault.locked {
-        if (isOwnRecoveryKey(entered)) WordsProof() else null
+        if (isOwnRecoveryKey(entered)) WordsProof(entered.keyId) else null
     }
 
     /** True if [key] is the current recovery key of this app's stored `record`. */

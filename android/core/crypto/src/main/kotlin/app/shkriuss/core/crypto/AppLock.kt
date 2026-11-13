@@ -56,8 +56,10 @@ class AppLock internal constructor(private val vault: KeyVault) {
      * Starts turning the app lock on. Before this, the app has checked the
      * recovery words: [proof] comes from [KeySetup.checkFourWords] in an
      * app that keeps the recovery key, or from [KeySetup.checkAllWords] in
-     * one that does not. The steps, in an order that a stop at any point
-     * cannot harm:
+     * one that does not. A proof for another `record` key than the one
+     * stored now is refused with [IllegalStateException]: the keys changed
+     * since the words were checked. The steps, in an order that a stop at
+     * any point cannot harm:
      *
      * 1. A new key of the kind that wrapped `file-key` until now is made,
      *    and the other keysets of the old one move to it.
@@ -72,9 +74,11 @@ class AppLock internal constructor(private val vault: KeyVault) {
      * file, and then it is deleted at the next start. If the prompt is
      * cancelled, the app lock stays off.
      */
-    @Suppress("UNUSED_PARAMETER") // The proof is a type: having one is the check.
     fun beginTurnOn(proof: WordsProof): PromptStep<Unit> = vault.locked {
         check(canTurnOn()) { "The app lock cannot be turned on now" }
+        val record = vault.look(KeysetName.RECORD) as? Stored.Open
+            ?: throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
+        check(KeysetCodec.primaryId(record.keyset) == proof.keyId) { "The words were checked against another recovery key" }
         val fileKey = vault.look(KeysetName.FILE_KEY) as? Stored.Open
             ?: throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
         val oldKey = fileKey.key

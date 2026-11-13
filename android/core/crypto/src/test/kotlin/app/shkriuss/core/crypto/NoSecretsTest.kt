@@ -187,7 +187,7 @@ class NoSecretsTest {
         val locked = app.open()
         failing { locked.files.unwrap(fileId, wrapped) }
         failing { locked.appLock.turnOff() }
-        failing { locked.appLock.beginTurnOn(WordsProof()) }
+        failing { locked.appLock.beginTurnOn(WordsProof(key.keyId)) }
         val unlock = locked.appLock.beginUnlock()
         show(unlock)
         unlock.finish()
@@ -266,6 +266,6 @@ class NoSecretsTest {
         assertEquals("Accepted", RecoveryWords.parse(key.words().joinToString(" ")).toString())
         assertEquals("WordNotInList(1)", RecoveryWords.parse("nope").toString())
         assertEquals("DoNotBelongTogether", RecoveryWords.parse("abandon").toString())
-        assertEquals("WordsProof", WordsProof().toString())
+        assertEquals("WordsProof", WordsProof(key.keyId).toString())
     }
 }

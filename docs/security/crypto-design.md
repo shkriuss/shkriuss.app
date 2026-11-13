@@ -680,7 +680,8 @@ When the app gets its recovery-key-derived keys:
 ### Keys in memory
 
 1. The recovery key is in memory only while it is created, entered,
-   shown, or used to derive keys. Then every reference is dropped.
+   shown, used to derive keys, or checked before the app lock is turned
+   on. Then every reference is dropped.
 2. The `record` keyset is loaded when needed and may stay for the life of
    the process.
 3. The `backup` keyset is loaded for one backup or restore and then
@@ -1003,7 +1004,13 @@ with no files. So the prompt always unlocks a real hardware key.
      security screen. The owner decided this in step 1.7, session B.
    - `core/crypto` enforces the check: turning on needs a `WordsProof`,
      which only `checkFourWords` and `checkAllWords` make. Both store
-     nothing and drop no key from memory.
+     nothing and drop no key from memory. A proof names the key ID of the
+     `record` key it was checked against, and turning on refuses a proof
+     whose key ID is not the one of the `record` key stored now.
+   - In a keeper app, the kept recovery key that was read for the four
+     words leaves memory when the screen stops, as on the screen that
+     shows the words. A turn of the phone does not count. The prompt asks
+     again on the way back.
    - Whether a keeper can do the check for another app is decided in the
      handover step (3.0).
 3. Why rule 1: the Lock key is removed when the screen lock is removed.
@@ -1865,11 +1872,12 @@ constructor, and the tests pass a software one with the same byte layout.
     so that a change that failed half way leaves nothing stale behind.
     In `StartOverTest`.
 13. Step 1.7, session B: the checks of the words before the app lock.
-    Four words of the kept key, and all 24 words, give a proof; a wrong
-    word, another recovery key, three or five positions and an app with
-    no recovery key do not; the checks store nothing and keep the app
-    unlocked; a `record` that cannot be judged stops them. In
-    `WordsProofTest`. When the app locks, and the screens, are tested in
+    Four words of the kept key, and all 24 words, give a proof that names
+    the key ID of `record`; a wrong word, another recovery key, three or
+    five positions and an app with no recovery key do not; the checks
+    store nothing and keep the app unlocked; a `record` that cannot be
+    judged stops them; turning on refuses a proof for another `record`
+    key and changes nothing. In `WordsProofTest`. When the app locks, and the screens, are tested in
     `core/security`
     ([security-screens.md](../architecture/security-screens.md#tests)).
 
@@ -2120,7 +2128,9 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 | Question | Decision |
 |---|---|
 | Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. Whether a keeper can check for another app stays open for step 3.0. |
-| Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. |
+| Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. It names the key ID of the `record` key it was checked against, and `beginTurnOn` refuses a proof for another key (the owner's review of pull request 29). |
+| A keeper app that cannot read its kept recovery key | It asks for all 24 words instead: the same check as an app that does not keep the key. Confirmed in the owner's review of pull request 29. |
+| The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words. A turn of the phone does not count. The prompt asks again on the way back (the owner's review of pull request 29). |
 | When the app locks | When it leaves the screen (the default), or after 1, 5 or 15 minutes or 1 hour away. Time away is counted with a clock the user cannot change. The app always locks when the screen turns off with the app on it, and after Android stopped it. |
 | What a waiting app learns of a screen that turned off | Nothing sure. The screen-off broadcast is held back on Android 14 and later, and a late one is ignored. "Keys in memory", point 5, says what happens; the user guide says it plainly. |
 | What a notification shows while the app lock is on | Only its channel's name and a fixed text, unless the user turns on "Show the text in notifications". Turning the app lock on posts the shown notifications again in that form. If the state cannot be read, the text is hidden. |

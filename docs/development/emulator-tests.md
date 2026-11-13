@@ -547,7 +547,10 @@ Turning it on:
    Open the app lock screen and turn the app lock on. Check: the plain
    warning, one prompt, four words, then a second prompt. Type one wrong
    word first. Check: the app says that a word does not match and shows
-   no words.
+   no words. Then, while the four fields show, switch to another app and
+   back. Check: the prompt asks again, and then four words show. Turn
+   the phone while the four fields show. Check: no new prompt, and the
+   words you typed stay.
 2. Turn the app lock off. In a second test app, or after clearing the
    app's data and entering the words with **Not now** at the prompt,
    turn it on in an app that does not keep the key. Check: it asks for

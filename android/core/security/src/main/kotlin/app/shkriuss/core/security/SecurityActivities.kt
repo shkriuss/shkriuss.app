@@ -229,12 +229,14 @@ class AppLockActivity : ComponentActivity() {
 /** Turning the app lock on. It takes recovery words, so its window blocks screenshots like the recovery key screens. */
 @OptIn(SecurityScreenSamples::class)
 class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
+    private lateinit var model: TurnOnViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         secureWindow(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val watcher = securityHost.appLock
-        val model = flowViewModel { TurnOnViewModel(it, onTurnedOn = watcher::turnedOn) }
+        model = flowViewModel { TurnOnViewModel(it, onTurnedOn = watcher::turnedOn) }
         val actions = TurnOnActions(
             onBack = ::finish,
             onContinue = model::onContinue,
@@ -264,5 +266,17 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
                 )
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        model.onStart()
+    }
+
+    // The kept recovery key leaves memory when the screen stops, as the words
+    // do on the show screen. A turn of the phone does not count.
+    override fun onStop() {
+        super.onStop()
+        model.onStop(isChangingConfigurations)
     }
 }

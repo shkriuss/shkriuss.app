@@ -47,7 +47,10 @@ paper safe.
    this phone keeps your recovery key (the security screen says so):
    - **It keeps the key.** Answer the system prompt. Then type the four
      words the app asks for, from your paper, and tap **Check**. If a
-     word does not match, the app says so. It never shows the words.
+     word does not match, the app says so. It never shows the words. If
+     you switch to another app or the screen turns off while you type,
+     the phone forgets the key it read. When you come back, answer the
+     prompt again.
    - **It does not keep the key.** Type all 24 words from your paper,
      as on the screen **Enter your recovery key**. Then tap **Check the
      words**. The words are not kept on the phone by this.

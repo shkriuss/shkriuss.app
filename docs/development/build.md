@@ -251,7 +251,7 @@ second build must write the same mapping file, or the release stops. See
   since" query, the example migration and the migration test helpers,
   on the system SQLite driver under Robolectric
   ([architecture/data.md](../architecture/data.md#tests)).
-- `core/crypto` has 23 test classes with 188 tests. They are the items 1
+- `core/crypto` has 23 test classes with 190 tests. They are the items 1
   to 8 and 10 to 13 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
@@ -372,7 +372,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has nine test classes with 75 tests
+- `core/security` has nine test classes with 79 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -396,7 +396,9 @@ second build must write the same mapping file, or the release stops. See
     uses an app class that never starts its watcher.
   - `AppLockViewModelsTest` runs the lock screen, the app lock screen and
     turning the app lock on through their ViewModels, with real keys, as
-    `FlowViewModelsTest` does. `AppLockActivitiesTest` starts the app lock
+    `FlowViewModelsTest` does. A dispatcher of its own holds background
+    work back, so that a test can stop the screen while the prompt still
+    reads the kept key. `AppLockActivitiesTest` starts the app lock
     screen and checks its labels and touch targets.
 
 ### Instrumented tests

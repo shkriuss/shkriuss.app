@@ -1,11 +1,14 @@
 # 0032 The settings of the app lock in Android's preferences file
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 1, step 7, session B
   ([PROMPTS.md](../development/PROMPTS.md)). The owner decided it in
   that session, before any code, and asked that this record makes no
-  promise about DataStore.
+  promise about DataStore. Claude wrote it down in
+  [pull request 29](https://github.com/shkriuss/shkriuss.app/pull/29),
+  which adds the app lock. The owner accepted the record in the review
+  of that pull request, on 2026-11-13.
 
 ## Context
 

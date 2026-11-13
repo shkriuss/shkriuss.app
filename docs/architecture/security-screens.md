@@ -276,12 +276,17 @@ like the recovery key screens.
 2. A keeper app: one prompt of the Recovery guard reads the kept key,
    then four words at positions picked at random. A wrong word is named;
    the words are never shown. If the kept copy cannot be read, the app
-   asks for all 24 words instead.
+   asks for all 24 words instead. If the screen stops while the key is
+   in memory (the phone's screen turns off, or another app comes to the
+   front), the key leaves memory, as on the screen that shows the words.
+   A turn of the phone does not count. The prompt asks again on the way
+   back.
 3. An app that does not keep the key: all 24 words, on the screen of
    "Enter your recovery key" (the same composable and rules). Words that
    give this app's own `record` key are the proof. The key is not kept.
-4. The check gives a `WordsProof`. The prompt of the new Lock key turns
-   the app lock on. A closed prompt leaves it off and can be opened
+4. The check gives a `WordsProof`, which names the key ID of the
+   `record` key it was checked against. `beginTurnOn` refuses a proof for
+   another key. The prompt of the new Lock key turns the app lock on. A closed prompt leaves it off and can be opened
    again with the same check.
 5. The recovery key leaves memory right after the check.
 
@@ -353,7 +358,9 @@ file says that.
   lock; why it cannot be turned on; the settings kept; turning off;
   turning on in a keeper and in an app that does not keep the key, with
   wrong words, other words, closed prompts and a kept copy that cannot
-  be read.
+  be read; the kept key dropped when the screen stops, also while the
+  prompt still reads it, kept through a turn of the phone, and the
+  prompt asking again on the way back.
 - `AppLockActivitiesTest`: the app lock screen's labels and touch
   targets. `FlowViewModelsTest` also covers the note that a repair or
   the words after a reset turned the app lock off.

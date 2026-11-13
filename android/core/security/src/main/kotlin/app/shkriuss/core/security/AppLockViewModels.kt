@@ -267,8 +267,12 @@ class AppLockViewModel internal constructor(
  *   "Enter your recovery key". Words that give this app's own `record`
  *   key are the proof. The key is not kept here.
  *
- * The recovery key is dropped right after the check. [onTurnedOn] runs on
- * the main thread when the app lock is on.
+ * The recovery key is dropped right after the check. A kept key that was
+ * read is also dropped when the screen stops, as "Show the words" drops
+ * the words: the phone's screen turns off, or another app comes to the
+ * front. A turn of the phone does not count. On the way back the prompt
+ * asks again. [onTurnedOn] runs on the main thread when the app lock is
+ * on.
  */
 class TurnOnViewModel internal constructor(
     private val crypto: ShkCrypto,
@@ -291,6 +295,17 @@ class TurnOnViewModel internal constructor(
     /** The proof that the words were checked, kept for a new try of the last prompt. It holds nothing secret. */
     @Volatile
     private var proof: WordsProof? = null
+
+    /** True while a prompt that read the kept key finishes, before [kept] is set. */
+    @Volatile
+    private var reading = false
+
+    /** Counts the stops that dropped the kept key. Work that began before one keeps nothing. */
+    @Volatile
+    private var stops = 0
+
+    /** True when the screen stopped while the kept key was in memory: the prompt asks again on the way back. */
+    private var askOnReturn = false
 
     init {
         work {
@@ -339,8 +354,10 @@ class TurnOnViewModel internal constructor(
             return
         }
         screen.value = TurnOnWorking
+        val asked = stops
+        reading = true
         work {
-            kept = try {
+            val read = try {
                 request.step.finish() as RecoveryKey
             } catch (failed: BlobException) {
                 screen.value = if (failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) {
@@ -349,7 +366,12 @@ class TurnOnViewModel internal constructor(
                     TurnOnReading(note = KeepNote.FAILED)
                 }
                 return@work
+            } finally {
+                reading = false
             }
+            // The screen stopped while the key was read: keep nothing, and ask again on the way back.
+            if (asked != stops) return@work
+            kept = read
             screen.value = TurnOnFourWords(confirmPositions(random), List(WORDS_TO_CONFIRM) { "" })
         }
     }
@@ -365,8 +387,11 @@ class TurnOnViewModel internal constructor(
         val four = screen.value as? TurnOnFourWords ?: return
         val key = kept ?: return
         screen.value = TurnOnWorking
+        val asked = stops
         work {
             val checked = crypto.setup.checkFourWords(key, four.positions.zip(four.answers).toMap())
+            // The screen stopped during the check: the key is gone, and the prompt asks again on the way back.
+            if (asked != stops) return@work
             if (checked == null) {
                 screen.value = four.copy(mismatch = true)
             } else {
@@ -375,6 +400,26 @@ class TurnOnViewModel internal constructor(
                 beginLocking()
             }
         }
+    }
+
+    /**
+     * The screen stopped. Unless the phone is only turning
+     * ([changingConfigurations]), the kept recovery key leaves memory, and
+     * the screen goes back to the step before the prompt that read it.
+     */
+    fun onStop(changingConfigurations: Boolean) {
+        if (changingConfigurations || (kept == null && !reading)) return
+        stops++
+        kept = null
+        askOnReturn = true
+        screen.value = TurnOnReading()
+    }
+
+    /** The screen starts again. If the kept key was dropped when it stopped, the prompt asks again. */
+    fun onStart() {
+        if (!askOnReturn) return
+        askOnReturn = false
+        onRead()
     }
 
     /** The user typed [text] for the current one of the 24 words. */
