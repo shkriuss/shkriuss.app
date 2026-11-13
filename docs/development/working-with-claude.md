@@ -28,9 +28,8 @@ only. That account:
 Claude has no Cloudflare access and no access to the signing-ceremony
 repository.
 
-Open: the plan lists the machine account as pending the smoke test
-(Session 0 in [PROMPTS.md](PROMPTS.md)). The account's name is not recorded
-yet.
+The machine account is `shkriuss-bot`. It has worked since Phase 0. The
+owner recorded its name on 2026-11-13.
 
 ## Rules that enforce this
 

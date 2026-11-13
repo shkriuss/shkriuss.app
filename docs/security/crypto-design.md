@@ -113,22 +113,25 @@ The page ends with every [assumption](#assumptions), the owner's
 
 ## What the design protects
 
-The threat model page does not exist yet. This table follows section 10
-of the [plan](../plan/PLAN.md).
+The whole threat model is [threat-model.md](threat-model.md). This table
+is the part of it that the keys on this page answer.
 
 | Against | What protects the data |
 |---|---|
-| A lost or stolen phone | Android's file-based encryption. Keys are wrapped by hardware keys that never leave the phone. With the app lock on, file keys also need the system prompt. |
-| Other apps on the phone | The app sandbox. Each app has its own hardware keys. Apps of the suite give keys to each other only through a signature-protected screen, after a system prompt. |
-| A network attacker, a curious or hostile sync server | They see only sealed records and encrypted files. A changed, cut or swapped blob does not open. |
-| A malicious library inside one app | It can reach that app's data and derived keys. It cannot reach the recovery key without a system prompt, and never the keys of another app. |
-| A weak or reused password | There is no password ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). |
+| A lost or stolen phone | Android's file-based encryption. Keys are wrapped by hardware keys that never leave the phone, where the phone has key hardware ([StrongBox and other hardware](#strongbox-and-other-hardware)). With the app lock on, file keys also need the system prompt. The prompt also takes the phone's PIN, pattern or password, so all of it is as strong as the screen lock. |
+| Other apps on the phone | The app sandbox. Each app has its own hardware keys and its own derived keys. Android's own backup is off. Today a key reaches another app of the suite only when the user types the words there. The handover between apps is planned: a signature-protected screen, after a system prompt (step 3.0, not built). |
+| A network attacker, a curious or hostile sync server | They see only sealed records and encrypted files, with the key ID in the clear. A changed, cut or swapped blob does not open. What else they learn is in [threat-model.md](threat-model.md#what-the-sync-server-and-the-network-can-still-learn). |
+| A malicious library inside one app | It can reach that app's data and derived keys. It can read the recovery key while it is in that app's memory: while it is created, entered or shown. With it, it could make the keys of every app. It cannot read the kept copy without a system prompt. It cannot connect to the network itself: a data app has no network permission. |
+| Someone who gets a backup file | The stream under the `backup` key. The file shows its app, the key ID, the format version and its size ([backup-format.md](../architecture/backup-format.md#what-a-changed-or-cut-file-does)). |
+| Someone who finds the paper with the words | Nothing on the phone. With a backup file or the sync data, the words open everything of every app. There is no password on top ([threat-model.md](threat-model.md#what-the-24-words-open)). |
+| A weak or reused password | There is no password ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). The phone's screen lock still matters: file-based encryption and the system prompt rest on it. |
 
 Not protected, by decision or by nature:
 
 - A compromised operating system, an unlocked phone in an attacker's
   hands, a malicious keyboard or accessibility service, coercion, and
-  traffic analysis (plan section 10).
+  traffic analysis (plan section 10,
+  [threat-model.md](threat-model.md#out-of-scope)).
 - Sizes, counts and timing. An encrypted file is as long as the file plus
   a small overhead. A sealed record is as long as the record plus 50
   bytes.
@@ -2168,8 +2171,8 @@ What is left, with the step that decides it.
    unchecked until the file is opened. A hostile server could fill
    storage with bytes that never open. Should the file's record carry a
    hash of the ciphertext? Phase 5.
-10. **The threat model page** does not exist. A step of its own: step
-    1.8.
+10. **The threat model page.** Written in step 1.8:
+    [threat-model.md](threat-model.md).
 11. **Starting over after a setup that stopped half way.** Decided in
     step 1.7, session A
     ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
