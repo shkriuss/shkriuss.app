@@ -1,6 +1,7 @@
 package app.shkriuss.core.security
 
 import android.content.Context
+import androidx.core.content.edit
 
 /**
  * How long the app may be away from the screen before the app lock locks
@@ -38,17 +39,17 @@ internal class AppLockSettings(context: Context) {
     /** When the app locks after it left the screen. */
     var lockAfter: LockAfter
         get() = LockAfter.entries.firstOrNull { it.name == preferences.getString(LOCK_AFTER, null) } ?: LockAfter.LEAVING
-        set(value) = preferences.edit().putString(LOCK_AFTER, value.name).apply()
+        set(value) = preferences.edit { putString(LOCK_AFTER, value.name) }
 
     /** True if every window of the app blocks screenshots and shows blank in the recent apps. */
     var blockScreenshots: Boolean
         get() = preferences.getBoolean(BLOCK_SCREENSHOTS, false)
-        set(value) = preferences.edit().putBoolean(BLOCK_SCREENSHOTS, value).apply()
+        set(value) = preferences.edit { putBoolean(BLOCK_SCREENSHOTS, value) }
 
     /** True if notifications show their text while the app lock is on. Off by default. */
     var notificationText: Boolean
         get() = preferences.getBoolean(NOTIFICATION_TEXT, false)
-        set(value) = preferences.edit().putBoolean(NOTIFICATION_TEXT, value).apply()
+        set(value) = preferences.edit { putBoolean(NOTIFICATION_TEXT, value) }
 
     private companion object {
         /** The file of the app lock's settings in the app's private storage. */

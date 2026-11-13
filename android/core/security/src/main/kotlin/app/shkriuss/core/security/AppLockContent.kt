@@ -304,7 +304,7 @@ private fun PromptNote(note: KeepNote?) {
  */
 @SecurityScreenSamples
 @Composable
-fun AppLockDialogSample(dialog: AppLockDialog, lockAfter: LockAfter = LockAfter.LEAVING, modifier: Modifier = Modifier) {
+fun AppLockDialogSample(dialog: AppLockDialog, modifier: Modifier = Modifier, lockAfter: LockAfter = LockAfter.LEAVING) {
     AppLockDialogView(dialog, inPlace = true, lockAfter = lockAfter, onLockAfter = {}, onConfirm = {}, onDismiss = {}, modifier = modifier)
 }
 
