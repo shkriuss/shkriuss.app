@@ -4,6 +4,10 @@ How the project protects user data, and how to check that it does.
 
 Pages:
 
+- [Threat model](threat-model.md): what is protected, against whom, what
+  stops each attacker and what does not, what is out of scope, what the
+  app lock does, what the sync server can still learn, the OWASP MASVS
+  controls, and every open question.
 - [Cryptography design](crypto-design.md): every key, where it lives and
   what it protects, the Tink primitives and their parameters, the byte
   layout of every encrypted blob, the app lock, the recovery key, key
@@ -20,8 +24,6 @@ Pages:
 
 What else belongs here:
 
-- The threat model: what is protected, against whom, and what is out of
-  scope. File: `threat-model.md`.
 - The data inventory: what data each app stores, and where.
 - How to report a problem: see [SECURITY.md](../../SECURITY.md).
 

@@ -46,9 +46,14 @@ The same fingerprint is in three places:
 - in [fingerprints.md](../security/fingerprints.md) on GitHub,
 - in the notes of every release on GitHub.
 
-The website runs on Cloudflare, not on GitHub. Someone who takes over one
-of them cannot change the other. If the places do not agree, do not use
-the app, and report it.
+The website runs on Cloudflare. Someone who takes over the website,
+through Cloudflare or the domain, cannot change GitHub. Then the places
+do not agree. If they do not agree, do not use the app, and report it.
+
+Someone who takes over the project's GitHub account can change all three
+places. Comparing them does not help then. What this check does not
+cover is in the
+[threat model](../security/threat-model.md#takeover-of-github-cloudflare-or-the-domain).
 
 After the first check, Android protects you: it installs an update only if
 it is signed with the same key as the app on your phone.
