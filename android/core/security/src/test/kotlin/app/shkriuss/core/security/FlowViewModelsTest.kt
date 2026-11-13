@@ -1,5 +1,7 @@
 package app.shkriuss.core.security
 
+import app.shkriuss.core.crypto.AppLockState
+import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.HardwareKeyKind
 import app.shkriuss.core.crypto.RecoveryKey
 import app.shkriuss.core.crypto.RecoveryWords
@@ -238,6 +240,67 @@ class FlowViewModelsTest {
 
         assertFalse(app.crypto.status().needsRepair)
         assertEquals(key.keyId, app.crypto.status().keyId)
+    }
+
+    /** Gives [app] a recovery key and turns the app lock on, as the turn-on screen does. */
+    private fun withTheAppLockOn(app: SoftwareKeysApp): RecoveryKey {
+        val key = app.crypto.setup.createRecoveryKey()
+        app.crypto.setup.storeDerivedKeys(key)
+        app.crypto.appLock.beginTurnOn(app.crypto.setup.checkAllWords(key)!!).finish()
+        assertEquals(AppLockState.ON, app.crypto.appLock.state())
+        return key
+    }
+
+    @Test
+    fun theWordsAfterAResetOpenTheFilesAndTheEndSaysThatTheAppLockIsOff() {
+        val (app, _) = newApp()
+        val key = withTheAppLockOn(app)
+        app.crypto.appLock.lock()
+        app.screenLock = false
+        assertEquals(AppLockState.RESET, app.crypto.appLock.state())
+        var told = 0
+        val model = EnterViewModel(app.crypto, startOver = false, background = inline, onAppLockChanged = { told++ })
+
+        enterAll(model, key.words())
+
+        assertEquals(FlowDone(Kept.NO_SCREEN_LOCK, appLockOff = true), model.state.value)
+        assertEquals(AppLockState.OFF, app.crypto.appLock.state())
+        assertEquals("the watcher is told, so it shows no notice of its own", 1, told)
+    }
+
+    @Test
+    fun aRepairOfTheKeyFileOfTheAppLockTurnsItOffAndTheEndSaysSo() {
+        val (app, folder) = newApp()
+        val key = withTheAppLockOn(app)
+        app.crypto.appLock.lock()
+        damage(File(folder, "file-key"))
+        try {
+            app.crypto.appLock.beginUnlock().finish()
+        } catch (_: BlobException) {
+            // The prompt found the key file damaged. Only the words repair it.
+        }
+        var told = 0
+        val model = EnterViewModel(app.crypto, startOver = false, background = inline, onAppLockChanged = { told++ })
+
+        enterAll(model, key.words())
+        answer(model, PromptOutcome.SUCCEEDED)
+
+        assertEquals(FlowDone(Kept.KEPT, appLockOff = true), model.state.value)
+        assertEquals(AppLockState.OFF, app.crypto.appLock.state())
+        assertEquals(1, told)
+    }
+
+    @Test
+    fun wordsThatChangeNothingAboutTheAppLockSayNothingAboutIt() {
+        val (app, _) = newApp()
+        val key = withTheAppLockOn(app)
+        val model = EnterViewModel(app.crypto, startOver = false, background = inline, onAppLockChanged = { error("not told") })
+
+        enterAll(model, key.words())
+        answer(model, PromptOutcome.SUCCEEDED)
+
+        assertEquals(FlowDone(Kept.KEPT), model.state.value)
+        assertEquals(AppLockState.ON, app.crypto.appLock.state())
     }
 
     @Test

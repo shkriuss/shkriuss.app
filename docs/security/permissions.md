@@ -32,8 +32,10 @@ did:
 
 Other components that libraries add, none of them a permission:
 
-- The four screens of `core/security`: removed in Catalog's manifest,
-  for the same reason. Catalog draws their content on a page of its own.
+- The six screens of `core/security`: removed in Catalog's manifest,
+  for the same reason. Catalog draws their content on two pages of its
+  own. Catalog has no app lock, so nothing registers the screen-off
+  receiver of the app lock either.
 
 - `androidx.startup.InitializationProvider`: not exported. Starts
   libraries when the app starts.
@@ -109,9 +111,9 @@ receiver that runs before the first unlock, or another broadcast.
 
 ## Apps that use `core/security`
 
-`core/security` holds the recovery key screens and the security screen
-([security-screens.md](../architecture/security-screens.md)). Its
-manifest declares one permission and four screens. Every app that uses
+`core/security` holds the recovery key screens, the security screen and
+the app lock ([security-screens.md](../architecture/security-screens.md)).
+Its manifest declares one permission and six screens. Every app that uses
 the module gets them when the app is built. No app uses it yet. The
 first one will be Water.
 
@@ -140,10 +142,32 @@ What it does not allow:
 | `app.shkriuss.core.security.CreateRecoveryKeyActivity` | No | Creating a recovery key. |
 | `app.shkriuss.core.security.EnterRecoveryKeyActivity` | No | Entering the 24 words. |
 | `app.shkriuss.core.security.ShowRecoveryKeyActivity` | No | Showing the kept recovery key again, after the system prompt. |
+| `app.shkriuss.core.security.AppLockActivity` | No | The app lock screen. It asks for the system prompt first while the app lock is on. |
+| `app.shkriuss.core.security.TurnOnAppLockActivity` | No | Turning the app lock on: the warning, the recovery words, the system prompt. |
 
 - No screen is exported. Only the app itself can open them.
-- Every screen blocks screenshots, screen recording and the recent-apps
-  preview, and keeps autofill and content capture away.
+- Every screen that shows or takes the words blocks screenshots, screen
+  recording and the recent-apps preview, and keeps autofill and content
+  capture away. The app lock screen follows the app's own setting, as
+  every screen of the app does.
+
+### A receiver registered at runtime
+
+The app lock listens for Android's broadcast that the screen turned off
+([security-screens.md](../architecture/security-screens.md#when-the-app-locks)).
+
+- It is not in the manifest: Android delivers this broadcast only to
+  receivers that an app registers while it runs. `AppLockWatcher`
+  registers it when the app starts, with `RECEIVER_NOT_EXPORTED`, so no
+  other app can send to it.
+- It needs no permission. It only drops the app's file keys from
+  memory, and locks the app if the app lock is on.
+- Android 14 and later may hold it back while the app waits in the
+  background. A late one is ignored. The app does not depend on it.
+
+The app lock adds no permission. Its settings are in a small file in the
+app's private storage
+([ADR 0032](../adr/0032-app-lock-settings-in-android-preferences.md)).
 
 ## Test APKs
 

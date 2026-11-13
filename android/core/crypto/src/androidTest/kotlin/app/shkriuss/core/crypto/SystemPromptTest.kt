@@ -150,7 +150,7 @@ class SystemPromptTest {
         assertTrue(crypto.appLock.canTurnOn())
 
         // Turn on: one prompt of the new Lock key.
-        val turnOn = crypto.appLock.beginTurnOn()
+        val turnOn = crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId))
         SystemPrompt.answer(turnOn.cryptoObject)
         turnOn.finish()
 

@@ -320,6 +320,7 @@ These points stay unproven until they are checked on a device:
 | A Keystore that fails for a moment | A test cannot make the real Keystore fail. What `getKey` and `aliases` answer then stays read from Android's source. The rules for it are tested with the stand-in (`HardwareKeyRulesTest`). |
 | A loss of power while a keyset file is replaced | A test cannot cut the power. |
 | The time before the first unlock after a restart | No test runs then. |
+| The app lock in a real app | No app uses it yet. Its rules are unit tests with Robolectric; what a real phone does with the screen-off broadcast, the recent apps, the system pickers and the prompt's PIN view is checked in [the app lock steps](#steps-for-the-three-devices-the-app-lock). |
 
 For `core/notify`, these points stay unproven until they are checked on
 a device:
@@ -390,8 +391,9 @@ Part 3, a fingerprint added or removed:
    key. Check: the prompt asks for the PIN, and the words are shown.
 10. Add one fingerprint again for the next parts.
 
-Part 4, the app lock. Skip it until the app lock exists (step 1.7,
-session B):
+Part 4, the app lock. Step 1.7, session B built it in `core/security`.
+It needs an app that uses it, Water from step 2.5. The longer steps are
+in [Steps for the three devices: the app lock](#steps-for-the-three-devices-the-app-lock):
 
 11. Turn the app lock on. Check: it asks for four of the words and shows
     two system prompts.
@@ -526,6 +528,88 @@ Part 7, "Force stop" and notifications turned off:
 Tell Claude in a session what did not match. Claude records the result
 in this page, in [notifications.md](../architecture/notifications.md)
 and in the user page [reminders.md](../user/reminders.md).
+
+### Steps for the three devices: the app lock
+
+For the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a. They need an app
+that uses the app lock of `core/security`
+([security-screens.md](../architecture/security-screens.md#the-app-lock)),
+Water from step 2.5. Use its preview build and a new recovery key for
+testing, never your real words. The unit tests cover the rules with
+Robolectric; these steps check what only a real phone shows.
+
+Before you start: the app has a recovery key, the phone has a PIN and a
+fingerprint, and the app has one reminder and, if it can, one file.
+
+Turning it on:
+
+1. In the app's security screen, check that it keeps the recovery key.
+   Open the app lock screen and turn the app lock on. Check: the plain
+   warning, one prompt, four words, then a second prompt. Type one wrong
+   word first. Check: the app says that a word does not match and shows
+   no words. Then, while the four fields show, switch to another app and
+   back. Check: the prompt asks again, and then four words show. Turn
+   the phone while the four fields show. Check: no new prompt, and the
+   words you typed stay.
+2. Turn the app lock off. In a second test app, or after clearing the
+   app's data and entering the words with **Not now** at the prompt,
+   turn it on in an app that does not keep the key. Check: it asks for
+   all 24 words on the screen of "Enter your recovery key", then one
+   prompt. Check on the security screen: the key is still not kept.
+
+When it locks:
+
+3. Choose **When it leaves the screen**. Switch to another app, then
+   back. Check: the lock screen comes first. No content of the app shows
+   for a moment, neither in the recent apps nor on the way back.
+4. Choose **5 minutes**. With the app on the screen, turn the screen off,
+   wait 10 seconds, turn it on and unlock the phone. Check: the lock
+   screen, and no content first.
+5. Still **5 minutes**. Switch to another app. Turn the screen off for 10
+   seconds, turn it on, unlock the phone, and go back to the app. Check:
+   the app shows either its content or the lock screen, but never its
+   content first and the lock screen after. The preview in the recent
+   apps is blank. Write down which one it showed: Android 14 and later
+   may hold the screen-off broadcast back, so the content is allowed
+   here, as the user guide says.
+6. Still **5 minutes**. Switch to another app for more than 5 minutes,
+   then go back. Check: the lock screen comes first.
+7. With **When it leaves the screen**, open the prompt and answer it with
+   the PIN instead of the fingerprint. Check: the app opens and does not
+   lock again right away.
+
+Pickers and sharing:
+
+8. In the app, start to add a file, so that Android's file picker opens.
+   Pick a file. Check: the lock screen comes first; after the prompt,
+   the file is added.
+9. Open the file picker again. In the recent apps, swipe the app away
+   or use **Force stop** while the picker is open, then pick a file.
+   Check: the app starts locked, and after the prompt the screen is
+   there. Write down whether the file arrived.
+10. Share something from the app, if it can. Check: after the share
+    sheet, the lock screen comes first.
+
+The app lock screen and the windows:
+
+11. Open the app lock screen while the app is unlocked. Check: the
+    prompt opens before anything shows. Close it. Check: the screen
+    closes.
+12. Turn on **Hide in recent apps and block screenshots**. Try a
+    screenshot on a screen of the app. Check: Android refuses it, and
+    the recent apps show the app blank.
+
+Notifications:
+
+13. With the app lock off, let the reminder show. Then turn the app lock
+    on. Check: the reminder in the shade changes to the name of its kind
+    and "The app lock hides this notification", with no new sound.
+14. Let the reminder show again. Check: the hidden form. Turn on **Show
+    the text in notifications**, let it show again. Check: its text.
+
+Tell Claude in a session what did not match. Claude records the result
+in this page, in [security-screens.md](../architecture/security-screens.md)
+and in the user page [app-lock.md](../user/app-lock.md).
 
 ## Decided
 

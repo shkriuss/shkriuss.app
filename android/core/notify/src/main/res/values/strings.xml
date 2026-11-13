@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The text of every notification while the app lock hides it. The title is the name of the notification's channel. -->
+    <string name="notify_text_hidden">The app lock hides this notification. Open the app to see it.</string>
+</resources>

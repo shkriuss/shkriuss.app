@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     What core/security adds to every app that uses it: one permission and
-    four screens. See docs/architecture/security-screens.md,
+    six screens. See docs/architecture/security-screens.md,
     docs/security/permissions.md and ADR 0031.
 
     No screen is exported. Only the app itself can open them.
@@ -37,6 +37,18 @@
         <!-- Show the kept recovery key again, after the system prompt. -->
         <activity
             android:name="app.shkriuss.core.security.ShowRecoveryKeyActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+
+        <!-- The app lock screen: turn it on or off, when it locks, notifications, screenshots. -->
+        <activity
+            android:name="app.shkriuss.core.security.AppLockActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+
+        <!-- Turn the app lock on: the warning, the recovery words, the system prompt. -->
+        <activity
+            android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
             android:exported="false"
             android:theme="@style/Theme.Shk" />
     </application>

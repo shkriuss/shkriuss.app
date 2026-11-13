@@ -2,6 +2,9 @@ package app.shkriuss.core.crypto
 
 import com.google.crypto.tink.KeysetHandle
 
+/** How many words [KeySetup.checkFourWords] checks: four, as when a recovery key is created. */
+private const val WORDS_TO_CHECK = 4
+
 /** What [KeySetup.storeDerivedKeys] did with a recovery key. */
 enum class KeySetupResult {
     /** Every derived keyset is stored. The app has its keys from this recovery key. */
@@ -307,11 +310,7 @@ class KeySetup internal constructor(private val vault: KeyVault) {
     fun beginKeepRecoveryKey(recoveryKey: RecoveryKey): PromptStep<Unit>? = vault.locked {
         if (!vault.hardware.hasScreenLock()) return@locked null
         val recovery = RecoveryKeyDeriver.recoveryKeyset(listOf(recoveryKey), recoveryKey)
-        val record = judged(KeysetName.RECORD)
-        val derivedRecord = RecoveryKeyDeriver.derive(recovery, vault.app).record
-        require(record is Stored.Open && KeysetCodec.holdsAll(record.keyset, derivedRecord)) {
-            "The app has no keys from this recovery key"
-        }
+        require(givesOwnRecord(judged(KeysetName.RECORD), recovery)) { "The app has no keys from this recovery key" }
         val stored = judged(KeysetName.RECOVERY)
         val replacing = stored is Stored.Damaged ||
             (stored is Stored.NeedsPrompt && vault.isDamagedBehindPrompt(KeysetName.RECOVERY))
@@ -368,6 +367,53 @@ class KeySetup internal constructor(private val vault: KeyVault) {
             onCancel = {},
         )
     }
+
+    /**
+     * Checks four of the recovery words before the app lock is turned on,
+     * in an app that keeps the recovery key ("The app lock" in
+     * crypto-design.md, rule 2). [kept] is the kept key, read with
+     * [beginShowRecoveryKey]. [answers] maps four positions, 1 to 24, to
+     * the words the user typed.
+     *
+     * Returns the proof that [AppLock.beginTurnOn] needs if [kept] is the
+     * current recovery key of this app's `record` and every word matches.
+     * Returns null if not. Nothing is stored, and no key leaves memory.
+     * Throws [BlobException] if `record` cannot be judged now or is
+     * damaged.
+     */
+    fun checkFourWords(kept: RecoveryKey, answers: Map<Int, String>): WordsProof? = vault.locked {
+        require(answers.size == WORDS_TO_CHECK && answers.keys.all { it in 1..Bip39.WORD_COUNT }) {
+            "Four words at positions 1 to 24 are checked"
+        }
+        if (isOwnRecoveryKey(kept) && kept.hasWordsAt(answers)) WordsProof(kept.keyId) else null
+    }
+
+    /**
+     * Checks all 24 recovery words before the app lock is turned on, in an
+     * app that does not keep the recovery key ("The app lock" in
+     * crypto-design.md, rule 2). Words that give this app's own `record`
+     * key are the proof: [entered] must be the current recovery key of the
+     * stored `record`.
+     *
+     * Returns the proof that [AppLock.beginTurnOn] needs, or null. Nothing
+     * is stored: the key is not kept here. Keeping stays the user's own
+     * choice. No key leaves memory. Throws [BlobException] if `record`
+     * cannot be judged now or is damaged.
+     */
+    fun checkAllWords(entered: RecoveryKey): WordsProof? = vault.locked {
+        if (isOwnRecoveryKey(entered)) WordsProof(entered.keyId) else null
+    }
+
+    /** True if [key] is the current recovery key of this app's stored `record`. */
+    private fun isOwnRecoveryKey(key: RecoveryKey): Boolean {
+        val record = judged(KeysetName.RECORD)
+        if (record is Stored.Damaged) throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
+        return givesOwnRecord(record, RecoveryKeyDeriver.recoveryKeyset(listOf(key), key))
+    }
+
+    /** True if [record] opens and holds the `record` keyset that [recovery] derives, with the same primary. */
+    private fun givesOwnRecord(record: Stored, recovery: KeysetHandle): Boolean =
+        record is Stored.Open && KeysetCodec.holdsAll(record.keyset, RecoveryKeyDeriver.derive(recovery, vault.app).record)
 
     /**
      * True while file keys are still sealed by the random key the app had

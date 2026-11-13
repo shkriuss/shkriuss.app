@@ -43,6 +43,10 @@ abstract class FlowViewModel<S : Any> internal constructor(
     @Volatile
     private var requests = 0
 
+    /** True once storing the keys turned the app lock off. The end of the flow says so. */
+    @Volatile
+    protected var appLockWentOff = false
+
     protected fun show(next: S) {
         screen.value = next
     }
@@ -75,7 +79,7 @@ abstract class FlowViewModel<S : Any> internal constructor(
                 !status.hasScreenLock -> Kept.NO_SCREEN_LOCK
                 else -> Kept.NOT_KEPT
             }
-            show(flowScreen(FlowDone(kept)))
+            show(flowScreen(FlowDone(kept, appLockWentOff)))
             return
         }
         show(flowScreen(FlowKeeping(prompt = PromptRequest(++requests, step))))
@@ -90,7 +94,7 @@ abstract class FlowViewModel<S : Any> internal constructor(
     /** The user keeps only the paper copy. */
     fun onSkipKeeping() {
         keeping = null
-        show(flowScreen(FlowDone(Kept.NOT_KEPT)))
+        show(flowScreen(FlowDone(Kept.NOT_KEPT, appLockWentOff)))
     }
 
     /** How the system prompt of [request] ended. A request that is no longer shown is ignored. */
@@ -117,7 +121,7 @@ abstract class FlowViewModel<S : Any> internal constructor(
             try {
                 step.finish()
                 keeping = null
-                show(flowScreen(FlowDone(Kept.KEPT)))
+                show(flowScreen(FlowDone(Kept.KEPT, appLockWentOff)))
             } catch (_: BlobException) {
                 show(flowScreen(FlowKeeping(note = KeepNote.FAILED)))
             } catch (_: IllegalStateException) {

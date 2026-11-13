@@ -48,7 +48,7 @@ class ScreenLockRemovedTest {
     }
 
     private fun turnAppLockOn(crypto: ShkCrypto) {
-        val turnOn = crypto.appLock.beginTurnOn()
+        val turnOn = crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId))
         SystemPrompt.answer(turnOn.cryptoObject)
         turnOn.finish()
         assertEquals(AppLockState.ON, crypto.appLock.state())

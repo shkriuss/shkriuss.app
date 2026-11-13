@@ -29,19 +29,30 @@ Built in Phase 1, step 6. No app uses it yet. Water is the first
    the app starts:
 
    ```kotlin
-   class WaterApp : Application(), NotifyHost {
+   class WaterApp : Application(), NotifyHost, SecurityHost {
        override val notify: Notify by lazy {
-           Notify(this, listOf(drinkChannel), reminders, reminders, Clock.System)
+           Notify(
+               this,
+               listOf(drinkChannel),
+               reminders,
+               reminders,
+               Clock.System,
+               hidesText = appLock::hidesNotificationText,
+           )
        }
 
        override fun onCreate() {
            super.onCreate()
+           appLock.start()
            notify.start()
        }
    }
    ```
 
-2. It hands over four things:
+   The parts of `SecurityHost` are in
+   [security-screens.md](security-screens.md#what-an-app-does-for-the-app-lock).
+
+2. It hands over five things:
    - **The channels.** Each is a `NotifyChannel`: a fixed id, a name and
      a description from the app's string resources, and how much it
      interrupts at the start (`ChannelImportance`).
@@ -50,6 +61,11 @@ Built in Phase 1, step 6. No app uses it yet. Water is the first
    - **An `AlarmHandler`.** It runs when an alarm fires. The app reads
      the record and shows a notification.
    - **A `Clock`**, the one from `core/data`. A test passes its own.
+   - **`hidesText`.** It answers whether notifications must hide their
+     text now ([While the app lock is on](#while-the-app-lock-is-on)).
+     It has no default, so that no app can forget it. An app with the
+     app lock passes `AppLockWatcher.hidesNotificationText`. An app
+     without one passes `{ false }` and says so in a comment.
 3. After every change to a reminder, the app calls `notify.sync()`. That
    is all. It never sets or removes a single alarm itself.
 4. A screen that turns reminders on asks `notify.state(channel)` and
@@ -87,7 +103,7 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
 
 | Class | What it is for |
 |---|---|
-| `Notify` | The entry point. `start`, `sync`, `state`, `permissionAnswered`, `settingsIntent`, and `notifications`. |
+| `Notify` | The entry point. `start`, `sync`, `hideShownText`, `state`, `permissionAnswered`, `settingsIntent`, and `notifications`. |
 | `NotifyHost` | The interface of the app class. Android creates the receivers itself, so nothing can be passed to them through a constructor. They reach the app's `Notify` through the app class. |
 | `Alarm`, `AlarmId`, `AlarmSource`, `AlarmHandler` | What the app names and gets back. |
 | `AlarmScheduler` | The small interface in front of `AlarmManager`: `set` and `cancel`. `AlarmManagerScheduler` is the real one. A test passes one that only keeps a list. |
@@ -178,7 +194,7 @@ all.
 |---|---|
 | The alarm at Android | The time, and a broadcast to `AlarmReceiver` of this app with the alarm id. No title, no text, no extras. |
 | The file `app.shkriuss.core.notify.xml` in the app's private storage | For each registered alarm its id and time. For each fired alarm its id and time. Whether the user was asked for the permission. |
-| The notification | The title and text the app's handler read from its database at that moment. They go to Android to be shown. |
+| The notification | The title and text the app's handler read from its database at that moment. They go to Android to be shown. While the app lock hides the text: only the channel's name and a fixed text. |
 
 - The file is in credential-encrypted storage, like the database. It
   can be read only after the first unlock.
@@ -189,6 +205,33 @@ all.
   notification content.
 - A tap opens a screen of the same app. `Notifications.show` refuses any
   other target.
+
+## While the app lock is on
+
+Decided by the owner on 2026-11-13, in Phase 1, step 7, session B, with
+the app lock ([security-screens.md](security-screens.md#the-app-lock)).
+
+1. While the app lock is on, a notification shows only the name of its
+   channel, for example "Drink reminders", and the text "The app lock
+   hides this notification. Open the app to see it." It is the same
+   while the app is unlocked, so nothing changes when the app locks.
+2. The app lock screen has a switch, "Show the text in notifications".
+   It is off by default. With it on, notifications show their title and
+   text as when the app lock is off.
+3. When the app lock is turned on, or the switch is turned off, the
+   notifications already showing are posted again in the hidden form,
+   so no old text stays in the notification shade. They keep their key,
+   tap target, icon and time, and make no new sound
+   (`setOnlyAlertOnce`). `Notify.hideShownText()` does it, on the
+   module's one worker thread, after any alarm handler that is running.
+   The app lock calls it through the `onTextHidden` it was given.
+4. If the state of the app lock cannot be read, the text is hidden.
+   `Notifications.show` also hides it when `hidesText` itself fails.
+5. A notification that is hidden stays hidden after the app lock is
+   turned off. New ones show their text again.
+6. The title and text the app gives are never stored by `core/notify`,
+   so a hidden notification cannot be shown again with its text. A tap
+   opens the app, behind the lock screen.
 
 ## Channels
 
@@ -253,7 +296,7 @@ Unit tests, on the JVM. They are in `core/notify/src/test/`:
 |---|---|
 | `AlarmSyncTest` | The rules of "How alarms are kept right", with a clock the test moves and a stand-in for Android's alarms: what is registered, that an alarm fires once and not before its time, changed and removed reminders, a reminder that repeats, a reboot, a missed alarm, the clock set forward and back, a new time zone, more than 100 alarms, a handler that fails, and that a change in the app does not set the other alarms again. |
 | `AlarmManagerSchedulerTest` | What is asked of `AlarmManager`: exact, on the wall clock, waking the device, one alarm for each id, a broadcast that only this app can send and that carries only the id. |
-| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. |
+| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. The hidden form while the app lock is on, also when `hidesText` fails, and the shown notifications posted again in it with the same key and tap target and no new alert. |
 | `ManifestTest` | The module's manifest: the three permissions and no other, two receivers, not exported, nothing that runs before the first unlock, and exactly the four broadcasts. |
 | `NotifyBoundaryTest` | No other module under `android/` names `AlarmManager` or a notification class of Android or AndroidX. It reads source, like `CryptoBoundaryTest` ([build.md](../development/build.md#unit-tests)). |
 
@@ -276,9 +319,9 @@ three devices.
 4. The checks on a GrapheneOS device: after a reboot, in a secondary
    profile and in Private Space
    ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices-reminders)).
-5. What a notification shows while the app lock is on. Today a
-   notification shows its title and text whether the app is locked or
-   not. Decided in Phase 1, step 7, session B, with the app lock.
+5. What a notification shows while the app lock is on. Decided in
+   Phase 1, step 7, session B
+   ([While the app lock is on](#while-the-app-lock-is-on)).
 6. What the user sees when an app's alarm handler fails. Today the
    reminder is marked as fired and is lost without a word
    ([How alarms are kept right](#how-alarms-are-kept-right)). Decided in

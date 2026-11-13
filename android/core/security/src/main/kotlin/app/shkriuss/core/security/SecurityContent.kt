@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.HardwareKeyKind
 import app.shkriuss.core.crypto.SecurityLevel
 import app.shkriuss.core.design.ShkCard
@@ -44,6 +45,7 @@ class SecurityActions(
     val onShow: () -> Unit = {},
     val onGiveUpFiles: () -> Unit = {},
     val onRetry: () -> Unit = {},
+    val onAppLock: () -> Unit = {},
 )
 
 /**
@@ -65,6 +67,17 @@ fun SecurityContent(state: SecurityState, previewBuild: Boolean, actions: Securi
             else -> {
                 RecoveryKeySection(state, actions)
                 if (state.needsRepair || state.filesCanBeGivenUp) RepairSection(state, actions)
+                ShkSectionHeader(stringResource(R.string.sec_section_app_lock))
+                Paragraph(
+                    stringResource(
+                        when (state.appLock) {
+                            AppLockState.ON -> R.string.sec_security_lock_on
+                            AppLockState.OFF -> R.string.sec_security_lock_off
+                            AppLockState.RESET -> R.string.sec_security_lock_reset
+                        },
+                    ),
+                )
+                Buttons { ShkTonalButton(stringResource(R.string.sec_app_lock_button), actions.onAppLock) }
                 ShkSectionHeader(stringResource(R.string.sec_section_screen_lock))
                 Paragraph(stringResource(if (state.hasScreenLock) R.string.sec_screen_lock_on else R.string.sec_screen_lock_off))
                 KeysSection(state)

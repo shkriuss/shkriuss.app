@@ -61,6 +61,12 @@
         <activity
             android:name="app.shkriuss.core.security.ShowRecoveryKeyActivity"
             tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.AppLockActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
+            tools:node="remove" />
 
         <!--
             Emoji support would look for a downloadable font from a system

@@ -54,6 +54,9 @@ Good to know:
 - On a locked screen, Android decides how much of a notification it
   shows. Set it in Android's settings: search for **Notifications on
   lock screen**.
+- While the app lock of an app is on, its notifications show no text,
+  only their kind. You can show the text again on the app lock screen
+  ([The app lock](app-lock.md#notifications)).
 
 ## After a restart of the phone
 

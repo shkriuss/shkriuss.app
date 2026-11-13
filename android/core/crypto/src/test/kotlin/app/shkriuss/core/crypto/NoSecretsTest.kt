@@ -173,8 +173,12 @@ class NoSecretsTest {
         show(crypto.backups.decryptingStream(header, ByteArrayInputStream(backup.toByteArray())).use { it.readBytes() }.size)
         failing { crypto.backups.decryptingStream("another header".toByteArray(), ByteArrayInputStream(backup.toByteArray())).readBytes() }
 
-        // The app lock.
-        val turnOn = crypto.appLock.beginTurnOn()
+        // The app lock, and the checks of the words before it.
+        val proof = crypto.setup.checkAllWords(key)!!
+        show(proof)
+        show(crypto.setup.checkFourWords(key, mapOf(1 to words[0], 7 to words[6], 13 to words[12], 24 to "notaword")))
+        show(crypto.setup.checkAllWords(RecoveryKey.ofBytes(ByteArray(32) { 0x77 })))
+        val turnOn = crypto.appLock.beginTurnOn(proof)
         show(turnOn)
         turnOn.finish()
         show(crypto.appLock.state())
@@ -183,7 +187,7 @@ class NoSecretsTest {
         val locked = app.open()
         failing { locked.files.unwrap(fileId, wrapped) }
         failing { locked.appLock.turnOff() }
-        failing { locked.appLock.beginTurnOn() }
+        failing { locked.appLock.beginTurnOn(WordsProof(key.keyId)) }
         val unlock = locked.appLock.beginUnlock()
         show(unlock)
         unlock.finish()
@@ -262,5 +266,6 @@ class NoSecretsTest {
         assertEquals("Accepted", RecoveryWords.parse(key.words().joinToString(" ")).toString())
         assertEquals("WordNotInList(1)", RecoveryWords.parse("nope").toString())
         assertEquals("DoNotBelongTogether", RecoveryWords.parse("abandon").toString())
+        assertEquals("WordsProof", WordsProof(key.keyId).toString())
     }
 }

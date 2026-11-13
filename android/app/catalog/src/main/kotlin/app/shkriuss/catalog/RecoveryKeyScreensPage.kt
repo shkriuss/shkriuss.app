@@ -12,6 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.HardwareKeyKind
 import app.shkriuss.core.crypto.RecoveryWords
 import app.shkriuss.core.crypto.SecurityLevel
@@ -56,6 +57,7 @@ enum class SecuritySample(@param:StringRes val title: Int) {
     CreateDone(R.string.sample_create_done),
     EnterTheWords(R.string.sample_enter_words),
     EnterStartOver(R.string.sample_enter_start_over),
+    EnterDoneAppLockOff(R.string.sample_enter_done_app_lock_off),
     ShowTheWords(R.string.sample_show_words),
 }
 
@@ -118,8 +120,10 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
                 keys = listOf(
                     KeyRow(HardwareKeyKind.BACKGROUND, SecurityLevel.STRONGBOX),
                     KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.STRONGBOX),
+                    KeyRow(HardwareKeyKind.LOCK, SecurityLevel.STRONGBOX),
                     KeyRow(HardwareKeyKind.RECOVERY_GUARD, SecurityLevel.STRONGBOX),
                 ),
+                appLock = AppLockState.ON,
             ),
             false,
             security,
@@ -160,6 +164,8 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
         SecuritySample.CreateDone -> CreateContent(FlowDone(Kept.KEPT), false, create, modifier)
         SecuritySample.EnterTheWords -> EnterSample(onBack, modifier)
         SecuritySample.EnterStartOver -> EnterContent(EnterStartOverOffer, false, EnterActions(onBack = onBack), modifier)
+        SecuritySample.EnterDoneAppLockOff ->
+            EnterContent(FlowDone(Kept.KEPT, appLockOff = true), false, EnterActions(onBack = onBack), modifier)
         SecuritySample.ShowTheWords -> ShowContent(ShowWords(sampleWords), false, ShowActions(onBack = onBack), modifier)
     }
 }

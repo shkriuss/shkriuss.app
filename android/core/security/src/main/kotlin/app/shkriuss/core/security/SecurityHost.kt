@@ -10,12 +10,15 @@ import app.shkriuss.core.crypto.ShkCrypto
 /**
  * The app class of every app that uses these screens. Android creates the
  * screens itself, so nothing can be passed to them through a constructor.
- * They reach the app's one [ShkCrypto] through the app class instead, as
- * `core/notify` reaches its `Notify` (ADR 0030).
+ * They reach the app's one [ShkCrypto] and its [AppLockWatcher] through
+ * the app class instead, as `core/notify` reaches its `Notify` (ADR 0030).
  */
 interface SecurityHost {
     /** The app's one [ShkCrypto], built and started when the app starts. */
     val crypto: ShkCrypto
+
+    /** The app's one [AppLockWatcher], built and started in the app class's `onCreate`. */
+    val appLock: AppLockWatcher
 }
 
 /**
@@ -37,6 +40,12 @@ object SecurityScreens {
 
     /** Show the kept recovery key again, after the system prompt. */
     internal fun showIntent(context: Context): Intent = Intent(context, ShowRecoveryKeyActivity::class.java)
+
+    /** The app lock screen: turn it on or off, when it locks, notifications and screenshots. */
+    fun appLockIntent(context: Context): Intent = Intent(context, AppLockActivity::class.java)
+
+    /** Turn the app lock on: the warning, the words, the system prompt. */
+    internal fun turnOnIntent(context: Context): Intent = Intent(context, TurnOnAppLockActivity::class.java)
 
     /** Start a setup that stopped over: with a new key ([create]) or with other words. */
     internal fun startOverIntent(context: Context, create: Boolean): Intent =

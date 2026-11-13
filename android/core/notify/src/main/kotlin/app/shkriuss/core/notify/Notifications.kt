@@ -35,15 +35,25 @@ class ShkNotification(
  * Nothing here checks whether the user allows notifications. Android
  * drops a notification that is not allowed without an error. A screen
  * finds out with `Notify.state`.
+ *
+ * While [hidesText] says yes, a notification shows only the name of its
+ * channel and a fixed text, never the title and text the app gave it
+ * (docs/architecture/notifications.md). If [hidesText] fails, the text
+ * is hidden too.
  */
-class Notifications internal constructor(private val context: Context) {
+class Notifications internal constructor(
+    private val context: Context,
+    private val hidesText: () -> Boolean,
+) {
     private val manager = context.getSystemService(NotificationManager::class.java)
 
     /**
      * Shows [notification], or replaces the one with the same key.
      *
      * On a locked screen Android shows its text only if the user lets
-     * the lock screen show all notification content.
+     * the lock screen show all notification content. While the app lock
+     * hides the text, the notification shows the channel's name and
+     * "The app lock hides this notification" instead, everywhere.
      */
     fun show(notification: ShkNotification) {
         require(notification.open.component?.packageName == context.packageName) {
@@ -56,19 +66,51 @@ class Notifications internal constructor(private val context: Context) {
             Intent(notification.open).setIdentifier(notification.key),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val built = Notification.Builder(context, notification.channel.id)
+        val hidden = mustHide()
+        val built = builder(notification.channel.id, notification.atMillis, tap)
             .setSmallIcon(notification.smallIcon)
-            .setContentTitle(notification.title)
-            .setContentText(notification.text)
-            .setContentIntent(tap)
-            .setAutoCancel(true)
-            .setWhen(notification.atMillis)
-            .setShowWhen(true)
-            .setCategory(Notification.CATEGORY_REMINDER)
-            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setContentTitle(if (hidden) context.getString(notification.channel.name) else notification.title)
+            .setContentText(if (hidden) context.getString(R.string.notify_text_hidden) else notification.text)
             .build()
         manager.notify(notification.key, NOTIFICATION_ID, built)
     }
+
+    /**
+     * Posts every notification of [channels] that is on screen again, in
+     * the hidden form: the same key, tap target, icon and time, and no new
+     * sound or vibration. Does nothing if the text is not to be hidden.
+     */
+    internal fun hideShown(channels: List<NotifyChannel>) {
+        if (!mustHide()) return
+        manager.activeNotifications.forEach { shown ->
+            val old = shown.notification
+            val channel = channels.firstOrNull { it.id == old.channelId } ?: return@forEach
+            val built = builder(channel.id, old.`when`, old.contentIntent)
+                .setSmallIcon(old.smallIcon)
+                .setContentTitle(context.getString(channel.name))
+                .setContentText(context.getString(R.string.notify_text_hidden))
+                .setOnlyAlertOnce(true)
+                .build()
+            manager.notify(shown.tag, shown.id, built)
+        }
+    }
+
+    /** True if the text must be hidden now. An answer that cannot be had counts as yes. */
+    private fun mustHide(): Boolean = try {
+        hidesText()
+    } catch (_: Exception) {
+        true
+    }
+
+    /** The parts every notification of the suite shares. */
+    private fun builder(channelId: String, atMillis: Long, tap: PendingIntent?): Notification.Builder =
+        Notification.Builder(context, channelId)
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .setWhen(atMillis)
+            .setShowWhen(true)
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
 
     /** Removes the notification with this key. Nothing happens if there is none. */
     fun cancel(key: String) = manager.cancel(key, NOTIFICATION_ID)

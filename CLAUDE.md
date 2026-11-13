@@ -40,7 +40,7 @@ If a task seems to need it, stop and say so in the PR description.
     `core/crypto` all cryptography. `core/backup` backup file format.
     `core/notify` alarms and notifications. `core/sync-client` change-set export
     and import. `core/testing` shared test helpers.
-    `core/security` the recovery key screens, shared by every app.
+    `core/security` the recovery key screens and the app lock, shared by every app.
   - `feature/<app>/...` screens and logic for one app.
   - `app/<app>` thin application modules. `app/catalog` is the debug-only
     design gallery. `app/sync` is the only networked app.

@@ -10,9 +10,16 @@ development.
   the security screen of `core/security`, with sample words that are no
   real key. Tap a state to see it full window. Back returns to the list.
   A switch blocks screenshots on the page, as the screens do in an app.
+- A second page under **Shared screens**, **App lock screens**: the lock
+  screen, the app lock screen with its dialogs and notices, and turning
+  the app lock on, with sample data. Catalog has no app lock: nothing on
+  the page locks, unlocks or shows the system prompt.
+- **Recovery key screens**: the security screen shows the app lock, and
+  a new state shows the end of entering the words after the app lock
+  was turned off.
 - Permissions: still none. Catalog removes `USE_BIOMETRIC`, which
-  `core/security` asks for, and the screens of that module. Catalog holds
-  no keys and never shows the system prompt.
+  `core/security` asks for, and the six screens of that module. Catalog
+  holds no keys and never shows the system prompt.
 
 ## 0.2.0 (2026-11-12)
 

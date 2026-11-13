@@ -14,6 +14,7 @@ import app.shkriuss.core.testing.TestClock
 import java.time.LocalTime
 import java.util.concurrent.Executor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -66,8 +67,12 @@ class NotifyTest {
         context.notify = newNotify()
     }
 
+    /** What the app lock answers about the text of notifications: hide it, show it, or fail. */
+    private var hidesText: () -> Boolean = { false }
+
     /** What the app class builds when the app starts. The worker runs each piece at once, so a test needs no waiting. */
-    private fun newNotify() = Notify(context, listOf(reminders, summaries), app, handler, clock, worker = Executor { it.run() })
+    private fun newNotify() =
+        Notify(context, listOf(reminders, summaries), app, handler, clock, hidesText = { hidesText() }, worker = Executor { it.run() })
 
     private fun waiting() = alarmManager.waiting()
 
@@ -117,7 +122,7 @@ class NotifyTest {
         val otherApp = object : ContextWrapper(context) {
             override fun getApplicationContext(): Context = this
         }
-        val notify = Notify(otherApp, listOf(reminders), app, handler, clock, FakeAlarmScheduler(), Executor { it.run() })
+        val notify = Notify(otherApp, listOf(reminders), app, handler, clock, { false }, FakeAlarmScheduler(), Executor { it.run() })
 
         assertThrows(IllegalStateException::class.java) { notify.start() }
         assertEquals(0, notificationManager.notificationChannels.size)
@@ -405,5 +410,80 @@ class NotifyTest {
 
         // The app handled it, so a reminder that repeats moves on. Android itself drops the notification.
         assertEquals(listOf(Alarm(a, start + HOUR)), app.handled)
+    }
+
+    // While the app lock hides the text.
+
+    /** Every text a notification carries, so a test can look for user content anywhere in it. */
+    private fun textsOf(shown: Notification): List<String> =
+        shown.extras.keySet().mapNotNull { shown.extras.getCharSequence(it)?.toString() } + listOfNotNull(shown.tickerText?.toString())
+
+    private fun assertHidden(shown: Notification, channelName: String) {
+        assertEquals(channelName, shown.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertEquals(context.getString(R.string.notify_text_hidden), shown.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        textsOf(shown).forEach { text ->
+            assertFalse("user content in $text", "plants" in text || "kitchen" in text)
+        }
+    }
+
+    @Test
+    fun whileTheAppLockHidesTheTextANotificationShowsOnlyItsChannel() {
+        hidesText = { true }
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        context.notify.start()
+
+        advanceBy(HOUR)
+
+        val shown = shownBy.getNotification("a", 0)
+        assertHidden(shown, context.getString(android.R.string.ok))
+        assertEquals("the tap still opens the app's screen", open.component, shadowOf(shown.contentIntent).savedIntent.component)
+        assertEquals(Notification.VISIBILITY_PRIVATE, shown.visibility)
+        assertEquals(start + HOUR, shown.`when`)
+    }
+
+    @Test
+    fun whenTheStateOfTheAppLockCannotBeReadTheTextIsHidden() {
+        hidesText = { throw IllegalStateException("The keyset file cannot be read now") }
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        context.notify.start()
+
+        advanceBy(HOUR)
+
+        assertHidden(shownBy.getNotification("a", 0), context.getString(android.R.string.ok))
+    }
+
+    @Test
+    fun hideShownTextPostsTheShownNotificationsAgainInTheHiddenForm() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", "In the kitchen", android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", summaries, "Two plants", null, android.R.drawable.ic_dialog_info, open, start + 1))
+        val tapBefore = shownBy.getNotification("one", 0).contentIntent
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        assertEquals(2, shownBy.size())
+        val one = shownBy.getNotification("one", 0)
+        assertHidden(one, context.getString(android.R.string.ok))
+        assertHidden(shownBy.getNotification("two", 0), context.getString(android.R.string.copy))
+        assertEquals("reminders", one.channelId)
+        assertEquals(start, one.`when`)
+        assertEquals(tapBefore, one.contentIntent)
+        assertEquals("one", shadowOf(one.contentIntent).savedIntent.identifier)
+        assertTrue("no new sound or vibration", one.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
+        assertTrue(one.flags and Notification.FLAG_AUTO_CANCEL != 0)
+    }
+
+    @Test
+    fun hideShownTextLeavesTheTextWhenItIsNotToBeHidden() {
+        context.notify.start()
+        context.notify.notifications.show(
+            ShkNotification("one", reminders, "Water the plants", "In the kitchen", android.R.drawable.ic_dialog_info, open, start),
+        )
+
+        context.notify.hideShownText()
+
+        assertEquals("Water the plants", shownBy.getNotification("one", 0).extras.getString(Notification.EXTRA_TITLE))
     }
 }

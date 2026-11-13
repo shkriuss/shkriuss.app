@@ -71,7 +71,7 @@ class AppLockTest {
         noRecoveryKey.open().files.wrap(fileId, noRecoveryKey.open().files.newFileKey())
         assertFalse(noRecoveryKey.open().appLock.canTurnOn())
         try {
-            noRecoveryKey.open().appLock.beginTurnOn()
+            noRecoveryKey.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId))
             fail("turned the app lock on over a random file-key keyset")
         } catch (_: IllegalStateException) {
             // A random keyset could never come back after the Lock key is lost.
@@ -87,7 +87,7 @@ class AppLockTest {
         assertFalse("an app with the app lock off is never locked", crypto.appLock.isLocked())
         assertEquals(HardwareKeyRef(HardwareKeyKind.UNLOCKED, 1), app.keyOf(KeysetName.FILE_KEY))
 
-        val step = crypto.appLock.beginTurnOn()
+        val step = crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId))
         // Before the prompt: the other keysets already sit under a new key, the app lock is still off.
         assertEquals(HardwareKeyRef(HardwareKeyKind.UNLOCKED, 2), app.keyOf(KeysetName.BACKUP))
         assertEquals(HardwareKeyRef(HardwareKeyKind.UNLOCKED, 1), app.keyOf(KeysetName.FILE_KEY))
@@ -115,7 +115,7 @@ class AppLockTest {
         val app = fixture.app
         val crypto = app.open()
 
-        crypto.appLock.beginTurnOn().finish()
+        crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
 
         assertEquals(listOf("record", "backup", "file-key"), app.store.changes)
         assertEquals(HardwareKeyRef(HardwareKeyKind.BACKGROUND, 2), app.keyOf(KeysetName.RECORD))
@@ -130,7 +130,7 @@ class AppLockTest {
     fun whileLockedFilesNeedThePromptAndRecordsAndBackupsGoOn() {
         val fixture = appWithKeys()
         val app = fixture.app
-        app.open().appLock.beginTurnOn().finish()
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
 
         // The app started again is locked.
         val locked = app.open()
@@ -165,7 +165,7 @@ class AppLockTest {
         val app = fixture.app
         val crypto = app.open()
 
-        crypto.appLock.beginTurnOn().cancel()
+        crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).cancel()
 
         assertEquals(AppLockState.OFF, crypto.appLock.state())
         assertFalse("the unused Lock key is deleted", lockKey.alias in app.hardware.existing())
@@ -176,7 +176,7 @@ class AppLockTest {
 
         // The next try moves nothing again: the other keysets are already off the old key.
         val again = app.open()
-        again.appLock.beginTurnOn().finish()
+        again.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
         assertEquals(listOf("file-key"), app.store.changes)
         assertEquals(setOf("shk.background.1", "shk.unlocked.2", "shk.lock.1"), app.hardware.existing())
         assertFilesOpen(again, fixture)
@@ -192,7 +192,7 @@ class AppLockTest {
                 val crypto = app.open()
                 app.store.stopBeforeChange = stopBefore
                 try {
-                    crypto.appLock.beginTurnOn().finish()
+                    crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
                     fail("did not stop")
                 } catch (_: Stopped) {
                     // The app was killed while the app lock was turned on.
@@ -207,7 +207,7 @@ class AppLockTest {
                 val named = KeysetName.entries.mapNotNull { app.keyOf(it)?.alias }.toSet()
                 assertEquals("stop $stopBefore", named, app.hardware.existing())
 
-                later.appLock.beginTurnOn().finish()
+                later.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
                 assertEquals(AppLockState.ON, app.open().appLock.state())
                 assertRecordsWork(app.open(), fixture)
             }
@@ -224,7 +224,7 @@ class AppLockTest {
             override fun delete(key: HardwareKeyRef) = throw HardwareKeyNotUsable()
         }
         val vault = KeyVault(TestKeys.water, KeysetFiles(app.folder), failing)
-        AppLock(vault).beginTurnOn().finish()
+        AppLock(vault).beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
         assertTrue("shk.unlocked.1" in app.hardware.existing())
 
         val later = app.open()
@@ -236,7 +236,7 @@ class AppLockTest {
     fun turningItOffPutsFileKeyBackUnderAKeyWithoutPromptAndDeletesTheLockKey() {
         val fixture = appWithKeys()
         val app = fixture.app
-        app.open().appLock.beginTurnOn().finish()
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
 
         val locked = app.open()
         assertEquals(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW, TestKeys.answerOf { locked.appLock.turnOff() })
@@ -252,7 +252,7 @@ class AppLockTest {
         assertTrue(app.open().appLock.canTurnOn())
 
         // A new Lock key each time the app lock is turned on.
-        app.open().appLock.beginTurnOn().finish()
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
         assertEquals(AppLockState.ON, app.open().appLock.state())
         assertEquals(3, app.hardware.made.count { it.kind == HardwareKeyKind.UNLOCKED })
     }
@@ -261,7 +261,7 @@ class AppLockTest {
     fun screenLockRemovedWhileLockedTheAppLockIsResetAndTheWordsOpenTheFiles() {
         val fixture = appWithKeys()
         val app = fixture.app
-        app.open().appLock.beginTurnOn().finish()
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
 
         app.hardware.removeScreenLock()
         val reset = app.open()
@@ -289,7 +289,7 @@ class AppLockTest {
         val fixture = appWithKeys()
         val app = fixture.app
         val crypto = app.open()
-        crypto.appLock.beginTurnOn().finish()
+        crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
         assertFalse(crypto.appLock.isLocked())
 
         app.hardware.removeScreenLock()
@@ -305,7 +305,7 @@ class AppLockTest {
     fun theFileKeyKeysetOpensOnlyWithItsOwnLockKey() {
         val fixture = appWithKeys()
         val app = fixture.app
-        app.open().appLock.beginTurnOn().finish()
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
         // Another key under the same alias: the blob is refused, and nothing is opened.
         app.hardware.put(lockKey, ByteArray(32) { 1 })
 
@@ -318,7 +318,7 @@ class AppLockTest {
     fun afterAnUpdateToAndroid15OnlyBackupMovesWhileTheAppLockIsOn() {
         val fixture = appWithKeys(SoftwareHardwareKeys(unlockedKeyAllowed = false))
         val app = fixture.app
-        app.open().appLock.beginTurnOn().finish()
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
 
         app.hardware.unlockedKeyAllowed = true
         app.open()

@@ -251,13 +251,15 @@ second build must write the same mapping file, or the release stops. See
   since" query, the example migration and the migration test helpers,
   on the system SQLite driver under Robolectric
   ([architecture/data.md](../architecture/data.md#tests)).
-- `core/crypto` has 22 test classes with 180 tests. They are the items 1
-  to 8 and 10 to 12 of "What the tests must cover" in
+- `core/crypto` has 23 test classes with 190 tests. They are the items 1
+  to 8 and 10 to 13 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
   (`BackupExampleFileTest`, see `core/backup` below). `StartOverTest` and
   `RepairTest` came with step 1.7, session A: starting over after a setup
   that stopped, a damaged keyset file, and giving file keys up.
+  `WordsProofTest` came with step 1.7, session B: the checks of the
+  recovery words before the app lock is turned on.
   - No Android Keystore exists on the JVM. So the tests pass a software
     stand-in for the hardware keys, `SoftwareHardwareKeys`, with the same
     byte layout. It can act like a phone that is locked, a Keystore that
@@ -350,7 +352,7 @@ second build must write the same mapping file, or the release stops. See
   section headers as headings, the loading state as "in progress", and
   the loading and error states to try as polite live regions.
 
-- `core/notify` has five test classes with 65 tests
+- `core/notify` has five test classes with 69 tests
   ([notifications.md](../architecture/notifications.md#tests)).
   - `AlarmSyncTest` runs the rules for alarms with `TestClock` of
     `core/testing` and a stand-in for Android's alarms. No test waits
@@ -370,7 +372,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has four test classes with 29 tests
+- `core/security` has nine test classes with 79 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -383,6 +385,21 @@ second build must write the same mapping file, or the release stops. See
     a new key in a plain activity, which it adds to Robolectric's
     package manager first, as the tests of `core/design` do.
   - `WordInputTest` checks what a word field accepts, with no Android.
+  - `AppLockWatcherTest` starts and stops plain screens with
+    Robolectric's activity controller, moves a clock of its own instead
+    of Android's, and turns Robolectric's screen off and on. It checks
+    when the app locks and what the windows hide.
+  - `AppLockGateTest` draws a screen in `AppLockGate`, with real drawing
+    (`GraphicsMode.NATIVE`), so that it can count the frames of the
+    screen while the app is locked. It delivers a picker's result with
+    Robolectric while the app is locked. `AppLockGateWithoutAWatcherTest`
+    uses an app class that never starts its watcher.
+  - `AppLockViewModelsTest` runs the lock screen, the app lock screen and
+    turning the app lock on through their ViewModels, with real keys, as
+    `FlowViewModelsTest` does. A dispatcher of its own holds background
+    work back, so that a test can stop the screen while the prompt still
+    reads the kept key. `AppLockActivitiesTest` starts the app lock
+    screen and checks its labels and touch targets.
 
 ### Instrumented tests
 
