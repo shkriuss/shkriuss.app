@@ -584,7 +584,92 @@ docs/security/README.md, and the table "What the design protects" in
 crypto-design.md if the two differ. End with every open question.
 ```
 
+### 1.9 Build checks from the threat model
+
+Model: `opus`. Effort: `high`. Mode: **Plan** first. Run it after step 1.8
+and before step 2.2. It answers points 1, 2 and 3 under "Found while
+writing this page" in
+[threat-model.md](../security/threat-model.md#found-while-writing-this-page).
+
+```text
+Read CLAUDE.md, docs/security/threat-model.md (the points 1, 2 and 3
+under "Found while writing this page") and the build checks that exist:
+CheckApkRulesTask.kt, CheckRoomSchemasTask.kt and CheckDaoRulesTask.kt
+in android/build-logic, with docs/development/build.md. Build these
+checks. They run in `./gradlew check`, and a pull request cannot pass
+without them.
+
+1. Every app's merged manifest turns Android's own backup and device
+   transfer off. Fail with the app's name and the attribute that is
+   wrong. Decide with me, before any code, what exactly the check reads
+   (the backup attribute, the data extraction rules, or both).
+2. No APK uses a WebView or loads code at runtime (hard rule 1, ADR
+   0019): no WebView class, no DexClassLoader or other class loader
+   that reads code from a file or the network. Run it on the release
+   APK, like the other APK rules. If a library that ships in an app
+   today trips it, stop. Do not allow it, do not exclude it. Tell me
+   which library, which app and which class, and wait.
+3. One check for all modules that main code does not log: no call of
+   `android.util.Log` or `println` in main source sets, in any module.
+   The test of core/crypto that does this today is replaced by this
+   check, not weakened. Say how the check treats test code and
+   Catalog. Hard rule 10 is the reason: user content must never reach a
+   log.
+
+Each check gets a test that shows it fails on a sample that breaks the
+rule, and passes on one that does not. Update docs/development/build.md,
+docs/security/threat-model.md (points 1, 2 and 3, and the lines of
+STORAGE-2, PLATFORM-2 and CODE-4 that say Open) and the commands in
+CLAUDE.md only if they change. A weaker rule is never the way to a green
+build.
+
+I am the owner and I ask you to change these owner-only files for these
+checks, and for nothing else: CheckApkRulesTask.kt, the convention
+plugins that connect the checks to the build
+(AndroidApplicationConventionPlugin.kt, and AndroidCommon.kt if the
+logging check needs it), and .github/CODEOWNERS, to list every new check
+file as owner-only. Change only the lines these checks need in each.
+```
+
+### 1.10 Overlays and accessibility data on the security screens
+
+Model: `opus`. Effort: `high`. Mode: **Plan** first. Run it after step 1.9
+and before step 2.5. It answers point 7 under "Found while writing this
+page" in
+[threat-model.md](../security/threat-model.md#found-while-writing-this-page).
+
+```text
+Read CLAUDE.md, docs/security/crypto-design.md,
+docs/architecture/security-screens.md and docs/security/threat-model.md
+(MASVS-PLATFORM-3 and CODE-1, and point 7 under "Found while writing
+this page"). The recovery key screens and the app lock already block
+screenshots. They do not yet protect against another app that draws over
+them, and they do not tell accessibility services that their content is
+sensitive.
+
+First decide with me, before any code:
+- What Android 13 to 17 offers against overlays and against tapjacking
+  on the security screens, and what each option costs.
+- What Android offers to mark a view as sensitive for accessibility
+  services, on which Android versions, and what happens to TalkBack, which
+  we must keep working.
+- Which screens: the words, the entry of the words, the app lock screen
+  and the lock screen. The words most of all.
+- Whether any option needs a permission. A new permission needs its ADR,
+  its entry in docs/security/permissions.md, and the owner's leave for
+  the allow list of the APK rules check. Ask me before you plan one.
+
+Then build what we agreed, in core/security, with tests and screenshot
+tests where the screens change, the user guide, and the Catalog
+changelog. TalkBack must still read every label. Update
+docs/architecture/security-screens.md and the threat model (point 7,
+PLATFORM-3 and CODE-1). If we decide to do nothing for a case, write it
+as an accepted deviation with the reason.
+```
+
 ### Phase 1 gate (you)
+
+The owner made these decisions on 2026-11-13.
 
 The design part was done on 2026-11-12 with Catalog 0.2.0, on the Pixel
 9 Pro, the Pixel Tablet and the Pixel 6a. It covers the tokens and
@@ -592,11 +677,32 @@ components of steps 1.1 and 1.2. The teal accent and the six text styles
 stay as they are ([ADR 0017](../adr/0017-design-system-tokens.md)). The
 rest of the gate waits for steps 1.3 to 1.7.
 
-1. Install Catalog on the Pixel 9 Pro, Pixel Tablet and Pixel 6a.
+The look at Catalog on the three devices, for the shared screens of steps
+1.3 to 1.7, waits for Catalog 0.3.0. These steps stay open until then:
+
+1. Install Catalog 0.3.0 on the Pixel 9 Pro, Pixel Tablet and Pixel 6a.
 2. Look at every page in light and dark, with large font, with TalkBack.
 3. Write what you dislike as a comment. Use prompt R3 to change it.
-4. Decide a step for each point under "Found while writing this page"
-   in [threat-model.md](../security/threat-model.md#found-while-writing-this-page).
+
+Decided on 2026-11-13:
+
+4. The emulator jobs. "Emulator (Android 13)", "(Android 14)" and
+   "(Android 15)" become required checks. "Emulator (Android 17)" does
+   not, while its image crashes Android's system process. The owner turns
+   the three on in the ruleset
+   ([ci.md](ci.md#the-emulator-jobs)) and decides again at the Phase 2
+   gate.
+5. A step for each point under "Found while writing this page" in
+   [threat-model.md](../security/threat-model.md#found-while-writing-this-page):
+
+   | Points | Step |
+   |---|---|
+   | 1, 2, 3 | New step 1.9, before step 2.2 |
+   | 4, 8, 9, 10 | Step 2.6 |
+   | 5 | Decided now: no forced update. Step 5.1 decides again for the Sync app. |
+   | 6, 12 | Step 5.1 |
+   | 7 | New step 1.10, before step 2.5 |
+   | 11 | New step 2.7, before the Phase 2 gate |
 
 ---
 
@@ -673,10 +779,26 @@ Steps:
 
 ### 2.6 Release preparation
 
-Model: `sonnet`. Effort: `medium`.
+Model: `opus`. Effort: `high`. Mode: **Plan** first, because it decides
+points 4, 9 and 10 with me. The rest is routine.
 
 ```text
 Prepare Water 1.0.0 for release. Do not start the release workflow.
+
+First decide with me, before any file changes. They answer points 4, 8, 9
+and 10 under "Found while writing this page" in
+docs/security/threat-model.md:
+- How dependencies are checked for known vulnerabilities (point 4). First
+  try what GitHub offers by itself, for example the dependency graph and
+  Dependabot alerts, and tell me what each shows for the Gradle project
+  and what I must turn on in the repository settings, step by step, for a
+  phone. A tool outside GitHub needs its own ADR (hard rule 5). Write the
+  decision where the threat model says Open.
+- My GitHub and Cloudflare accounts, and the domain (points 9 and 10). I
+  check them myself. Ask me what to record. Write only the rule, for
+  example "the owner's accounts have a second factor", in
+  docs/security/. Never write details of my accounts or domain, no
+  names and no settings values.
 
 - User guide in `docs/user/water.md`, written for a phone screen.
 - `docs/security/permissions.md` and the data inventory are complete.
@@ -687,16 +809,64 @@ Prepare Water 1.0.0 for release. Do not start the release workflow.
   step 10), which are Open until now, as exact steps.
 - `docs/apps/water/release-checklist-1.0.0.md`: a copy of
   `docs/development/release-checklist.md`, filled in for Water 1.0.0.
+- A privacy page (point 8): `docs/user/privacy.md` in the user guide and a
+  page on the hub site. Plain English. What each app stores, that data
+  apps have no network permission, what the Sync app and its server
+  can see, and that there is no tracking. It must match the data
+  inventory and docs/security/permissions.md. Update the threat model
+  (PRIVACY-3) and the hub site's page list.
 - Add Water to the hub site and to the release workflow's list of apps:
   the `app` options and the "Check the inputs" step of every job (I am the
   owner and I ask for exactly that change).
 - List every known problem honestly.
 ```
 
+### 2.7 Restore and rotation rehearsal
+
+Model: `opus`. Effort: `xhigh`. Mode: **Plan** first. Run it after step
+2.6 and before the Phase 2 gate. It answers point 11 under "Found while
+writing this page" in
+[threat-model.md](../security/threat-model.md#found-while-writing-this-page).
+
+```text
+Read CLAUDE.md, ADR 0013, docs/development/release.md and
+docs/security/threat-model.md (point 11 and open question 18). Plan the
+rehearsal of ADR 0013, point 8: restoring the signing key from its
+backup, and rotating it, both with a throwaway key and never the real
+one. Write steps I can do on a phone. Do not change signing config,
+release workflows or fingerprints.md, and never print or ask for a
+secret.
+
+First decide with me, before any file changes:
+- Where the rehearsal runs, so that the real `release` environment and
+  its secrets are never touched.
+- How a rotation works with APK signature scheme v3.1, and how that fits
+  ADR 0013, point 14, which says the release job signs with scheme v3
+  only. If they disagree, say so and propose the change as an ADR.
+- What I must do, in order, after a rotation: the fingerprint file, the
+  hub page, Obtainium and AppVerifier, and what users must do.
+
+Then write:
+- The rehearsal steps in docs/development/ and what to look for at each
+  step, with a place to record the date and the result.
+- The decision record for a rotation (ADR) and for a stolen key: how I
+  tell, what I do in the first hour, what I tell users, what happens to
+  releases already signed. Plain English, short steps.
+- Update ADR 0013, the threat model (point 11 and open question 18) and
+  docs/development/release.md.
+
+If the rehearsal needs a change to an owner-only file, stop and tell me
+which and why. Do not make the change.
+```
+
 ### Phase 2 gate (you)
 
 Work through the release checklist on the Pixel 9 Pro, check the layout on the
 other two devices, use the app daily for two weeks, then run the release.
+
+Also at this gate: decide again whether "Emulator (Android 17)" becomes a
+required check ([ci.md](ci.md#the-emulator-jobs)). Do the rehearsal of step
+2.7 before you run the release.
 
 ---
 
@@ -783,6 +953,17 @@ the server can still learn (sizes, timing, counts); format versioning.
 
 The server stores only ciphertext and must never be trusted. End with a list
 of attacks you considered and how each one fails, and every open question.
+
+Also decide with me, and record each in the document or an ADR. They are
+points 5, 6 and 12 under "Found while writing this page" in
+docs/security/threat-model.md:
+- Whether the Sync app needs a way to make users update. For the data apps
+  I decided on 2026-11-13: no forced update, because they have no
+  network and updates come through Obtainium. The Sync app has a network,
+  so this is decided again for it.
+- The Sync app's TLS settings, and whether it pins the server
+  (NETWORK-1 and NETWORK-2).
+- Whether the recovery words alone can add a device to the sync server.
 ```
 
 ### 5.2 to 5.5 Build it

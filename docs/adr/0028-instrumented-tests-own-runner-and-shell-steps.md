@@ -131,9 +131,11 @@
   checksum of our own. `sdkmanager` takes the newest revision and checks
   the download against Google's own list. So a new revision can change
   what a run does, and the log of a run says which revisions it used.
-- The four emulator jobs are not required checks for now. The owner
-  decides at the Phase 1 gate
-  ([ci.md](../development/ci.md#required-checks)).
+- The owner decided at the Phase 1 gate, on 2026-11-13: the jobs for
+  Android 13, 14 and 15 become required checks, and the job for Android
+  17 does not, while its image crashes Android's system process. The
+  owner decides again at the Phase 2 gate. See
+  [ci.md](../development/ci.md#the-emulator-jobs).
 - Compose's test rule for instrumented tests
   (`androidx.compose.ui:ui-test-junit4`) expects the AndroidX runner. The
   plan puts Compose accessibility checks into emulator tests (section 11
