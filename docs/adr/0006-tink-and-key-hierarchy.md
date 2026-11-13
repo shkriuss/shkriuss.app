@@ -182,6 +182,12 @@ proof that a key is gone. See
 - A keyset file under a hardware key can be the only way to a user's
   files. crypto-design.md has the rules for making, replacing and losing
   a hardware key. A key is never made again because an operation failed.
+  - Step 1.7, session A gave those rules three exceptions, each written
+    there with why it is safe: start over after a setup that stopped,
+    repair of a damaged keyset file with proven words, and giving up
+    file keys that no words can bring back. A damaged keyset file is
+    always copied aside first, and never deleted
+    ([crypto-design.md](../security/crypto-design.md#decided-in-step-17-session-a)).
 - For a key that needs the prompt, associated data is given to the
   cipher only after the prompt succeeds. Tink's helper does it earlier,
   which is one more reason it cannot be used for these keys.

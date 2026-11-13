@@ -50,6 +50,9 @@ class ShkCrypto internal constructor(private val vault: KeyVault) {
             appLock = appLock.state(),
             hasScreenLock = vault.hardware.hasScreenLock(),
             fileKeyMoveIsPending = vault.isStored(KeysetName.FILE_KEY_OLD),
+            setupIsUnfinished = setup.isUnfinished(),
+            needsRepair = setup.needsRepair(),
+            filesCanBeGivenUp = setup.damagedFileKeysToGiveUp().isNotEmpty(),
             hardwareKeys = named.sortedWith(compareBy({ it.kind }, { it.number })).mapNotNull { key ->
                 try {
                     HardwareKeyStatus(key.kind, vault.hardware.securityLevel(key))

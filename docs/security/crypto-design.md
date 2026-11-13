@@ -18,6 +18,11 @@ follows this page.
   What an emulator cannot show is a list of steps for the owner's three
   devices
   ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+- Step 1.7, session A, on 2026-11-13: starting over after a setup that
+  stopped, repairing a damaged keyset file, and giving up file keys that
+  no words can bring back, with fixes to the code of session B
+  ([Decided in step 1.7, session A](#decided-in-step-17-session-a)).
+  The code came first, in its own pull request.
 - Not built yet: the screens (step 1.7), the handover between apps
   (step 3.0), sealing file keys again in the database (the first app
   that stores files), and a new recovery key (Phase 5).
@@ -38,8 +43,9 @@ follows this page.
   [CLAUDE.md](../../CLAUDE.md)).
 
 The page ends with every [assumption](#assumptions), the owner's
-[decisions on pull request 22](#decided-on-pull-request-22) and
-[in session B](#decided-in-session-b), and every
+[decisions on pull request 22](#decided-on-pull-request-22),
+[in session B](#decided-in-session-b) and
+[in step 1.7, session A](#decided-in-step-17-session-a), and every
 [open question](#open-questions) that is left.
 
 ## At a glance
@@ -369,14 +375,32 @@ destroying it.
    - A tag that the Keystore refuses is neither: the blob is "damaged or
      changed".
 2. A keyset file that cannot be opened is never deleted or written over,
-   unless rule 1 says its hardware key is gone. This holds without
-   exception. So a keyset file that is damaged under a living hardware
-   key can never be replaced, not even with the right recovery words.
-3. A keyset is made only when its file does not exist. Two cases are not
-   "made" in this sense: a keyset whose hardware key is gone is stored
-   again from the recovery words (rule 2), and the random `file-key` is
-   replaced by the derived one
-   ([The file-key keyset without a recovery key](#the-file-key-keyset-without-a-recovery-key)).
+   unless rule 1 says its hardware key is gone. Step 1.7, session A gave
+   this rule three exceptions. Each one writes over or removes a file
+   whose hardware key lives. Each one is safe for the reason given:
+   - **Repair.** A damaged `record`, `backup` or `file-key` is written
+     over with the keyset the recovery words derive. Only if another
+     stored keyset that opens is exactly the one those words derive.
+     Safe: the words are proven, and the damaged bytes are first copied
+     to the set-aside folder and kept
+     ([A damaged keyset file](#a-damaged-keyset-file)).
+   - **Giving up.** A damaged keyset that no words can bring back is
+     copied to the set-aside folder and then removed, when the user asks.
+     Safe: nothing could open it, and the copy is kept
+     ([A damaged keyset file](#a-damaged-keyset-file)).
+   - **Start over.** Start over writes over `backup` and grows
+     `file-key-old`, although their hardware keys live and both files
+     open. Safe: that `backup` was never used, and `file-key-old` only
+     gains keys
+     ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
+3. A keyset is made only when its file does not exist. Four cases are not
+   "made" in this sense:
+   - a keyset whose hardware key is gone is stored again from the
+     recovery words (rule 2);
+   - the random `file-key` is replaced by the derived one
+     ([The file-key keyset without a recovery key](#the-file-key-keyset-without-a-recovery-key));
+   - a damaged keyset is stored again by a repair (rule 2);
+   - start over stores the keysets of the new recovery key (rule 2).
 4. A new hardware key gets the number that is one above the highest
    number of its kind, counted over the aliases that exist and the
    numbers that keyset files name. A key is never made under an alias
@@ -398,6 +422,10 @@ destroying it.
    keyset file. It deletes only keys that the Keystore's list shows. A
    file in `shk-keys/` that the code does not know counts as "could not
    read every header".
+   - The set-aside folder is not read here. A set-aside file names no
+     hardware key, so the key that wrapped it is deleted like any key
+     that no keyset file names. The Keystore refused that blob, so the
+     key could never open it again.
 
 #### Why four keys
 
@@ -448,6 +476,7 @@ Unlocked key cannot be used yet, and the move waits for a later start.
 | `record` | `XChaCha20Poly1305Key`, variant `TINK` | Derived from the recovery key | Background key |
 | `backup` | `AesGcmHkdfStreamingKey`, the predefined `AES256_GCM_HKDF_1MB` | Derived from the recovery key | Unlocked key |
 | `file-key` | `XChaCha20Poly1305Key`, variant `TINK` | No recovery key: one random key. With one: derived from it. | Lock key if the app lock is on, else Unlocked key |
+| `file-key-old` | `XChaCha20Poly1305Key`, variant `TINK`. One or more keys: the random key, and after a start over also the keys of each setup that stopped. | Kept from `file-key` when the app gets its derived keys, or by start over | Unlocked key |
 | File key | `AesGcmHkdfStreamingKey`, `AES256_GCM_HKDF_1MB` | Random, one per file content | The `file-key` keyset |
 
 `AES256_GCM_HKDF_1MB` means: a 32-byte key, a 32-byte AES-256-GCM key
@@ -455,7 +484,8 @@ derived for each stream, HKDF-SHA256, and ciphertext segments of
 1,048,576 bytes.
 
 After a keyset is read, the code checks that it holds only the key type
-and parameters of this table. Anything else is refused.
+and parameters of this table, and that every key has its own ID.
+Anything else is refused.
 
 Which hardware key may wrap which keyset. A reader refuses every other
 pair:
@@ -487,9 +517,14 @@ pair:
    same key the same ID on every device with no coordination. HKDF
    outputs under different labels are independent, so the ID tells
    nothing about any key.
-4. A new recovery key whose key ID is 0, or equal to the ID of a recovery
-   key the app already has, is thrown away and made again. The chance is
+4. A new recovery key whose key ID is 0, or equal to the ID of any key in
+   a keyset the app stores, is thrown away and made again. The chance is
    about 1 in 4 billion.
+5. A wrapped file key names the key that sealed it only by its ID. So no
+   ID may stand for two different keys in `file-key` and `file-key-old`.
+   Entered words whose ID already stands for another key there are
+   refused: nothing is stored, and the answer says that the key ID is in
+   use. The chance is the same.
 
 ### Deriving keys
 
@@ -567,14 +602,20 @@ When the app gets its recovery-key-derived keys:
 
 1. The old keyset is stored as `file-key-old`. Only then does the derived
    keyset become `file-key`. If `file-key-old` already exists, it is
-   never written again. So doing this twice, after a stop in the middle,
-   cannot replace the old keyset with the new one.
+   never written again here. So doing this twice, after a stop in the
+   middle, cannot replace the old keyset with the new one. Only start
+   over writes it again, and only to add keys
+   ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
 2. The app opens each wrapped file key with the old keyset and seals it
    again with the new one. It writes the row through `RecordWriter`.
    This can stop and go on later.
-3. When no row is left, `file-key-old` is deleted.
+3. When no row is left, `file-key-old` is deleted. Only once `record`
+   exists: before that, the setup is not finished. A damaged
+   `file-key-old` is copied to the set-aside folder first.
 4. To open a wrapped file key, the app tries `file-key` first, then
-   `file-key-old`.
+   `file-key-old`. A damaged `file-key-old` counts as absent here, so the
+   files that `file-key` sealed still open. The user can give up the
+   others ([A damaged keyset file](#a-damaged-keyset-file)).
 5. The app makes a backup, sends file records to sync and can turn the
    app lock on only when both are true: `record` exists, and
    `file-key-old` does not. A file key sealed by a key that exists only
@@ -602,6 +643,7 @@ When the app gets its recovery-key-derived keys:
 | File keys | The file's database row | Wrapped file key (kind 4) |
 | Files | The app's private storage | File stream (kind 2) |
 | The recovery key in the clear | Nowhere. On paper, with the user. | 24 words |
+| A damaged keyset file, kept | One file each in `shk-keys-set-aside/`, next to `shk-keys/`, named `<name>-<n>` | The damaged bytes, as they were |
 
 1. Every app turns Android's own backup and device transfer off, as
    Catalog does (`android:allowBackup="false"` and data extraction rules
@@ -611,6 +653,13 @@ When the app gets its recovery-key-derived keys:
      `backup`, `file-key`, `file-key-old`, `recovery`.
    - While a file is replaced, the new one is written as `<name>.tmp`. A
      `.tmp` file that a stop left behind is deleted at start.
+   - Before a damaged keyset file is written over or given up, it is
+     copied to `shk-keys-set-aside/<name>-<n>`. The copy is written as a
+     new file, flushed, renamed to the next free number without
+     replacing anything, and the folder is flushed. A copy with the same
+     bytes is not made twice. Nothing deletes a set-aside file.
+   - The set-aside folder is not inside `shk-keys/`: there, a file the
+     code does not know would stop rule 8 for good.
 3. The app's storage is credential-encrypted. No part of an app runs
    before the first unlock after a restart.
 
@@ -630,6 +679,10 @@ When the app gets its recovery-key-derived keys:
    moment may finish. Nothing new starts.
 6. Kotlin cannot wipe memory for certain. Dropping references is the best
    the app can do. Keys are held as Tink objects, never as text.
+7. Every keyset in memory is dropped when any keyset file is written or
+   removed. The next use reads the files again. A keyset kept from before
+   a change that failed half way would seal with the wrong key. Only the
+   app lock keeps `file-key` again right after its own write.
 
 ## Nonces and key IDs
 
@@ -1046,19 +1099,26 @@ when the phone is lost. The paper copy is the backup.
      finish a setup that already stored a derived keyset. Other words
      would leave keysets of two recovery keys, or lose the keys of files
      that were added in between. The owner decided this in session B.
-     How a user who cannot give the same words starts over is an
-     [open question](#open-questions).
+     A user who cannot give the same words can start over
+     ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
    - A stored keyset that cannot be opened now stops the setup, and
      nothing is written: "not usable now" if its hardware key cannot be
-     used, "damaged or changed" if the file is damaged.
+     used. A damaged file stops it too, with "damaged or changed", unless
+     the words are proven and it is repaired
+     ([A damaged keyset file](#a-damaged-keyset-file)). A damaged
+     `file-key-old` does not stop it, and is left as it is.
    - A stored keyset is left as it is when it is the right one. It is
-     stored again only when its file is missing or its hardware key is
-     gone. `file-key` under a Lock key cannot be opened without the
-     prompt. It is left as it is.
+     stored again only when its file is missing, its hardware key is
+     gone, or it is damaged and repaired. `file-key` under a Lock key
+     cannot be opened without the prompt. It is left as it is, unless a
+     prompt found it damaged.
 5. If the phone has a screen lock, the app keeps the recovery key: it
    makes a Recovery guard, shows the system prompt, and stores the
    `recovery` keyset. The app is now a keeper. If the user cancels the
-   prompt, the key is not kept and everything else still works.
+   prompt, the key is not kept and everything else still works. The app
+   keeps only the current recovery key of its stored `record`. Any other
+   key is refused, so the words it shows again are always the ones its
+   keys come from.
 6. Before step 5, if another keeper app is already on the phone, the app
    asks whether to keep the key here too. With no other keeper it keeps
    the key without asking. An app can learn of other keepers only through
@@ -1131,16 +1191,18 @@ alphanumeric mode and is at most 228 characters.
    equal. The key ID alone is a name, not a proof: other words with the
    same four bytes can be found. A different recovery key is taken only
    through "new recovery key" (see [Key rotation](#key-rotation)).
-   - The code gives one of three results: the current recovery key, an
-     older recovery key of the keyset, or a different one. For the last
-     two nothing is stored. What the screen says then belongs to step
-     1.7.
+   - The code gives one of four results: the current recovery key, an
+     older recovery key of the keyset, a different one, or a key whose
+     key ID is in use
+     ([The recovery key and its key ID](#the-recovery-key-and-its-key-id),
+     point 5). For the last three nothing is stored. What the screen
+     says then belongs to step 1.7.
    - Entered words whose key ID is 0 are accepted. Only a new recovery
      key with that ID is made again.
 6. Then as "Creating it" from step 4. The app stores each derived keyset
-   whose file is missing or whose hardware key is gone. It leaves the
-   others as they are. An app where the words were entered is a keeper,
-   if the phone has a screen lock.
+   whose file is missing, whose hardware key is gone, or that is damaged
+   and repaired. It leaves the others as they are. An app where the
+   words were entered is a keeper, if the phone has a screen lock.
 
 ### Screens that show or take the words
 
@@ -1220,6 +1282,108 @@ in a handover with a real app.
    taking the words once.
 6. The app's security screen says that the phone has no screen lock and
    what that means.
+
+### Starting over after a setup that stopped
+
+Decided by the owner on 2026-11-13, in step 1.7, session A (open
+question 11).
+
+A setup stopped half way when some derived keysets are stored, but not
+`record`. The same words finish it ("Creating it", step 4). A user who
+cannot give them can start over:
+
+1. Start over is offered only while the setup is unfinished: there is no
+   `record`, no kept recovery key, and a `backup` or a `file-key-old`
+   file. The user asks for it, and makes a new recovery key or enters
+   other words.
+2. The stored `file-key` is kept. It joins `file-key-old`, which then
+   holds every key it held before and every key of `file-key`. The
+   primary of `file-key-old` stays its primary. `file-key-old` is
+   written only when it gains a key.
+3. Then `file-key`, `backup` and `record` are stored from the new
+   recovery key, in the order of "Creating it". The `backup` of the
+   stopped setup is written over.
+4. The move of
+   [The file-key keyset without a recovery key](#the-file-key-keyset-without-a-recovery-key)
+   then seals every file key again under the new `file-key`.
+5. Each step can be done twice without harm. After a stop part way, start
+   over runs again, with the same words or with other words. Until it
+   finishes, entering the new words alone answers "a different recovery
+   key", because the old `backup` is still there.
+6. Start over stops, and writes nothing, if a keyset cannot be judged
+   now, if `file-key` or `file-key-old` is damaged (the user gives those
+   files up first), or if a key ID would stand for two keys.
+
+Start over writes over keyset files whose hardware key lives. That is an
+exception to rule 2 under "Rules for making, replacing and losing a
+hardware key". It is safe:
+
+- The `backup` keyset of a stopped setup was never used. A backup can be
+  made only once `record` exists, and nothing is sealed for sync without
+  `record`. So no backup file and no sealed record needs it.
+- `file-key-old` only gains keys. Every file key that it or `file-key`
+  opened before still opens.
+- `record` is written last. So a finished setup never holds keysets of
+  two recovery keys.
+- No recovery key is kept yet: keeping comes after `record`. So no kept
+  key can show the old words.
+- The keys of the stopped setup never left the phone.
+
+### A damaged keyset file
+
+Decided by the owner on 2026-11-13, in step 1.7, session A (open
+question 12).
+
+A keyset file is damaged when the Keystore refuses its tag, or when what
+it opens is not a keyset of the right kind. There are two ways out.
+
+**Repair with proven words**, for `record`, `backup`, `file-key` and
+`recovery`:
+
+1. The user enters the 24 words.
+2. The words are proven when another stored keyset opens now and is
+   exactly the keyset they derive: the same keys, no more and no fewer.
+   Then each damaged keyset among `record`, `backup` and `file-key` is
+   repaired. If nothing proves the words, nothing is written.
+3. The damaged file is first copied to the set-aside folder and kept.
+   Then the keyset is written over it in the usual way (rule 6). It is
+   never moved: a stop in between would leave `record` missing, and a
+   finished app would then look unfinished.
+4. A file under a key that needs the prompt shows its damage only when a
+   prompt opens it. The app remembers that in memory, for as long as it
+   runs. Then:
+   - `file-key` under a Lock key is stored again under a key that needs
+     no prompt: the Unlocked key, or the Background key on Android 13
+     and 14. The Lock key is deleted, and the app lock is off. The app
+     lock screens (step 1.7, session B) tell the user.
+   - A kept recovery key is replaced when the user keeps the words again.
+     The damaged file is copied aside first. Just before, the file is
+     read again. If it changed since the step began, nothing happens.
+5. The security screen says when a keyset file can be repaired.
+
+**Give up the files**, for the keysets that no words can bring back: a
+damaged `file-key-old`, and a damaged `file-key` while the app has no
+`record`. That is an app with no recovery key yet, whose `file-key` is
+random, or an unfinished setup.
+
+1. It is offered only when such a keyset is damaged. Never while it
+   opens, so never for a move that is only unfinished.
+2. Before the user confirms, the screen says plainly that those files
+   can then not be opened, on any device.
+3. The keyset file is copied to the set-aside folder, then removed.
+4. Backup, sync of file records and the app lock then work again. An app
+   with no recovery key makes a new random `file-key` for its next file.
+5. A damaged `file-key` of a finished setup is never given up. The words
+   repair it, and without it the app could never make a `file-key`
+   again.
+
+Until then, a damaged `file-key-old` counts as absent when a file is
+opened, so the files that `file-key` sealed still open. How an app shows
+the files that were given up is an [open question](#open-questions).
+
+Writing over or removing a damaged file is an exception to rule 2. It is
+safe: the damaged bytes are kept in the set-aside folder, and the keyset
+that replaces them is the one the proven words derive.
 
 ## When things change
 
@@ -1616,6 +1780,19 @@ constructor, and the tests pass a software one with the same byte layout.
    the owner's three devices. Built: the tests are in
    `android/core/crypto/src/androidTest/`, and the steps are in
    [emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices).
+10. Step 1.7, session A: start over. Stopped before each change, then
+    started over with the same words and with other words; files added
+    in between; Android 13 and 14, and the move to Android 15 between
+    two tries. `file-key-old` only grows. A key ID that would stand for
+    two keys is refused. In `StartOverTest`.
+11. Step 1.7, session A: a damaged keyset file. Repaired with proven
+    words; refused without proof, with other words, and with a proof
+    that holds more keys; a stop after the copy; a set-aside copy is
+    never written over; damage that a prompt found; giving up, and what
+    is never given up. In `RepairTest` and `KeysetFilesTest`.
+12. Step 1.7, session A: every keyset in memory is dropped after a write,
+    so that a change that failed half way leaves nothing stale behind.
+    In `StartOverTest`.
 
 ## Assumptions
 
@@ -1748,6 +1925,12 @@ owner. Each one is a place to object.
     every vector of this page and the published ones on emulators with
     Android 13, 14, 15 and 17. All pass. Android's own provider is there, and no
     Play services provider.
+33. After a prompt that succeeded, the Keystore answers a blob whose tag
+    is wrong with `AEADBadTagException`, and an operation the user did
+    not allow with another exception. The app marks a file as damaged
+    only on the first. Not checked in Android's source or on a device in
+    step 1.7. A wrong mark is harmless: a repair needs the proven words,
+    and stores the keyset those words derive.
 
 ## Decided on pull request 22
 
@@ -1800,6 +1983,8 @@ The owner approved these readings with the plan of session B:
 5. Rule 4 decides the number of a new hardware key. A number can come
    back.
 6. What "a keyset is made" means in rule 3. Rule 2 has no exception.
+   Step 1.7, session A gave rule 2 three exceptions
+   ([Decided in step 1.7, session A](#decided-in-step-17-session-a)).
 7. `file-key-old` moves to the Unlocked key too, and the move waits
    while the phone is locked.
 8. The three states of the app lock.
@@ -1810,6 +1995,37 @@ The owner approved these readings with the plan of session B:
     `file-key-old` exists.
 12. The screen lock is asked from `KeyguardManager`. The provider check
     runs at every way into the module.
+
+## Decided in step 1.7, session A
+
+The owner's decisions of 2026-11-13, in step 1.7, session A, when the
+code for open questions 11 and 12 was built. Each is built into the page
+above. The recovery key screens follow in the next pull request.
+
+| Question | Decision |
+|---|---|
+| How a user starts over after a setup that stopped half way (open question 11) | An explicit start over, offered only while the setup is unfinished. The old file keys join `file-key-old`, and the `backup` of the stopped setup is written over. It is an exception to rule 2, and the page says why it is safe ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)). |
+| A keyset file that is damaged while its hardware key lives (open question 12) | Repair with proven words: an exact match of another stored keyset. The damaged file is copied aside and kept, never deleted, and the keyset is stored again ([A damaged keyset file](#a-damaged-keyset-file)). |
+| A damaged keyset that no words can bring back | "Give up these files", offered only when `file-key-old`, or the `file-key` of an app without `record`, is damaged. A plain warning comes first: those files can then not be opened on any device. |
+| `file-key` damaged under the app lock | Repaired in this step, under a key that needs no prompt. The app lock is then off. The message to the user comes with the app lock screens in session B. |
+
+The independent review of this step found five things in the code of
+session B. Each is fixed and tested:
+
+1. A keyset kept in memory was dropped only when a setup succeeded. After
+   a change that failed half way, file code went on with the old keyset.
+   Now every write of a keyset file drops them all.
+2. The move from the random `file-key` could be finished, and
+   `file-key-old` deleted, before the app had `record`. Now it cannot.
+3. Whether a row is sealed by the current key is told by the key ID
+   alone. A new recovery key could share its ID with the random
+   `file-key`. Now a new key avoids every stored ID, entered words with
+   an ID in use are refused, and a keyset with an ID twice does not
+   open.
+4. A damaged `file-key-old` stopped every file and every setup. Now it
+   counts as absent.
+5. Keeping a recovery key trusted its caller. Now the app keeps only the
+   current recovery key of its stored `record`.
 
 ## Open questions
 
@@ -1850,22 +2066,18 @@ What is left, with the step that decides it.
    hash of the ciphertext? Phase 5.
 10. **The threat model page** does not exist. A step of its own: step
     1.8.
-11. **Starting over after a setup that stopped half way.** A setup that
-    already stored a derived keyset can be finished only with the same
-    recovery words ("Creating it", step 4). A user who cannot give those
-    words is stuck: the app has no derived keys, and every other
-    recovery key is refused. The files still open on this phone, but
-    backup, sync and the app lock stay off. How does such a user start
-    over without losing files? The file keys that were sealed in
-    between would have to be sealed again under the keys of the new
-    recovery key first, as in the move from a random `file-key`.
-    Nothing is built for this. Decided in step 1.7, session A.
-12. **A keyset file that is damaged while its hardware key lives** can
-    never be replaced (rule 2 under "Rules for making, replacing and
-    losing a hardware key"). Not even the right recovery words help: the
-    setup stops at "damaged or changed" and writes nothing. For
-    `file-key` that closes the app's files on this phone for good,
-    although the words could derive the keyset again. Proposal: with
-    the right recovery words, set the damaged file aside, never delete
-    it, and store the keyset again. Nothing is built for this. Decided
-    in step 1.7, session A.
+11. **Starting over after a setup that stopped half way.** Decided in
+    step 1.7, session A
+    ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
+12. **A keyset file that is damaged while its hardware key lives.**
+    Decided in step 1.7, session A
+    ([A damaged keyset file](#a-damaged-keyset-file)).
+13. **Files whose keys were given up.** Their records stay, and their
+    files can never be opened again. How does an app show them: hide
+    them, mark them, or offer to delete them? Decided with the first app
+    that stores files.
+14. **Repair once a keyset holds keys of two recovery keys.** Repair
+    needs an exact match of another stored keyset. After a new recovery
+    key, each keyset holds keys of two recovery keys, and the new words
+    alone derive only one of them. So repair does not work then.
+    Phase 5, with the new recovery key.

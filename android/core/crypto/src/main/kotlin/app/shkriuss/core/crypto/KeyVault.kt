@@ -54,6 +54,15 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
     private var fileKeyOld: KeysetHandle? = null
 
     /**
+     * Keysets behind a key that needs the prompt whose file this run of
+     * the app found damaged: the prompt succeeded, and the Keystore or
+     * Tink refused what it opened. `look()` cannot see this without a
+     * prompt. Only memory holds it. The mark goes when the file is
+     * replaced or removed.
+     */
+    private val damagedBehindPrompt = mutableSetOf<KeysetName>()
+
+    /**
      * Runs [action] alone, after the provider check. A hardware key that
      * is gone or not usable now becomes the answer "needs keys this app
      * does not have now", a refused blob "damaged or changed".
@@ -77,6 +86,12 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
 
     /** Whether a file is stored for [name]. */
     fun isStored(name: KeysetName): Boolean = store.read(name) != null
+
+    /** The stored bytes of [name], or null. */
+    fun storedBlob(name: KeysetName): ByteArray? = store.read(name)
+
+    /** True if a prompt in this run found the file of [name] damaged. */
+    fun isDamagedBehindPrompt(name: KeysetName): Boolean = name in damagedBehindPrompt
 
     /** The hardware key the stored file of [name] names, or null if there is no file. Throws [BlobException]. */
     fun namedKey(name: KeysetName): HardwareKeyRef? = store.read(name)?.let { WrappedKeyset.keyOf(it, name) }
@@ -132,6 +147,7 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
             again.fill(0)
             if (!same) throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
             store.replace(name, WrappedKeyset.prefix(key) + wrapped)
+            changed(name)
         } finally {
             plain.fill(0)
         }
@@ -149,23 +165,53 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         try {
             val wrapped = cipher.finish(plain, AssociatedData.forKeyset(key, name))
             store.replace(name, WrappedKeyset.prefix(key) + wrapped)
+            changed(name)
         } finally {
             plain.fill(0)
         }
     }
 
-    /** Opens what [stored] holds with the started [cipher], after the prompt succeeded. */
+    /**
+     * Opens what [stored] holds with the started [cipher], after the prompt
+     * succeeded. If the Keystore refuses the blob, or what it opens is not
+     * a keyset, the file is marked as damaged for this run of the app.
+     */
     fun openWithPrompt(name: KeysetName, stored: Stored.NeedsPrompt, cipher: PromptCipher): KeysetHandle {
-        val plain = cipher.finish(WrappedKeyset.afterIv(stored.blob), AssociatedData.forKeyset(stored.key, name))
+        val plain = try {
+            cipher.finish(WrappedKeyset.afterIv(stored.blob), AssociatedData.forKeyset(stored.key, name))
+        } catch (refused: HardwareBlobRefused) {
+            damagedBehindPrompt += name
+            throw refused
+        }
         try {
             return KeysetCodec.parse(plain, name.type)
+        } catch (damaged: BlobException) {
+            damagedBehindPrompt += name
+            throw damaged
         } finally {
             plain.fill(0)
         }
     }
 
     /** Removes the file of [name]. */
-    fun remove(name: KeysetName) = store.delete(name)
+    fun remove(name: KeysetName) {
+        store.delete(name)
+        changed(name)
+    }
+
+    /** Copies the file of [name] to the set-aside folder. The file itself stays. */
+    fun setAside(name: KeysetName) = store.setAside(name)
+
+    /**
+     * After any change to a keyset file: every keyset in memory is
+     * dropped, so that the next use reads the files again. A keyset kept
+     * from before a change that failed half way would seal with the wrong
+     * key. The damaged mark of [name] goes with its old file.
+     */
+    private fun changed(name: KeysetName) {
+        damagedBehindPrompt -= name
+        forgetAll()
+    }
 
     /**
      * Makes a new hardware key of [kind]. Its number is one above the
@@ -304,10 +350,14 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         else -> throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
     }
 
+    /**
+     * A damaged `file-key-old` counts as absent here, so that the files
+     * that `file-key` sealed still open. The files it sealed never open
+     * again. The user can give them up ([KeySetup.giveUpDamagedFileKeys]).
+     */
     private fun loadFileKeyOld(): KeysetHandle? = when (val stored = look(KeysetName.FILE_KEY_OLD)) {
-        is Stored.Missing -> null
+        is Stored.Missing, is Stored.Damaged -> null
         is Stored.Open -> stored.keyset
-        is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
         else -> throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
     }
 
