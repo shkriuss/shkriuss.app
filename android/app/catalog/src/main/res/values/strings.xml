@@ -66,6 +66,14 @@
     <string name="page_recovery_key_summary">Creating, entering and showing the recovery key, and the security screen.</string>
     <string name="page_app_lock_title">App lock screens</string>
     <string name="page_app_lock_summary">The lock screen, the app lock screen, and turning the app lock on.</string>
+    <string name="page_first_need_title">Recovery key when first needed</string>
+    <string name="page_first_need_summary">The dialog an app shows when a backup, a restore or the app lock first needs the recovery key.</string>
+    <string name="first_need_intro">An app opens with no setup. When the user starts a backup, a restore or the app lock and the app has no recovery key yet, it shows this dialog first. It is the same in every app. Catalog holds no keys, so the buttons here do nothing.</string>
+    <string name="first_need_forms_heading">Forms</string>
+    <string name="sample_first_need_backup">For a backup</string>
+    <string name="sample_first_need_app_lock">For the app lock</string>
+    <string name="sample_first_need_restore">For a restore</string>
+    <string name="sample_first_need_finish">After a setup that stopped</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
@@ -209,6 +217,13 @@
     <string name="state_one_action">With one button</string>
     <string name="state_with_choice">With a choice</string>
     <string name="state_confirm_disabled">With the confirm button turned off</string>
+    <string name="state_three_actions">With a third button, between the way out and the answer. Use it rarely: two buttons are easier to choose from.</string>
+    <string name="state_progress_dialog">A progress dialog. It only says what the app is doing while the user waits. It has no button, and a tap outside it or Back does nothing.</string>
+    <string name="sample_move_note_question">This note is in a shared list</string>
+    <string name="sample_move_note_text">You can move it to your own list, or keep a copy there.</string>
+    <string name="sample_move_it">Move it</string>
+    <string name="sample_copy_it">Keep a copy</string>
+    <string name="sample_writing_backup">Writing the backup</string>
     <string name="state_try_dialog">Try it: tap the button to open the dialog. Then tap Delete or Cancel, tap outside the dialog, or go back.</string>
     <string name="state_with_title">With a title</string>
     <string name="state_without_title">Without a title, with supporting text</string>

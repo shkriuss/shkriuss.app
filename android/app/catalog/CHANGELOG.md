@@ -5,6 +5,16 @@ development.
 
 ## Unreleased
 
+- New page **Recovery key when first needed**, in the group of shared
+  screens: the dialog an app shows when a backup, a restore or the app
+  lock first needs the recovery key, in its four forms
+  ([ADR 0035](../../../docs/adr/0035-recovery-key-when-first-needed.md)).
+  Water is the first app that shows it. Catalog holds no keys, so the
+  buttons do nothing.
+- **Dialogs** has two more samples at its end: a dialog with a third
+  button, between the way out and the answer, and a progress dialog,
+  which only says what the app is doing and has no button
+  ([design-system.md](../../../docs/development/design-system.md#added-in-step-25)).
 - **Recovery key screens** and **App lock screens**: the switch is now
   **Protect this page, as in an app**, under the heading **Protection**.
   It does what the screens of `core/security` do in an app

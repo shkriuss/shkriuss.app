@@ -56,6 +56,7 @@ enum class CatalogPage(
     TimePickers(R.string.page_time_pickers_title, R.string.page_time_pickers_summary, CatalogGroup.Components),
     RecoveryKeyScreens(R.string.page_recovery_key_title, R.string.page_recovery_key_summary, CatalogGroup.Screens),
     AppLockScreens(R.string.page_app_lock_title, R.string.page_app_lock_summary, CatalogGroup.Screens),
+    RecoveryKeyFirstNeed(R.string.page_first_need_title, R.string.page_first_need_summary, CatalogGroup.Screens),
 }
 
 /**
@@ -97,5 +98,6 @@ fun CatalogApp() {
         CatalogPage.TimePickers -> TimePickersPage()
         CatalogPage.RecoveryKeyScreens -> RecoveryKeyScreensPage()
         CatalogPage.AppLockScreens -> AppLockScreensPage()
+        CatalogPage.RecoveryKeyFirstNeed -> RecoveryKeyFirstNeedPage()
     }
 }

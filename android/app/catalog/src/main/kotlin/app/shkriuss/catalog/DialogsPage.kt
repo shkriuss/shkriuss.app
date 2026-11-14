@@ -13,6 +13,7 @@ import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.design.ShkDialog
 import app.shkriuss.core.design.ShkDialogAction
 import app.shkriuss.core.design.ShkDialogInPlace
+import app.shkriuss.core.design.ShkProgressDialogInPlace
 import app.shkriuss.core.design.ShkInPlace
 import app.shkriuss.core.design.ShkRadioButton
 import app.shkriuss.core.design.ShkRadioGroup
@@ -109,6 +110,20 @@ fun DialogsPage(modifier: Modifier = Modifier) {
                             errorText = stringResource(R.string.sample_glasses_error),
                         )
                     }
+                },
+                // Added in step 2.5: a third button, for two answers and a way out.
+                ComponentState(R.string.state_three_actions) {
+                    ShkDialogInPlace(
+                        title = stringResource(R.string.sample_move_note_question),
+                        text = stringResource(R.string.sample_move_note_text),
+                        confirmAction = ShkDialogAction(text = stringResource(R.string.sample_move_it), onClick = {}),
+                        dismissAction = cancelAction(),
+                        otherAction = ShkDialogAction(text = stringResource(R.string.sample_copy_it), onClick = {}),
+                    )
+                },
+                // Added in step 2.5: the dialog for work the user waits for.
+                ComponentState(R.string.state_progress_dialog) {
+                    ShkProgressDialogInPlace(text = stringResource(R.string.sample_writing_backup))
                 },
             ),
             wideColumns = 2,
