@@ -231,6 +231,12 @@ What stops it:
    receiver is registered as not exported. A tap on a notification opens
    only the same app, through an explicit, immutable intent
    ([permissions.md](permissions.md)).
+   - One exception, in Catalog only: the receiver of
+     `androidx.profileinstaller` is exported to callers with
+     `android.permission.DUMP`, which only the system and the developer
+     shell hold. Water removes it (owner's decision on pull request 40).
+     Open, for the next change to Catalog: remove it there too
+     ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 4. There is no content provider of our own, no file provider and no deep
    link.
 5. Files enter and leave only through the system pickers. No app of the
@@ -995,7 +1001,10 @@ Status: **Open (Phase 5).**
   ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). The
   protocol is Open.
 - MASWE-0018, components: met for what is built. Nothing is exported
-  except the launcher screen.
+  except the launcher screen. Open: Catalog still exports the receiver of
+  `androidx.profileinstaller` to callers with `android.permission.DUMP`,
+  until its next change. Water removes it
+  ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 - MASWE-0019, autofill for credential managers: does not apply. There
   are no passwords. The word field turns autofill off on purpose.
 - MASWE-0047: as CRYPTO-1.

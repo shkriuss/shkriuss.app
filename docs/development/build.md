@@ -1035,6 +1035,12 @@ file. Never turn verification off or make it lenient (hard rule 9). Find
 out why the file changed. If a dependency was meant to change, follow the
 steps above.
 
+This holds for a single diagnostic command too, such as
+`./gradlew dependencies` with `--dependency-verification=off` to see
+where a version comes from. A Claude session asks the owner before it
+runs one (owner's decision on pull request 40, after a session ran such
+a command without asking).
+
 ## Gradle wrapper
 
 - Gradle 9.6.1, the bug-fix release of 9.6. AGP 9.5.1 needs at least
@@ -1549,6 +1555,9 @@ Every new app must remove the same two. The APK rules check fails until it
 does. Water removes them too, and until step 2.5 also the two permissions
 and the six screens of `core/security`
 ([permissions.md](../security/permissions.md#water-appshkriusswater)).
+Water also removes the receiver of `androidx.profileinstaller`, which is
+exported to developer tools. Catalog still has it, until its next change
+(owner's decision on pull request 40).
 
 ## Known messages in the build log
 

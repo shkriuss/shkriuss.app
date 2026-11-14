@@ -5,18 +5,19 @@ import java.io.File
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.w3c.dom.Element
 
 /**
  * What Water's merged manifest holds until steps 2.4 and 2.5
  * (docs/security/permissions.md, "Water"): no permission at all, one
- * screen, and nothing else that another app can reach but the receiver of
- * the profile installer, which only the system and the developer shell
- * can call.
+ * screen, and nothing else that another app can reach. The receiver of the
+ * profile installer is removed (owner's decision on pull request 40).
  *
  * The APK rules check fails an APK with any permission too. This test also
- * names every exported part, so a library that adds one fails here first.
+ * checks that the screen is the only exported part, so a library that adds
+ * another fails here first.
  */
 class WaterManifestTest {
     private val manifest: Element = DocumentBuilderFactory.newInstance().apply {
@@ -44,17 +45,17 @@ class WaterManifestTest {
     }
 
     @Test
-    fun onlyTheScreenAndTheProfileInstallerAreExported() {
+    fun theScreenIsTheOnlyExportedPart() {
         val exported = listOf("activity", "activity-alias", "service", "receiver", "provider").flatMap(::elements)
             .filter { it.android("exported") == "true" }
-            .map { it.android("name") to it.android("permission") }
-        assertEquals(
-            listOf(
-                WaterActivity::class.java.name to "",
-                "androidx.profileinstaller.ProfileInstallReceiver" to "android.permission.DUMP",
-            ),
-            exported,
-        )
+            .map { it.android("name") }
+        assertEquals(listOf(WaterActivity::class.java.name), exported)
+    }
+
+    @Test
+    fun theReceiverOfTheProfileInstallerIsRemoved() {
+        val receivers = elements("receiver").map { it.android("name") }
+        assertFalse(receivers.toString(), "androidx.profileinstaller.ProfileInstallReceiver" in receivers)
     }
 
     private companion object {

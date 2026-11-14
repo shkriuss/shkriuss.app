@@ -47,7 +47,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Shk">
 
-        <!-- The one screen of Water, and the only exported screen. Every screen puts its content in AppLockGate. -->
+        <!-- The one screen of Water, and the only exported part. Every screen puts its content in AppLockGate. -->
         <activity
             android:name=".WaterActivity"
             android:exported="true">
@@ -80,6 +80,27 @@
             tools:node="remove" />
         <activity
             android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
+            tools:node="remove" />
+
+        <!--
+            androidx.profileinstaller adds this receiver, exported to every
+            caller with android.permission.DUMP: the system and the developer
+            shell. It lets developer tools install or save the start-up
+            profile from outside the app. Water lets no other app reach any
+            part of it but its screen (docs/apps/water/spec.md,
+            "Permissions"), and needs no such tool. The start-up profile is
+            still installed when the app starts, by the profile installer's
+            initializer in androidx.startup. Owner's decision on pull
+            request 40.
+
+            As for the provider below, lint cannot see this class: the
+            library comes in only at run time. The removal works, which
+            WaterManifestTest checks in the merged manifest. So
+            MissingClass is ignored here only.
+        -->
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:ignore="MissingClass"
             tools:node="remove" />
 
         <!--

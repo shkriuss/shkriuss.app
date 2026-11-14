@@ -44,6 +44,9 @@ Other components that libraries add, none of them a permission:
   callers with `android.permission.DUMP` can reach it. Normal apps cannot
   get that permission; the system and the developer shell have it. It
   installs the app's start-up profile.
+  - Open, for the next change to Catalog: remove it, as Water does
+    (owner's decision on pull request 40;
+    [Water](#water-appshkriusswater)).
 - The emoji font loader from `androidx.emoji2` is removed, because it would
   ask a system font provider, usually Google Play services, for a font.
 
@@ -82,17 +85,20 @@ Other components that libraries add, none of them a permission:
 - `androidx.startup.InitializationProvider`: not exported. Starts
   libraries when the app starts. The emoji font loader is removed from
   it, as in Catalog.
-- `androidx.profileinstaller.ProfileInstallReceiver`: exported, but only
-  callers with `android.permission.DUMP` can reach it: the system and the
-  developer shell. It is the one receiver that another process can
-  reach, as in Catalog. The specification says that no receiver of
-  Water is exported. This one is listed as an open question for step
-  2.4.
+- `androidx.profileinstaller.ProfileInstallReceiver`: removed in Water's
+  manifest (owner's decision on pull request 40). It is exported to
+  callers with `android.permission.DUMP`, the system and the developer
+  shell, so that developer tools can install or save the start-up
+  profile from outside the app. Water lets no other app reach any part
+  of it but its screen. The start-up profile is still installed when the
+  app starts, by the profile installer's initializer in
+  `androidx.startup`.
 - The app lock's screen-off receiver, registered while the app runs,
   not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
   Water starts its `AppLockWatcher` from step 2.2.
-- `WaterManifestTest` names every exported part of Water's merged
-  manifest, so a library that adds one fails the tests.
+- `WaterManifestTest` fails unless `WaterActivity` is the only exported
+  part of Water's merged manifest, so a library that adds another fails
+  the tests.
 
 Water stores its data in its own database and backs it up only into the
 backup file of the suite, so Android backup and device-to-device transfer

@@ -28,3 +28,7 @@ Step 2.2, the data and the logic:
 - Permissions: none. Water does not ask for the two permissions of the
   app lock's screens before step 2.5, nor for those of reminders before
   step 2.4 ([permissions.md](../../../docs/security/permissions.md#water-appshkriusswater)).
+- No other app can reach any part of Water but its screen. Water removes
+  a receiver that a library adds for developer tools
+  (`androidx.profileinstaller`). The start-up profile is still installed
+  when the app starts.

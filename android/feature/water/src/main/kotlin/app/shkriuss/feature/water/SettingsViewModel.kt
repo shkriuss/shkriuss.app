@@ -50,8 +50,10 @@ class SettingsViewModel(
 
     /**
      * The daily goal dialog: [text] in the unit shown. False if it is not a
-     * whole number from 500 to 10,000 ml (17 to 338 fl oz); then nothing is
-     * written. The new goal counts from today. Past days keep theirs.
+     * whole number from 500 to 10,000 ml (17 to 338 fl oz): then the field
+     * says "Enter a goal from 500 to 10,000 ml." in the unit in use, and
+     * nothing is written. The new goal counts from today. Past days keep
+     * theirs.
      */
     fun setGoal(text: String): Boolean {
         val unit = settings.unit
@@ -92,7 +94,8 @@ class SettingsViewModel(
     /**
      * "From". False if "Until" would then be less than 30 minutes after it:
      * the dialog says "Until must be at least 30 minutes after From." and
-     * the old time stays.
+     * the old time stays, as for a change of "Until" (spec, "Settings
+     * screen").
      */
     fun setFrom(minute: Int): Boolean {
         if (!SettingsRules.hoursAllowed(minute, settings.untilMinute)) return false
