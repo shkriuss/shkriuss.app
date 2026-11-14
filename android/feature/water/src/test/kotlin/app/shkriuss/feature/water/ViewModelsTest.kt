@@ -279,12 +279,19 @@ class ViewModelsTest {
 
             model.show(opened)
 
-            // From the moment show() is called: the new day, not loaded, with nothing of the day before.
+            // From the moment show() returns: the new day, with nothing of the day before. Room reads the drinks on
+            // its own thread, and the ViewModel's work runs there too in this test, so the new day can already be
+            // loaded by the time the test reads the state (CI run 143). That the first state after show() is not
+            // loaded is checked below, on every state the screen got.
             val right = model.state.value
             assertEquals(opened, right.day)
-            assertFalse("not loaded until the new day's drinks are read", right.loaded)
-            assertEquals(0, right.totalMl)
-            assertEquals(emptyList<Drink>(), right.drinks)
+            if (right.loaded) {
+                assertEquals(400, right.totalMl)
+                assertEquals(listOf(400), right.drinks.map { it.amountMl })
+            } else {
+                assertEquals(0, right.totalMl)
+                assertEquals(emptyList<Drink>(), right.drinks)
+            }
             // Then the new day's drinks.
             assertEquals(400, model.state.await { it.loaded }.totalMl)
             assertTrue("no state shows the day before: $seen", seen.none { it.day == before })
