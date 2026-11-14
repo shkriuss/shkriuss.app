@@ -139,6 +139,17 @@ class RemindersWaterApp : UnlockedAppForTests(WATER), WaterTestApp {
     override val test: TestWater
         get() = started ?: TestWater(this).also { started = it }
 
+    /**
+     * The same app on a phone with no data: new objects on an empty
+     * database, with the same keys, clock and source of IDs. As a second
+     * phone that has entered the same recovery words, before a restore.
+     */
+    fun startOnAPhoneWithNoData() {
+        val before = test
+        started = null
+        started = TestWater(this, before.clock, ids = before.ids)
+    }
+
     /** The app starts again. [open] is what a tap on a reminder opens. */
     fun restart(open: Intent = Intent(this, WaterActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) {
         val before = test
