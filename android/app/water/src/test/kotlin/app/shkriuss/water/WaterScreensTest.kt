@@ -95,6 +95,7 @@ class WaterScreensTest {
         // The button's 48dp touch target is checked with the design system's buttons (ShkComponentsTest).
         compose.onNode(hasContentDescription("Add 250 millilitres") and hasClickAction()).tapAsTalkBack()
         compose.waitForText("Added 250 ml")
+        compose.waitForText("14:05 · 250 ml")
         val row = compose.onNode(hasText("14:05 · 250 ml") and hasClickAction())
         row.assert(hasContentDescription("14:05, 250 millilitres"))
             .assert(SemanticsMatcher("its action is Edit") { it.config[SemanticsActions.OnClick].label == "Edit" })

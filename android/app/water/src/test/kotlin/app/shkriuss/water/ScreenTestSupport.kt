@@ -46,9 +46,15 @@ fun ComposeTestRule.waitForText(text: String, substring: Boolean = false) = wait
  * Taps the one thing that can be tapped and shows [text], as TalkBack
  * does: also below the edge of the window, and without a ripple, which
  * would differ from one run to the next in a screenshot.
+ *
+ * It first waits for that thing to show. A screen draws what it reads
+ * from the database only once Room's thread has answered, and Compose
+ * does not wait for that thread by itself.
  */
 fun ComposeTestRule.tap(text: String, substring: Boolean = false) {
-    onNode(hasText(text, substring = substring) and hasClickAction()).tapAsTalkBack()
+    val target = hasText(text, substring = substring) and hasClickAction()
+    waitFor(target)
+    onNode(target).tapAsTalkBack()
     waitForIdle()
 }
 

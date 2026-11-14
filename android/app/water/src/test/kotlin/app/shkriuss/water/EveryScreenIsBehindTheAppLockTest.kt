@@ -4,12 +4,8 @@ import android.content.Intent
 import android.os.Looper
 import android.os.PowerManager
 import androidx.annotation.StringRes
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import app.shkriuss.core.testing.AppLockCheck
@@ -69,9 +65,7 @@ class EveryScreenIsBehindTheAppLockTest {
     fun theSheetEditDrinkGoesWhenTheAppLocks() {
         val water = ApplicationProvider.getApplicationContext<AppLockOnWaterApp>().water
         runBlocking { water.repository.addDrink(THE_DAY, 9 * 60, 300) }
-        openThenLock {
-            compose.onNode(hasText("300 ml", substring = true) and hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
-        }
+        openThenLock { compose.tap("300 ml", substring = true) }
     }
 
     @Test
@@ -111,7 +105,8 @@ class EveryScreenIsBehindTheAppLockTest {
      */
     private fun openThenLock(open: () -> Unit) {
         ActivityScenario.launch(WaterActivity::class.java).use {
-            compose.waitForIdle()
+            // Today shows its buttons once the first read of the database is in.
+            compose.waitForText(words(R.string.water_other_amount))
             val windowsBefore = compose.onAllNodes(isRoot()).fetchSemanticsNodes().size
             open()
             compose.waitForIdle()
@@ -127,10 +122,6 @@ class EveryScreenIsBehindTheAppLockTest {
         }
     }
 
-    /** Taps the one thing that can be tapped with the words of [words], also below the edge of the window. */
-    private fun tap(@StringRes words: Int) {
-        val text = ApplicationProvider.getApplicationContext<AppLockOnWaterApp>().getString(words)
-        compose.onNode(hasText(text) and hasClickAction()).performSemanticsAction(SemanticsActions.OnClick)
-        compose.waitForIdle()
-    }
+    /** Taps the one thing that can be tapped with the words of string [id], once it shows. */
+    private fun tap(@StringRes id: Int) = compose.tap(id)
 }

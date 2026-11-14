@@ -90,6 +90,9 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         compose.onNode(hasContentDescription("Add 250 millilitres")).tapAsTalkBack()
         compose.waitForText(words(R.string.water_added, "250 ml"))
         compose.waitForText(words(R.string.water_undo))
+        // The snackbar comes as soon as the drink is written. The list and the
+        // total come a moment later, when Room tells the screen of the change.
+        compose.waitForText("14:05 · 250 ml")
         captureWindows("TodaySnackbar")
     }
 
@@ -169,7 +172,8 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         compose.tap(R.string.water_history)
         compose.waitForText(words(R.string.water_yesterday))
         compose.tap(words(R.string.water_yesterday))
-        compose.waitForText(words(R.string.water_add_drink))
+        // The title of the day shows once that day's drinks are read.
+        compose.waitForText("Thursday, November 12, 2026")
         compose.captureWholeScreen("DayOpen", config)
     }
 
