@@ -253,6 +253,11 @@ otherwise below.
   old goal. The owner decided the words on pull request 40.
 - Setting the goal to the value today already has writes nothing
   ([Changing the goal](#the-goal-of-a-day)).
+- Each quick amount is from 1 to 3,000 ml (1 to 101 fl oz). Otherwise
+  the field that is wrong says "Enter an amount from 1 to 3,000 ml."
+  under it, the same words as the drink sheet, in the unit in use: "Enter
+  an amount from 1 to 101 fl oz." The dialog keeps the old amounts. The
+  owner decided the words on pull request 40.
 
 **Reminders**
 
@@ -1078,7 +1083,7 @@ On 2026-11-13, in the planning session of this step.
 | The decision records and the assumptions (on [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36)) | [ADR 0034](../../adr/0034-notification-buttons.md), [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md) and [ADR 0036](../../adr/0036-app-settings-as-records.md) accepted. The 18 [assumptions](#assumptions) accepted as written. |
 | The file key move (on pull request 36) | Water may finish a pending move at once only because it stores no files. A later version that stores files must take this call out first, or files sealed with the old key are lost. The spec says so under [Files](#files), and the code carries the same warning as a comment on that call. |
 | A drink while a snooze is set (step 2.2, on 2026-11-14) | Rule 3 and the case "A drink is logged" said different things when a snooze was set. The owner decided: a snooze holds only while the press of **Later** is still the latest of the four. A drink timed at or after the press ends it; a drink entered with an earlier time does not. Rule 3 and two rows of [the table](#when-the-next-reminder-comes) say so. |
-| On pull request 40 (step 2.2, on 2026-11-14) | The words for a goal outside its limits ([Settings screen](#settings-screen)). Three rules the code had chosen, accepted: on the same `updatedAt` the larger `id` counts, until step 5.1; a change of "From" that leaves less than 30 minutes before "Until" is refused, like a change of "Until"; setting the goal to the value it already has writes nothing. The receiver of `androidx.profileinstaller` is removed from Water's manifest ([Permissions](#permissions)). |
+| On pull request 40 (step 2.2, on 2026-11-14) | The words for a goal and for a quick amount outside their limits ([Settings screen](#settings-screen)). Three rules the code had chosen, accepted: on the same `updatedAt` the larger `id` counts, until step 5.1; a change of "From" that leaves less than 30 minutes before "Until" is refused, like a change of "Until"; setting the goal to the value it already has writes nothing. The receiver of `androidx.profileinstaller` is removed from Water's manifest ([Permissions](#permissions)). |
 
 ## Assumptions
 
