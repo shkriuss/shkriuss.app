@@ -21,6 +21,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.VisualTransformation
 
 /**
@@ -40,6 +42,10 @@ import androidx.compose.ui.text.input.VisualTransformation
  * The field fills the width it is given. With [singleLine] it is one line
  * tall and scrolls sideways; otherwise it grows with the text. The label
  * and the line under it wrap. It is at least 48dp tall.
+ *
+ * [suffix] is optional: a short unit after the typed text, inside the box,
+ * such as "ml". TalkBack reads [suffixDescription] for it, with the label,
+ * such as "millilitres", or the suffix itself when there is none.
  */
 @Composable
 fun ShkTextField(
@@ -53,6 +59,8 @@ fun ShkTextField(
     errorText: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    suffix: String? = null,
+    suffixDescription: String? = null,
 ) {
     TextFieldInStyle(
         value = value,
@@ -66,6 +74,8 @@ fun ShkTextField(
         errorText = errorText,
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
+        suffix = suffix,
+        suffixDescription = suffixDescription,
     )
 }
 
@@ -87,6 +97,8 @@ internal fun TextFieldInStyle(
     errorText: String? = null,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    suffix: String? = null,
+    suffixDescription: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
@@ -148,6 +160,9 @@ internal fun TextFieldInStyle(
                             supportingText = lineUnder?.let { text ->
                                 { LineUnderField(text, isError) }
                             },
+                            suffix = suffix?.let { shown ->
+                                { Suffix(shown, suffixDescription ?: shown, textStyle, enabled) }
+                            },
                             colors = colors,
                             container = {
                                 OutlinedTextFieldDefaults.Container(
@@ -164,6 +179,22 @@ internal fun TextFieldInStyle(
             },
         )
     }
+}
+
+/**
+ * The unit after the typed text, such as "ml", in the style of the typed
+ * text and the secondary text colour. TalkBack reads [description] in its
+ * place, such as "millilitres".
+ */
+@Composable
+private fun Suffix(text: String, description: String, textStyle: ShkTextStyle, enabled: Boolean) {
+    val colors = ShkTheme.colors
+    ShkText(
+        text = text,
+        style = textStyle,
+        color = if (enabled) colors.textSecondary else colors.textSecondary.copy(alpha = DisabledContentAlpha),
+        modifier = Modifier.clearAndSetSemantics { this.text = AnnotatedString(description) },
+    )
 }
 
 /**

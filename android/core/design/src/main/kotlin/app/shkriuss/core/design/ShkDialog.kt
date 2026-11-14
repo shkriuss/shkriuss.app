@@ -46,6 +46,12 @@ import androidx.compose.ui.window.DialogProperties
  * one calls it, then [onDismissRequest]. A tap outside the dialog and Back
  * call only [onDismissRequest]. Stop showing the dialog there.
  *
+ * An action with [ShkDialogAction.closesDialog] false is the exception: a
+ * tap only calls it, and the dialog stays open. Use it for Save in a
+ * dialog with a field, so that a value that is refused can be named under
+ * the field (its `errorText`, which TalkBack announces). Stop showing the
+ * dialog once the value is taken.
+ *
  * It is the higher surface colour with a 1dp outline and
  * [ShkShapes.Sheet] corners, and has no shadow (ADR 0017, point 5). It is
  * 280 to 560dp wide. The buttons sit side by side and move one above the
@@ -112,12 +118,19 @@ fun ShkDialogInPlace(
 class ShkDialogAction(
     /** The words on the button, such as "Delete" or "Cancel". Say what it does; avoid "Yes" and "No". */
     val text: String,
-    /** What a tap does. The dialog then closes. */
+    /** What a tap does. The dialog then closes, unless [closesDialog] is false. */
     val onClick: () -> Unit,
     /** False while the action is not possible, such as before a choice is made. TalkBack reads "disabled". */
     val enabled: Boolean = true,
     /** True for an action that destroys something, such as "Delete". Its text is the error colour. */
     val destructive: Boolean = false,
+    /**
+     * False for an action that checks a value first, such as Save in a
+     * dialog with a field: a tap only calls [onClick], and the dialog stays
+     * open until the caller stops showing it. True, the default, closes
+     * the dialog after [onClick].
+     */
+    val closesDialog: Boolean = true,
 )
 
 /**
@@ -174,7 +187,7 @@ private fun DialogActionButton(action: ShkDialogAction, onAction: () -> Unit) {
         text = action.text,
         onClick = {
             action.onClick()
-            onAction()
+            if (action.closesDialog) onAction()
         },
         color = if (action.destructive) colors.error else colors.accent,
         enabled = action.enabled,

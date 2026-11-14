@@ -3,6 +3,7 @@ package app.shkriuss.core.design
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -132,6 +133,45 @@ class ShkTimePickerTest(private val fontScale: Float) {
     }
 
     @Test
+    fun aRefusedTimeKeepsTheDialogOpenAndTalkBackAnnouncesWhy() {
+        val calls = mutableListOf<String>()
+        show {
+            ShkTimePicker(
+                title = TITLE,
+                initialTime = LocalTime.of(9, 30),
+                onTimeChosen = { calls += "chosen $it" },
+                onDismissRequest = { calls += CLOSED },
+                refuse = { time -> if (time.hour < 12) REFUSAL else null },
+            )
+        }
+        val ok = compose.onNode(hasText(OK) and hasClickAction())
+
+        ok.performClick()
+        compose.runOnIdle { assertEquals("Nothing is chosen and the dialog stays open", emptyList<String>(), calls) }
+        compose.onNode(hasText(REFUSAL))
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+        // The fields keep the time typed, so it can be changed.
+        compose.onNode(IS_FIELD and hasText(HOUR)).assert(hasText("09"))
+
+        // Typing hides the words. A time that is taken closes the dialog.
+        compose.onNode(IS_FIELD and hasText(HOUR)).performTextReplacement("3")
+        compose.onNode(hasText(REFUSAL)).assertDoesNotExist()
+        compose.onNode(hasText("PM") and hasClickAction()).performClick()
+        ok.performClick()
+        compose.runOnIdle { assertEquals(listOf(CLOSED, "chosen 15:30"), calls) }
+    }
+
+    @Test
+    fun byDefaultEveryTimeIsTaken() {
+        var chosen: LocalTime? = null
+        show { ShkTimePicker(title = TITLE, initialTime = LocalTime.of(0, 0), onTimeChosen = { chosen = it }, onDismissRequest = {}) }
+
+        compose.onNode(hasText(OK) and hasClickAction()).performClick()
+        compose.runOnIdle { assertEquals(LocalTime.of(0, 0), chosen) }
+        compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.LiveRegion)).assertDoesNotExist()
+    }
+
+    @Test
     fun theTwentyFourHourClockHasNoAmOrPm() {
         Settings.System.putString(RuntimeEnvironment.getApplication().contentResolver, Settings.System.TIME_12_24, "24")
         var chosen: LocalTime? = null
@@ -163,6 +203,7 @@ class ShkTimePickerTest(private val fontScale: Float) {
         private const val MINUTE = "Minute"
         private const val OK = "OK"
         private const val CANCEL = "Cancel"
+        private const val REFUSAL = "Choose a time in the afternoon."
         private const val CLOSED = "closed"
         private const val HOUR_RANGE_12 = "From 1 to 12"
         private const val HOUR_RANGE_24 = "From 0 to 23"

@@ -107,6 +107,60 @@ class ShkTextFieldTest(private val fontScale: Float) {
     }
 
     @Test
+    fun aSuffixShowsInTheBoxAndTalkBackHearsItsWordsWithTheLabel() {
+        compose.setContent {
+            ShkTheme {
+                ShkTextField(
+                    value = AMOUNT,
+                    onValueChange = {},
+                    label = AMOUNT_LABEL,
+                    suffix = SUFFIX,
+                    suffixDescription = SUFFIX_WORDS,
+                )
+            }
+        }
+
+        val field = compose.onNode(IS_TEXT_FIELD)
+        val config = field.fetchSemanticsNode().config
+        assertEquals(listOf(AMOUNT_LABEL, SUFFIX_WORDS), heard(config))
+        assertEquals(AMOUNT, config[SemanticsProperties.EditableText].text)
+        // The short unit is drawn inside the box, after the text, but is not read as well.
+        compose.onAllNodes(hasText(SUFFIX), useUnmergedTree = true).assertCountEquals(0)
+        val suffix = compose.onNode(hasText(SUFFIX_WORDS), useUnmergedTree = true).fetchSemanticsNode()
+        val box = field.fetchSemanticsNode().boundsInRoot
+        assertTrue("The suffix is inside the field", box.contains(suffix.boundsInRoot.center))
+    }
+
+    @Test
+    fun withASuffixAnErrorIsStillReadOnceAsTheError() {
+        compose.setContent {
+            ShkTheme {
+                ShkTextField(
+                    value = "",
+                    onValueChange = {},
+                    label = AMOUNT_LABEL,
+                    errorText = ERROR,
+                    suffix = SUFFIX,
+                    suffixDescription = SUFFIX_WORDS,
+                )
+            }
+        }
+
+        val config = compose.onNode(IS_TEXT_FIELD).fetchSemanticsNode().config
+        assertEquals(ERROR, config[SemanticsProperties.Error])
+        assertEquals(listOf(AMOUNT_LABEL, SUFFIX_WORDS), heard(config))
+    }
+
+    @Test
+    fun withoutASuffixDescriptionTalkBackHearsTheSuffix() {
+        compose.setContent {
+            ShkTheme { ShkTextField(value = AMOUNT, onValueChange = {}, label = AMOUNT_LABEL, suffix = SUFFIX) }
+        }
+
+        assertEquals(listOf(AMOUNT_LABEL, SUFFIX), heard(compose.onNode(IS_TEXT_FIELD).fetchSemanticsNode().config))
+    }
+
+    @Test
     fun longLabelAndHelpWrapInsideTheFieldAroundTheBox() {
         compose.setContent {
             ShkTheme {
@@ -158,6 +212,10 @@ class ShkTextFieldTest(private val fontScale: Float) {
         private const val LABEL = "Name"
         private const val VALUE = "Ana"
         private const val HELP = "Shown on your notes"
+        private const val AMOUNT = "250"
+        private const val AMOUNT_LABEL = "Amount"
+        private const val SUFFIX = "ml"
+        private const val SUFFIX_WORDS = "millilitres"
         private const val ERROR = "Enter a name"
         private const val LONG_LABEL = "The name that shows on every note you write"
         private const val LONG_HELP = "Other people never see it, it stays on this phone"

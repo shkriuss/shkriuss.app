@@ -35,8 +35,11 @@ import androidx.compose.ui.unit.dp
  * [headline] is the main line, in the subtitle style. [supportingText] is
  * an optional line of detail under it, [trailingText] an optional short
  * note at the end, such as a time or a count. [icon] is optional, sits at
- * the start, is decorative, and grows with the font size. All text wraps,
- * so nothing is cut off at large font sizes.
+ * the start, is decorative, and grows with the font size. [trailingIcon]
+ * is optional too and the same, but sits at the very end, after
+ * [trailingText], such as a check next to "Goal reached". Neither is a
+ * label: say in the text what the icon shows. All text wraps, so nothing
+ * is cut off at large font sizes.
  *
  * With [onClick], the whole row is one touch target, at least 48dp tall
  * and as wide as the space it is given, and TalkBack reads all its text,
@@ -67,6 +70,7 @@ fun ShkListItem(
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
     selected: Boolean = false,
+    trailingIcon: Painter? = null,
 ) {
     val colors = ShkTheme.colors
     val alpha = if (enabled) 1f else DisabledContentAlpha
@@ -105,6 +109,14 @@ fun ShkListItem(
         }
         if (trailingText != null) {
             ShkText(text = trailingText, style = ShkTextStyle.Caption, color = colors.textSecondary.copy(alpha = alpha))
+        }
+        if (trailingIcon != null) {
+            Icon(
+                painter = trailingIcon,
+                contentDescription = null,
+                modifier = Modifier.size(iconSizeNextToText(ListItemIconSize)),
+                tint = colors.textSecondary.copy(alpha = alpha),
+            )
         }
     }
 }

@@ -18,7 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,6 +52,13 @@ import java.time.LocalTime
  * "Cancel", a tap outside the dialog and Back call only
  * [onDismissRequest]. Stop showing the dialog there.
  *
+ * [refuse] is optional. "OK" asks it first. When it returns words, such
+ * as "Until must be at least 30 minutes after From.", the time is refused:
+ * the dialog stays open, the words show under the fields in the error
+ * colour, TalkBack announces them, and the fields keep the time typed, so
+ * it can be changed or the dialog cancelled. Typing hides the words. By
+ * default every time is taken.
+ *
  * It is built from the suite's own parts, not Material 3's time picker,
  * whose AM and PM buttons are 40dp tall and whose clock face puts the
  * touch targets of its numbers on top of each other (owner decision
@@ -64,25 +73,42 @@ fun ShkTimePicker(
     onTimeChosen: (LocalTime) -> Unit,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    refuse: (LocalTime) -> String? = { null },
 ) {
     val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
     var hour by rememberSaveable { mutableStateOf(hourText(initialTime, is24Hour)) }
     var minute by rememberSaveable { mutableStateOf(twoDigits(initialTime.minute)) }
     var pm by rememberSaveable { mutableStateOf(initialTime.hour >= NOON) }
+    var refusal by rememberSaveable { mutableStateOf<String?>(null) }
     Dialog(onDismissRequest = onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         TimePickerPanel(
             title = title,
             fields = TimeFields(hour = hour, minute = minute, pm = pm, is24Hour = is24Hour),
-            onHourChange = { hour = it },
-            onMinuteChange = { minute = it },
-            onPmChange = { pm = it },
+            onHourChange = {
+                hour = it
+                refusal = null
+            },
+            onMinuteChange = {
+                minute = it
+                refusal = null
+            },
+            onPmChange = {
+                pm = it
+                refusal = null
+            },
             inWindow = true,
             onConfirm = { time ->
-                onDismissRequest()
-                onTimeChosen(time)
+                val words = refuse(time)
+                if (words == null) {
+                    onDismissRequest()
+                    onTimeChosen(time)
+                } else {
+                    refusal = words
+                }
             },
             onCancel = onDismissRequest,
             modifier = modifier.padding(DialogWindowMargin),
+            refusal = refusal,
         )
     }
 }
@@ -92,8 +118,9 @@ fun ShkTimePicker(
  * samples (see [ShkInPlace]). It shows [hour] and [minute] as typed, so a
  * sample can show an impossible time, and [is24Hour] picks the clock, so
  * the samples do not change with the phone's setting. With the 12-hour
- * clock, [pm] picks PM. Nothing in it changes: the fields keep their
- * text, and its buttons do nothing.
+ * clock, [pm] picks PM. [refusal] shows the words of a refused time, as
+ * [ShkTimePicker] shows what its `refuse` returned. Nothing in it changes:
+ * the fields keep their text, and its buttons do nothing.
  */
 @ShkInPlace
 @Composable
@@ -104,6 +131,7 @@ fun ShkTimePickerInPlace(
     is24Hour: Boolean,
     modifier: Modifier = Modifier,
     pm: Boolean = false,
+    refusal: String? = null,
 ) {
     TimePickerPanel(
         title = title,
@@ -115,6 +143,7 @@ fun ShkTimePickerInPlace(
         onConfirm = {},
         onCancel = {},
         modifier = modifier,
+        refusal = refusal,
     )
 }
 
@@ -158,7 +187,7 @@ internal class TimeFields(val hour: String, val minute: String, val pm: Boolean,
     }
 }
 
-/** The panel of a time picker: the title, the two fields, AM and PM, and the buttons. */
+/** The panel of a time picker: the title, the two fields, AM and PM, the words of a refused time, and the buttons. */
 @Composable
 private fun TimePickerPanel(
     title: String,
@@ -170,6 +199,7 @@ private fun TimePickerPanel(
     onConfirm: (LocalTime) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier,
+    refusal: String?,
 ) {
     val time = fields.time
     DialogPanel(
@@ -218,6 +248,15 @@ private fun TimePickerPanel(
         if (!fields.is24Hour) {
             Spacer(Modifier.height(ShkSpacing.Large))
             AmOrPm(pm = fields.pm, onPmChange = onPmChange)
+        }
+        if (refusal != null) {
+            Spacer(Modifier.height(ShkSpacing.Large))
+            // A live region, so TalkBack announces the words when they appear.
+            ShkText(
+                text = refusal,
+                color = ShkTheme.colors.error,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
         }
     }
 }

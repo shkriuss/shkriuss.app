@@ -4,6 +4,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.Role
@@ -20,6 +24,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
@@ -100,6 +105,51 @@ class ShkDialogTest(private val fontScale: Float) {
         compose.onNode(hasText(DELETE)).performClick()
         compose.onNode(hasText(CANCEL)).performClick()
         compose.runOnIdle { assertEquals(listOf(DELETE, CLOSED, CANCEL, CLOSED), calls) }
+    }
+
+    @Test
+    fun aButtonThatChecksFirstKeepsTheDialogOpenAndTalkBackHearsTheError() {
+        val calls = mutableListOf<String>()
+        show {
+            var value by remember { mutableStateOf("12") }
+            var error by remember { mutableStateOf<String?>(null) }
+            var open by remember { mutableStateOf(true) }
+            if (open) {
+                ShkDialog(
+                    title = GOAL,
+                    confirmAction = ShkDialogAction(
+                        text = SAVE,
+                        onClick = {
+                            calls += SAVE
+                            if (value.toInt() < 500) error = GOAL_ERROR else open = false
+                        },
+                        closesDialog = false,
+                    ),
+                    dismissAction = ShkDialogAction(text = CANCEL, onClick = { calls += CANCEL }),
+                    onDismissRequest = {
+                        calls += CLOSED
+                        open = false
+                    },
+                ) {
+                    ShkTextField(value = value, onValueChange = { value = it }, label = "Goal", errorText = error)
+                }
+            }
+        }
+        val field = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText))
+
+        compose.onNode(hasText(SAVE)).performClick()
+        compose.runOnIdle { assertEquals("A tap only calls the action", listOf(SAVE), calls) }
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, GOAL_ERROR))
+
+        field.performTextReplacement("2000")
+        compose.onNode(hasText(SAVE)).performClick()
+        compose.onNode(hasText(GOAL)).assertDoesNotExist()
+        compose.runOnIdle { assertEquals("The caller closed it; the dialog did not", listOf(SAVE, SAVE), calls) }
+    }
+
+    @Test
+    fun byDefaultEveryButtonClosesTheDialog() {
+        assertTrue(ShkDialogAction(text = SAVE, onClick = {}).closesDialog)
     }
 
     @Test
@@ -221,6 +271,9 @@ class ShkDialogTest(private val fontScale: Float) {
         private const val DELETE = "Delete"
         private const val CANCEL = "Cancel"
         private const val CLOSED = "closed"
+        private const val GOAL = "Daily goal"
+        private const val SAVE = "Save"
+        private const val GOAL_ERROR = "Enter a goal from 500 to 10,000 ml."
         private const val LONG_TITLE = "Delete all the notes in this folder, and the folder itself?"
         private const val LONG_TEXT = "They are deleted from this phone and from every phone you sync with."
         private const val LONG_DELETE = "Delete them all for good"

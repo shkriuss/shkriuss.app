@@ -366,6 +366,16 @@ class ShkComponentsTest(private val case: ComponentCase, private val fontScale: 
             ) { label, enabled, onClick, icon ->
                 ShkListItem(headline = label, onClick = onClick, enabled = enabled, icon = icon)
             },
+            // The icon at the end, as next to "Goal reached", is decorative
+            // too and grows with the text.
+            ComponentCase(
+                "TappableListItemWithEndIcon",
+                Role.Button,
+                ShkShapes.Field,
+                icon = IconCase(ICON, nextToText = true),
+            ) { label, enabled, onClick, icon ->
+                ShkListItem(headline = label, onClick = onClick, enabled = enabled, trailingIcon = icon)
+            },
             // The states' buttons are tonal buttons, and the icon of the
             // empty state sits above its title, next to text.
             ComponentCase(
