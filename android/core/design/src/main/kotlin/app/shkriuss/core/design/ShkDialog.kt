@@ -46,6 +46,11 @@ import androidx.compose.ui.window.DialogProperties
  * one calls it, then [onDismissRequest]. A tap outside the dialog and Back
  * call only [onDismissRequest]. Stop showing the dialog there.
  *
+ * [otherAction] is an optional third button, for a question with two
+ * answers and a way out, such as "Create a recovery key", "I already have
+ * one" and "Not now". It sits between the way out and [confirmAction].
+ * Two buttons are easier to choose from, so use it rarely.
+ *
  * An action with [ShkDialogAction.closesDialog] false is the exception: a
  * tap only calls it, and the dialog stays open. Use it for Save in a
  * dialog with a field, so that a value that is refused can be named under
@@ -68,6 +73,7 @@ fun ShkDialog(
     modifier: Modifier = Modifier,
     text: String? = null,
     dismissAction: ShkDialogAction? = null,
+    otherAction: ShkDialogAction? = null,
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Dialog(onDismissRequest = onDismissRequest, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -76,6 +82,7 @@ fun ShkDialog(
             text = text,
             confirmAction = confirmAction,
             dismissAction = dismissAction,
+            otherAction = otherAction,
             onAction = onDismissRequest,
             inWindow = true,
             modifier = modifier.padding(DialogWindowMargin),
@@ -96,6 +103,7 @@ fun ShkDialogInPlace(
     modifier: Modifier = Modifier,
     text: String? = null,
     dismissAction: ShkDialogAction? = null,
+    otherAction: ShkDialogAction? = null,
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     AlertPanel(
@@ -103,11 +111,68 @@ fun ShkDialogInPlace(
         text = text,
         confirmAction = confirmAction,
         dismissAction = dismissAction,
+        otherAction = otherAction,
         onAction = {},
         inWindow = false,
         modifier = modifier,
         content = content,
     )
+}
+
+/**
+ * A dialog that only says what the app is doing, with a turning circle,
+ * while the user waits for work they started and can do nothing else:
+ * "Writing the backup". It has no button. A tap outside it and Back do
+ * nothing. The caller stops showing it when the work has ended, and then
+ * says how it ended, for example in a [ShkDialog].
+ *
+ * Use it only for work that ends by itself and that must not be left half
+ * way. For content that is on its way, use a [ShkLoadingState] in the
+ * screen. For work the user may stop, use a [ShkDialog] with a way out.
+ *
+ * [text] says what is being done. It is required. TalkBack reads it and
+ * "in progress" as one item, and announces it when the dialog opens: it is
+ * the [ShkLoadingState] of the dialog. The dialog itself has no title, so
+ * the words are announced once.
+ *
+ * It looks like every dialog of the suite: the higher surface colour with
+ * a 1dp outline and [ShkShapes.Sheet] corners, 280 to 560dp wide. The text
+ * wraps, and scrolls when the dialog is taller than the window.
+ */
+@Composable
+fun ShkProgressDialog(text: String, modifier: Modifier = Modifier) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false),
+    ) {
+        ProgressPanel(text = text, inWindow = true, modifier = modifier.padding(DialogWindowMargin))
+    }
+}
+
+/**
+ * Draws a [ShkProgressDialog] in place, without its window, for the
+ * Catalog's samples (see [ShkInPlace]).
+ */
+@ShkInPlace
+@Composable
+fun ShkProgressDialogInPlace(text: String, modifier: Modifier = Modifier) {
+    ProgressPanel(text = text, inWindow = false, modifier = modifier)
+}
+
+/** The panel of a [ShkProgressDialog]: the circle and the words, and no button. */
+@Composable
+private fun ProgressPanel(text: String, inWindow: Boolean, modifier: Modifier) {
+    DialogPanel(
+        // No pane title: the loading state inside announces the words, and they should be heard once.
+        paneTitle = null,
+        scrollable = inWindow,
+        modifier = modifier.sizeIn(minWidth = DialogMinWidth, maxWidth = DialogMaxWidth),
+        bodyPadding = PaddingValues(horizontal = DialogPadding),
+        buttonsPadding = PaddingValues(0.dp),
+        buttons = {},
+    ) {
+        ShkLoadingState(text = text)
+    }
 }
 
 /**
@@ -143,6 +208,7 @@ private fun AlertPanel(
     text: String?,
     confirmAction: ShkDialogAction,
     dismissAction: ShkDialogAction?,
+    otherAction: ShkDialogAction?,
     onAction: () -> Unit,
     inWindow: Boolean,
     modifier: Modifier,
@@ -158,6 +224,7 @@ private fun AlertPanel(
         buttons = {
             DialogButtons {
                 if (dismissAction != null) DialogActionButton(dismissAction, onAction)
+                if (otherAction != null) DialogActionButton(otherAction, onAction)
                 DialogActionButton(confirmAction, onAction)
             }
         },
@@ -248,8 +315,8 @@ internal fun DialogPanel(
  * The buttons of a dialog, in the order given: side by side at the end
  * when they fit, else one above the other, at the end, the last one on
  * top. The last one is the confirm button, so it stays nearest the
- * content in both. Each keeps its own width; text that is wider than the
- * dialog wraps.
+ * content in both. With three, the way out is first, or lowest. Each
+ * keeps its own width; text that is wider than the dialog wraps.
  */
 @Composable
 internal fun DialogButtons(content: @Composable () -> Unit) {
