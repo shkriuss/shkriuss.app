@@ -26,30 +26,22 @@ class LicensedPart(
  * comes from and how the list was made. One entry is one project, not
  * one file of it: the AndroidX libraries are one entry.
  *
- * When a library is added, changed or removed, change this list, the page
- * and the texts in `res/raw` together.
+ * "Ships" means: it is in the release APK. Some libraries are on the
+ * build's class path and R8 removes them, because nothing in Water uses
+ * them, such as Gson, which Tink names. They are not listed here. The
+ * page lists them, and says how to check the APK again.
+ *
+ * When a library is added, changed or removed, or one of those starts to
+ * ship, change this list, the page and the texts in `res/raw` together.
  */
 object Licences {
     /** The parts, sorted by name. */
     val parts: List<LicensedPart> = listOf(
         apache("androidx", R.string.water_part_androidx, R.raw.water_notice_androidx),
         LicensedPart("bip39", R.string.water_part_bip39, R.string.water_licence_name_mit, R.raw.water_notice_bip39, R.raw.water_licence_bip39),
-        apache("error_prone", R.string.water_part_error_prone, R.raw.water_notice_error_prone),
-        apache("gson", R.string.water_part_gson, R.raw.water_notice_gson),
-        apache("guava", R.string.water_part_guava, R.raw.water_notice_guava),
-        apache("jetbrains_annotations", R.string.water_part_jetbrains_annotations, R.raw.water_notice_jetbrains_annotations),
         apache("compose", R.string.water_part_compose, R.raw.water_notice_compose),
-        apache("jspecify", R.string.water_part_jspecify, R.raw.water_notice_jspecify),
-        LicensedPart(
-            "jsr305",
-            R.string.water_part_jsr305,
-            R.string.water_licence_name_bsd_3_clause,
-            R.raw.water_notice_jsr305,
-            R.raw.water_licence_jsr305,
-        ),
         apache("kotlin", R.string.water_part_kotlin, R.raw.water_notice_kotlin),
         apache("coroutines", R.string.water_part_coroutines, R.raw.water_notice_coroutines),
-        apache("serialization", R.string.water_part_serialization, R.raw.water_notice_serialization),
         LicensedPart(
             "protobuf",
             R.string.water_part_protobuf,

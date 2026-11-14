@@ -187,8 +187,8 @@ class EveryScreenIsBehindTheAppLockTest {
     fun anOpenNoticeOfLicencesGoesWhenTheAppLocks() = openThenLock(inAWindowOfItsOwn = false) {
         tap(R.string.water_settings)
         tap(R.string.water_licences)
-        compose.tap("Gson")
-        compose.waitForText("Copyright (C) 2008 Google Inc.", substring = true)
+        compose.tap("BIP-39 English word list")
+        compose.waitForText("Copyright (c) 2013-2016 Pavol Rusnak", substring = true)
     }
 
     /**

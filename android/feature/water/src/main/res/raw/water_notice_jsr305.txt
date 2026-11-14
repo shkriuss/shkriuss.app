@@ -1,8 +1,0 @@
-JSR-305 annotations
-
-Copyright (c) 2007-2009, JSR305 expert group
-All rights reserved.
-
-Source: the archive of https://code.google.com/p/jsr-305/
-
-Tink brings it. The library's listing at Maven Central names the Apache License, Version 2.0. The source carries the licence that follows, a BSD licence with three clauses, in its file ri/LICENSE.

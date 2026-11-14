@@ -340,8 +340,15 @@ class WaterBackupScreensTest {
 
         compose.tap(R.string.water_licences)
         compose.waitForText(words(R.string.water_licences_intro))
-        // The list is longer than the phone's window. The first names are on screen.
-        listOf("AndroidX libraries", "BIP-39 English word list", "Gson").forEach {
+        listOf(
+            "AndroidX libraries",
+            "BIP-39 English word list",
+            "Jetpack Compose and Material 3",
+            "Kotlin standard library",
+            "kotlinx.coroutines",
+            "Protocol Buffers, inside Tink",
+            "Tink for Java",
+        ).forEach {
             compose.onNode(hasText(it) and hasClickAction()).assertHeightIsAtLeast(ShkSpacing.MinTouchTarget)
         }
 
@@ -369,8 +376,8 @@ class WaterBackupScreensTest {
         compose.tap(R.string.water_licences)
         compose.waitForText(words(R.string.water_choose_a_part))
 
-        compose.tap("Gson")
-        compose.waitForText("Copyright (C) 2008 Google Inc.", substring = true)
+        compose.tap("Tink for Java")
+        compose.waitForText("Copyright 2017 Google Inc.", substring = true)
         compose.onNode(hasText("AndroidX libraries") and hasClickAction()).assertExists()
         compose.onNode(hasText("Apache License 2.0") and isHeading()).assertExists()
     }

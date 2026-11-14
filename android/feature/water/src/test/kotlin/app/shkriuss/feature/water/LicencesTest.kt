@@ -28,7 +28,7 @@ class LicencesTest {
 
     @Test
     fun everyPartHasANameANoticeAndALicence() {
-        assertEquals("the 14 parts of third-party.md", 14, Licences.parts.size)
+        assertEquals("the seven parts that ship, as third-party.md lists them", 7, Licences.parts.size)
         Licences.parts.forEach { part ->
             assertTrue(part.id, name(part).isNotBlank())
             assertTrue("${part.id} names its licence", resources.getString(part.licence).isNotBlank())
@@ -58,14 +58,13 @@ class LicencesTest {
     fun theApacheLicenceIsTheTextOfApacheOrg() {
         assertEquals("cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", sha256(R.raw.water_licence_apache_2_0))
         val apache = Licences.parts.filter { resources.getString(it.licence) == "Apache License 2.0" }
-        assertEquals(11, apache.size)
+        assertEquals(5, apache.size)
         apache.forEach { assertEquals(it.id, R.raw.water_licence_apache_2_0, it.text) }
     }
 
     @Test
     fun theOtherLicencesAreTheFilesOfTheirSources() {
         assertEquals("6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d", sha256(R.raw.water_licence_protobuf))
-        assertEquals("fb9bdee1ef51ee85a17d04fda7fbf0ea2af92454b151a252c13cea7a720f3a8b", sha256(R.raw.water_licence_jsr305))
         // The licence file that ships next to the word list in core/crypto, which is the source's own.
         assertEquals("d5e3c7c62a84e80073201e2f6e5130e9e6804fa05f8ac4f8b26a13c7d3969697", sha256(R.raw.water_licence_bip39))
     }
