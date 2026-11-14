@@ -80,7 +80,7 @@ class BodyRulesTest {
     fun aBodyWrittenByHandInTheRightFormIsGood() {
         val body = Body().manifest().aRecord(1).aRecord(2).file(pattern(100)).end(records = 2, files = 1)
 
-        val summary = BackupSummary(dataVersion = 1, madeAt = 0, records = 2, files = 1)
+        val summary = BackupSummary(dataVersion = 1, madeAt = 0, records = 2, files = 1, notDeleted = mapOf("note" to 2L))
         assertEquals(CheckResult.Good(summary), device.check(device.fileWithBody(body.bytes())))
     }
 
@@ -174,7 +174,7 @@ class BodyRulesTest {
 
         val file = device.backup()
 
-        val summary = BackupSummary(dataVersion = 1, madeAt = device.clock.nowMillis, records = 1, files = 0)
+        val summary = BackupSummary(dataVersion = 1, madeAt = device.clock.nowMillis, records = 1, files = 0, notDeleted = mapOf("note" to 1L))
         assertEquals(CheckResult.Good(summary), device.check(file))
     }
 }

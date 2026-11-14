@@ -44,6 +44,14 @@ data class BackupSummary(
     val records: Long,
     /** How many files it holds. */
     val files: Long,
+    /**
+     * For each type name, how many of its records are not deleted. A type
+     * whose records are all deleted is not in it. So a screen can say how
+     * many drinks or notes a backup holds, without the deleted ones.
+     * `core/backup` still knows no record type of any app: the names are
+     * the ones in the file.
+     */
+    val notDeleted: Map<String, Long>,
 )
 
 /** How writing a backup ended. A failed write of the document is not a result: it throws. */
@@ -52,8 +60,11 @@ sealed class ExportResult {
      * The backup is written. It holds [records] records and [files]
      * files. [filesLeftOut] files are not on this device and are not in
      * this backup. The file itself does not say that number.
+     * [notDeleted] says, for each type name, how many of its records are
+     * not deleted, as [BackupSummary.notDeleted] does for a backup that
+     * was read.
      */
-    data class Written(val records: Long, val files: Long, val filesLeftOut: Long) : ExportResult()
+    data class Written(val records: Long, val files: Long, val filesLeftOut: Long, val notDeleted: Map<String, Long>) : ExportResult()
 
     /**
      * No backup can be made yet: the app has no keys from a recovery key,

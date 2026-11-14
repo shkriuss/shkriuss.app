@@ -77,8 +77,8 @@ class ExportTest {
 
         val (result, file) = device.write()
 
-        assertEquals(ExportResult.Written(records = 3, files = 1, filesLeftOut = 2), result)
-        val summary = BackupSummary(dataVersion = 1, madeAt = device.clock.nowMillis, records = 3, files = 1)
+        assertEquals(ExportResult.Written(records = 3, files = 1, filesLeftOut = 2, notDeleted = mapOf("file" to 3L)), result)
+        val summary = BackupSummary(dataVersion = 1, madeAt = device.clock.nowMillis, records = 3, files = 1, notDeleted = mapOf("file" to 3L))
         assertEquals("the file itself does not say how many were left out", CheckResult.Good(summary), device.check(file))
 
         val other = Device(temporary)
@@ -104,7 +104,7 @@ class ExportTest {
             },
         )
 
-        assertEquals(ExportResult.Written(records = 1, files = 0, filesLeftOut = 5), result.getOrThrow())
+        assertEquals(ExportResult.Written(records = 1, files = 0, filesLeftOut = 5, notDeleted = mapOf("note" to 1L)), result.getOrThrow())
     }
 
     @Test

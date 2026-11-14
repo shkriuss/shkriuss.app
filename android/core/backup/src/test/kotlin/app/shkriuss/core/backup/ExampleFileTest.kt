@@ -69,7 +69,7 @@ class ExampleFileTest {
             "bid rhythm alien crouch range attend journey unaware"
 
         /** Made on 2026-01-01 at 01:00 UTC, with three records and one file. */
-        val SUMMARY = BackupSummary(dataVersion = 1, madeAt = 1_767_229_200_000L, records = 3, files = 1)
+        val SUMMARY = BackupSummary(dataVersion = 1, madeAt = 1_767_229_200_000L, records = 3, files = 1, notDeleted = mapOf("example" to 2L))
 
         /** The file stream "file stream test" of the vectors in crypto-design.md, 77 bytes. */
         val FILE_STREAM = hex(

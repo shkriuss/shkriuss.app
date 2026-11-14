@@ -242,7 +242,7 @@ class WaterBackupContentTest {
         val recoveryKey = keys.crypto.setup.createRecoveryKey().also { keys.crypto.setup.storeDerivedKeys(it) }
 
         val written = backupsOf(keys, content).export(document)
-        assertEquals(ExportResult.Written(records = 3, files = 0, filesLeftOut = 0), written)
+        assertEquals(ExportResult.Written(records = 3, files = 0, filesLeftOut = 0, notDeleted = mapOf("intake" to 1L, "goal" to 1L, "settings" to 1L)), written)
 
         val newPhone = SoftwareKeysApp(temporary.newFolder(), WATER).also { it.crypto.setup.storeDerivedKeys(recoveryKey) }
         val other = otherDatabase()

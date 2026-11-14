@@ -45,12 +45,15 @@ internal class BackupReader(input: InputStream, private val newestDataVersion: I
 
         var records = 0L
         var files = 0L
+        val counts = RecordCounts()
         while (true) {
             when (body.tag()) {
                 BackupFormat.TAG_RECORD -> {
                     if (files > 0) damaged()
-                    sink.record(RecordEntry.read(body))
+                    val record = RecordEntry.read(body)
+                    sink.record(record)
                     records++
+                    counts.count(record)
                 }
                 BackupFormat.TAG_FILE -> {
                     readFile(sink)
@@ -58,7 +61,7 @@ internal class BackupReader(input: InputStream, private val newestDataVersion: I
                 }
                 BackupFormat.TAG_END -> {
                     readEnd(records, files)
-                    return BackupSummary(dataVersion, madeAt, records, files)
+                    return BackupSummary(dataVersion, madeAt, records, files, counts.notDeleted())
                 }
                 // A second Manifest, a tag that is not known, and a body that ends before End.
                 else -> damaged()

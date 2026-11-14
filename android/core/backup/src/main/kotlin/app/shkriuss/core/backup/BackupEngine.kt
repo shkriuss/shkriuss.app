@@ -60,7 +60,7 @@ internal class BackupEngine(
             // Closing writes the last segment. Only now is the stream whole.
             body.close()
             whole = true
-            return ExportResult.Written(writer.records, writer.files, writer.filesLeftOut)
+            return ExportResult.Written(writer.records, writer.files, writer.filesLeftOut, writer.notDeleted)
         } finally {
             // A backup that failed is left cut: its stream is never closed as a whole one.
             if (!whole) runCatching { document.close() }
