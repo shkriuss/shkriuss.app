@@ -18,4 +18,7 @@ dependencies {
 
     // A real ShkCrypto on the stand-in for the Keystore (ADR 0029).
     testImplementation(testFixtures(project(":core:crypto")))
+    // The check that every screen of an app is behind the app lock, which
+    // AppLockCheckTest tries on sample screens.
+    testImplementation(project(":core:testing"))
 }

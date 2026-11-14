@@ -17,3 +17,12 @@ Pages:
 
 Catalog 0.1.0 had no checklist. It was the rehearsal of the release flow
 ([release.md](../../development/release.md#rehearsal-with-catalog)).
+
+Open, for the next change to Catalog:
+
+1. Remove the receiver of `androidx.profileinstaller` in Catalog's
+   manifest, as Water does. It is exported to callers with
+   `android.permission.DUMP`, the system and the developer shell. The
+   owner decided this for Water on pull request 40, and asked for Catalog
+   to follow in its next change
+   ([permissions.md](../../security/permissions.md#catalog-appshkriusscatalog)).

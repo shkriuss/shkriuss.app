@@ -11,7 +11,12 @@ what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
   accepted them, and the three decision records below, on
   [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36),
   on 2026-11-13.
-- Not built yet. No code exists for Water.
+- Step 2.2 built the data and the logic on 2026-11-14: the database,
+  the rules of this page as plain code, the view models and the backup
+  content, in `android/feature/water`, and the app module
+  `android/app/water`. The screens come in step 2.3. In the same step the
+  owner corrected [rule 3](#when-the-next-reminder-comes), on the snooze
+  and a drink ([Decided by the owner](#decided-by-the-owner)).
 - If this page is wrong or silent, the fix is a change to this page
   first, agreed with the owner ("If the spec is wrong or silent, stop and
   ask" in the prompt of steps 2.2 to 2.5).
@@ -242,6 +247,18 @@ otherwise below.
 | Unit | "Millilitres (ml)" | A dialog with two choices: "Millilitres (ml)" and "US fluid ounces (fl oz)" |
 | Quick amounts | "150 ml, 250 ml, 500 ml" | A dialog with three number fields: "First", "Second", "Third". Under them: "The first amount is also the one that a reminder's Drank button adds." |
 
+- The daily goal is from 500 to 10,000 ml (17 to 338 fl oz). Otherwise
+  the field says "Enter a goal from 500 to 10,000 ml." under it, in the
+  unit in use: "Enter a goal from 17 to 338 fl oz." The dialog keeps the
+  old goal. The owner decided the words on pull request 40.
+- Setting the goal to the value today already has writes nothing
+  ([Changing the goal](#the-goal-of-a-day)).
+- Each quick amount is from 1 to 3,000 ml (1 to 101 fl oz). Otherwise
+  the field that is wrong says "Enter an amount from 1 to 3,000 ml."
+  under it, the same words as the drink sheet, in the unit in use: "Enter
+  an amount from 1 to 101 fl oz." The dialog keeps the old amounts. The
+  owner decided the words on pull request 40.
+
 **Reminders**
 
 | Item | Shows | Opens |
@@ -255,9 +272,11 @@ otherwise below.
   the [reminder line of Today](#today), for the four states of the
   notification permission.
 - "Every", "From" and "Until" can be changed while reminders are off.
-- "Until" must be at least 30 minutes after "From". Otherwise the
-  picker's dialog says "Until must be at least 30 minutes after From."
-  and keeps the old time.
+- "Until" must be at least 30 minutes after "From". A change of "Until",
+  or a change of "From", that would leave less than 30 minutes between
+  them is refused: the picker's dialog says "Until must be at least 30
+  minutes after From." and keeps the old time. The owner accepted the
+  rule for "From" on pull request 40.
 - When no reminder fits between "From" and "Until" (the interval is
   longer than the hours), a line says: "No reminder fits between From and
   Until. Choose a shorter interval or longer hours." It does not block
@@ -405,7 +424,10 @@ One row per change of the goal.
 1. Take the goals that are not deleted and whose `fromDay` is that day or
    earlier.
 2. The one with the latest `fromDay` counts. If two have the same
-   `fromDay`, the one with the later `updatedAt` counts.
+   `fromDay`, the one with the later `updatedAt` counts. If they also
+   have the same `updatedAt`, the one with the larger `id` counts, until
+   step 5.1 decides ties ([Open](#open), item 7). Only a restore or sync
+   can bring such a tie.
 3. If there is none, the goal is 2,000 ml.
 
 Changing the goal:
@@ -413,6 +435,8 @@ Changing the goal:
 1. If the goal that counts for today has `fromDay` today, it is updated.
 2. Otherwise a new goal is created with `fromDay` today.
 3. So a change counts from today, and past days keep the goal they had.
+4. Setting the goal to the value that today's goal already has writes
+   nothing. The owner accepted this on pull request 40.
 
 ### Table `settings`
 
@@ -433,7 +457,9 @@ The settings that belong to your data
 #### The settings in use
 
 1. The settings in use are those of the record that is not deleted and
-   has the latest `updatedAt`.
+   has the latest `updatedAt`. Of two with the same `updatedAt`, the one
+   with the larger `id` counts, until step 5.1 decides ties
+   ([Open](#open), item 7).
 2. With no such record, the defaults count: millilitres, 150, 250 and
    500 ml, reminders off, every 60 minutes, from 08:00 until 22:00.
 3. The first change in Settings creates the record, with the defaults
@@ -531,8 +557,17 @@ The rule:
    - the time you last pressed **Later**.
 2. **The next reminder** is the first of "the count + 1 interval",
    "the count + 2 intervals", and so on, that is later than now.
-3. **A snooze comes first.** While a snooze is set and its time is later
-   than now, the next reminder is at the snooze time.
+3. **A snooze comes first, while Later is the latest.** A snooze holds
+   only while the press of **Later** is still the latest of the four.
+   While it holds and its time is later than now, the next reminder is
+   at the snooze time.
+   - A drink timed at or after the press of **Later** ends the snooze.
+     The drink is then the latest of the four, so the next reminder is 1
+     interval after it.
+   - A drink entered with an earlier time does not end it. The press of
+     **Later** is still the latest.
+   - The owner decided this in step 2.2, on 2026-11-14
+     ([Decided by the owner](#decided-by-the-owner)).
 4. **Only inside the reminder hours, and only until the goal is met.**
    If the next reminder would come after "Until", or today's goal is met,
    there is no more reminder today. The next one is tomorrow at "From" +
@@ -555,6 +590,8 @@ Each case, with reminder hours from 08:00 until 22:00 and every hour:
 | The latest drink is deleted, or its time is made earlier | The count falls back to the latest of the four that is left | |
 | A reminder is shown and not answered, or swiped away | 1 interval after that reminder. It replaces the old notification. | Shown at 11:20: next at 12:20 |
 | **Later** at time t | t + 15 minutes. If that reminder is not answered either, 1 interval after it. | **Later** at 12:22: next at 12:37, then 13:37 |
+| A drink timed at or after the press of **Later**, while a snooze is set | The snooze ends. 1 interval after the drink. | **Later** at 12:22, then a drink at 12:30: no reminder at 12:37, next at 13:30 |
+| A drink entered with an earlier time, while a snooze is set | The snooze holds: the press of **Later** is still the latest of the four. After the snooze, 1 interval after it. | **Later** at 12:22, then at 12:25 you add a drink for 11:00: next at 12:37, then 13:37 |
 | **Later** when t + 15 minutes is after "Until" | No snooze. The count moves to t, and t + 1 interval is after "Until" too, so none today. Tomorrow at "From" + 1 interval. | **Later** at 21:50: next tomorrow at 09:00 |
 | The next time is after "Until" | None today. Tomorrow at "From" + 1 interval. | Last drink at 21:30: next tomorrow at 09:00 |
 | The goal is met | None today. Tomorrow at "From" + 1 interval. The shown reminder is removed. | |
@@ -937,6 +974,10 @@ off do not matter for Water.
 3. Android backup and device-to-device transfer are turned off. The
    backup file is the only backup ([backup.md](../../user/backup.md)).
 4. Exported: only `WaterActivity`, the launcher screen.
+   `androidx.profileinstaller` adds a receiver that is exported to callers
+   with `android.permission.DUMP`, for developer tools. Water's manifest
+   removes it (owner's decision on pull request 40). The start-up profile
+   is still installed when the app starts.
 5. Receivers, none exported:
    - the two of `core/notify`,
    - a third one for the buttons of a notification, which step 2.4 adds
@@ -1011,6 +1052,8 @@ Water needs these. Each is built in the step named, not on this page.
 
 | Module | Change | Step |
 |---|---|---|
+| `core/testing` | The check that every screen of an app is behind the app lock: `AppLockCheck`, its app classes and `MergedManifest` ([security-screens.md](../../architecture/security-screens.md#every-screen-is-behind-the-gate)). Built. | 2.2 |
+| `core/security` | `AppLockGate` tags its lock screen with `LOCK_SCREEN_TEST_TAG`, so the check can find it. Nothing that shows changes. Built. | 2.2 |
 | `core/design` | `ShkProgressBar`, a progress bar with a value from 0 to 1. Features cannot draw Material 3's own. With its page in Catalog, its screenshots and its tests. | 2.3 |
 | `core/notify` | Buttons on a notification: a third receiver, not exported, the rules of [ADR 0034](../../adr/0034-notification-buttons.md), no buttons in the hidden form, and a timeout for a notification. `ManifestTest` and [permissions.md](../../security/permissions.md) follow. | 2.4 |
 | `core/security` | The first-need dialog of [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md), with its Catalog page. | 2.5 |
@@ -1039,6 +1082,8 @@ On 2026-11-13, in the planning session of this step.
 | Reminder settings and sync | Reminder settings are a record, so with sync they would reach every device, and every device would remind. The sync design decides which settings are per device ([Open](#open), item 6). |
 | The decision records and the assumptions (on [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36)) | [ADR 0034](../../adr/0034-notification-buttons.md), [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md) and [ADR 0036](../../adr/0036-app-settings-as-records.md) accepted. The 18 [assumptions](#assumptions) accepted as written. |
 | The file key move (on pull request 36) | Water may finish a pending move at once only because it stores no files. A later version that stores files must take this call out first, or files sealed with the old key are lost. The spec says so under [Files](#files), and the code carries the same warning as a comment on that call. |
+| A drink while a snooze is set (step 2.2, on 2026-11-14) | Rule 3 and the case "A drink is logged" said different things when a snooze was set. The owner decided: a snooze holds only while the press of **Later** is still the latest of the four. A drink timed at or after the press ends it; a drink entered with an earlier time does not. Rule 3 and two rows of [the table](#when-the-next-reminder-comes) say so. |
+| On pull request 40 (step 2.2, on 2026-11-14) | The words for a goal and for a quick amount outside their limits ([Settings screen](#settings-screen)). Three rules the code had chosen, accepted: on the same `updatedAt` the larger `id` counts, until step 5.1; a change of "From" that leaves less than 30 minutes before "Until" is refused, like a change of "Until"; setting the goal to the value it already has writes nothing. The receiver of `androidx.profileinstaller` is removed from Water's manifest ([Permissions](#permissions)). |
 
 ## Assumptions
 
@@ -1109,4 +1154,5 @@ What is left, with the step that decides it.
 7. **Ties in sync**, for two settings records or two goals with the same
    `updatedAt`
    ([backup-format.md](../../architecture/backup-format.md#the-restore-rule)).
-   Step 5.1.
+   Step 5.1. Until then, the larger `id` counts (owner's decision on pull
+   request 40).
