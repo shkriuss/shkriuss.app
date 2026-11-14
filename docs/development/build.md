@@ -54,8 +54,8 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   tests only ([Shared test helpers](#shared-test-helpers)).
 - `android/feature/water/`: the data and logic of Water: its database,
   with the committed schemas in `schemas/`, its rules, its ViewModels
-  and its backup content. Its screens come in step 2.3. See
-  [apps/water/spec.md](../apps/water/spec.md).
+  and its backup content, and from step 2.3 its screens, in the package
+  `ui`. See [apps/water/spec.md](../apps/water/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
 - `android/app/water/`: the Water app, `app.shkriuss.water`.
@@ -275,10 +275,11 @@ second build must write the same mapping file, or the release stops. See
 - They run for the `debug` build type only. `release` and `preview` compile
   the same Kotlin code, and R8 does not run for unit tests, so running them
   again would test nothing new.
-- `core/design` has ten: `ShkColorsContrastTest`,
+- `core/design` has, among others, `ShkColorsContrastTest`,
   `ShkThemeMaterialTest`, `ShkComponentsTest`, `ShkIconSizeTest`,
-  `ShkTextFieldTest`, `ShkSliderTest`, `ShkSelectionControlSizeTest`,
-  `ShkRadioGroupTest`, `ShkContentComponentsTest` and `ShkRowEdgeTest`.
+  `ShkTextFieldTest`, `ShkSliderTest`, `ShkProgressBarTest`,
+  `ShkSelectionControlSizeTest`, `ShkRadioGroupTest`,
+  `ShkContentComponentsTest` and `ShkRowEdgeTest`.
   They check the contrast of every colour pair, how Material 3 is set
   up, and every `Shk*` component at font scale 1.0 and 2.0: its touch
   target, what TalkBack hears and announces, that long text wraps inside
@@ -468,9 +469,12 @@ second build must write the same mapping file, or the release stops. See
   - `WaterBackupContentTest` also writes a whole backup through `Backups`
     of `core/backup`, to a document behind a small content provider of
     the test, and restores it on a second app with the same recovery key.
-- `app/water` has `EveryScreenIsBehindTheAppLockTest`, `WaterManifestTest`,
-  which names everything Water's merged manifest lets another app reach,
-  and the screenshots of the screen that stands in until step 2.3.
+- `app/water` has `EveryScreenIsBehindTheAppLockTest`, which also locks
+  the app over each sheet and dialog, `WaterManifestTest`, which names
+  everything Water's merged manifest lets another app reach,
+  `WaterScreensTest`, what the screens do and what TalkBack hears, and
+  `WaterScreenshotTest`, the screenshots of every screen, sheet and
+  dialog.
 
 ### Instrumented tests
 

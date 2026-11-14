@@ -56,7 +56,7 @@ turned off.
 ### Water (`app.shkriuss.water`)
 
 No permissions yet. Step 2.2 built Water's data and logic and its app
-module, with one screen that stands in until step 2.3. Steps 2.4 and 2.5
+module, and step 2.3 its screens, with no permission. Steps 2.4 and 2.5
 add its five permissions, with its allow list in the APK rules check,
 as its [specification](../apps/water/spec.md#permissions) says.
 

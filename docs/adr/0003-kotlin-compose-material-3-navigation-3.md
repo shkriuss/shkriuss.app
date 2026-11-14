@@ -1,7 +1,8 @@
 # 0003 Kotlin, Compose, Material 3, Navigation 3
 
 - Status: Accepted. Point 2's "adaptive libraries" superseded by
-  [0024](0024-own-adaptive-layouts.md).
+  [0024](0024-own-adaptive-layouts.md). Point 2's open question on
+  Navigation 3 decided for Water in step 2.3.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 2), 3, 4 and 17,
   and the owner's review of
@@ -26,8 +27,19 @@
      adaptive layouts ([0024](0024-own-adaptive-layouts.md), owner
      decision on
      [pull request 16](https://github.com/shkriuss/shkriuss.app/pull/16)).
-   - Open: whether the apps use Navigation 3 is decided when the first
-     app is built (the same decision).
+   - Navigation 3 is not used by Water, the first app (owner decision
+     in step 2.3 of [PROMPTS.md](../development/PROMPTS.md), on
+     2026-11-14). Water has three destinations and one open day: the
+     chosen destination is saved state of the screen, the open day is in
+     a ViewModel, and Back works through Activity Compose's
+     `BackHandler`, which the build has already. Navigation 3 would be a
+     new library in the version catalog and the verification metadata,
+     for no gain here ([Water's spec](../apps/water/spec.md#navigation)).
+   - A later app whose screens go deeper, such as several screens
+     stacked on each other, decides again for itself. Navigation 3 stays
+     part of the stack, so that app needs no new record, only the
+     owner's leave for the version catalog and the verification
+     metadata (hard rule 5).
 3. Only `core/design` uses Material 3 directly. Apps use the `Shk*`
    components (section 4).
 4. Other libraries:
