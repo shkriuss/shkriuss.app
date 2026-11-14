@@ -910,6 +910,9 @@ What is left, with the step that decides it.
    when a file can change while a backup runs. The first app that stores
    files.
 5. **What Water puts in**, and its type names and contents. Step 2.1.
+   Answered in Water's
+   [specification](../apps/water/spec.md#backup-contents): data version
+   1, the types `intake`, `goal` and `settings`, and no files.
 6. **Whether the content of a record is also the plaintext of a sealed
    record in sync.** One encoding for both would be less code. Phase 5.
 7. **Ties in sync.** See [The restore rule](#the-restore-rule). Phase 5.

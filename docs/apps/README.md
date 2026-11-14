@@ -8,8 +8,10 @@ of each version. Guides for people who use the apps are in
 Folders:
 
 - [catalog/](catalog/README.md): Catalog, the design gallery.
+- [water/](water/README.md): Water, the pilot app, with its
+  specification.
 
 What else belongs here:
 
-- A folder for each further app, starting with Water and its
-  specification (prompt 2.1 in [PROMPTS.md](../development/PROMPTS.md)).
+- A folder for each further app, with its specification (prompt 2.1 in
+  [PROMPTS.md](../development/PROMPTS.md), with the app's name).
