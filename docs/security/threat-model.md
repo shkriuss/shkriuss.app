@@ -115,6 +115,13 @@ same: "Whoever has the words can read your backups and your synced data"
 4. An encrypted copy is in the owner's private `signing-ceremony`
    repository, and the owner keeps two more copies outside GitHub
    (ADR 0013, point 10).
+5. How the key is rotated to a new one is in
+   [ADR 0037](../adr/0037-signing-key-rotation.md). What to do if it is
+   stolen is in [ADR 0038](../adr/0038-a-stolen-signing-key.md). The
+   rehearsal of restoring and rotating it, with throwaway keys, and the
+   check that the real backup and its copies open, are in
+   [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
+   Open until the owner has done it.
 
 ### The release pipeline
 
@@ -449,6 +456,11 @@ What a takeover can do:
    of this repository.
 6. **Download the encrypted copy of the key** from `signing-ceremony`.
    Its passphrase is only with the owner (ADR 0013, point 10).
+   - Open: the ceremony takes the passphrase as a typed input, and GitHub
+     keeps typed inputs with each run. The rehearsal page asks the owner
+     to delete those runs, and to mask the passphrase in the ceremony
+     ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#open-points),
+     point 1).
 
 What limits it, and no more than this:
 
@@ -466,8 +478,14 @@ What limits it, and no more than this:
    not told to check attestations. So this limits only someone who looks.
 5. With a key of its own, a takeover can reach only new installs.
    Android refuses an update signed with another key.
-6. Open: what to do if the key is stolen. A key rotation needs its own
-   decision record, which is not written yet (ADR 0013).
+6. What to do if the key is stolen is decided in
+   [ADR 0038](../adr/0038-a-stolen-signing-key.md): rotate at once, as
+   [ADR 0037](../adr/0037-signing-key-rotation.md) says.
+   - A phone that has the rotated app refuses the old key alone, and any
+     other lineage made from it.
+   - A phone that takes a thief's update first stays with the thief.
+   - Both records are Proposed. They are Open until the rehearsal is
+     recorded.
 
 #### Claude's machine account
 
@@ -1432,6 +1450,11 @@ Other:
 19. The rehearsal of restoring and rotating the signing key, and the
     decision record a rotation needs. Step 2.7
     ([ADR 0013](../adr/0013-signing-key-custody-and-rotation.md)).
+    Step 2.7 wrote the rehearsal
+    ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md))
+    and the records [ADR 0037](../adr/0037-signing-key-rotation.md) and
+    [ADR 0038](../adr/0038-a-stolen-signing-key.md). Open until the owner
+    has done the rehearsal and recorded the results.
 20. Whether the emulator job for Android 17 becomes required (decided
     again at the Phase 2 gate), and the unpinned images
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
@@ -1439,6 +1462,16 @@ Other:
     ([CODEOWNERS](../../.github/CODEOWNERS)).
 22. Code scanning for Kotlin
     ([plan section 17](../plan/PLAN.md#17-to-confirm-in-phase-0)).
+23. A `rotate` action in signing-ceremony, before a real rotation, and
+    masking the typed passphrase there
+    ([ADR 0037](../adr/0037-signing-key-rotation.md);
+    [signing-key-rehearsal.md](../development/signing-key-rehearsal.md#open-points),
+    points 1 and 2).
+24. Whether, and when, the old key's right to hand over installed apps is
+    turned off after a rotation
+    ([ADR 0037](../adr/0037-signing-key-rotation.md)).
+25. What users do about their recovery key, if a harmful update ran on
+    their phone ([ADR 0038](../adr/0038-a-stolen-signing-key.md)).
 
 ### Found while writing this page
 
@@ -1504,6 +1537,13 @@ Open until its step is done.
     key (ADR 0013, point 8), and the decision record for a rotation and
     for a stolen key. It can run at any time, and is done before the
     first data app is released.
+    **Written in step 2.7**:
+    [ADR 0037](../adr/0037-signing-key-rotation.md) (a rotation),
+    [ADR 0038](../adr/0038-a-stolen-signing-key.md) (a stolen key) and
+    the rehearsal in
+    [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
+    Open until the owner has done the rehearsal and recorded the
+    results.
 12. Whether the recovery words alone can add a device to the sync
     server (Phase 5).
     **Step 5.1.**

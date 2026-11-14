@@ -872,7 +872,7 @@ answers point 11 under "Found while writing this page" in
 
 ```text
 Read CLAUDE.md, ADR 0013, docs/development/release.md and
-docs/security/threat-model.md (point 11 and open question 18). Plan the
+docs/security/threat-model.md (point 11 and open question 19). Plan the
 rehearsal of ADR 0013, point 8: restoring the signing key from its
 backup, and rotating it, both with a throwaway key and never the real
 one. Write steps I can do on a phone. Do not change signing config,
@@ -899,6 +899,29 @@ Then write:
 
 If the rehearsal needs a change to an owner-only file, stop and tell me
 which and why. Do not make the change.
+```
+
+The prompt first said "open question 18". The list was renumbered in step
+2.1, and it is now 19.
+
+Written on 2026-11-14: the rehearsal in
+[signing-key-rehearsal.md](signing-key-rehearsal.md),
+[ADR 0037](../adr/0037-signing-key-rotation.md) (rotation) and
+[ADR 0038](../adr/0038-a-stolen-signing-key.md) (a stolen key). Then do
+the rehearsal on your phone, and hand Claude the results:
+
+```text
+Read CLAUDE.md and docs/development/signing-key-rehearsal.md. These are
+my results of the signing key rehearsal, part by part, with the exact
+words that Obtainium, Android and AppVerifier showed: <results>.
+
+Record them in the results table of that page, and fix any step that did
+not match. Update docs/user/verify.md and docs/user/install.md with what
+users see after a key rotation, using the words I wrote down. If every
+part passed, close point 11 and open question 19 in
+docs/security/threat-model.md and point 8 of ADR 0013, and mark ADR 0037
+and ADR 0038 accepted if they are still Proposed. Never ask for or print
+a secret.
 ```
 
 ### Phase 2 gate (you)

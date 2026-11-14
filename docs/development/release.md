@@ -167,13 +167,122 @@ asked to approve.
 | A release secret is missing. | Check the three secrets of the `release` environment. |
 | SIGNING_KEYSTORE_B64 is not a base64-encoded keystore. | Write the secrets again with the `restore` action of `signing-ceremony`. |
 | apksigner could not sign. ... | The keystore, password and alias do not belong together. Write them again with `restore`. |
-| The APK was signed with a certificate that is not the one in ... | The `release` environment holds another key. Nothing was uploaded. Restore the suite key. Change fingerprints.md only after a planned key rotation. |
+| The APK was signed with a certificate that is not the one in ... | The `release` environment holds another key. Nothing was uploaded. [Restore the suite key](#restore-the-signing-key). Change fingerprints.md only in a [key rotation](#rotate-the-signing-key). |
 | A release or draft for ... already exists. | Delete the old draft: on the Releases page, tap the bin next to it, then **Delete this release**. Then start again. |
 | The tag ... exists now. The workflow must not create tags. | This should never happen. Do not publish the draft. Tell Claude in a session. |
 
 A job that failed because a download failed can be run again: on the run's
 page, tap **Re-run jobs**, then **Re-run failed jobs**. GitHub allows this
 for 30 days. To stop a run at any time, tap **Cancel workflow**.
+
+## The signing key
+
+Why it works this way:
+[ADR 0013](../adr/0013-signing-key-custody-and-rotation.md) (custody),
+[ADR 0037](../adr/0037-signing-key-rotation.md) (rotation) and
+[ADR 0038](../adr/0038-a-stolen-signing-key.md) (a stolen key). How to
+rehearse restoring and rotating it with throwaway keys, and how to check
+the real backup and its two copies, is in
+[signing-key-rehearsal.md](signing-key-rehearsal.md).
+
+### Restore the signing key
+
+When the secrets of `release` are lost, deleted or wrong, for example
+after "SIGNING_KEYSTORE_B64 is not a base64-encoded keystore":
+
+1. In signing-ceremony, run its workflow with the action `restore`
+   (ADR 0013, point 11).
+2. In shkriuss.app, open **Settings**, **Environments**, `release`. The
+   three secrets must each show as updated just now.
+3. The next release checks the key: the job **Sign** compares its
+   certificate with [fingerprints.md](../security/fingerprints.md), and
+   uploads nothing if they differ.
+
+To check that the backup opens without touching `release`, use part D of
+[signing-key-rehearsal.md](signing-key-rehearsal.md#part-d-check-the-real-backup).
+
+### Rotate the signing key
+
+A planned move of every app to a new key
+([ADR 0037](../adr/0037-signing-key-rotation.md)). After a theft, the
+same steps follow the first hour of
+[ADR 0038](../adr/0038-a-stolen-signing-key.md).
+
+Prepare. Users see nothing yet.
+
+1. In signing-ceremony:
+   1. Make the new key with `generate`.
+   2. Make the lineage, from the old key to the new one, with the old
+      key's rights of ADR 0037, point 3. This needs a `rotate` action,
+      which does not exist yet (ADR 0037, Open).
+   3. Back up the new key with the lineage. Make the two copies, and
+      check all three (parts D and E of
+      [signing-key-rehearsal.md](signing-key-rehearsal.md)).
+   4. Keep the old key's backup.
+2. Ask Claude in a session for the rotation pull request. Ask for exactly
+   these changes to owner-only files:
+   - `release.yml`: sign with the lineage, and check it (ADR 0037, points
+     4 and 6);
+   - `.github/CODEOWNERS`: a line for `docs/security/signing-lineage.txt`.
+
+   Claude also changes the hub's generator, so that the verify page lists
+   previous certificates. It also adds a line to every app's changelog:
+   "Signed with a new key. Obtainium warns once."
+3. In that pull request, you do two things yourself:
+   1. Add `docs/security/signing-lineage.txt`, with the lineage in base64
+      from the ceremony's run.
+   2. Edit fingerprints.md. Put the new certificate on the current line.
+      Move the old one to "Previous certificates", with the dates it was
+      used and the tag of the last release signed with it.
+
+Switch, all on one day:
+
+4. Merge. From now on, a release signed with the old key fails in the job
+   **Sign**, before anything is uploaded. The hub shows the new
+   fingerprint, and the old one as previous.
+5. In signing-ceremony, run `restore` for the new key. `release` now holds
+   it.
+6. Release a new version of every app ([Run a release](#run-a-release)).
+   In each run's summary, the certificate is the new one, and the lineage
+   lists the old certificate, then the new one.
+7. Update each app on your own phone first, with Obtainium:
+   1. Obtainium warns that the signing certificate changed. Go on.
+   2. Android updates the app, and its data stays.
+   3. AppVerifier shows two fingerprints, the old one first and the new
+      one last.
+8. Open `https://shkriuss.app/verify/`. It shows the new fingerprint, and
+   the old one as previous.
+
+What users do:
+
+9. They update as usual. Obtainium warns once for each app. They go on
+   when the hub shows the new fingerprint.
+10. AppVerifier then shows two fingerprints. The last one must be the new
+    one.
+11. Users who typed fingerprints into an app's settings in Obtainium add
+    the new one.
+
+Their data stays. A phone that was never updated keeps the old key until
+it updates.
+
+Later: whether to take away the old key's last right, to hand over
+installed apps, is Open (ADR 0037).
+
+### If the signing key is stolen
+
+Follow [ADR 0038](../adr/0038-a-stolen-signing-key.md). Suspicion is
+enough. In short:
+
+1. First hour:
+   1. Write down what you saw.
+   2. Secure your GitHub account.
+   3. Delete the three secrets of `release`, and disable the Release
+      workflow.
+   4. Publish the security advisory with the text in ADR 0038.
+2. First day: rotate, as above, and release every app. Then update the
+   advisory.
+3. Releases already published stay. The advisory and fingerprints.md list
+   which of them are ours.
 
 ## Rehearsal with Catalog
 

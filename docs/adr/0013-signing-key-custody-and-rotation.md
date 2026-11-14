@@ -1,6 +1,7 @@
 # 0013 Signing key custody and rotation
 
-- Status: Accepted
+- Status: Accepted; point 7 superseded by
+  [0037](0037-signing-key-rotation.md)
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 2 (decision 5), 10, 13, 14
   and 15, the owner's review of
@@ -40,12 +41,19 @@
 6. Secrets live only in environments limited to `main`. There are no
    repository-level secrets.
 7. Key rotation uses APK signature scheme v3.1 (Android 13 and later).
+   - Superseded by [0037](0037-signing-key-rotation.md). With a minimum
+     of Android 13, apksigner puts the new key and its lineage in the
+     scheme v3 block, and makes no v3.1 block.
 8. Restoring the key and rotating it are rehearsed with a throwaway key
    before the first public release.
    - Catalog 0.1.0, 0.2.0 and 0.3.0 were released before the rehearsal.
      It is now step 2.7 of [PROMPTS.md](../development/PROMPTS.md#27-restore-and-rotation-rehearsal).
      It can run at any time, and must be done before the first data app
      is released.
+   - It runs in a throwaway public repository, `key-rehearsal`, with
+     throwaway keys only, never in signing-ceremony or shkriuss.app. The
+     owner decided on 2026-11-14. The steps are in
+     [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
 9. Preview builds use a throwaway key and the application ID suffix
    `.preview`, so they install next to the real app.
 10. The encrypted backup:
@@ -141,10 +149,13 @@
 - A JKS keystore also loads with these settings, as long as its key has
   the keystore's password. This was tried in the cloud environment with
   `apksigner` from build tools 36.0.0, not in GitHub Actions.
-- A key rotation will need more than this record: a lineage file made
-  with `apksigner rotate`, signing with that lineage and scheme v3.1, a
-  place to keep the lineage, a change to `release.yml`, and the old
-  certificate moved to "Previous certificates" in fingerprints.md. It gets
-  its own record when it is planned.
-- Open: the restore and rotation rehearsal with a throwaway key (point 8)
-  happens in the `signing-ceremony` repository, which Claude cannot see.
+- A key rotation is decided in [0037](0037-signing-key-rotation.md). What
+  to do if the key is stolen is decided in
+  [0038](0038-a-stolen-signing-key.md).
+- The rehearsal (point 8) runs in `key-rehearsal`, so that it can never
+  reach `release`, the real backup or the real token. Parts D and E of
+  [signing-key-rehearsal.md](../development/signing-key-rehearsal.md)
+  then check, from signing-ceremony, that the real backup opens and that
+  its two copies are the same file. They change nothing.
+- Open: point 8 stays open until the owner has done the rehearsal and
+  recorded the results.

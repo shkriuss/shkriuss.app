@@ -49,7 +49,12 @@ recovery key when it is first needed, and an app's settings as records.
 The owner decided the core of 0034 and 0035 in that session. Claude
 proposed the details and 0036 in pull request 36, and the owner accepted
 all three in the review of that pull request, on 2026-11-13. 0036
-supersedes point 4 of 0004.
+supersedes point 4 of 0004. Records 0037 and 0038 come from Phase 2,
+step 2.7, the rehearsal of restoring and rotating the signing key: how a
+rotation works, and what to do if the key is stolen. 0037 supersedes
+point 7 of 0013. The owner decided the place of the rehearsal, where the
+lineage is kept and the answer to a stolen key in that session, on
+2026-11-14. Claude proposed the rest.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -68,7 +73,7 @@ How a record may be edited or replaced is in point 7 of
 | 0010 | [Exact alarms and reminder storage](0010-exact-alarms-and-reminder-storage.md) | Accepted |
 | 0011 | [No native code, Grammar exception](0011-no-native-code-grammar-exception.md) | Accepted |
 | 0012 | [No DI framework](0012-no-di-framework.md) | Accepted |
-| 0013 | [Signing key custody and rotation](0013-signing-key-custody-and-rotation.md) | Accepted |
+| 0013 | [Signing key custody and rotation](0013-signing-key-custody-and-rotation.md) | Accepted; point 7 superseded by 0037 |
 | 0014 | [Release flow and reproducible builds](0014-release-flow-and-reproducible-builds.md) | Accepted |
 | 0015 | [Distribution channels](0015-distribution-channels.md) | Accepted |
 | 0016 | [No developer registration with Google for now](0016-no-google-developer-registration-for-now.md) | Accepted |
@@ -92,3 +97,5 @@ How a record may be edited or replaced is in point 7 of
 | 0034 | [Buttons on notifications](0034-notification-buttons.md) | Accepted |
 | 0035 | [The recovery key comes when it is first needed](0035-recovery-key-when-first-needed.md) | Accepted |
 | 0036 | [An app's settings are records](0036-app-settings-as-records.md) | Accepted |
+| 0037 | [Signing key rotation](0037-signing-key-rotation.md) | Proposed |
+| 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Proposed |
