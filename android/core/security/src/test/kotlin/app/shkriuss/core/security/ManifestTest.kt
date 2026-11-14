@@ -15,7 +15,8 @@ import org.w3c.dom.Element
  * Without `HIDE_OVERLAY_WINDOWS` the screens would still work, but no
  * longer hide other apps' windows (`hideOtherAppsWindows`). This test makes
  * sure the module asks for it. Each app's merged manifest is checked by
- * the APK rules check from step 2.5 on (security-screens.md, "Open").
+ * the APK rules check since step 2.5 (docs/development/build.md, "APK
+ * rules check", rule 10).
  *
  * The test reads `src/main/AndroidManifest.xml` itself.
  */

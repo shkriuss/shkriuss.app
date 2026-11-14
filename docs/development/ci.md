@@ -127,8 +127,9 @@ Which build check runs where:
   module, and the tests of the build checks in `build-logic`
   (`:build-logic:test`).
 - By name, the two release checks below. The APK rules check reads the
-  release APK: rules 1 to 6 for every APK, and rules 7 to 9 (WebView and
-  code loading) for the APKs that ship.
+  release APK: rules 1 to 6 and rule 10 (the screens of `core/security`
+  with both permissions, since step 2.5) for every APK, and rules 7 to 9
+  (WebView and code loading) for the APKs that ship.
 - In every Gradle command: the refusal of the bundled SQLite driver, and
   the refusal of `core/testing` outside tests.
 

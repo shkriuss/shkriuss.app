@@ -234,7 +234,11 @@ all.
 - The file is in credential-encrypted storage, like the database. It
   can be read only after the first unlock.
 - The file is not in a backup. After a restore, the app calls
-  `Notify.sync()`.
+  `Notify.sync()`, so the alarms follow the restored data. A
+  notification that is showing is the app's to take away, if it no
+  longer fits. Water does both in one step since step 2.5
+  (`WaterReminders.afterRestore`;
+  [spec.md](../apps/water/spec.md#after-a-restore)).
 - A notification is shown with `VISIBILITY_PRIVATE`. On a locked screen
   Android shows its text only if the user lets the lock screen show all
   notification content.

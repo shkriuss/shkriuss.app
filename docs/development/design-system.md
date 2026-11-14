@@ -57,7 +57,7 @@ components ([Added in step 2.3](#added-in-step-23)).
 | `ShkCard.kt` | `ShkCard`, with and without `onClick`. |
 | `ShkLists.kt` | `ShkListItem`, `ShkDivider` and `ShkSectionHeader`. |
 | `ShkContentStates.kt` | `ShkEmptyState`, `ShkLoadingState`, `ShkErrorState`, and `ShkStateAction`, the button of a state. |
-| `ShkDialog.kt` | `ShkDialog` and `ShkDialogAction`, a question in a window and one of its buttons. `DialogPanel` and `DialogButtons`, the panel and the buttons of every dialog, the pickers included, are internal to `core/design`. |
+| `ShkDialog.kt` | `ShkDialog` and `ShkDialogAction`, a question in a window and one of its buttons, up to three. `ShkProgressDialog`, a dialog with a progress circle and no button, from step 2.5. `DialogPanel` and `DialogButtons`, the panel and the buttons of every dialog, the pickers included, are internal to `core/design`. |
 | `ShkBottomSheet.kt` | `ShkBottomSheet`. |
 | `ShkSnackbar.kt` | `ShkSnackbarHostState`, `rememberShkSnackbarHostState` and `ShkSnackbarResult`. `ShkScreen` shows the snackbars. |
 | `ShkMenu.kt` | `ShkMenu` and `ShkMenuItem`. |
@@ -343,6 +343,7 @@ icon rule asks, and the rail grows with its labels.
 | `ShkNavigationScaffold` | Switching between the three to five main places of an app, such as Today, History and Settings. It wraps all of the app's screens. | Going deeper, from a list to one item. Use `ShkListDetailScaffold` and Back. An app with one place needs none. |
 | `ShkListDetailScaffold` | A list and one item from it, such as notes and the open note. | A list whose items do not open. Use list items on a `ShkScreen`. |
 | `ShkDialog` | A question to answer before going on, such as "Delete this note?" before something that cannot be undone. | News that needs no answer: use a snackbar. More than a few choices or fields: use a sheet or a screen. |
+| `ShkProgressDialog` | Work the user started, must wait for and cannot stop, such as "Writing the backup". | Content that is on its way: use a loading state in the screen. Work the user may stop: use a dialog with a way out. |
 | `ShkBottomSheet` | A few actions or a short form about what is on the screen, such as what to do with a note. Actions that need a second line of text. | A question that needs an answer: use a dialog. A few short actions: a menu is lighter. |
 | Snackbar (`ShkSnackbarHostState`) | A short message about something that just happened, with at most one action, such as "Note deleted" with Undo. | Something that went wrong with what a screen shows: use an error state. A question: use a dialog. Anything that must not be missed: it goes away by itself. |
 | `ShkMenu` | A short list of actions that opens from a button, such as Rename and Delete behind "More options" in a top bar (`menuItems`). | More than about six actions, or actions that need a second line: use a sheet. The main action of a screen. |
@@ -691,6 +692,27 @@ the Catalog.
 | `ShkTimePicker` | `refuse` | "OK" asks it first. When it returns words, such as "Until must be at least 30 minutes after From.", the dialog stays open, keeps the time typed, and shows the words under the fields in `error`, as a polite live region that TalkBack announces. Typing hides them. |
 | `ShkTextField` | `suffix` and `suffixDescription` | A short unit after the typed text, inside the box, such as "ml", in `textSecondary`. TalkBack reads `suffixDescription`, such as "millilitres", with the label, or the suffix itself without one. |
 | `ShkListItem` | `trailingIcon` | A decorative icon at the very end of the row, after the trailing text, in `textSecondary`, such as a check next to "Goal reached". It grows with the text. Say in the text what it shows. |
+
+### Added in step 2.5
+
+Water's backup and restore, and the dialog for the moment the recovery
+key is first needed, needed two parts that the dialog did not have
+(owner's decision in step 2.5). Each has a sample at the end of the
+Dialogs page in the Catalog.
+
+| Component | Part | What it does |
+|---|---|---|
+| `ShkDialog` | `otherAction` | An optional third button, for a question with two answers and a way out, such as "Create a recovery key", "I already have one" and "Not now". It sits between the way out and the confirm button. When the buttons do not fit side by side, they go one above the other: the confirm button on top, the way out lowest. Two buttons are easier to choose from, so use it rarely. Its default is none, which leaves every existing dialog as it was. |
+| `ShkProgressDialog` | New | A dialog that only says what the app is doing, with a turning circle, while the user waits: "Writing the backup". It has no button. A tap outside it and Back do nothing. The caller stops showing it when the work has ended, and then says how it ended, for example in a `ShkDialog`. It looks like every dialog: the higher surface colour, a 1 dp outline, 280 to 560 dp wide. Its words wrap. |
+
+1. TalkBack reads the words of a progress dialog and "in progress" as
+   one item, and announces them when the dialog opens. The dialog has no
+   title of its own, so the words are announced once, not twice.
+2. With the two changes alone, no existing Catalog screenshot changed
+   except those of the Dialogs page and the start screen, which grew.
+3. Open: how TalkBack announces the progress dialog on a real phone. A
+   unit test shows what it would read, not that it speaks. It is in the
+   phone steps of the pull request of step 2.5.
 
 ### States
 
@@ -1070,6 +1092,14 @@ for every component with an icon next to text.
    right in right-to-left languages, with round ends. The drawing is
    checked pixel by pixel on a plain image.
 
+The two parts added in step 2.5 are checked in `ShkDialogTest`, at font
+scale 1.0 and 2.0: the third button is read once, as a button, calls its
+action and closes the dialog; side by side it sits between the way out
+and the confirm button, and one above the other it sits in the middle;
+three touch targets do not overlap. The progress dialog is one item for
+TalkBack, with its words, has no button, stays open after Back, and its
+long words wrap inside the dialog.
+
 The four parts added in step 2.3 are checked where their component is:
 
 1. `ShkDialogTest`: a button with `closesDialog = false` keeps the dialog
@@ -1337,8 +1367,9 @@ Components:
 
 18. **Dialogs**: the dialog with text and two buttons, with one button,
     with a choice, with its confirm button turned off and with long text,
-    then one to try, and last one that stays open with an error under its
-    field.
+    then one to try, one that stays open with an error under its
+    field, and, from step 2.5, one with a third button and a progress
+    dialog.
 19. **Bottom sheets**: the sheet with a title, without one and with long
     text, then one to try.
 20. **Snackbars**: the snackbar with a message only, with an action and
@@ -1368,6 +1399,17 @@ Shared screens:
     and Back returns to the list. A switch blocks screenshots as in an
     app; it is off by default
     ([security-screens.md](../architecture/security-screens.md#catalog)).
+25. **App lock screens**: every state of the lock screen, the app lock
+    screen, its dialogs, the notices, and turning the app lock on, with
+    sample data
+    ([security-screens.md](../architecture/security-screens.md#catalog)).
+26. **Recovery key when first needed**, from step 2.5: the four forms of
+    the dialog an app shows when a backup, a restore or the app lock
+    first needs the recovery key: for a backup, for the app lock, for a
+    restore, and after a setup that stopped. Each opens on a screen of
+    its own, drawn in place, and Back returns to the list. Their buttons
+    do nothing: Catalog holds no keys
+    ([security-screens.md](../architecture/security-screens.md#the-recovery-key-when-first-needed)).
 
 The samples of pages 18 to 23 are drawn in place
 ([Windows of their own](#windows-of-their-own)); only the one under "Try
@@ -1415,6 +1457,12 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
 `SecurityScreensScreenshotTest` opens each state of the recovery key
 screens from its page, the way the owner does, and captures it to its end
 in the eight standard configurations: `RecoveryKey<State>_<config>.png`.
+
+`FirstNeedScreenshotTest`, from step 2.5, opens each of the four forms
+from the page "Recovery key when first needed" and captures it in the
+eight standard configurations: `FirstNeedBackup`, `FirstNeedAppLock`,
+`FirstNeedRestore` and `FirstNeedFinish`. The page itself is
+`RecoveryKeyFirstNeedPage_<config>.png`.
 
 `OpenComponentsScreenshotTest` opens each component of batch 5 from "Try
 it", the way a user does, and captures the whole screen with its window,

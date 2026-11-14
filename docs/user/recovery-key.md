@@ -4,19 +4,39 @@ The recovery key is your account. It is 24 words that you write on
 paper. With it you can read your backups and your synced data, and set
 up the apps on a new phone.
 
-No released app has these screens yet. The first one will be Water. This
-page says what is already fixed. It was written on 2026-11-13, with the
-screens.
+Water is the first app that has these screens. It is not released yet.
+This page was written on 2026-11-13, with the screens, and updated on
+2026-11-14, when Water got them.
 
-To see them before then: from version 0.3.0, the
-[Catalog app](apps.md) shows every state of these screens with sample
-words. Open **Recovery key screens** under **Shared screens**. The
-sample words are no real key, and nothing there makes, keeps or shows
-one.
+Where they are, in Water: open **Settings**. Under **Security**, tap
+**Recovery key**. That opens the app's security screen. The row says
+**Not set up**, **Setup not finished** or **Set up**. Later apps have
+the same row in their settings.
 
-Open: the names of the buttons that open these screens in an app, and
-where they are. They are set when the first app gets them. This page is
-updated then.
+To see the screens without an app that has them: from version 0.3.0,
+the [Catalog app](apps.md) shows every state of these screens with
+sample words. Open **Recovery key screens** under **Shared screens**.
+The sample words are no real key, and nothing there makes, keeps or
+shows one.
+
+## When an app asks for it
+
+An app opens without any setup. You can use it at once. The recovery key
+comes when you first need it:
+
+| You tap | The app says | Buttons |
+|---|---|---|
+| **Make a backup** | "Set up your recovery key first". A backup is locked with it. | **Create a recovery key**, **I already have one**, **Not now** |
+| **App lock** | "Set up your recovery key first". The words are the way back in. | **Create a recovery key**, **I already have one**, **Not now** |
+| **Restore a backup** | "Enter your recovery key first". A backup opens only with the words it was made with. | **Enter the words**, **Cancel** |
+
+1. A button opens the screens below.
+2. When you are done there, the app goes on with what you tapped: the
+   file picker for a backup or a restore, or the app lock screen.
+3. **Not now** and **Cancel** change nothing. You can go on using the
+   app without a recovery key.
+4. If setting up the key stopped half way, the app says "Finish your
+   recovery key" instead, with **Open the security screen**.
 
 ## What it is
 
@@ -34,7 +54,9 @@ updated then.
 
 ## Create a recovery key
 
-1. Open the app's security screen and tap **Create a recovery key**.
+1. Open the app's security screen and tap **Create a recovery key**. Or
+   tap **Create a recovery key** when the app asks for the key
+   ([When an app asks for it](#when-an-app-asks-for-it)).
 2. Read the screen. Make sure nobody can see your phone. If TalkBack is
    on, it reads the words aloud.
 3. Tap **Show the words**. Write the 24 words on paper, in order, with

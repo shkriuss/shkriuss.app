@@ -11,8 +11,13 @@ backup is written, checked and restored.
   request. On that pull request the owner changed one thing: a backup
   with a higher data version is refused right after the Manifest. That
   is a change to the order of reading, not to the file format.
-- Not built yet: the screens (step 2.5), and the backup of a real app.
-  The first is Water (step 2.1).
+- The first app with a backup is Water. Its screens were built in
+  Phase 2, step 2.5, on 2026-11-14
+  ([spec.md](../apps/water/spec.md#backup-and-restore-screens)). In that
+  step the owner decided when a backup is checked
+  ([open question 2](#open-questions)), and a backup that was written or
+  checked now also says how many of its records are not deleted, per
+  type name. The file format did not change.
 - The code is `android/core/backup`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -339,7 +344,10 @@ own pages. The first is Water (step 2.1 in
    last segment.
 
 A backup that was written gives back three numbers: the records in it,
-the files in it, and the files that were left out.
+the files in it, and the files that were left out. It also gives back,
+for each type name, how many of its records are not deleted, so that a
+screen can say what the backup holds, for example "42 drinks". The
+writer counts this from the four fields. It never looks into a content.
 
 If anything fails on the way, the backup is not made. The app tries to
 delete the document. If it cannot, a half-written file stays. It has no
@@ -379,14 +387,28 @@ and does everything a restore does before it changes the app:
 4. It stores nothing, changes nothing and never calls the app's code.
 
 A good backup gives back its data version, when it was made, and how many
-records and files it holds. A bad one gives the same answer a restore
-would give.
+records and files it holds. It also gives back, for each type name, how
+many of its records are not deleted: the same numbers the writer gave
+when the backup was made. A type name whose records are all deleted is
+not in that list. A bad backup gives the same answer a restore would
+give.
 
 Why: a backup that cannot be restored must be found on the day it is
 made, not on the day it is needed. The app can read back the file it has
 just written. The check also lets a screen say what a file holds before
-the user restores it. When a screen calls the check is decided with the
-screens (step 2.5).
+the user restores it.
+
+When a screen calls the check (owner's decision in step 2.5):
+
+1. **After every backup**, by itself. The app reads the file it has just
+   written and checks it. The user does not have to ask.
+2. **Before every restore.** The app checks the file, shows what it
+   holds, and asks. Only then does it restore.
+3. There is no item to check a file on its own. To check an older file,
+   the user starts a restore and cancels at the question.
+
+Water's screens are the first
+([spec.md](../apps/water/spec.md#backup-and-restore-screens)).
 
 What the check cannot know:
 
@@ -596,7 +618,7 @@ For sync, later:
 | `BackupSink` | `core/backup` | Where an app lists: `record(...)`, `file(id, length, content)` and `filesLeftOut(count)` |
 | `BackupRecord` | `core/backup` | One record on its way: type name, the four fields (`RecordFields` of `core/data`), content |
 | `CheckedBackup`, `CheckedFile` | `core/backup` | A backup that passed every check, as the app gets it: its data version, when it was made, the counts, every record, and every file. A file can be opened or moved into the app's file store. |
-| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto`, its app name, its staging folder and a clock. `export(to)` writes a backup to a URI and says how many records, files and left-out files there were. `check(from)` checks one. `restore(from)` restores one. `start()` empties the staging folder at app start. |
+| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto`, its app name, its staging folder and a clock. `export(to)` writes a backup to a URI and says how many records, files and left-out files there were, and how many records of each type name are not deleted. `check(from)` checks one, and gives a `BackupSummary` with the same counts. `restore(from)` restores one. `start()` empties the staging folder at app start. |
 | `ExportResult`, `CheckResult`, `RestoreResult`, `BackupAnswer` | `core/backup` | What the three functions give back: a result, or one of the answers of this page |
 | `BackupDocuments` | `core/backup` | The two intents for the system file picker, the result of the picker, and the suggested file name |
 | `RecordWriter.takeFromBackup` | `core/data` | The only way a record of a backup is written ([ADR 0027](../adr/0027-record-fields-and-stamping.md), point 8). It answers with a `BackupTake`. |
@@ -605,8 +627,9 @@ For sync, later:
    every check.
 2. `core` never depends on a feature. So `core/backup` knows no table and
    no record type of any app.
-3. No screen is part of this step. The screens come with the first app
-   (step 2.5).
+3. No screen is part of `core/backup`. The screens are the app's. The
+   first are Water's, built in step 2.5
+   ([spec.md](../apps/water/spec.md#backup-and-restore-screens)).
 
 ## The system file picker
 
@@ -626,8 +649,9 @@ For sync, later:
    content (`wt`). Without it, writing over a longer file could leave its
    old end in place.
 6. The app asks for no storage permission and keeps no lasting permission
-   for the document. One pick is for one backup, one check or one
-   restore.
+   for the document. One pick is for one backup with the check that
+   follows it, or for one check with the restore that follows it. The
+   app reads the document a second time for that, with the same pick.
 
 ## What a changed or cut file does
 
@@ -836,7 +860,8 @@ for a single test. So the first proof stays well under the owner's limit
 of about a minute, and it is kept.
 
 No test in this step runs on an emulator, and none opens the picker
-itself. The picker is checked by hand with the first app.
+itself. The picker is checked by hand with the first app, Water
+([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices-backup-and-restore)).
 
 ## Decided by the owner
 
@@ -855,6 +880,13 @@ pull request 25, all on 2026-11-12.
 | The very large file test | If it takes more than about a minute in CI, a cheaper proof is used. |
 | When code starts | After the owner has read this page and ADR 0008. The owner gave the OK on 2026-11-12. |
 | A backup with a higher data version (on pull request 25) | It is refused right after the Manifest, before anything is staged. This changes the order of reading, not the file format. |
+
+In the planning session of Phase 2, step 2.5, on 2026-11-14.
+
+| Question | Decision |
+|---|---|
+| When a backup is checked ([open question 2](#open-questions)) | After every backup, by itself: the app reads the file again and checks it to its last byte. And before every restore. There is no item to check a file on its own; a restore checks first and can be cancelled. |
+| How a screen knows what a backup holds, for example how many drinks | `core/backup` counts, for each type name, the records that are not deleted, and gives the counts back when a backup is written and when one is checked. It reads only the four fields, never a content. No change to the file format. |
 
 ## Assumptions
 
@@ -896,15 +928,21 @@ What is left, with the step that decides it.
    deleted or changed after the backup. The format allows it. It needs a
    second `RecordWriter` function and a choice on the screen. Not built.
    The owner decides whether and when.
-2. **When the app checks a backup.** After every backup, before every
-   restore, or when the user asks. Step 2.5, with the screens.
+2. **When the app checks a backup.** Decided by the owner in step 2.5,
+   on 2026-11-14: after every backup, by itself, and before every
+   restore. Not only when the user asks
+   ([Checking a backup](#checking-a-backup);
+   [Decided by the owner](#decided-by-the-owner)).
 3. **Progress, stopping in the middle, and a long backup while the
    screen is off.** Keysets are dropped when the screen turns off, and a
    backup that is being written may finish
    ([crypto-design.md](../security/crypto-design.md#keys-in-memory)).
    What keeps the app running for a backup of many gigabytes is not
-   decided. Step 2.5, and again with the first app that stores large
-   files.
+   decided. Step 2.5 built what Water needs, and Water stores no files:
+   a dialog with a progress circle and no button, no way to stop in the
+   middle, and no service that keeps the app running. A restore and the
+   step after it are not stopped when the screen goes away. Still open
+   for the first app that stores large files.
 4. **One snapshot of records and files.** How an app with files makes
    sure that a file in a backup is the content its record describes,
    when a file can change while a backup runs. The first app that stores

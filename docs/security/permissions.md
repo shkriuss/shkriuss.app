@@ -14,8 +14,8 @@ and has its own decision record ([CLAUDE.md](../../CLAUDE.md)).
   permission it is not allowed. Each app has an allow list in the APK
   rules check. Only the owner changes it, after the app's ADR and its
   entry on this page. Today only Water is allowed any: the three of
-  `core/notify`, since step 2.4. Step 2.5 adds the two of
-  `core/security` for Water ([PROMPTS.md](../development/PROMPTS.md)).
+  `core/notify`, since step 2.4, and the two of `core/security`, since
+  step 2.5 ([PROMPTS.md](../development/PROMPTS.md)).
   An app that is not on the list may request none, and no app may
   declare a permission of its own. The check is described in
   [build.md](../development/build.md#apk-rules-check).
@@ -34,6 +34,61 @@ did:
 | `app.shkriuss.catalog.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Catalog's manifest. `androidx.core` uses it only on Android 12 and older, and the minimum is Android 13. |
 | `android.permission.USE_BIOMETRIC` | `core/security` | Removed in Catalog's manifest. Catalog shows the recovery key screens with sample data, holds no keys and never shows the system prompt ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). |
 | `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | Removed in Catalog's manifest. Catalog has none of the screens that hide other apps' windows, and no app lock ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Its switch **Protect this page** does the rest of what the screens do, which needs no permission. |
+
+Other components that libraries add, none of them a permission:
+
+- The six screens of `core/security`: removed in Catalog's manifest,
+  for the same reason. Catalog draws their content on two pages of its
+  own. Catalog has no app lock, so nothing registers the screen-off
+  receiver of the app lock either.
+
+- `androidx.startup.InitializationProvider`: not exported. Starts
+  libraries when the app starts.
+- `androidx.profileinstaller.ProfileInstallReceiver`: exported, but only
+  callers with `android.permission.DUMP` can reach it. Normal apps cannot
+  get that permission; the system and the developer shell have it. It
+  installs the app's start-up profile.
+  - Open, for the next change to Catalog: remove it, as Water does
+    (owner's decision on pull request 40;
+    [Water](#water-appshkriusswater)).
+- The emoji font loader from `androidx.emoji2` is removed, because it would
+  ask a system font provider, usually Google Play services, for a font.
+
+Catalog stores no data, so Android backup and device-to-device transfer are
+turned off.
+
+### Water (`app.shkriuss.water`)
+
+Five permissions: three from `core/notify`, for its reminders, since
+step 2.4, and two from `core/security`, for the recovery key screens and
+the app lock, since step 2.5.
+
+| Permission | From | Why |
+|---|---|---|
+| `android.permission.POST_NOTIFICATIONS` | `core/notify` | To show a reminder. The user allows it or not: Water explains first, then Android asks ([spec.md](../apps/water/spec.md#asking-for-notifications)). |
+| `android.permission.USE_EXACT_ALARM` | `core/notify` | To remind at the exact minute ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)). Granted at install. |
+| `android.permission.RECEIVE_BOOT_COMPLETED` | `core/notify` | To set the alarm again after a restart. Granted at install. |
+| `android.permission.USE_BIOMETRIC` | `core/security` | To show Android's system prompt: for the recovery key that the phone keeps, and for the app lock ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). Granted at install. |
+| `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | To hide other apps' windows while a screen of the recovery key or the lock screen shows ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Granted at install. |
+
+- They are Water's allow list in the APK rules check. The owner asked
+  for the first three in step 2.4 and for the last two in step 2.5. A
+  build of Water with any other permission fails.
+- What they allow and do not allow is under
+  [Apps that use core/notify](#apps-that-use-corenotify) and
+  [Apps that use core/security](#apps-that-use-coresecurity).
+- Water asks the user for one only: `POST_NOTIFICATIONS`. Android grants
+  the other four at install.
+- Until step 2.5, Water's manifest removed the two of `core/security`,
+  and the six screens with them. The owner decided that in step 2.2:
+  nothing in Water opened those screens then. Step 2.5 took the removals
+  out, with the buttons that open the screens.
+
+Water's manifest still removes one permission that a library asks for:
+
+| Permission | Added by | What happens to it |
+|---|---|---|
+| `app.shkriuss.water.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Water's manifest, for good, as in Catalog. `androidx.core` uses it only on Android 12 and older. |
 
 Other components that libraries add, none of them a permission:
 
@@ -93,11 +148,17 @@ Other components that libraries add, none of them a permission:
   zone, and `ButtonReceiver` for **Drank** and **Later** on a reminder.
   `WaterManifestTest` checks that these three are Water's receivers.
 
-- The six screens of `core/security`: removed in Water's manifest until
-  step 2.5, with the two permissions. A screen of the module needs both
+- The six screens of `core/security`, none exported
+  ([Screens](#screens)). Only Water itself opens them: from "Recovery
+  key" and "App lock" in Settings, and from the dialog that shows when
+  the recovery key is first needed
+  ([spec.md](../apps/water/spec.md#the-recovery-key-when-first-needed)).
+  A screen of the module needs both permissions
   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
-  point 5). Step 2.5 takes these removals out
-  ([PROMPTS.md](../development/PROMPTS.md#22-to-25-build-it)).
+  point 5), and the APK rules check fails a build of Water without
+  them. `WaterManifestTest` checks that Water's screens are its own and
+  these six, that none of the six is exported, and that none has an
+  intent filter.
 - `androidx.room3.MultiInstanceInvalidationService`: added by Room, not
   exported. Room starts it only for a database opened with
   multi-instance invalidation, which Water does not use.
@@ -195,10 +256,11 @@ intent filter on the receiver of alarms or of buttons.
 `core/security` holds the recovery key screens, the security screen and
 the app lock ([security-screens.md](../architecture/security-screens.md)).
 Its manifest declares two permissions and six screens. Every app that
-uses the module gets them when the app is built. No app uses them yet.
-Water uses the module from step 2.2, for the app lock's gate, and removes
-both permissions and the six screens until step 2.5
-([Water](#water-appshkriusswater)).
+uses the module gets them when the app is built. Water is the first app
+that has them, since step 2.5 ([Water](#water-appshkriusswater)). It
+used the module from step 2.2, for the app lock's gate, and removed both
+permissions and the six screens until then. Catalog removes them for
+good.
 
 An app does not get the permissions unnoticed. The APK rules check fails
 the app until the owner allows them for that app (step 2.5 for Water),
@@ -208,9 +270,11 @@ An app does not lose them unnoticed either:
 
 1. The unit test `ManifestTest` in `core/security` fails unless the
    module's manifest asks for exactly these two permissions.
-2. From step 2.5, the APK rules check fails an app whose merged manifest
-   declares a screen of `core/security` but does not request both
-   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+2. The APK rules check fails an app whose merged manifest declares a
+   screen of `core/security` but does not request both
+   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md);
+   [build.md](../development/build.md#the-security-screens-rule)). Built
+   in step 2.5.
 3. Without `HIDE_OVERLAY_WINDOWS`, the screens still work. They only no
    longer hide other apps' windows.
 

@@ -1140,7 +1140,9 @@ Status: **Partly met.**
   - Without the permission `HIDE_OVERLAY_WINDOWS`, a screen still works,
     but hides nothing.
     - `ManifestTest` checks that `core/security` asks for it.
-    - From step 2.5, the APK rules check is to check each app.
+    - Since step 2.5, the APK rules check fails the build of an app that
+      has one of the screens and does not request it
+      ([build.md](../development/build.md#the-security-screens-rule)).
   - Accepted deviations, decided by the owner on 2026-11-13:
     - The other screens of the apps hide no other app's windows. They
       show records, not keys, and a dimmer or a floating button would
@@ -1329,7 +1331,11 @@ Status: **Partly met.**
   - The data stays on the phone unless the user sets up sync or makes a
     backup.
   - Backup and restore to a file of the user's choice exist in
-    `core/backup`. Their screens come in step 2.5.
+    `core/backup`. Water has the screens since step 2.5
+    ([spec.md](../apps/water/spec.md#backup-and-restore-screens)). The
+    app reads every backup again right after it is written and checks
+    it, so a backup that cannot be restored is found on the day it is
+    made.
   - Clearing an app's data in Android's settings deletes everything of
     that app, keys included.
   - How a user deletes their data from the sync server is Open
@@ -1401,20 +1407,22 @@ Phase 2, Water:
    ([spec.md](../apps/water/spec.md#asking-for-notifications)). The
    buttons on a reminder ask for the phone's unlock and carry no text
    ([ADR 0034](../adr/0034-notification-buttons.md)).
-3. When the app checks a backup, and what keeps a long backup running
-   while the screen is off. Step 2.5
-   ([backup-format.md](../architecture/backup-format.md#open-questions),
-   questions 2 and 3).
+3. Done in step 2.5: when the app checks a backup. After every backup,
+   by itself, and before every restore (owner's decision;
+   [backup-format.md](../architecture/backup-format.md#open-questions),
+   question 2). What keeps a long backup running while the screen is off
+   stays open for the first app that stores large files (question 3).
+   Water stores no files.
 4. The data inventory: what data each app stores, and where. Step 2.6
    ([README.md](README.md)).
 5. The checks of reminders on a GrapheneOS phone: after a restart, in a
    second profile and in Private Space
    ([notifications.md](../architecture/notifications.md#open),
    question 4).
-6. The check that every app that uses `core/security` requests
-   `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Step 2.5, in the APK rules
+6. Done in step 2.5: the check that every app that uses `core/security`
+   requests `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`, in the APK rules
    check
-   ([security-screens.md](../architecture/security-screens.md#open),
+   ([build.md](../development/build.md#the-security-screens-rule),
    [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
 
 The first app that stores files:
@@ -1547,7 +1555,7 @@ Open until its step is done.
    - The new permission `HIDE_OVERLAY_WINDOWS` has
      [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md).
    - What is not done is an accepted deviation under [PLATFORM-3](#platform).
-   - Step 2.5 adds the check that each app requests the permission.
+   - Step 2.5 added the check that each app requests the permission.
 8. There is no privacy policy page (PRIVACY-3).
    **Step 2.6**: a privacy page in the user guide and on the hub site.
 9. How the owner's GitHub and Cloudflare accounts are protected, for

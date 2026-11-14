@@ -322,7 +322,7 @@ These points stay unproven until they are checked on a device:
 | A Keystore that fails for a moment | A test cannot make the real Keystore fail. What `getKey` and `aliases` answer then stays read from Android's source. The rules for it are tested with the stand-in (`HardwareKeyRulesTest`). |
 | A loss of power while a keyset file is replaced | A test cannot cut the power. |
 | The time before the first unlock after a restart | No test runs then. |
-| The app lock in a real app | No app uses it yet. Its rules are unit tests with Robolectric; what a real phone does with the screen-off broadcast, the recent apps, the system pickers and the prompt's PIN view is checked in [the app lock steps](#steps-for-the-three-devices-the-app-lock). |
+| The app lock in a real app | Water has it since step 2.5, and has no emulator tests. Its rules are unit tests with Robolectric; what a real phone does with the screen-off broadcast, the recent apps, the system pickers and the prompt's PIN view is checked in [the app lock steps](#steps-for-the-three-devices-the-app-lock). |
 
 For `core/notify`, these points stay unproven until they are checked on
 a device:
@@ -343,13 +343,18 @@ a device:
 
 For the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a.
 
-These steps cannot be done today. They need an app that holds keys and
-has the recovery key screens and the security screen. Step 1.7 built
-those screens in `core/security`
+These steps can be done since step 2.5, with Water's preview build.
+They need an app that holds keys and has the recovery key screens and
+the security screen. Step 1.7 built those screens in `core/security`
 ([security-screens.md](../architecture/security-screens.md)). Water is
 the first app that holds keys and uses them. Catalog holds none: it shows
 the screens with sample data only. The steps name what a screen does,
 not its final title.
+
+Where the screens are in Water: open **Settings**. Under **Security**,
+**Recovery key** opens the security screen and **App lock** opens the
+app lock screen. Water stores no files, so a step that needs a file of
+the app waits for the first app that stores files.
 
 Before you start:
 
@@ -395,7 +400,7 @@ Part 3, a fingerprint added or removed:
 10. Add one fingerprint again for the next parts.
 
 Part 4, the app lock. Step 1.7, session B built it in `core/security`.
-It needs an app that uses it, Water from step 2.5. The longer steps are
+It needs an app that uses it. Water does since step 2.5. The longer steps are
 in [Steps for the three devices: the app lock](#steps-for-the-three-devices-the-app-lock):
 
 11. Turn the app lock on. Check: it asks for four of the words and shows
@@ -614,13 +619,18 @@ in Water's [specification](../apps/water/spec.md) and in the user page
 
 For the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a. They need an app
 that uses the app lock of `core/security`
-([security-screens.md](../architecture/security-screens.md#the-app-lock)),
-Water from step 2.5. Use its preview build and a new recovery key for
+([security-screens.md](../architecture/security-screens.md#the-app-lock)).
+Water does since step 2.5: **Settings**, then **App lock** under
+**Security**. Use its preview build and a new recovery key for
 testing, never your real words. The unit tests cover the rules with
 Robolectric; these steps check what only a real phone shows.
 
 Before you start: the app has a recovery key, the phone has a PIN and a
 fingerprint, and the app has one reminder and, if it can, one file.
+Water has no files. In steps 8 and 9, use **Make a backup** or **Restore
+a backup** in Water's settings: they open Android's file picker too.
+Check then: the lock screen comes first; after the prompt, the backup is
+written or the question of the restore shows.
 
 Turning it on:
 
@@ -691,6 +701,52 @@ Notifications:
 Tell Claude in a session what did not match. Claude records the result
 in this page, in [security-screens.md](../architecture/security-screens.md)
 and in the user page [app-lock.md](../user/app-lock.md).
+
+### Steps for the three devices: backup and restore
+
+For the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a, with Water's
+preview build, since step 2.5. The unit tests write and read backups
+through a stand-in for the file picker. No test opens Android's real
+picker or a real storage app. These steps check that.
+
+Before you start: let Water make a new recovery key for this check, and
+write the 24 test words on paper. Never type your real recovery words
+into a preview build.
+
+1. Log three drinks. Open **Settings** and tap **Make a backup**. Check:
+   with no recovery key, "Set up your recovery key first" shows. Tap
+   **Create a recovery key** and finish. Check: Android's "create
+   document" screen opens by itself, with the name
+   `water-<today's date>.shkbackup`.
+2. Tap **Save**. Check: "Writing the backup", "Checking the backup",
+   then "Backup written" and "It holds 3 drinks." With TalkBack on,
+   check that each of them is spoken once.
+3. Make a second backup into a storage app that is not the phone's own
+   storage, for example a USB stick. Check: the same end. If it says
+   "Backup written, not checked", write down which storage app it was.
+4. Delete one drink. Tap **Restore a backup** and pick the file. Check:
+   the question names the date and time of step 2 and 3 drinks. Tap
+   **Cancel**. Check: nothing changed.
+5. Restore the file. Check: "Backup restored", and the drink stays
+   deleted, as the question said.
+6. Pick a photo for a restore. Check: "Not a backup", and nothing
+   changed.
+7. On a second device, install the same preview. Tap **Restore a
+   backup**. Check: "Enter your recovery key first". Enter the 24 test
+   words. Check: the picker opens by itself. Restore the file of step 2.
+   Check: the three drinks, the goal and the settings of the first
+   phone.
+8. With reminders on in the backup, check on the second device: the
+   reminder line on **Today** says that reminders are silent and offers
+   **Allow**, and after **Allow** a reminder comes at the time the line
+   names.
+9. Turn the app lock on, with **When it leaves the screen**. Make a
+   backup. Check: after the picker the lock screen comes first, and
+   after the prompt the backup is written and checked.
+
+Tell Claude in a session what did not match. Claude records the result
+in this page, in [backup-format.md](../architecture/backup-format.md)
+and in the user page [backup.md](../user/backup.md).
 
 ## Decided
 

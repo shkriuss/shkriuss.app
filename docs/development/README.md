@@ -34,8 +34,9 @@ Pages:
   keys and what they showed, and the steps for the three devices for
   what an emulator cannot check.
 - [Third-party material](third-party.md): what others made and the apps
-  contain, with the source, the licence and the notice of each. Today the
-  recovery word list, and Tink with the libraries it brings.
+  contain, with the source, the licence and the notice of each:
+  everything that ships in Water, which its Licences screen shows, and
+  what is on the build's class path and does not ship.
 - [Working with Claude](working-with-claude.md): who can do what, and how a
   change gets from a session to `main`.
 - [Cloud environment](cloud-environment.md): the Claude Code cloud

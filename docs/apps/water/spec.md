@@ -31,6 +31,14 @@ what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
   open items 2 and 3 of this page, how the reminder line of Settings and
   Today reads in two cases, and the title of the dialog before Android's
   question ([Decided by the owner](#decided-by-the-owner)).
+- Step 2.5 built backup and restore, the recovery key and the app lock in
+  Settings, and Licences, on 2026-11-14: `WaterBackups`, `BackupViewModel`
+  and `Licences` in `android/feature/water`, the first-need dialog in
+  `core/security`, a count per record type in `core/backup`, two
+  additions to `core/design`, and Water's allow list of five permissions
+  with the rule of ADR 0033 in the APK rules check. The owner decided
+  [open item 4](#open), when a backup is checked, and three more points
+  ([Decided by the owner](#decided-by-the-owner)).
 - If this page is wrong or silent, the fix is a change to this page
   first, agreed with the owner ("If the spec is wrong or silent, stop and
   ask" in the prompt of steps 2.2 to 2.5).
@@ -325,6 +333,11 @@ otherwise below.
 | Recovery key | "Not set up", "Setup not finished", or "Set up" | The security screen of `core/security` (`SecurityScreens.securityIntent`), always |
 | App lock | "Off" or "On" | The first-need dialog if there is no recovery key, otherwise the app lock screen (`SecurityScreens.appLockIntent`) |
 
+- "App lock" says "On" only while the app lock is on. After a reset,
+  when the phone's screen lock was removed, it says "Off", as the notice
+  of `core/security` does ("so the app lock is off"). Owner's decision
+  in step 2.5.
+
 **About**
 
 | Item | Shows | Opens |
@@ -357,9 +370,9 @@ button that does nothing:
 | Drinking: Daily goal, Unit, Quick amounts | 2.3 |
 | Reminders: Every, From, Until, and the line when no reminder fits | 2.3 |
 | Reminders: the switch "Remind me to drink" and the line about notifications | 2.4. Built. |
-| Backup, and Security | 2.5 |
+| Backup, and Security | 2.5. Built. Nothing of the two sections shows until the keys were read once, so no row says "Not set up" for a moment in an app that has its recovery key. |
 | About: Version | 2.3. It shows the version name of the installed app, such as `1.0.0-alpha.1`. |
-| About: Licences | 2.5 |
+| About: Licences | 2.5. Built. |
 
 ### Asking for notifications
 
@@ -383,8 +396,10 @@ says.
 
 ### Backup and restore screens
 
-Step 2.5 builds them with `core/backup`. This page fixes what they do.
-Their exact words are written in step 2.5.
+Built in step 2.5 with `core/backup`: `WaterBackups` and
+`BackupViewModel` in `android/feature/water`. Each step is one dialog.
+`WaterScreens` draws them once, after the destinations, so they do not
+depend on the destination that shows.
 
 Make a backup:
 
@@ -394,11 +409,20 @@ Make a backup:
    for example `water-2026-11-13.shkbackup`
    ([backup-format.md](../../architecture/backup-format.md#the-system-file-picker)).
 3. While it writes: a dialog with a progress circle, "Writing the
-   backup".
-4. At the end: a dialog that says the backup is written, and how many
-   drinks it holds. Or one of the answers of
-   [backup-format.md](../../architecture/backup-format.md#the-answers),
-   in the words of [backup.md](../../user/backup.md).
+   backup". It has no button, and a tap outside it or Back does nothing.
+4. **Water reads the file again and checks it to its last byte**,
+   everything a restore checks: "Checking the backup". The owner decided
+   this in step 2.5: after every backup, by itself
+   ([Decided by the owner](#decided-by-the-owner)).
+5. At the end, one dialog, with **OK**:
+
+   | What happened | Title | Text |
+   |---|---|---|
+   | Written, and the file passed the check | Backup written | "The backup is written and checked. It holds 42 drinks." |
+   | Written, but the file does not pass the check | This backup cannot be used | "Water wrote the file, but could not read it back as a whole backup. Make the backup again, in another place." Water does not delete the file. |
+   | Written, but the file could not be read again | Backup written, not checked | "The backup is written. Water could not read the file again to check it. To check it, choose Restore a backup, pick the file, and cancel at the question." |
+   | Writing failed | The backup could not be written | "Writing the file failed, for example because the storage is full. If an unfinished file stays, delete it. It is never taken for a backup." |
+   | "Not ready", or the keys cannot be used now | No backup was made | "Water cannot use its keys now. Open Recovery key in Settings, then try again." |
 
 Restore a backup:
 
@@ -407,19 +431,67 @@ Restore a backup:
 2. Android's "open document" screen opens.
 3. Water checks the whole file first: "Checking the backup".
 4. A dialog asks: "Restore this backup?" It shows when the backup was
-   made and how many drinks it holds. It says: "A restore cannot undo a
-   deletion or an edit you made after the backup." Buttons: **Restore**
-   and **Cancel**.
-5. At the end: "Backup restored", or the answer.
+   made, in the phone's format, and how many drinks it holds: "Made on 13
+   November 2026, 14:05. It holds 42 drinks." It says: "A restore cannot
+   undo a deletion or an edit you made after the backup." Buttons:
+   **Restore** and **Cancel**. Cancel changes nothing.
+5. While it restores: "Restoring the backup", with the progress circle.
+6. At the end, with **OK**: "Backup restored", "For every record, the
+   newest edit stays." Or one of these:
 
-When Water checks a backup it has just written is [open](#open), for
-step 2.5.
+   | What happened | Title | Text. Each also says "Nothing in Water has changed." |
+   |---|---|---|
+   | The file is no backup | Not a backup | "The file is something else, for example a photo. Pick the backup file." |
+   | A newer version made it | Made by a newer version of Water | "The backup comes from a newer version of Water than the one on this phone. Update Water, then restore." |
+   | A backup of another app | Backup of another app | "This is a backup of the app “notes”. Open the app the backup is from." |
+   | Made with other recovery words | Needs another recovery key | "The backup was made with other recovery words than Water has. The short name of the key it needs is b19d376f. Restore it in an app that is set up with those words." |
+   | Water has no keys, or cannot use them now | No keys | "Water is not set up with a recovery key yet, or the phone was locked. Set up the recovery key, unlock the phone, and try again." |
+   | The file is cut short or was changed | Damaged or changed | "The file is cut short or was changed. Use another copy of the backup." |
+   | Reading the file failed | The file could not be read | "Try again." |
+   | The backup could not be put aside on the phone | Not enough room on the phone | "A restore needs free room for about the size of the backup." |
+   | Water's own code refuses a record | Water cannot read this backup | "It holds something this version of Water cannot read." |
+
+   The first six are the answers of
+   [backup-format.md](../../architecture/backup-format.md#the-answers), in
+   the words of [backup.md](../../user/backup.md). The last three are its
+   three failures.
+
+"How many drinks" is the number of `intake` records in the file that are
+not deleted. Goals and settings are not drinks. `core/backup` counts the
+records of each type name, without looking into them
+([backup-format.md](../../architecture/backup-format.md#checking-a-backup)).
+
+There is no item to check a file on its own. To check an older file,
+start **Restore a backup**: it checks first, and **Cancel** at the
+question changes nothing.
+
+While the app lock is on and locks when Water leaves the screen, the
+file picker locks Water. The result of the picker waits for the system
+prompt, or, if it arrives first, the work goes on and its dialog shows
+after the prompt
+([security-screens.md](../../architecture/security-screens.md#pickers-and-the-share-sheet)).
 
 ### Licences
 
 A list of every third-party part that ships in Water, by name. A tap
-shows its notice in full. Step 2.5 fills it from
+shows its notice in full. Built in step 2.5, from
 [third-party.md](../../development/third-party.md).
+
+1. Settings opens it in its own place, with Back in its top bar. Back
+   goes to Settings.
+2. One row per part, with its name and the name of its licence under it,
+   sorted by name. One part is one project, not one file of it: the
+   AndroidX libraries are one row.
+3. A tap opens the part's notice: whose it is and where it comes from,
+   and then the full text of its licence, byte for byte as its source has
+   it.
+4. Under 840dp the notice opens in place of the list, with Back. From
+   840dp it opens beside the list, as a [Day](#day) of History does.
+   With none open, the second pane says "Choose a part."
+5. "Ships" means: it is in the release APK. Today these are seven parts.
+   A library that the build removes, because nothing in Water uses it,
+   is not listed. third-party.md names those too.
+6. The names, the notices and the licence texts are not translated.
 
 ### Every screen
 
@@ -559,7 +631,10 @@ Water stores no files and has no table with a wrapped file key.
    says, before it calls `finishFileKeyMove()`. Otherwise the files
    sealed with the old key can never be opened again: they are lost.
 5. The code carries the same warning, as a comment on the call to
-   `finishFileKeyMove()` (step 2.5).
+   `finishFileKeyMove()`, in `WaterBackups` (built in step 2.5). There
+   is one such call. It runs when Water starts, each time its screen
+   starts, which is also the way back from a screen of `core/security`,
+   and before Water goes on after the first-need dialog.
 
 ## Units
 
@@ -927,9 +1002,17 @@ After the flow:
 3. Before it goes on, Water finishes a pending file key move
    ([Files](#files)).
 
-Step 2.5 builds the dialog, its words and the "go on after" once, in
-`core/security`, so every app shows the same. Water passes which of the
-three it is for.
+Step 2.5 built the dialog, its words and the "go on after" once, in
+`core/security`, so every app shows the same: `RecoveryKeyFirstNeed`,
+with `RecoveryKeyNeed` for which of the three it is for
+([security-screens.md](../../architecture/security-screens.md#the-recovery-key-when-first-needed)).
+Water passes it from the rows "Make a backup", "Restore a backup" and
+"App lock".
+
+- "The flow ends" means: the screen that a button of the dialog opened
+  has closed, however it was closed. Water then reads the keys again.
+- The dialog can never show while the app lock is on: the app lock needs
+  the recovery key.
 
 ## Backup contents
 
@@ -1040,7 +1123,17 @@ that this backup holds something this version of Water cannot read.
 ### After a restore
 
 1. Water calls `notify.sync()`. The reminders follow the settings in use
-   at once.
+   at once: the alarm moves to the time
+   [the rule](#when-the-next-reminder-comes) gives now.
+   - A reminder that is showing and no longer fits is removed: when,
+     with the restored data, reminders are off, today's goal is met, or
+     the reminder is from another day. These are the conditions an edit
+     has ([What a reminder shows](#what-a-reminder-shows), point 6).
+   - A restored drink was not logged now. So it does not answer a
+     reminder by itself.
+   - The restore and this step are one: `WaterBackups` does not stop
+     between them when the screen goes away. Built in step 2.5
+     (`WaterReminders.afterRestore`).
 2. Today and History show the restored drinks at once: their screens
    read the database through flows.
 3. If the backup turned reminders on and Android has not asked on this
@@ -1083,8 +1176,11 @@ off do not matter for Water.
 6. Steps 2.4 and 2.5 list all of this under Water in
    [permissions.md](../../security/permissions.md) and add Water's allow
    list to the APK rules check. Step 2.4 added the list with the three
-   permissions of `core/notify`, and the three receivers. Step 2.5 adds
-   the two of `core/security`.
+   permissions of `core/notify`, and the three receivers. Step 2.5 added
+   the two of `core/security`, took the removals of both permissions and
+   of the six screens out of Water's manifest, and added the rule that an
+   app with a screen of `core/security` requests both
+   ([ADR 0033](../../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
 
 ## TalkBack and accessibility
 
@@ -1163,8 +1259,11 @@ Water needs these. Each is built in the step named, not on this page.
 | `core/testing` | The check that every sheet and dialog of an app is behind the app lock: an app class whose app lock is on and open (`AppLockOnForTests`), and `AppLockCheck.checkLockedNow` ([security-screens.md](../../architecture/security-screens.md#every-screen-is-behind-the-gate)). Built. | 2.3 |
 | `core/notify` | Buttons on a notification: a third receiver, not exported, the rules of [ADR 0034](../../adr/0034-notification-buttons.md), no buttons in the hidden form, and a timeout for a notification. `ManifestTest` and [permissions.md](../../security/permissions.md) follow. Also the notice when an app's handler fails, the owner's decision in step 2.4. Built. | 2.4 |
 | `core/notify` | Test fixtures, `NotifyTestDevice`, so that Water's tests check the reminders without naming Android's alarm and notification classes (`NotifyBoundaryTest`), and the rule of the APK rules check that keeps them out of every app (owner's decision in step 2.4). Built. | 2.4 |
-| `core/security` | The first-need dialog of [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md), with its Catalog page. | 2.5 |
-| The APK rules check | Water's allow list of five permissions, and the rule of ADR 0033 | 2.4 and 2.5, as the prompts say. Step 2.4 built the list per app, with the three permissions of `core/notify`. |
+| `core/security` | The first-need dialog of [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md), `RecoveryKeyFirstNeed`, with its Catalog page. Built. | 2.5 |
+| The APK rules check | Water's allow list of five permissions, and the rule of ADR 0033. Built. | 2.4 and 2.5, as the prompts say. Step 2.4 built the list per app, with the three permissions of `core/notify`. Step 2.5 added the two of `core/security` and the rule. |
+| `core/backup` | How many records of each type name are not deleted, on `ExportResult.Written` and `BackupSummary`, so that a screen can say how many drinks a backup holds. The file format does not change (owner's decision in step 2.5). Built. | 2.5 |
+| `core/design` | Two additions (owner's decision in step 2.5), each with a sample in Catalog and tests: `ShkProgressDialog`, a dialog with a progress circle and no button, and an optional third button for `ShkDialog` (`otherAction`), whose default leaves every existing dialog as it was. Built. | 2.5 |
+| `core/testing` | App classes with no recovery key (`NewAppForTests`) and with a setup that stopped (`StoppedSetupAppForTests`), and `TestDocuments`, the documents of the file picker for unit tests. Built. | 2.5 |
 
 ## Steps that build it
 
@@ -1173,7 +1272,7 @@ Water needs these. Each is built in the step named, not on this page.
 | 2.2 | The database, the repositories, the rules of [the goal of a day](#the-goal-of-a-day), [the settings in use](#the-settings-in-use), [units](#units) and [the next reminder](#when-the-next-reminder-comes) as plain code with unit tests, the view models, the backup content readers and writers, and the check that every screen is behind the app lock |
 | 2.3 | Every screen of [Screens](#screens) except backup and restore, and `ShkProgressBar`. Built, without the parts that need steps 2.4 and 2.5 ([Settings screen](#settings-screen)). |
 | 2.4 | Reminders: `AlarmSource`, `AlarmHandler`, the buttons, the permission question, the reminder line of Today, the switch "Remind me to drink" and the line about notifications in Settings, and the `core/notify` changes. Built. |
-| 2.5 | Backup and restore screens, the first-need dialog, the sections Backup and Security of Settings with the app lock, the file key move of [Files](#files) with its warning as a comment on the call, and the Licences screen |
+| 2.5 | Backup and restore screens, the first-need dialog, the sections Backup and Security of Settings with the app lock, the file key move of [Files](#files) with its warning as a comment on the call, and the Licences screen. Built. |
 | 2.6 | The user guide `docs/user/water.md`, the changelog, the release checklist |
 
 ## Decided by the owner
@@ -1193,6 +1292,8 @@ On 2026-11-13, in the planning session of this step.
 | Step 2.3, on 2026-11-14, in the planning of the step | Water does not use Navigation 3 ([Navigation](#navigation), item 7, and [ADR 0003](../../adr/0003-kotlin-compose-material-3-navigation-3.md), point 2). Settings shows Every, From and Until in step 2.3, and the switch "Remind me to drink" and the line about notifications with the reminders in step 2.4. Everything else that needs steps 2.4 and 2.5 waits for its step, with no button that does nothing. Four optional additions to `core/design`, whose defaults change nothing that exists, each announced by TalkBack where it shows an error, with a sample in Catalog. The dialogs of Settings have **Save** and **Cancel**. History's "Goal reached" has its check at the end of the row. The owner confirmed six choices of the plan: emulator accessibility checks are open for step 2.6 ([TalkBack](#talkback-and-accessibility), point 13); the three destination icons are drawn for the suite; on a phone the four buttons of Today take a row each when one does not fit in half the width; the navigation bar stays while a day is open; Version shows the installed version name; TalkBack's words for a row or a button are given by Water where the spec names them. |
 | Step 2.4, on 2026-11-14, in the planning of the step | **A handler that fails**: `core/notify` shows a notice in place of the reminder, for every app: the channel's name and "A reminder could not be shown. Open the app to see it.", no buttons, no content of the app, and a tap opens the app. The next reminder still comes and replaces it ([How Water uses core/notify](#how-water-uses-corenotify), point 5; [Open](#open), item 2). **An alarm that is due while Water moves it**: a grace of one minute. A reminder Water set an alarm for stays the next one until one minute after its time, unless its handler ran or something answered it; the handler shows it only while the rule still gives its time ([rule 7](#when-the-next-reminder-comes); [Open](#open), item 3). Claude found that without it most reminders would be lost: when Android starts Water for an alarm, the start of the app moves the alarm first. **The reminder line**: Settings shows the same line as Today, also "Next reminder at 14:30" while notifications are allowed; Today says "No more reminders today." when no reminder fits between "From" and "Until" on any day. **The dialog before Android's question** has the title "Allow notifications". |
 | On pull request 40 (step 2.2, on 2026-11-14) | The words for a goal and for a quick amount outside their limits ([Settings screen](#settings-screen)). Three rules the code had chosen, accepted: on the same `updatedAt` the larger `id` counts, until step 5.1; a change of "From" that leaves less than 30 minutes before "Until" is refused, like a change of "Until"; setting the goal to the value it already has writes nothing. The receiver of `androidx.profileinstaller` is removed from Water's manifest ([Permissions](#permissions)). |
+
+| Step 2.5, on 2026-11-14, in the planning of the step | **When a backup is checked**: after every backup, by itself. Water reads the file again and checks it to its last byte. There is no item to check a file on its own; **Restore a backup** checks first and can be cancelled ([Backup and restore screens](#backup-and-restore-screens); [Open](#open), item 4). **How many drinks a backup holds**: `core/backup` counts the records of each type name that are not deleted, and Water shows the count of `intake`. No change to the file format. **Two dialogs the design system lacked**: `ShkProgressDialog` and a third button for `ShkDialog`, added to `core/design`. **The APK rules check**: beside the three changes of the prompt, its class comment is brought up to date. The owner also accepted, with the plan of the step: the same progress dialog while a restore runs; the three outcomes of the check after a backup, and that Water does not delete a file that fails it; which reminder "no longer fits" after a restore ([After a restore](#after-a-restore)); "Off" for the app lock after a reset; that Water goes on when the flow's screen closes and the keys are there, however it was closed; that the first-need dialog is checked behind the app lock in `core/security`, because it can never show while the app lock is on; Licences as one entry per project, opened in place of Settings; and the words of the dialogs. |
 
 ## Assumptions
 
@@ -1249,9 +1350,11 @@ What is left, with the step that decides it.
    a grace of one minute ([rule 7](#when-the-next-reminder-comes)), with
    tests (`NextReminderTest` in `feature/water`, and `WaterRemindersTest`
    in `feature/water` and in `app/water`).
-4. **When a backup is checked.** After every backup, or when the user
-   asks ([backup-format.md](../../architecture/backup-format.md#open-questions),
-   open question 2). Step 2.5, with the owner.
+4. **When a backup is checked.** Decided in step 2.5: after every
+   backup, by itself, and before every restore
+   ([Backup and restore screens](#backup-and-restore-screens);
+   [backup-format.md](../../architecture/backup-format.md#open-questions),
+   open question 2).
 5. **How TalkBack reads "ml" and "fl oz" on the notification buttons.**
    The TalkBack pass of step 2.6.
 6. **Reminder settings with sync.** The reminder settings are a record,
