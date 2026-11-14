@@ -1,0 +1,287 @@
+# Checks the real backup of the suite key. It changes nothing: it writes no
+# secret, has no token that can write, and makes no artifact and no cache.
+#
+# Paste this file into signing-ceremony, as
+# .github/workflows/check-backup.yml.
+#
+# Steps: docs/development/signing-key-rehearsal.md, parts D and E, in
+# shkriuss.app. Why: ADR 0013, points 8 and 10.
+#
+# Modes:
+# - files: prints the SHA-256 of every .gpg file in this repository. Needs
+#   no passphrase and decrypts nothing.
+# - list: decrypts backup/signing-key.tar.gpg and prints the size and the
+#   name of each file in it.
+# - check: decrypts it, reads the keystore and its password from the two
+#   files you name, and checks that:
+#   - the keystore holds one certificate, under the alias shkriuss;
+#   - its private key belongs to that certificate;
+#   - the certificate's SHA-256 is the current one in
+#     docs/security/fingerprints.md of shkriuss.app, and the one in
+#     backup/fingerprint.txt.
+#
+# Every mode also prints the SHA-256 of every .gpg file, for part E.
+#
+# How it handles the secrets:
+# - GitHub prints a step's script and its env values in the log. So the
+#   passphrase is never in an env block or in the script text. It is read
+#   from the run's event file and masked before anything else.
+# - The keystore password is masked the moment it is read, before any use.
+# - Nothing from the backup is written to disk. It goes from gpg to tar to
+#   openssl through pipes only. Only public values are printed: names,
+#   sizes, SHA-256 values and the certificate's fingerprint.
+# - Do not turn on debug logging for a run of this workflow.
+# - GitHub keeps the typed passphrase with the run. Delete the run when you
+#   have read the result.
+
+name: Check backup
+run-name: Check backup (${{ inputs.mode }})
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: files, list or check
+        type: choice
+        required: true
+        options:
+          - files
+          - list
+          - check
+      passphrase:
+        description: The backup's passphrase, for list and check. Leave it empty for files.
+        type: string
+        required: false
+        default: ""
+      keystore_file:
+        description: For check. The name of the keystore file in the backup, exactly as list shows it.
+        type: string
+        required: false
+        default: ""
+      password_file:
+        description: For check. The name of the file with the keystore's password, exactly as list shows it.
+        type: string
+        required: false
+        default: ""
+
+defaults:
+  run:
+    # Stops a step at the first failing command, also inside a pipe.
+    shell: bash
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: check-backup
+      cancel-in-progress: false
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # One step, so that the passphrase never passes between steps. The
+      # passphrase is deliberately not in this env block.
+      - name: Check the backup
+        env:
+          MODE: ${{ inputs.mode }}
+          KEYSTORE_FILE: ${{ inputs.keystore_file }}
+          PASSWORD_FILE: ${{ inputs.password_file }}
+          ACTOR: ${{ github.actor }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -u
+
+          # Registers a value with GitHub, which then shows *** in its place.
+          mask() {
+            local value="$1"
+            value="${value//'%'/%25}"
+            value="${value//$'\r'/%0D}"
+            value="${value//$'\n'/%0A}"
+            printf '::add-mask::%s\n' "$value"
+          }
+
+          # 1. The passphrase, from the event file, masked before anything
+          #    else is done or printed.
+          passphrase="$(jq -r '.inputs.passphrase // ""' "$GITHUB_EVENT_PATH")"
+          if [ -n "$passphrase" ]; then
+            mask "$passphrase"
+          fi
+
+          if [ -z "$OWNER" ] || [ "$ACTOR" != "$OWNER" ] || [ "$TRIGGERING_ACTOR" != "$OWNER" ]; then
+            echo "::error::Only the repository owner may run this check."
+            exit 1
+          fi
+          case "$MODE" in
+            files | list | check) ;;
+            *) echo "::error::Unknown mode."; exit 1 ;;
+          esac
+
+          backup=backup/signing-key.tar.gpg
+          if [ ! -s "$backup" ]; then
+            echo "::error::$backup is missing."
+            exit 1
+          fi
+          summary="$GITHUB_STEP_SUMMARY"
+
+          # 2. The SHA-256 of every .gpg file, for part E. These are hashes
+          #    of encrypted bytes, so they give nothing away.
+          main_sha="$(sha256sum -- "$backup" | cut -d ' ' -f 1)"
+          {
+            echo "## Files"
+            echo
+            echo "| File | SHA-256 | Same as the backup |"
+            echo "|---|---|---|"
+          } >> "$summary"
+          while IFS= read -r file; do
+            sha="$(sha256sum -- "$file" | cut -d ' ' -f 1)"
+            if [ "$file" = "$backup" ]; then same="This is the backup"
+            elif [ "$sha" = "$main_sha" ]; then same=Yes
+            else same="**No, it differs**"
+            fi
+            echo "| \`$file\` | \`$sha\` | $same |" >> "$summary"
+            echo "$file: $sha ($same)"
+          done < <(git ls-files -- '*.gpg')
+          if [ "$MODE" = files ]; then
+            exit 0
+          fi
+
+          # 3. Decrypt. Nothing from the backup is written to disk.
+          if [ -z "$passphrase" ]; then
+            echo "::error::Type the passphrase for the modes list and check."
+            exit 1
+          fi
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          decrypt() {
+            printf '%s' "$passphrase" |
+              gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 0 --decrypt -- "$backup" 2> /dev/null
+          }
+          member() {
+            decrypt | tar --extract --to-stdout --file - -- "$1"
+          }
+          mapfile -t names < <(decrypt | tar --list --file - || true)
+          if [ "${#names[@]}" -eq 0 ]; then
+            echo "::error::The passphrase does not open $backup, or it holds no files."
+            exit 1
+          fi
+
+          if [ "$MODE" = list ]; then
+            {
+              echo
+              echo "## Files in the backup"
+              echo
+              echo "| Size in bytes | Name |"
+              echo "|---|---|"
+              decrypt | tar --list --verbose --file - |
+                awk '{ size = $3; for (i = 1; i <= 5; i++) $i = ""; sub(/^ +/, ""); print "| " size " | `" $0 "` |" }'
+              echo
+              echo "Run the mode check with the names of the keystore file and the password file."
+            } >> "$summary"
+            echo "The passphrase opens the backup. It holds ${#names[@]} files; their names are in the summary."
+            exit 0
+          fi
+
+          # 4. check.
+          for name in "$KEYSTORE_FILE" "$PASSWORD_FILE"; do
+            if [ -z "$name" ] || ! printf '%s\n' "${names[@]}" | grep -qxF -- "$name"; then
+              echo "::error::Type the names of the keystore file and the password file exactly as the mode list shows them."
+              exit 1
+            fi
+          done
+
+          # The keystore's password, masked before any use.
+          KEYSTORE_PASSWORD="$(member "$PASSWORD_FILE")"
+          KEYSTORE_PASSWORD="${KEYSTORE_PASSWORD%$'\n'}"
+          KEYSTORE_PASSWORD="${KEYSTORE_PASSWORD%$'\r'}"
+          if [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::$PASSWORD_FILE is empty."
+            exit 1
+          fi
+          mask "$KEYSTORE_PASSWORD"
+          export KEYSTORE_PASSWORD
+
+          # The keystore, decoded on the fly if it is stored as base64. A
+          # PKCS12 file in base64 starts with MII.
+          start="$( (set +o pipefail; member "$KEYSTORE_FILE" 2> /dev/null | head -c 3) )"
+          keystore() {
+            if [ "$start" = MII ]; then
+              member "$KEYSTORE_FILE" | base64 --decode
+            else
+              member "$KEYSTORE_FILE"
+            fi
+          }
+          # A keystore from an older tool may need OpenSSL's legacy mode.
+          legacy=()
+          if ! keystore | openssl pkcs12 -nokeys -passin env:KEYSTORE_PASSWORD > /dev/null 2>&1; then
+            legacy=(-legacy)
+          fi
+          if ! certs="$(keystore | openssl pkcs12 "${legacy[@]}" -nokeys -passin env:KEYSTORE_PASSWORD 2> /dev/null)"; then
+            echo "::error::$KEYSTORE_FILE does not open with the password in $PASSWORD_FILE."
+            exit 1
+          fi
+          count="$(grep -c -- '-----BEGIN CERTIFICATE-----' <<< "$certs" || true)"
+          aliases="$(sed -n 's/^ *friendlyName: //p' <<< "$certs" | sort -u | tr '\n' ' ')"
+          if [ "$count" != 1 ] || [ "$aliases" != "shkriuss " ]; then
+            echo "::error::The keystore must hold exactly one certificate, under the alias shkriuss. It holds $count, under: $aliases"
+            exit 1
+          fi
+          found="$(openssl x509 -noout -fingerprint -sha256 <<< "$certs" | sed 's/^.*=//' | tr 'a-f' 'A-F')"
+          # The private key goes from one openssl to the other through a
+          # pipe. Only a hash of its public half comes out.
+          cert_key="$(openssl x509 -noout -pubkey <<< "$certs" | openssl pkey -pubin -outform DER | sha256sum | cut -d ' ' -f 1)"
+          private_key="$(keystore | openssl pkcs12 "${legacy[@]}" -nocerts -nodes -passin env:KEYSTORE_PASSWORD 2> /dev/null |
+                         openssl pkey -pubout -outform DER | sha256sum | cut -d ' ' -f 1)"
+
+          # The fingerprint that users check, from the public repository.
+          published_file="$(mktemp)"
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+            --output "$published_file" \
+            https://raw.githubusercontent.com/shkriuss/shkriuss.app/main/docs/security/fingerprints.md
+          # The backticks are part of the line in the file, not a command.
+          # shellcheck disable=SC2016
+          pattern='^Current certificate SHA-256: `([0-9A-F]{2}(:[0-9A-F]{2}){31})`$'
+          mapfile -t lines < <(grep -E '^Current certificate SHA-256:' "$published_file" || true)
+          if [ "${#lines[@]}" -ne 1 ] || ! [[ "${lines[0]}" =~ $pattern ]]; then
+            echo "::error::Could not read the current fingerprint from fingerprints.md."
+            exit 1
+          fi
+          published="${BASH_REMATCH[1]}"
+
+          noted="(missing)"
+          if [ -s backup/fingerprint.txt ]; then
+            noted="$(grep -oiE '([0-9a-f]{2}:){31}[0-9a-f]{2}|[0-9a-f]{64}' backup/fingerprint.txt | head -n 1 |
+                     tr -d ':' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//' || true)"
+          fi
+
+          result() { if [ "$1" = "$2" ]; then echo Yes; else echo "**No**"; fi; }
+          key_ok="$(result "$cert_key" "$private_key")"
+          published_ok="$(result "$found" "$published")"
+          noted_ok="$(result "$found" "$noted")"
+          {
+            echo
+            echo "## The key in the backup"
+            echo
+            echo "Certificate SHA-256: \`$found\`"
+            echo
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| The passphrase opens the backup | Yes |"
+            echo "| One certificate, alias shkriuss | Yes |"
+            echo "| Its private key belongs to the certificate | $key_ok |"
+            echo "| Same as the current line of fingerprints.md (\`$published\`) | $published_ok |"
+            echo "| Same as backup/fingerprint.txt (\`$noted\`) | $noted_ok |"
+          } >> "$summary"
+          echo "Certificate SHA-256: $found"
+          if [ "$key_ok" != Yes ] || [ "$published_ok" != Yes ] || [ "$noted_ok" != Yes ]; then
+            echo "::error::A check failed. See the summary. Do not change anything; tell Claude in a session what the summary says, never the passphrase."
+            exit 1
+          fi
+          echo "The backup opens and holds the suite key."

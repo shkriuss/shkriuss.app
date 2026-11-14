@@ -18,6 +18,11 @@ Pages:
 - [Release checklist](release-checklist.md): what you check for every
   release, with the GrapheneOS checklist. Claude copies it for each
   version.
+- [Signing key rehearsal](signing-key-rehearsal.md): how to rehearse
+  restoring and rotating the signing key with throwaway keys, in a
+  throwaway repository, and how to check the real backup and its two
+  copies. With the two workflows to paste, in
+  [signing-key-rehearsal/](signing-key-rehearsal/).
 - [Hub site](site.md): how the website is built from the docs, checked
   and deployed to Cloudflare, its security headers, and how to set up
   Cloudflare from a phone.

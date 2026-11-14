@@ -42,9 +42,11 @@
 ## Consequences
 
 - Devices on Android 12 or older cannot install the apps.
-- Every supported device has APK signature scheme v3.1, which key rotation
-  uses (section 13, and
-  [0013](0013-signing-key-custody-and-rotation.md)).
+- Every supported device has APK signature scheme v3.1 (section 13, and
+  [0013](0013-signing-key-custody-and-rotation.md)). With this minimum,
+  a key rotation needs no v3.1 block: apksigner puts it in the scheme v3
+  block, which every supported device reads too
+  ([0037](0037-signing-key-rotation.md)).
 - Every app must work in a secondary user profile and in Private Space. See
   [0010](0010-exact-alarms-and-reminder-storage.md) for what that means for
   reminders.
