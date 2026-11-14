@@ -61,6 +61,17 @@ fun TimePickersPage(modifier: Modifier = Modifier) {
                     )
                 },
                 ComponentState(R.string.state_try_time) { TimePickerToTry() },
+                // What a picker shows when its refuse returns words: the
+                // dialog stays open with the time typed and the reason.
+                ComponentState(R.string.state_time_refused) {
+                    ShkTimePickerInPlace(
+                        title = title,
+                        hour = "03",
+                        minute = "00",
+                        is24Hour = true,
+                        refusal = stringResource(R.string.sample_time_refused),
+                    )
+                },
             ),
             wideColumns = 2,
             // Each panel keeps its own height, as in its window.

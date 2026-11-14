@@ -50,6 +50,15 @@ fun TextFieldsPage(modifier: Modifier = Modifier) {
                     )
                 },
                 ComponentState(R.string.state_try_text_field) { TextFieldToTry() },
+                ComponentState(R.string.state_with_suffix) {
+                    ShkTextField(
+                        value = stringResource(R.string.sample_amount_value),
+                        onValueChange = {},
+                        label = stringResource(R.string.sample_amount),
+                        suffix = stringResource(R.string.sample_unit_ml),
+                        suffixDescription = stringResource(R.string.sample_unit_ml_spoken),
+                    )
+                },
             ),
         )
     }

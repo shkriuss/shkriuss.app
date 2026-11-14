@@ -82,6 +82,11 @@ class CatalogScreenScreenshotTest(private val config: ScreenshotConfig) {
     }
 
     @Test
+    fun progressBarsPage() {
+        captureWholePage(CatalogPage.ProgressBars, "ProgressBarsPage")
+    }
+
+    @Test
     fun slidersPage() {
         captureWholePage(CatalogPage.Sliders, "SlidersPage")
     }
