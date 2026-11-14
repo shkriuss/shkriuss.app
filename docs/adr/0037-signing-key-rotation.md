@@ -1,11 +1,13 @@
 # 0037 Signing key rotation
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Source: Phase 2, step 2.7 of
   [PROMPTS.md](../development/PROMPTS.md#27-restore-and-rotation-rehearsal),
   with the owner's decisions in that session on 2026-11-14. It supersedes
-  point 7 of [0013](0013-signing-key-custody-and-rotation.md).
+  point 7 of [0013](0013-signing-key-custody-and-rotation.md). The owner
+  accepted the record on 2026-11-14, after parts A and B of the
+  rehearsal showed what it rests on.
 
 ## Context
 
@@ -57,9 +59,23 @@
     background.
   - Fingerprints that a user typed into an app's settings in Obtainium
     block every other certificate.
-- The rehearsal checks these readings on a phone
-  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md),
-  part B).
+- The rehearsal checked these readings on a phone on 2026-11-14, with
+  Obtainium 1.7.4
+  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#results),
+  part B):
+  - apksigner 36.0.0 reported the rotated APK as scheme v3 only, no v3.1,
+    one signer, the new key. Its lineage held the old key, with installed
+    data on and the other four rights off, then the new key.
+  - The rotated update installed over the app with the old key.
+  - Android refused the old key alone, and a thief's lineage made from
+    the old key, over the rotated app: "App not installed".
+  - Obtainium warned before the update with "Signing certificate
+    mismatch". It listed the expected hash, the old key, and the
+    downloaded hashes, the old key and then the new one.
+  - AppVerifier showed the old certificate, then the new one. With the
+    package name and the new key's SHA-256, "Verify from clipboard"
+    showed "Verification Status: SUCCESS". Whether the old key's SHA-256
+    gives a failure was not tested.
 
 ## Decision
 
@@ -70,6 +86,8 @@
    `shkriuss`, in a PKCS12 file (0013, points 3 and 12).
    - The signing-ceremony repository makes it, backs it up and restores
      it, as 0013, points 10 and 11, say.
+   - The ceremony's `create` refuses while a backup exists. So the new
+     key is made and backed up by the `rotate` action (Open, below).
    - The `release` environment keeps the same three secrets, which then
      hold the new key.
 3. The old key's rights in the lineage: **installed data** on; **shared
@@ -110,15 +128,20 @@
 10. The steps, in order, are in
     [release.md](../development/release.md#rotate-the-signing-key).
 11. What users see and do:
-    1. Obtainium warns once for each app that the certificate changed.
+    1. Obtainium shows "Signing certificate mismatch" once for each app.
     2. They go on only when the release notes and the hub announce the
        new key.
-    3. AppVerifier then shows two fingerprints. The last must be the new
-       one.
-    4. Users who typed fingerprints into Obtainium add the new one.
-    5. Nothing else. The data stays.
+    3. Before **Install anyway**, they compare: the first downloaded hash
+       is the expected one, and the last is the new fingerprint on the
+       hub.
+    4. AppVerifier then shows two fingerprints. The last must be the new
+       one. With it, "Verify from clipboard" shows "Verification Status:
+       SUCCESS".
+    5. Users who typed fingerprints into Obtainium add the new one.
+    6. Nothing else. The data stays.
 
-    The user guide gets the exact words after the rehearsal.
+    The exact words are in [install.md](../user/install.md#when-the-signing-key-changes)
+    and [verify.md](../user/verify.md#after-a-new-signing-key).
 
 ## Options rejected
 
@@ -164,12 +187,19 @@
   between apps (step 3.0) and for the courier interface of sync
   (Phase 5).
 - Open: signing-ceremony needs a `rotate` action before a real rotation.
-  It decrypts the old and the new backup in one job, and runs the
-  commands of the step "Rotate and sign" in
-  [`rehearsal.yml`](../development/signing-key-rehearsal/rehearsal.yml).
-  Claude cannot see that repository, so the owner adds it.
+  - Its `create` refuses while a backup exists: "A backup already
+    exists. This workflow never replaces a signing key." So `rotate` must
+    also make the new key and back it up, and keep the old key's backup
+    (point 9).
+  - In one job, it decrypts the old backup, makes the new key, and runs
+    the commands of the step "Rotate and sign" in
+    [`rehearsal.yml`](../development/signing-key-rehearsal/rehearsal.yml).
+  - Claude cannot see that repository, so the owner adds it.
+- Open: whether the ceremony's token needs only the permission
+  Environments. Its notes ask for Environments and Secrets, and the
+  rehearsal used both
+  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#open-points),
+  point 2).
 - Open: whether, and when, the old key's installed-data right is turned
   off once users have moved. Then an app that was never updated could no
   longer update.
-- Open: Obtainium's and AppVerifier's exact words, until the rehearsal
-  records them.

@@ -54,6 +54,9 @@
      throwaway keys only, never in signing-ceremony or shkriuss.app. The
      owner decided on 2026-11-14. The steps are in
      [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
+   - Done on 2026-11-14. Every part passed, from the restore to the check
+     of the two copies
+     ([Results](../development/signing-key-rehearsal.md#results)).
 9. Preview builds use a throwaway key and the application ID suffix
    `.preview`, so they install next to the real app.
 10. The encrypted backup:
@@ -66,6 +69,12 @@
 11. Restore: the owner runs the `signing-ceremony` repository's workflow
     with the action `restore`. It decrypts the backup and writes the three
     secrets into the `release` environment again.
+    - While it runs, it reads two repository secrets of signing-ceremony:
+      `BACKUP_PASSPHRASE` and `CEREMONY_TOKEN`, a token for shkriuss.app.
+      The owner adds them just before the run and deletes them, and the
+      token, right after it. Point 6 is about shkriuss.app, which has no
+      repository-level secrets. The steps are in
+      [release.md](../development/release.md#restore-the-signing-key).
 12. The keystore:
     - It is a PKCS12 file that holds the one key, under the alias in
       `SIGNING_KEY_ALIAS`.
@@ -157,5 +166,5 @@
   [signing-key-rehearsal.md](../development/signing-key-rehearsal.md)
   then check, from signing-ceremony, that the real backup opens and that
   its two copies are the same file. They change nothing.
-- Open: point 8 stays open until the owner has done the rehearsal and
-  recorded the results.
+- Point 8 was done on 2026-11-14, and every part passed
+  ([Results](../development/signing-key-rehearsal.md#results)).
