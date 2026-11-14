@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's name under its icon. -->
+    <string name="app_name">Water</string>
+
+    <!--
+        The top bar and the one line of the screen that stands in for
+        Water's screens until step 2.3. Step 2.3 deletes both, with the
+        screen's screenshots.
+    -->
+    <string name="placeholder_title">Water</string>
+    <string name="placeholder_line">Water\'s screens come in the next step.</string>
+</resources>

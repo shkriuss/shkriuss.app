@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Water (app.shkriuss.water). Its permissions are listed in
+    docs/security/permissions.md. Until steps 2.4 and 2.5 add its allow list
+    to the APK rules check, the APK holds no permission at all, so this
+    manifest removes the ones its libraries ask for.
+
+    Water stores its data in its own database and backs it up only into the
+    backup file of the suite, so Android backup and device-to-device
+    transfer are turned off (docs/user/backup.md).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        androidx.core adds this permission for Android 12 and older only.
+        The minimum is Android 13, so it is never used. Removed for good
+        (docs/apps/water/spec.md, "Permissions", point 2).
+    -->
+    <permission
+        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        tools:node="remove" />
+    <uses-permission
+        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        tools:node="remove" />
+
+    <!--
+        Removed until step 2.5. core/security asks for these two for its
+        screens: the system prompt (ADR 0031) and hiding other apps' windows
+        (ADR 0033). Nothing in Water opens those screens before step 2.5,
+        which adds both permissions to Water's allow list in the APK rules
+        check and takes these two removals out.
+    -->
+    <uses-permission
+        android:name="android.permission.USE_BIOMETRIC"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.HIDE_OVERLAY_WINDOWS"
+        tools:node="remove" />
+
+    <application
+        android:name=".WaterApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Shk">
+
+        <!-- The one screen of Water, and the only exported screen. Every screen puts its content in AppLockGate. -->
+        <activity
+            android:name=".WaterActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Removed until step 2.5, with the two permissions above: the six
+            screens of core/security. A screen of the module needs both
+            permissions (ADR 0033, point 5), and Settings opens them only
+            from step 2.5, which takes these six removals out.
+        -->
+        <activity
+            android:name="app.shkriuss.core.security.SecurityActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.CreateRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.EnterRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.ShowRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.AppLockActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
+            tools:node="remove" />
+
+        <!--
+            Emoji support would look for a downloadable font from a system
+            font provider. On most phones that is Google Play services, which
+            the suite never uses. Android 13 and later ship their own emoji
+            font. As in Catalog's manifest.
+
+            Lint cannot see this provider class, because it comes from a
+            library that Compose uses only at run time (androidx.startup).
+            The class is in the APK, so MissingClass is ignored here only.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:ignore="MissingClass"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>

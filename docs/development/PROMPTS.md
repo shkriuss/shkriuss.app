@@ -802,7 +802,9 @@ Steps:
   the owner and I ask you to add a per-app allow list of permissions to
   the APK rules check, `CheckApkRulesTask.kt`, with the three
   permissions of core/notify for Water, and nothing else in that file.
-- 2.5 Backup, restore, app lock and settings. The settings get a screen
+- 2.5 Backup, restore, app lock and settings. Take the removals of the
+  two permissions and of the six core/security screens out of Water's
+  manifest. The settings get a screen
   that shows the notices of all third-party material in the app. Complete
   `docs/development/third-party.md` with everything that ships in the app.
   For backup and restore, use `core/backup`: the screens call

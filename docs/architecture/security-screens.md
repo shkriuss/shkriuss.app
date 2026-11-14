@@ -211,6 +211,10 @@ user guide says so honestly ([app-lock.md](../user/app-lock.md)).
    default, so no app can forget them.
 4. Its settings open `SecurityScreens.appLockIntent`. The security
    screen has a button for it too.
+5. Its unit tests have one test that starts every screen of the app
+   locked, and fails unless each shows the lock screen and nothing of its
+   own. Copy Water's `EveryScreenIsBehindTheAppLockTest`
+   ([Every screen is behind the gate](#every-screen-is-behind-the-gate)).
 
 ```kotlin
 class WaterApp : Application(), SecurityHost, NotifyHost {
@@ -273,6 +277,49 @@ class WaterActivity : ComponentActivity() {
 The screens of the recovery key are not behind the gate. They show no
 records, "Show the words" has its own prompt, and the repair must be
 reachable while the app cannot be unlocked.
+
+### Every screen is behind the gate
+
+The gate protects only the screens that put their content in it. A
+check makes sure every screen does. Built in step 2.2, before Water's
+first screen
+([PROMPTS.md](../development/PROMPTS.md#22-to-25-build-it)).
+
+What it does, for each app, as a unit test that runs in `check`:
+
+1. The app class of the test, `LockedAppForTests` of `core/testing`, has
+   real keys on the stand-in for the Keystore. It turns the app lock on
+   and drops the file keys before the watcher starts, as after Android
+   stopped the app. So every screen starts locked.
+2. The test reads the activities of the app's merged manifest, the file
+   that goes into the APK. It leaves out only the six screens of this
+   module, which are not behind the gate on purpose.
+3. It starts each one, and fails, naming the screen and what it showed,
+   unless:
+   - the lock screen shows, once. The gate tags it with
+     `LOCK_SCREEN_TEST_TAG`. The tag changes nothing that shows, and no
+     screen of the suite gives test tags to accessibility services;
+   - nothing beside it, in any window of the screen, holds a text, a
+     label, a state or an action. A node around it may only group or
+     tag;
+   - the screen's content view holds Compose views only.
+4. It fails too if the manifest has no screen to check, so it cannot
+   pass by checking nothing.
+
+Each app has one such test: Water's `EveryScreenIsBehindTheAppLockTest`,
+which every later app copies with its own locked app class. The helper
+is in `core/testing`, which the build keeps out of every app
+([build.md](../development/build.md#shared-test-helpers)).
+
+What it cannot see:
+
+- Something drawn with no semantics at all, such as a picture with no
+  label in a window of its own.
+- A dialog that is a plain Android view and not Compose.
+- A screen in another module that is not in the app's manifest. Such a
+  screen cannot start in the app.
+
+Review keeps these out. No screen of the suite uses them.
 
 ### When the app locks
 
@@ -474,7 +521,18 @@ file says that.
   prompt still reads it, kept through a turn of the phone, and the
   prompt asking again on the way back.
 - `AppLockActivitiesTest`: the app lock screen's labels and touch
-  targets. `FlowViewModelsTest` also covers the note that a repair or
+  targets.
+- `AppLockCheckTest`: the check that every screen is behind the gate,
+  on sample screens. It passes a screen whose content is all in the
+  gate, and fails, naming the screen, for a screen with no gate, with
+  content beside the gate, with a label around it, with a dialog
+  outside it, with a plain view beside the Compose content, and for an
+  app with no screen to check. `AppLockCheckWithoutALockedAppTest`: the
+  check refuses an app that does not start locked. `MergedManifestTest`
+  of `core/testing`: how the check reads a merged manifest.
+- Water's `EveryScreenIsBehindTheAppLockTest`: every screen of Water's
+  merged manifest, locked
+  ([Every screen is behind the gate](#every-screen-is-behind-the-gate)). `FlowViewModelsTest` also covers the note that a repair or
   the words after a reset turned the app lock off.
 - Catalog's `AppLockScreensScreenshotTest`: every state of the app lock
   screens in the eight configurations.
@@ -501,19 +559,12 @@ with Catalog passed on 2026-11-13
   is first needed. Built in step 2.5.
 - "The recovery key is kept in Water" for an app that is not a keeper.
   It needs the handover between apps (step 3.0).
-- A check that every screen of an app puts its content in
-  `AppLockGate`. Until then, the gate itself only checks that the
-  watcher saw its screen start. Step 2.2 builds the check, before Water's
-  first screen in step 2.3: a test that starts every activity of the
-  app's merged manifest, except those of `core/security`, with the app
-  lock on and locked, and fails unless the lock screen shows and the
-  screen's content does not
-  ([PROMPTS.md](../development/PROMPTS.md#22-to-25-build-it)).
 - How an app shows files that were given up (open question 13 of
   crypto-design.md).
 - The check that every app that uses these screens requests
   `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Step 2.5 adds it to the APK
   rules check, which is owner-only, with Water's allow list
   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
-  point 5). Until then no app uses these screens, and Catalog removes
-  both the screens and the permissions.
+  point 5). Until then no app uses these screens. Catalog removes both
+  the screens and the permissions, and so does Water until step 2.5
+  ([permissions.md](../security/permissions.md#water-appshkriusswater)).

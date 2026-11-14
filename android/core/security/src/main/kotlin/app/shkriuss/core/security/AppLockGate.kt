@@ -9,6 +9,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -53,6 +55,16 @@ fun AppLockGate(content: @Composable () -> Unit) {
 
 private const val CONTENT_KEY = "app.shkriuss.core.security.content"
 
+/**
+ * The test tag of the lock screen that [AppLockGate] shows while the app is
+ * locked. The check that every screen of an app is behind the app lock
+ * finds the lock screen by it, and fails on anything of the screen beside
+ * it (docs/architecture/security-screens.md, "Every screen is behind the
+ * gate"). It changes nothing that shows. Accessibility services are not
+ * given it: no screen of the suite turns on `testTagsAsResourceId`.
+ */
+const val LOCK_SCREEN_TEST_TAG: String = "app.shkriuss.core.security.LockScreen"
+
 @OptIn(SecurityScreenSamples::class)
 @Composable
 private fun Locked(activity: ComponentActivity, watcher: AppLockWatcher) {
@@ -65,6 +77,7 @@ private fun Locked(activity: ComponentActivity, watcher: AppLockWatcher) {
     BackHandler { activity.moveTaskToBack(true) }
     val appName = remember(activity) { activity.applicationInfo.loadLabel(activity.packageManager).toString() }
     LockContent(
+        modifier = Modifier.testTag(LOCK_SCREEN_TEST_TAG),
         screen = screen,
         appName = appName,
         actions = LockActions(

@@ -51,9 +51,14 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   screen that every app uses. See
   [security-screens.md](../architecture/security-screens.md).
 - `android/core/testing/`: test helpers that other modules use in their
-  tests only.
+  tests only ([Shared test helpers](#shared-test-helpers)).
+- `android/feature/water/`: the data and logic of Water: its database,
+  with the committed schemas in `schemas/`, its rules, its ViewModels
+  and its backup content. Its screens come in step 2.3. See
+  [apps/water/spec.md](../apps/water/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
+- `android/app/water/`: the Water app, `app.shkriuss.water`.
 
 How the modules depend on each other is in
 [architecture/modules.md](../architecture/modules.md).
@@ -123,6 +128,7 @@ on every pull request, either inside `check` or by name.
 | [Instrumented test suite](#instrumented-test-suite-check) | `checkInstrumentedTestSuite` | Yes | Inside `check` | Modules with tests on an emulator |
 | [Logging](#logging-check) (hard rule 10) | `checkNoLogging` | Yes | Inside `check` | The main code and test fixtures of every Android module but `core/testing` |
 | [Tests of the build checks](#tests-of-the-build-checks) | `:build-logic:test` | Yes | Inside `check` | `build-logic` |
+| [Every screen is behind the app lock](#shared-test-helpers) | A unit test of each app, `EveryScreenIsBehindTheAppLockTest` | Yes | Inside `check` | The app's merged manifest, debug |
 | [APK rules](#apk-rules-check) 1 to 6: permissions, native code, emoji loader, Play services, test fixtures, backup | `check<Variant>ApkRules` | No | By name, `:app:<name>:checkReleaseApkRules`, and CI checks its report | Every APK that is built: release, preview and debug |
 | [APK rules](#apk-rules-check) 7 to 9: WebView and code loading | The same task | No | The same | Only the APKs that ship: release and preview |
 | [Graphics path](#the-graphics-path-check) | `check<Variant>GraphicsPathUse` | Debug only | By name, `:app:<name>:checkReleaseGraphicsPathUse`, and CI checks its report | Every class an app runs |
@@ -161,7 +167,7 @@ too.
 | `shkriuss.android.application` | Apps: SDK levels, build types, lint, warnings as errors, reproducible-build settings, the APK rules check and the graphics-path check. `check` also runs the [tests of the build checks](#tests-of-the-build-checks). |
 | `shkriuss.android.library` | Libraries: SDK levels, lint, warnings as errors. |
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
-| `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. |
+| `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. In an app, it tells the tests where the app's merged manifest is ([Shared test helpers](#shared-test-helpers)). |
 | `shkriuss.android.screenshot-test` | Roborazzi. Applies the unit-test plugin too. |
 | `shkriuss.android.instrumented-test` | Tests on an emulator, in `src/androidTest/`: the project's own test runner, JUnit 4 and `core/testing`. Tests in `src/sharedTest/` run on the JVM and on the emulator ([emulator-tests.md](emulator-tests.md), [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)). The [instrumented test suite check](#instrumented-test-suite-check). |
 | `shkriuss.android.test-fixtures` | Test helpers that the tests of other modules may use, in `src/testFixtures/` ([Test fixtures](#test-fixtures), [ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md)). |
@@ -293,6 +299,9 @@ second build must write the same mapping file, or the release stops. See
   since" query, the example migration and the migration test helpers,
   on the system SQLite driver under Robolectric
   ([architecture/data.md](../architecture/data.md#tests)).
+  `core/testing` also has `MergedManifestTest`, for how the app lock
+  check reads a merged manifest
+  ([Shared test helpers](#shared-test-helpers)).
 - `core/crypto` has 23 test classes with 190 tests. They are the items 1
   to 8 and 10 to 13 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
@@ -414,7 +423,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has nine test classes with 79 tests
+- `core/security` has 13 test classes with 101 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -442,6 +451,26 @@ second build must write the same mapping file, or the release stops. See
     work back, so that a test can stop the screen while the prompt still
     reads the kept key. `AppLockActivitiesTest` starts the app lock
     screen and checks its labels and touch targets.
+  - `AppLockCheckTest` tries the app lock check of `core/testing` on
+    sample screens, which it adds to Robolectric's package manager. A
+    library has no merged manifest of an app, so each test names the
+    activities it would hold. `AppLockCheckWithoutALockedAppTest` uses
+    an app class whose app lock is off.
+- `feature/water` has seven test classes with 90 tests: the units, the
+  goal of a day, the settings in use and the next reminder as plain code
+  (`UnitsTest`, `RulesTest`, `NextReminderTest`), the schema
+  (`WaterDatabaseTest`), the repository, the backup content and the
+  ViewModels on a database in memory (`WaterRepositoryTest`,
+  `WaterBackupContentTest`, `ViewModelsTest`).
+  - The ViewModels run their work at once, with
+    `Dispatchers.Unconfined`, and each test waits up to five seconds for
+    the state it expects. No coroutine test library is needed.
+  - `WaterBackupContentTest` also writes a whole backup through `Backups`
+    of `core/backup`, to a document behind a small content provider of
+    the test, and restores it on a second app with the same recovery key.
+- `app/water` has `EveryScreenIsBehindTheAppLockTest`, `WaterManifestTest`,
+  which names everything Water's merged manifest lets another app reach,
+  and the screenshots of the screen that stands in until step 2.3.
 
 ### Instrumented tests
 
@@ -457,8 +486,10 @@ Test helpers that the tests of other modules may use
 ([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md)).
 
 1. A module that applies `shkriuss.android.test-fixtures` has a folder
-   `src/testFixtures/`. Today only `core/crypto` does. `core/backup` and
-   `core/security` use them.
+   `src/testFixtures/`. Today only `core/crypto` does. `core/backup`,
+   `core/security`, `feature/water` and `app/water` use them in their
+   tests. `core/testing` compiles against them
+   ([Shared test helpers](#shared-test-helpers)).
 2. Code there sees the `internal` declarations of its module. The
    module's own unit tests and emulator tests see what is in the
    fixtures, also what is `internal` there.
@@ -487,6 +518,57 @@ Test helpers that the tests of other modules may use
      emulator tests.
    - Nothing new is downloaded, so the dependency verification file did
      not change.
+
+### Shared test helpers
+
+`core/testing` holds the helpers that the tests of other modules share.
+The build refuses it anywhere but in a test
+([Logging check](#logging-check)), so nothing in it reaches an app. It
+holds the migration test helpers and the fakes of
+[architecture/data.md](../architecture/data.md#migration-tests), the
+runner of the tests on an emulator, and, from step 2.2, the check that
+every screen of an app is behind the app lock
+([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
+
+The app lock check is three parts:
+
+1. `AppLockCheck.checkEveryScreen` starts every activity of the app's
+   merged manifest, except the six screens of `core/security`, and
+   fails unless each shows the lock screen and nothing of its own.
+2. `LockedAppForTests` is the app class of that test: real keys on the
+   stand-in for the Keystore, with the app lock on and locked before any
+   screen starts. `UnlockedAppForTests` is the same with the app lock
+   off, for screenshots.
+3. `MergedManifest` reads the activities of the app's merged manifest,
+   as it goes into the APK. The unit-test convention plugin gives an
+   app's unit tests the path of that file, in the system property
+   `shkriuss.mergedManifest`. Robolectric's own package manager would
+   not do: it also lists the screens of the test libraries, such as
+   those of `androidx.test`.
+
+Why the helper lives in `core/testing`, decided in step 2.2:
+
+- It must never reach an app. `core/testing` is already kept out of
+  apps by the build. Test fixtures of `core/security` would need a rule
+  of their own in the APK rules check ([Test fixtures](#test-fixtures),
+  point 5), which is owner-only.
+- `core/testing` names `core/security`, the test fixtures of
+  `core/crypto`, Activity Compose and the Compose test library as
+  `compileOnly`. An app's unit tests bring all of them at run time. The
+  tests on an emulator of `core/crypto` and `core/notify`, which use
+  `core/testing` too, get none of them.
+- Activity Compose comes before the Compose test library in its build
+  file on purpose. In the other order Gradle reads the metadata of old
+  AndroidX versions that `androidx.test:core` 1.5.0 asks for, which no
+  build read before, and dependency verification refuses them. For the
+  same reason it holds Espresso at 3.7.0, as the Compose convention
+  plugin does for tests: lint of `core/testing` would otherwise read the
+  metadata of Espresso 3.5.0. No file was downloaded that the
+  verification file does not already list.
+
+Every app has one test that calls the check: Water's
+`EveryScreenIsBehindTheAppLockTest`, which every later app copies, with
+its own locked app class.
 
 ### Screenshot tests
 
@@ -1464,7 +1546,9 @@ two:
    their own emoji font.
 
 Every new app must remove the same two. The APK rules check fails until it
-does.
+does. Water removes them too, and until step 2.5 also the two permissions
+and the six screens of `core/security`
+([permissions.md](../security/permissions.md#water-appshkriusswater)).
 
 ## Known messages in the build log
 

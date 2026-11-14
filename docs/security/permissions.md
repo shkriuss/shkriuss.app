@@ -50,6 +50,54 @@ Other components that libraries add, none of them a permission:
 Catalog stores no data, so Android backup and device-to-device transfer are
 turned off.
 
+### Water (`app.shkriuss.water`)
+
+No permissions yet. Step 2.2 built Water's data and logic and its app
+module, with one screen that stands in until step 2.3. Steps 2.4 and 2.5
+add its five permissions, with its allow list in the APK rules check,
+as its [specification](../apps/water/spec.md#permissions) says.
+
+Until then Water's manifest removes what its libraries ask for. The
+owner decided this in step 2.2, on 2026-11-14:
+
+| Permission | Added by | What happens to it |
+|---|---|---|
+| `app.shkriuss.water.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Water's manifest, for good, as in Catalog. `androidx.core` uses it only on Android 12 and older. |
+| `android.permission.USE_BIOMETRIC` | `core/security` | Removed in Water's manifest until step 2.5. Nothing in Water opens the screens of `core/security` before then, and the app lock cannot be turned on. |
+| `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | Removed in Water's manifest until step 2.5, for the same reason. |
+
+Water does not use `core/notify` before step 2.4, so its three
+permissions are not in Water yet.
+
+Other components that libraries add, none of them a permission:
+
+- The six screens of `core/security`: removed in Water's manifest until
+  step 2.5, with the two permissions. A screen of the module needs both
+  ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
+  point 5). Step 2.5 takes these removals out
+  ([PROMPTS.md](../development/PROMPTS.md#22-to-25-build-it)).
+- `androidx.room3.MultiInstanceInvalidationService`: added by Room, not
+  exported. Room starts it only for a database opened with
+  multi-instance invalidation, which Water does not use.
+- `androidx.startup.InitializationProvider`: not exported. Starts
+  libraries when the app starts. The emoji font loader is removed from
+  it, as in Catalog.
+- `androidx.profileinstaller.ProfileInstallReceiver`: exported, but only
+  callers with `android.permission.DUMP` can reach it: the system and the
+  developer shell. It is the one receiver that another process can
+  reach, as in Catalog. The specification says that no receiver of
+  Water is exported. This one is listed as an open question for step
+  2.4.
+- The app lock's screen-off receiver, registered while the app runs,
+  not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
+  Water starts its `AppLockWatcher` from step 2.2.
+- `WaterManifestTest` names every exported part of Water's merged
+  manifest, so a library that adds one fails the tests.
+
+Water stores its data in its own database and backs it up only into the
+backup file of the suite, so Android backup and device-to-device transfer
+are turned off.
+
 ## Apps that use `core/notify`
 
 `core/notify` sets the alarms and shows the notifications of an app with
@@ -115,8 +163,10 @@ receiver that runs before the first unlock, or another broadcast.
 `core/security` holds the recovery key screens, the security screen and
 the app lock ([security-screens.md](../architecture/security-screens.md)).
 Its manifest declares two permissions and six screens. Every app that
-uses the module gets them when the app is built. No app uses it yet. The
-first one will be Water.
+uses the module gets them when the app is built. No app uses them yet.
+Water uses the module from step 2.2, for the app lock's gate, and removes
+both permissions and the six screens until step 2.5
+([Water](#water-appshkriusswater)).
 
 An app does not get the permissions unnoticed. The APK rules check fails
 the app until the owner allows them for that app (step 2.5 for Water),

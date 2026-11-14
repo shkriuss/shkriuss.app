@@ -761,9 +761,10 @@ Also:
   themselves: the window blocks capture and keeps other apps away, and
   showing the words needs its own prompt
   ([security-screens.md](../architecture/security-screens.md#the-gate)).
-- Open: a check that every screen of an app puts its content behind the
-  gate. Step 2.2 builds it
-  ([security-screens.md](../architecture/security-screens.md#open)).
+- A check makes sure every screen of an app puts its content behind the
+  gate: a unit test of each app starts every screen of its merged
+  manifest locked. Built in step 2.2
+  ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
 
 How this fits with an unlocked phone in an attacker's hands:
 [How the optional app lock fits](#how-the-optional-app-lock-fits).
@@ -1018,7 +1019,8 @@ Status: **Partly met.**
     MASTG-TEST-0328), so that no phone setting destroys files
     ([crypto-design.md](crypto-design.md#no-phone-setting-destroys-files)).
   - MASWE-0016: as CRYPTO-2.
-- Open: a check that every screen is behind the gate (step 2.2).
+- Met: a check that every screen is behind the gate, built in step 2.2
+  ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
 
 **MASVS-AUTH-3: The app secures sensitive operations with additional
 authentication.**
@@ -1382,8 +1384,9 @@ Everything this page marks Open. None is decided here.
 
 Phase 2, Water:
 
-1. A check that every screen is behind the app lock's gate. Step 2.2
-   ([security-screens.md](../architecture/security-screens.md#open)).
+1. Done in step 2.2: a check that every screen is behind the app lock's
+   gate
+   ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
 2. The screen that asks for the notification permission. Step 2.4
    ([notifications.md](../architecture/notifications.md#open),
    question 1).
