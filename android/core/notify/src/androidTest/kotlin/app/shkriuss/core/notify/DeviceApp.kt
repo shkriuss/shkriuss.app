@@ -26,6 +26,7 @@ class DeviceApp : Application(), NotifyHost {
             Clock.System,
             // The test app has no app lock: its notifications always show their text.
             hidesText = { false },
+            buttons = reminders,
         ) }
 
     override fun onCreate() {
@@ -43,11 +44,12 @@ class DeviceApp : Application(), NotifyHost {
 class OpenedScreen : Activity()
 
 /**
- * The records of the test app, as its [AlarmSource] and [AlarmHandler].
- * The handler runs on the worker thread of [Notify] and the tests read
- * from their own thread, so everything here may be used from both.
+ * The records of the test app, as its [AlarmSource], [AlarmHandler] and
+ * [ButtonHandler]. The handlers run on the worker thread of [Notify] and
+ * the tests read from their own thread, so everything here may be used
+ * from both.
  */
-class DeviceReminders(private val app: Application) : AlarmSource, AlarmHandler {
+class DeviceReminders(private val app: Application) : AlarmSource, AlarmHandler, ButtonHandler {
     /** The alarms the app wants. */
     val wanted = CopyOnWriteArrayList<Alarm>()
 
@@ -56,6 +58,9 @@ class DeviceReminders(private val app: Application) : AlarmSource, AlarmHandler 
 
     /** How often the app was asked for its alarms. */
     val asked = AtomicInteger()
+
+    /** Every press of a button the app got. */
+    val presses = CopyOnWriteArrayList<ButtonPress>()
 
     override fun alarms(): List<Alarm> {
         asked.incrementAndGet()
@@ -69,6 +74,11 @@ class DeviceReminders(private val app: Application) : AlarmSource, AlarmHandler 
         notifications.show(
             ShkNotification(alarm.id.value, CHANNEL, "A reminder of the tests", null, android.R.drawable.ic_popup_reminder, open, alarm.atMillis),
         )
+    }
+
+    override fun onButton(press: ButtonPress, notifications: Notifications) {
+        presses += press
+        notifications.cancel(press.key)
     }
 
     companion object {

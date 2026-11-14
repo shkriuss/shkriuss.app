@@ -2,6 +2,7 @@ package app.shkriuss.feature.water.ui
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -24,6 +25,7 @@ import app.shkriuss.core.design.ShkRadioGroup
 import app.shkriuss.core.design.ShkScreen
 import app.shkriuss.core.design.ShkSectionHeader
 import app.shkriuss.core.design.ShkSpacing
+import app.shkriuss.core.design.ShkSwitch
 import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTextField
 import app.shkriuss.core.design.ShkTheme
@@ -31,6 +33,7 @@ import app.shkriuss.core.design.ShkTimePicker
 import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.feature.water.AmountInput
 import app.shkriuss.feature.water.R
+import app.shkriuss.feature.water.RemindersViewModel
 import app.shkriuss.feature.water.SettingsRules
 import app.shkriuss.feature.water.SettingsScreen
 import app.shkriuss.feature.water.SettingsViewModel
@@ -43,12 +46,13 @@ import java.time.LocalTime
  * opens a dialog, and a change takes effect at once.
  *
  * Step 2.3 shows Drinking, the hours of Reminders and the version under
- * About. The switch "Remind me to drink" and the line about notifications
- * come with the reminders in step 2.4. Backup, Security and Licences come
- * in step 2.5.
+ * About. Step 2.4 adds the switch "Remind me to drink" and, while
+ * reminders are on, the same reminder line as Today, under the hours (the
+ * owner's decision in step 2.4). Backup, Security and Licences come in
+ * step 2.5.
  */
 @Composable
-internal fun SettingsContent(model: SettingsViewModel, versionName: String) {
+internal fun SettingsContent(model: SettingsViewModel, reminders: RemindersViewModel, versionName: String) {
     val screen by model.state.collectAsState()
     val format = rememberWaterFormat()
     var dialog by rememberSaveable { mutableStateOf<SettingsDialog?>(null) }
@@ -79,6 +83,15 @@ internal fun SettingsContent(model: SettingsViewModel, versionName: String) {
         )
 
         ShkSectionHeader(stringResource(R.string.water_section_reminders))
+        ShkSwitch(
+            text = stringResource(R.string.water_remind_me),
+            checked = settings.remindersOn,
+            onCheckedChange = { on ->
+                model.setRemindersOn(on)
+                // Turning it on may start the question for notifications (spec, "Asking for notifications").
+                if (on) reminders.remindersTurnedOn()
+            },
+        )
         SettingItem(
             name = stringResource(R.string.water_every),
             value = format.interval(settings.intervalMinutes),
@@ -98,6 +111,7 @@ internal fun SettingsContent(model: SettingsViewModel, versionName: String) {
             Spacer(Modifier.height(ShkSpacing.Small))
             ShkText(text = stringResource(R.string.water_no_reminder_fits), color = ShkTheme.colors.textSecondary)
         }
+        ReminderLineRow(reminders, format, Modifier.padding(top = ShkSpacing.Small))
 
         ShkSectionHeader(stringResource(R.string.water_section_about))
         ShkListItem(headline = stringResource(R.string.water_version), supportingText = versionName)
@@ -112,6 +126,7 @@ internal fun SettingsContent(model: SettingsViewModel, versionName: String) {
         SettingsDialog.UNTIL -> HoursPicker(screen, isFrom = false, model, close)
         null -> Unit
     }
+    NotificationQuestion(reminders)
 }
 
 /** The dialogs of Settings. At most one is open; which one is kept while the phone is turned. */

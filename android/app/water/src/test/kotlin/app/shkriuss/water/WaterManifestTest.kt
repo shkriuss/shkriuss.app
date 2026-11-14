@@ -10,14 +10,15 @@ import org.junit.Test
 import org.w3c.dom.Element
 
 /**
- * What Water's merged manifest holds until steps 2.4 and 2.5
- * (docs/security/permissions.md, "Water"): no permission at all, one
- * screen, and nothing else that another app can reach. The receiver of the
- * profile installer is removed (owner's decision on pull request 40).
+ * What Water's merged manifest holds until step 2.5
+ * (docs/security/permissions.md, "Water"): the three permissions of
+ * core/notify and no other, its three receivers, one screen, and nothing
+ * else that another app can reach. The receiver of the profile installer
+ * is removed (owner's decision on pull request 40).
  *
- * The APK rules check fails an APK with any permission too. This test also
- * checks that the screen is the only exported part, so a library that adds
- * another fails here first.
+ * The APK rules check fails an APK with any permission that is not on
+ * Water's allow list too. This test also checks that the screen is the
+ * only exported part, so a library that adds another fails here first.
  */
 class WaterManifestTest {
     private val manifest: Element = DocumentBuilderFactory.newInstance().apply {
@@ -32,9 +33,37 @@ class WaterManifestTest {
     private fun Element.android(name: String): String = getAttributeNS(ANDROID, name)
 
     @Test
-    fun waterHoldsNoPermission() {
+    fun waterHoldsTheThreePermissionsOfCoreNotifyAndNoOther() {
         val tags = listOf("uses-permission", "uses-permission-sdk-23", "permission", "permission-group", "permission-tree")
-        assertEquals(emptyList<String>(), tags.flatMap { tag -> elements(tag).map { "<$tag> ${it.android("name")}" } })
+        assertEquals(
+            listOf(
+                "<uses-permission> android.permission.POST_NOTIFICATIONS",
+                "<uses-permission> android.permission.USE_EXACT_ALARM",
+                "<uses-permission> android.permission.RECEIVE_BOOT_COMPLETED",
+            ).sorted(),
+            tags.flatMap { tag -> elements(tag).map { "<$tag> ${it.android("name")}" } }.sorted(),
+        )
+    }
+
+    @Test
+    fun theTwoPermissionsOfCoreSecurityStayRemovedUntilStep25() {
+        val names = elements("uses-permission").map { it.android("name") }
+        assertFalse("android.permission.USE_BIOMETRIC" in names)
+        assertFalse("android.permission.HIDE_OVERLAY_WINDOWS" in names)
+    }
+
+    @Test
+    fun theReceiversAreTheThreeOfCoreNotifyAndNoneIsExported() {
+        val receivers = elements("receiver")
+        assertEquals(
+            setOf(
+                "app.shkriuss.core.notify.AlarmReceiver",
+                "app.shkriuss.core.notify.SystemEventReceiver",
+                "app.shkriuss.core.notify.ButtonReceiver",
+            ),
+            receivers.map { it.android("name") }.toSet(),
+        )
+        receivers.forEach { assertEquals(it.android("name"), "false", it.android("exported")) }
     }
 
     @Test

@@ -22,6 +22,7 @@ internal class AlarmSync(
     private val scheduler: AlarmScheduler,
     private val registry: AlarmRegistry,
     private val clock: Clock,
+    private val failed: (Alarm) -> Unit,
 ) {
     /**
      * Registers what the app wants now, and removes what it no longer
@@ -63,14 +64,22 @@ internal class AlarmSync(
      * Anything else is an old or repeated broadcast and is dropped. Then
      * the alarms are registered again, which sets the next time of a
      * reminder that repeats.
+     *
+     * If the handler fails, [failed] shows the user a notice in place of
+     * the reminder, and the alarms are registered again all the same, so
+     * the next reminder still comes (the owner's decision in step 2.4).
      */
     fun fired(id: AlarmId) {
         val state = registry.read()
         val at = state.registered[id]
         val due = at != null && at <= clock.nowMillis()
         if (at != null && due) {
+            val alarm = Alarm(id, at)
+            var handlerFailed = false
             try {
-                handler.onAlarm(Alarm(id, at), notifications)
+                handler.onAlarm(alarm, notifications)
+            } catch (_: Exception) {
+                handlerFailed = true
             } finally {
                 // Written after the handler: if the app stops inside the
                 // handler, the alarm fires again. Written also when the
@@ -78,11 +87,21 @@ internal class AlarmSync(
                 // every start of the app.
                 registry.write(state.copy(registered = state.registered - id, fired = state.fired + (id to at)))
             }
+            if (handlerFailed) tellTheUser(alarm)
         }
         // A broadcast that was dropped can mean that Android's alarms and
         // the file differ, for example after the clock was set back. Then
         // everything is set again.
         sync(setAll = !due)
+    }
+
+    /** The notice of a failed handler. If even that fails, there is nothing more to show, and the sync still runs. */
+    private fun tellTheUser(alarm: Alarm) {
+        try {
+            failed(alarm)
+        } catch (_: Exception) {
+            // Nothing is logged in core/notify (hard rule 10).
+        }
     }
 
     private companion object {

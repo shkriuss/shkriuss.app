@@ -165,4 +165,45 @@ class WaterRepositoryTest {
             database.settings().changedSince(BEFORE_FIRST_CHANGE, 10).map { it.changeNumber }
         assertEquals(listOf(4L, 2L, 3L), numbers)
     }
+
+    // The reminders follow every change.
+
+    @Test
+    fun everyWriteThatChangesSomethingTellsTheRemindersAndAWriteThatChangesNothingDoesNot() = runBlocking {
+        val changes = mutableListOf<WaterChange>()
+        val told = WaterRepository(database, clock, TestIdSource()) { changes += it }
+
+        val drink = told.addDrink(THE_DAY, 600, 250)
+        told.changeDrink(drink.id, 610, 250)
+        told.deleteDrink(drink.id)
+        // Deleted already: nothing is written.
+        told.deleteDrink(drink.id)
+        told.bringBackDrink(drink.id)
+        told.bringBackDrink(drink.id)
+        told.setGoal(THE_DAY, 2_500)
+        told.setGoal(THE_DAY, 2_500)
+        told.changeSettings { it.copy(remindersOn = true) }
+        told.changeSettings { it.copy(remindersOn = true) }
+
+        assertEquals(
+            listOf(
+                WaterChange.DRINK_ADDED,
+                WaterChange.DRINK_CHANGED,
+                WaterChange.DRINK_CHANGED,
+                WaterChange.DRINK_CHANGED,
+                WaterChange.GOAL,
+                WaterChange.SETTINGS,
+            ),
+            changes,
+        )
+    }
+
+    @Test
+    fun theSettingsInUseAreReadOnce() = runBlocking {
+        assertEquals(WaterSettings(), repository.settingsNow())
+
+        repository.changeSettings { it.copy(intervalMinutes = 90) }
+
+        assertEquals(90, repository.settingsNow().intervalMinutes)
+    }
 }

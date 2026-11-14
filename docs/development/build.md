@@ -404,8 +404,12 @@ second build must write the same mapping file, or the release stops. See
   section headers as headings, the loading state as "in progress", and
   the loading and error states to try as polite live regions.
 
-- `core/notify` has five test classes with 69 tests
-  ([notifications.md](../architecture/notifications.md#tests)).
+- `core/notify` has five test classes with 93 tests
+  ([notifications.md](../architecture/notifications.md#tests)). Its
+  test fixtures, `NotifyTestDevice`, let the tests of an app with
+  reminders read and change what Robolectric's Android holds of its
+  alarms and notifications without naming Android's classes
+  ([Test fixtures](#test-fixtures)).
   - `AlarmSyncTest` runs the rules for alarms with `TestClock` of
     `core/testing` and a stand-in for Android's alarms. No test waits
     for real time.
@@ -457,12 +461,19 @@ second build must write the same mapping file, or the release stops. See
     library has no merged manifest of an app, so each test names the
     activities it would hold. `AppLockCheckWithoutALockedAppTest` uses
     an app class whose app lock is off.
-- `feature/water` has seven test classes with 90 tests: the units, the
+- `feature/water` has eleven test classes with 165 tests: the units, the
   goal of a day, the settings in use and the next reminder as plain code
   (`UnitsTest`, `RulesTest`, `NextReminderTest`), the schema
   (`WaterDatabaseTest`), the repository, the backup content and the
   ViewModels on a database in memory (`WaterRepositoryTest`,
-  `WaterBackupContentTest`, `ViewModelsTest`).
+  `WaterBackupContentTest`, `ViewModelsTest`), how numbers are shown
+  (`WaterFormatTest`), and, from step 2.4, the reminders
+  (`WaterRemindersTest`, `ReminderBookTest`, `RemindersViewModelTest`).
+  - The tests of the reminders build a real `Notify` on Robolectric's
+    Android, as the app class does, with a worker that runs each piece at
+    once (`RemindersSetup`), and call the handler and the buttons as
+    `core/notify` calls them. They read what is shown through
+    `NotifyTestDevice`.
   - The ViewModels run their work at once, with
     `Dispatchers.Unconfined`, and each test waits up to five seconds for
     the state it expects. No coroutine test library is needed.
@@ -472,6 +483,9 @@ second build must write the same mapping file, or the release stops. See
 - `app/water` has `EveryScreenIsBehindTheAppLockTest`, which also locks
   the app over each sheet and dialog, `WaterManifestTest`, which names
   everything Water's merged manifest lets another app reach,
+  `WaterRemindersTest`, the reminders from end to end through
+  Robolectric's `AlarmManager`, the receivers of the merged manifest and
+  the buttons' pending intents (step 2.4),
   `WaterScreensTest`, what the screens do and what TalkBack hears, and
   `WaterScreenshotTest`, the screenshots of every screen, sheet and
   dialog.
@@ -490,10 +504,12 @@ Test helpers that the tests of other modules may use
 ([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md)).
 
 1. A module that applies `shkriuss.android.test-fixtures` has a folder
-   `src/testFixtures/`. Today only `core/crypto` does. `core/backup`,
-   `core/security`, `feature/water` and `app/water` use them in their
-   tests. `core/testing` compiles against them
-   ([Shared test helpers](#shared-test-helpers)).
+   `src/testFixtures/`. Today `core/crypto` and `core/notify` do.
+   `core/backup`, `core/security`, `feature/water` and `app/water` use
+   those of `core/crypto` in their tests, and `core/testing` compiles
+   against them ([Shared test helpers](#shared-test-helpers)).
+   `feature/water` and `app/water` use those of `core/notify` in their
+   tests.
 2. Code there sees the `internal` declarations of its module. The
    module's own unit tests and emulator tests see what is in the
    fixtures, also what is `internal` there.
@@ -505,11 +521,23 @@ Test helpers that the tests of other modules may use
    - `SoftwareKeysApp`, which builds a real `ShkCrypto` on the stand-in
      and a folder. A test gives it a recovery key, and then encrypts and
      decrypts as an app does.
-5. Fixtures are never part of an app. For those of `core/crypto`, the
-   APK rules check makes sure ([The test fixtures rule](#the-test-fixtures-rule)).
-   A limit: only the fixtures of `core/crypto` are kept out of apps by a
-   check today. A module that adds fixtures later needs the same care: a
-   rule of its own in the APK rules check, decided with the owner. The
+
+   The fixtures of `core/notify` are one package,
+   `app.shkriuss.core.notify.fixtures`, with one class,
+   `NotifyTestDevice`, and the two small classes it returns. It reads
+   and changes what Robolectric's Android holds of an app's alarms and
+   notifications: what a notification shows, which alarms wait, whether
+   notifications are allowed, a channel turned off, an alarm that fires,
+   a press of a button, a reboot. Only `core/notify` may name Android's
+   alarm and notification classes, also in tests (`NotifyBoundaryTest`),
+   so the tests of an app with reminders use it. It needs Robolectric,
+   which it takes as compile only: the tests that use it bring
+   Robolectric themselves. Added in step 2.4. Nothing new was downloaded.
+5. Fixtures are never part of an app. For those of `core/crypto` and
+   `core/notify`, the APK rules check makes sure
+   ([The test fixtures rule](#the-test-fixtures-rule)). A module that adds
+   fixtures later needs the same care: a rule of its own in the APK rules
+   check, decided with the owner, as for `core/notify` in step 2.4. The
    [logging check](#logging-check) reads every module's fixtures as main
    code, for the case that an app wrongly depends on them (owner's
    decision on [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
@@ -897,6 +925,7 @@ The owner asked for them in step 1.9.
 | `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. |
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. |
+| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (step 2.4, owner's request). Water's three permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 
 How the tests were checked: on 2026-11-13, the checks were weakened on
 purpose, all at once: `allowBackup` true let through, `WebView` allowed,
@@ -905,7 +934,8 @@ Seven tests failed. With the checks restored, all passed.
 
 The older checks (Room schemas, DAO rules, the instrumented test suite,
 the graphics path, and APK rules 1 to 5) were tested by hand, as their
-sections say. They have no unit tests yet.
+sections say. They have no unit tests yet, except the allow list of rule
+2, which has `PermissionAllowListTest` since step 2.4.
 
 ## Lint
 
@@ -1124,8 +1154,12 @@ Every time an APK is assembled, the task `check<Variant>ApkRules` reads it
 and fails the build if:
 
 1. it contains a native library (hard rule 2),
-2. its manifest declares or requests any permission (hard rule 4, and no
-   app needs a permission yet),
+2. its manifest declares any permission, or requests one that is not on
+   the app's allow list (hard rule 4). The list is per app, by module
+   name, the same for every build type. Since step 2.4 Water's list holds
+   the three permissions of `core/notify`; every other app's is empty.
+   Only the owner changes it ([permissions.md](../security/permissions.md)).
+   The report of a build that passes names the allowed permissions,
 3. its manifest still starts the emoji font loader (hard rule 3, see below),
 4. one of its dex files names a class under `com.google.android.gms`, the
    package of Google Play services (hard rule 3), or it has no dex file
@@ -1133,7 +1167,8 @@ and fails the build if:
 5. one of its dex files names a class under
    `app.shkriuss.core.crypto.fixtures`, the test fixtures of
    `core/crypto` ([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md),
-   see below),
+   see below), or under `app.shkriuss.core.notify.fixtures`, the test
+   fixtures of `core/notify` (owner's decision in step 2.4),
 6. Android's own backup or device transfer is not off
    ([The backup rule](#the-backup-rule)),
 7. in an APK that ships, its code names a WebView class,
@@ -1283,6 +1318,23 @@ then the name of the first is gone. The Play services class rule reads
 names the same way. So the owner decided on pull request 25 that it gets
 an R8 rule of its own
 ([The Play services class rule](#the-play-services-class-rule)).
+
+The fixtures of `core/notify` got the same rule in step 2.4, when they
+were added (owner's decision): rule 5 also searches for
+`Lapp/shkriuss/core/notify/fixtures/`, and one more R8 rule,
+`-keep class app.shkriuss.core.notify.fixtures.** { *; }`, keeps their
+names. How it was tested, on 2026-11-14 in the cloud environment:
+
+1. Catalog got a temporary dependency on the fixtures,
+   `implementation(testFixtures(project(":core:notify")))`, and one call
+   to `NotifyTestDevice` in its activity.
+2. `assembleDebug` failed in its APK rules check and named
+   `NotifyTestDevice`, `ShownNotification` and `SeenChannel`.
+3. `assembleRelease` failed earlier, in R8: the fixtures name classes of
+   Robolectric, which no app has ("Missing class
+   org.robolectric.Shadows"). So a release cannot even be built with
+   them. The R8 rule is there for the day that changes.
+4. With the probe removed, Catalog was as before.
 
 ### The backup rule
 

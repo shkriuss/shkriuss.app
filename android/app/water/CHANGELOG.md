@@ -9,6 +9,36 @@ get reminders during the hours you choose. Its specification is
 
 Not released yet. Version 1.0.0 is prepared in step 2.6.
 
+Step 2.4, reminders:
+
+- **Settings** has the switch **Remind me to drink**. Reminders come
+  every interval you chose, between **From** and **Until**, counted from
+  your last drink, and none once the goal is met.
+- The first time you turn reminders on, Water explains, in a dialog
+  "Allow notifications", and then Android asks. **Not now** keeps
+  reminders on. After one "no", Water never asks again.
+- **Today** and **Settings** have a reminder line: when the next
+  reminder comes, that the goal is reached, or that none comes today.
+  When notifications are not allowed, the line says that reminders are
+  silent, with **Allow** or **Open settings**.
+- The reminder says "Time for some water" and today's total and goal.
+  **Drank 150 ml** (your first quick amount) logs that drink; **Later**
+  reminds you again in 15 minutes. On the lock screen, a button asks you
+  to unlock first. A tap opens Today. At midnight the reminder goes away.
+- While the app lock hides the text of notifications, a reminder has no
+  buttons. (The app lock itself comes in step 2.5.)
+- A missed reminder, for example while the phone was off, is skipped. A
+  reminder whose time came while Android started Water, or in the same
+  seconds as a change, still comes, up to a minute late.
+- If a reminder cannot be shown, a notice "A reminder could not be
+  shown. Open the app to see it." comes in its place, and the next
+  reminder still comes.
+- Permissions: the three of reminders, `POST_NOTIFICATIONS`,
+  `USE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`, and no other. They are
+  Water's allow list in the APK rules check
+  ([permissions.md](../../../docs/security/permissions.md#water-appshkriusswater)).
+  Water's three new receivers are not exported.
+
 Step 2.3, the screens:
 
 - Water opens on **Today**. The navigation has three destinations:
@@ -37,9 +67,9 @@ Step 2.3, the screens:
   line says when no reminder fits between them. Under About: the
   version.
 - Not there yet: the switch "Remind me to drink" and the line about
-  notifications, which come with the reminders in step 2.4; Backup,
+  notifications, which came with the reminders in step 2.4; Backup,
   Security and Licences, which come in step 2.5. Until step 2.4 no
-  reminder comes, whatever the reminder hours say.
+  reminder came, whatever the reminder hours said.
 - TalkBack reads amounts with the unit in words, such as "250
   millilitres", reads the summary as one item, and reads each drink and
   each day of History as one item.

@@ -31,6 +31,12 @@
 # matches nothing and changes nothing.
 -keep class app.shkriuss.core.crypto.fixtures.** { *; }
 
+# The test fixtures of core/notify must never be in an app either. The
+# APK rules check finds them the same way, so they keep their names too
+# (owner's decision in step 2.4). In a correct app the rule matches
+# nothing and changes nothing.
+-keep class app.shkriuss.core.notify.fixtures.** { *; }
+
 # Keep the source file and line number attributes. While R8 optimises,
 # stack traces show the source file as "r8-map-id-..." and line numbers as
 # instruction offsets. With these attributes kept, the release's mapping

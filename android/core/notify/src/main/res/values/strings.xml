@@ -2,4 +2,6 @@
 <resources>
     <!-- The text of every notification while the app lock hides it. The title is the name of the notification's channel. -->
     <string name="notify_text_hidden">The app lock hides this notification. Open the app to see it.</string>
+    <!-- Shown in place of a reminder when the app could not read or show it. The title is the name of the notification's channel. -->
+    <string name="notify_reminder_failed">A reminder could not be shown. Open the app to see it.</string>
 </resources>

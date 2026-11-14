@@ -43,9 +43,9 @@ fun WaterScreens(models: WaterModels, versionName: String) {
     ) {
         saved.SaveableStateProvider(destination.name) {
             when (destination) {
-                WaterDestination.TODAY -> TodayContent(models.today)
+                WaterDestination.TODAY -> TodayContent(models.today, models.reminders)
                 WaterDestination.HISTORY -> HistoryContent(models.history, models.openDay)
-                WaterDestination.SETTINGS -> SettingsContent(models.settings, versionName)
+                WaterDestination.SETTINGS -> SettingsContent(models.settings, models.reminders, versionName)
             }
         }
     }

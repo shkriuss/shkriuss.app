@@ -6,11 +6,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.shkriuss.feature.water.DayViewModel
 import app.shkriuss.feature.water.HistoryViewModel
+import app.shkriuss.feature.water.RemindersViewModel
 import app.shkriuss.feature.water.SettingsViewModel
 import app.shkriuss.feature.water.WaterServices
 
 /**
- * The four ViewModels of Water's screens, made once for the activity
+ * The five ViewModels of Water's screens, made once for the activity
  * [owner] and kept while the phone is turned. Water has no navigation
  * library (ADR 0003, point 2): the three destinations and the open day
  * are these ViewModels and the screen's saved state.
@@ -22,6 +23,7 @@ class WaterModels(owner: ViewModelStoreOwner, services: WaterServices) {
             initializer { DayViewModel(services.repository, services.time) }
             initializer { HistoryViewModel(services.repository, services.time) }
             initializer { SettingsViewModel(services.repository, services.time) }
+            initializer { RemindersViewModel(services.repository, services.reminders, services.time) }
         },
     )
 
@@ -45,10 +47,19 @@ class WaterModels(owner: ViewModelStoreOwner, services: WaterServices) {
     /** Settings. */
     val settings: SettingsViewModel = provider[SettingsViewModel::class.java]
 
-    /** Today and History move to the new day after midnight. The activity calls it each time it comes to the front. */
+    /** The reminder line of Today and Settings, and the question for notifications. */
+    val reminders: RemindersViewModel = provider[RemindersViewModel::class.java]
+
+    /**
+     * Today and History move to the new day after midnight, and the
+     * reminder line reads the state of notifications again: the user can
+     * change it in Android's settings at any moment. The activity calls it
+     * each time it comes to the front.
+     */
     fun checkTheDay() {
         today.checkTheDay()
         history.checkTheDay()
+        reminders.refresh()
     }
 
     private companion object {

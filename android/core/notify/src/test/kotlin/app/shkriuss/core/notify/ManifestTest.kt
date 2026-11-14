@@ -10,7 +10,7 @@ import org.w3c.dom.Element
 
 /**
  * What this module's manifest adds to every app that uses it, as
- * docs/security/permissions.md says: three permissions, and two
+ * docs/security/permissions.md says: three permissions, and three
  * receivers that no other app can reach and that never run before the
  * first unlock.
  *
@@ -57,8 +57,12 @@ class ManifestTest {
     }
 
     @Test
-    fun theModuleAddsTwoReceiversAndNothingElse() {
-        assertEquals(setOf(AlarmReceiver::class.java.name, SystemEventReceiver::class.java.name), receivers.keys)
+    fun theModuleAddsThreeReceiversAndNothingElse() {
+        assertEquals(
+            setOf(AlarmReceiver::class.java.name, SystemEventReceiver::class.java.name, ButtonReceiver::class.java.name),
+            receivers.keys,
+        )
+        assertEquals(3, elements("receiver").size)
         listOf("activity", "activity-alias", "service", "provider", "uses-library", "meta-data", "queries").forEach { tag ->
             assertEquals(tag, 0, elements(tag).size)
         }
@@ -99,6 +103,12 @@ class ManifestTest {
     @Test
     fun theAlarmReceiverListensForNoBroadcastOfAnotherSender() {
         assertEquals(0, receivers.getValue(AlarmReceiver::class.java.name).getElementsByTagName("intent-filter").length)
+    }
+
+    @Test
+    fun theButtonReceiverListensForNoBroadcastOfAnotherSender() {
+        // Only the pending intent of a button, which the app made, names it (ADR 0034).
+        assertEquals(0, receivers.getValue(ButtonReceiver::class.java.name).getElementsByTagName("intent-filter").length)
     }
 
     private companion object {

@@ -2,6 +2,7 @@ plugins {
     id("shkriuss.android.library")
     id("shkriuss.android.unit-test")
     id("shkriuss.android.instrumented-test")
+    id("shkriuss.android.test-fixtures")
 }
 
 android {
@@ -15,4 +16,11 @@ dependencies {
     api(project(":core:data"))
 
     testImplementation(project(":core:testing"))
+
+    // The test fixtures (NotifyTestDevice): what an app's tests check of
+    // its alarms and notifications on Robolectric's Android, so that no
+    // other module names Android's alarm or notification classes, not even
+    // in its tests (NotifyBoundaryTest). Compile only: the tests that use
+    // the fixtures bring Robolectric themselves (the unit-test plugin).
+    testFixturesCompileOnly(libs.robolectric)
 }

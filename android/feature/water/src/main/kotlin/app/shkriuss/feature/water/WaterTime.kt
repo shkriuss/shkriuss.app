@@ -24,11 +24,19 @@ class WaterTime(
     /** The minute of now, in minutes after midnight. */
     fun minuteNow(): Int = now().let { it.hour * 60 + it.minute }
 
+    /** The local date and time of the moment [millis], in milliseconds since 1970. */
+    fun local(millis: Long): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), zone())
+
+    /** The moment of the local date and time [time], in milliseconds since 1970. A time in a gap of summer time moves forward. */
+    fun millisOf(time: LocalDateTime): Long = time.atZone(zone()).toInstant().toEpochMilli()
+
+    /** The moment of the next midnight on the phone's clock, in milliseconds since 1970. */
+    fun nextMidnightMillis(): Long = today().plusDays(1).atStartOfDay(zone()).toInstant().toEpochMilli()
+
     /** How long until the next midnight, in milliseconds, at least one second. */
     fun millisToNextDay(): Long {
         val now = clock.nowMillis()
-        val midnight = today().plusDays(1).atStartOfDay(zone()).toInstant().toEpochMilli()
-        return (midnight - now).coerceAtLeast(MIN_WAIT_MILLIS)
+        return (nextMidnightMillis() - now).coerceAtLeast(MIN_WAIT_MILLIS)
     }
 
     private companion object {

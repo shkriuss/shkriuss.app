@@ -13,9 +13,9 @@ import kotlinx.coroutines.plus
 
 /**
  * What the sections "Drinking" and "Reminders" of Settings show
- * (docs/apps/water/spec.md, "Settings screen"). Step 2.4 adds the line of
- * the notification permission, and step 2.5 the sections "Backup",
- * "Security" and "About".
+ * (docs/apps/water/spec.md, "Settings screen"). The reminder line under
+ * the hours is [RemindersViewModel]'s, shared with Today. Step 2.5 adds
+ * the sections "Backup" and "Security", and the Licences.
  */
 data class SettingsScreen(
     /** False until the first read of the database is in. */
@@ -82,7 +82,11 @@ class SettingsViewModel(
         return wrong
     }
 
-    /** The switch "Remind me to drink". Step 2.4 adds the question for notifications. */
+    /**
+     * The switch "Remind me to drink". It takes effect at once. Turning it
+     * on may start the question for notifications, which
+     * [RemindersViewModel.remindersTurnedOn] decides.
+     */
     fun setRemindersOn(on: Boolean) = change { it.copy(remindersOn = on) }
 
     /** "Every": one of [SettingsRules.INTERVALS]. It can be changed while reminders are off. */

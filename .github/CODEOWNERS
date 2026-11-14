@@ -33,6 +33,7 @@
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/ApkResourceReaderTest.kt               @shkriuss
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/BackupRulesTest.kt                     @shkriuss
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/WebViewAndCodeLoadingRulesTest.kt      @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/PermissionAllowListTest.kt             @shkriuss
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/BinaryResourceWriter.kt                @shkriuss
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/DexWriter.kt                           @shkriuss
 

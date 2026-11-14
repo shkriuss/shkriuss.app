@@ -6,8 +6,9 @@ notifications ([CLAUDE.md](../../CLAUDE.md)). The decisions are in
 [ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md) and
 [ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md).
 
-Built in Phase 1, step 6. No app uses it yet. Water is the first
-(Phase 2, step 4).
+Built in Phase 1, step 6. Water is the first app that uses it, from
+Phase 2, step 4. That step added buttons on a notification, the end of
+a notification, and the notice when an app's handler fails.
 
 ## At a glance
 
@@ -17,7 +18,8 @@ Built in Phase 1, step 6. No app uses it yet. Water is the first
 | Notifications | Android's `NotificationManager` and `Notification.Builder`. No library. |
 | Permissions | `POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, in the module's manifest ([permissions.md](../security/permissions.md#apps-that-use-corenotify)) |
 | Lint | `MissingPermission` is suppressed on the one function that sets an alarm, because lint does not know `USE_EXACT_ALARM` ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md), point 10) |
-| Receivers | Two, in the module's manifest. Neither is exported. |
+| Receivers | Three, in the module's manifest. None is exported. |
+| Buttons | At most three on a notification, each after the phone's unlock, none while the app lock hides the text ([ADR 0034](../adr/0034-notification-buttons.md)) |
 | Where the reminders are | In the app's own database. `core/notify` stores no reminder. |
 | What `core/notify` stores | The ids and times of the alarms it registered, and whether the user was asked for the permission. No title, no text. |
 | Before the first unlock | Nothing runs and nothing fires ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)) |
@@ -38,6 +40,7 @@ Built in Phase 1, step 6. No app uses it yet. Water is the first
                reminders,
                Clock.System,
                hidesText = appLock::hidesNotificationText,
+               buttons = reminders,
            )
        }
 
@@ -66,10 +69,17 @@ Built in Phase 1, step 6. No app uses it yet. Water is the first
      It has no default, so that no app can forget it. An app with the
      app lock passes `AppLockWatcher.hidesNotificationText`. An app
      without one passes `{ false }` and says so in a comment.
+   - **A `ButtonHandler`**, only if its notifications have buttons. It
+     runs when the user presses one
+     ([Buttons on a notification](#buttons-on-a-notification)).
 3. After every change to a reminder, the app calls `notify.sync()`. That
    is all. It never sets or removes a single alarm itself.
 4. A screen that turns reminders on asks `notify.state(channel)` and
    shows what it says ([the states](#the-permission-and-the-states)).
+5. The first channel in its list is where `core/notify` shows that a
+   reminder could not be shown
+   ([How alarms are kept right](#how-alarms-are-kept-right)). It is the
+   channel of the app's reminders.
 
 An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
 
@@ -91,6 +101,15 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
 4. After the handler ran for an alarm, name its next time, or leave it
    out.
 5. It is called on a background thread, so it may read the database.
+6. **Until the handler ran, an alarm that is due is still wanted.**
+   Keep naming it with its time. A sync can run in the seconds between
+   an alarm's time and the moment it reaches the handler: the start of
+   the app, when Android starts the process for that very alarm, runs
+   one first. An app whose rule counts "from now" would name the next
+   time then, and the alarm would be dropped. Water keeps a due alarm for
+   one minute, unless its handler ran
+   ([spec.md](../apps/water/spec.md#when-the-next-reminder-comes), rule
+   7). Found in Phase 2, step 4.
 
 ### Rules for the app's `AlarmHandler`
 
@@ -98,12 +117,17 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
 2. Doing it twice must give the same result as doing it once. If the app
    stops in the middle, it runs again for the same alarm later.
 3. It shows notifications through the `Notifications` it is given.
+4. If it fails, `core/notify` shows a notice in place of the reminder
+   ([How alarms are kept right](#how-alarms-are-kept-right)). So write
+   down first whatever keeps the alarm from being named again, before
+   anything that can fail.
 
 ## The parts
 
 | Class | What it is for |
 |---|---|
 | `Notify` | The entry point. `start`, `sync`, `hideShownText`, `state`, `permissionAnswered`, `settingsIntent`, and `notifications`. |
+| `ShkNotificationButton`, `ButtonPress`, `ButtonHandler` | A button on a notification, the press the app gets back, and what the app does with it ([Buttons on a notification](#buttons-on-a-notification)). |
 | `NotifyHost` | The interface of the app class. Android creates the receivers itself, so nothing can be passed to them through a constructor. They reach the app's `Notify` through the app class. |
 | `Alarm`, `AlarmId`, `AlarmSource`, `AlarmHandler` | What the app names and gets back. |
 | `AlarmScheduler` | The small interface in front of `AlarmManager`: `set` and `cancel`. `AlarmManagerScheduler` is the real one. A test passes one that only keeps a list. |
@@ -112,7 +136,7 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
 | `NotifyChannel`, `ChannelImportance` | A notification channel. |
 | `Notifications`, `ShkNotification` | Showing and removing a notification. |
 | `NotifyState` | What a screen shows about the permission and the channel. |
-| `AlarmReceiver`, `SystemEventReceiver` | The two receivers. |
+| `AlarmReceiver`, `SystemEventReceiver`, `ButtonReceiver` | The three receivers. |
 
 ## How alarms are kept right
 
@@ -155,6 +179,16 @@ When Android fires an alarm:
    handler, the alarm fires again at the next sync.
 4. "Fired" is written also when the handler fails. A reminder that
    cannot be read fails once, and not at every start of the app.
+5. **When the handler fails**, the user sees a notice in place of the
+   reminder, on the app's first channel: the channel's name, such as
+   "Drink reminders", and "A reminder could not be shown. Open the app to
+   see it." It has no buttons and nothing of the app's own. Its key is
+   the alarm's id, so the app's next notification for that alarm
+   replaces it. A tap opens the app's start screen. Then the sync runs as
+   after any alarm, so the next reminder is set. The owner decided this
+   in Phase 2, step 4, for every app ([Open](#open), item 6). Before, the
+   failure stopped the app's process in the background, and the next
+   reminder was set only at the next start of the app.
 
 Two more rules:
 
@@ -182,7 +216,7 @@ The change to and from summer time needs no broadcast. The app names the
 next time of a reminder after each alarm, and `java.time` already knows
 the change.
 
-Both receivers keep their broadcast open until the work is done
+The receivers keep their broadcast open until the work is done
 (`goAsync`). For an alarm, Android keeps the device awake that long.
 
 ## What goes where
@@ -194,7 +228,8 @@ all.
 |---|---|
 | The alarm at Android | The time, and a broadcast to `AlarmReceiver` of this app with the alarm id. No title, no text, no extras. |
 | The file `app.shkriuss.core.notify.xml` in the app's private storage | For each registered alarm its id and time. For each fired alarm its id and time. Whether the user was asked for the permission. |
-| The notification | The title and text the app's handler read from its database at that moment. They go to Android to be shown. While the app lock hides the text: only the channel's name and a fixed text. |
+| The notification | The title and text the app's handler read from its database at that moment, and the labels of its buttons. They go to Android to be shown. While the app lock hides the text: only the channel's name and a fixed text, and no buttons. Its end, if it has one, as a time in its extras. |
+| A button's press | A broadcast to `ButtonReceiver` of this app, after the phone's unlock: the notification's key, the button's action, the notification's time and the button's fixed value. No text. |
 
 - The file is in credential-encrypted storage, like the database. It
   can be read only after the first unlock.
@@ -221,8 +256,8 @@ the app lock ([security-screens.md](security-screens.md#the-app-lock)).
 3. When the app lock is turned on, or the switch is turned off, the
    notifications already showing are posted again in the hidden form,
    so no old text stays in the notification shade. They keep their key,
-   tap target, icon and time, and make no new sound
-   (`setOnlyAlertOnce`). `Notify.hideShownText()` does it, on the
+   tap target, icon, time and end, lose their buttons, and make no new
+   sound (`setOnlyAlertOnce`). `Notify.hideShownText()` does it, on the
    module's one worker thread, after any alarm handler that is running.
    The app lock calls it through the `onTextHidden` it was given.
 4. If the state of the app lock cannot be read, the text is hidden.
@@ -232,6 +267,46 @@ the app lock ([security-screens.md](security-screens.md#the-app-lock)).
 6. The title and text the app gives are never stored by `core/notify`,
    so a hidden notification cannot be shown again with its text. A tap
    opens the app, behind the lock screen.
+
+## Buttons on a notification
+
+Built in Phase 2, step 4, with Water's **Drank** and **Later**. The rules
+for every app are in [ADR 0034](../adr/0034-notification-buttons.md).
+
+1. A notification has at most three buttons, each a
+   `ShkNotificationButton`: the label it shows, an action (a fixed name
+   such as `drank`, never text) and a fixed value (such as an amount in
+   millilitres).
+2. Each button asks Android for the phone's unlock before it runs
+   (`setAuthenticationRequired`). Without the unlock nothing happens.
+3. While the app lock hides the text, a notification has no buttons. A
+   notification posted again in the hidden form loses them.
+4. A press is a broadcast to `ButtonReceiver` of this app, which is not
+   exported. The button's pending intent is immutable, and Android keeps
+   one for each key and action. It carries the notification's key, the
+   button's action, the notification's time and the button's value. No
+   text.
+5. `ButtonReceiver` hands the press to the app's `ButtonHandler` on the
+   one worker thread, after any alarm handler that is running.
+6. Android does not remove a notification when one of its buttons is
+   pressed. The app does: it removes it, and calls `notify.sync()` if the
+   press changed an alarm.
+7. The app decides whether a press still counts, from its time: a button
+   works once, and only while its notification is the one the app shows
+   for that reminder.
+8. A press that fails changes nothing more. The notification stays, so
+   the user can open the app.
+9. An app that puts buttons on a notification passes a `ButtonHandler`
+   to `Notify`. `Notifications.show` refuses buttons otherwise.
+
+## The end of a notification
+
+A notification can have an end, `ShkNotification.endsAtMillis`. Android
+removes it then (`setTimeoutAfter`). Water ends its reminder at the next
+midnight, so yesterday's numbers never show as today's. The end is kept
+in the notification as a time, so a notification posted again in the
+hidden form keeps the same end. A notification whose end has passed is
+not shown.
 
 ## Channels
 
@@ -271,8 +346,10 @@ the app starts it.
 - `USE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED` are granted at install.
   The user is not asked and cannot take them away.
 
-Open: the screen itself, with its words, is built with the first app
-that has reminders (Phase 2, step 4). `core/notify` has no screen.
+The screen itself, with its words, is the app's. `core/notify` has no
+screen. Water built the first in Phase 2, step 4: a dialog that explains,
+then Android's question, and a line on Today and in Settings for each
+state ([spec.md](../apps/water/spec.md#asking-for-notifications)).
 
 ## Limits of Android
 
@@ -294,14 +371,25 @@ Unit tests, on the JVM. They are in `core/notify/src/test/`:
 
 | Test class | What it checks |
 |---|---|
-| `AlarmSyncTest` | The rules of "How alarms are kept right", with a clock the test moves and a stand-in for Android's alarms: what is registered, that an alarm fires once and not before its time, changed and removed reminders, a reminder that repeats, a reboot, a missed alarm, the clock set forward and back, a new time zone, more than 100 alarms, a handler that fails, and that a change in the app does not set the other alarms again. |
+| `AlarmSyncTest` | The rules of "How alarms are kept right", with a clock the test moves and a stand-in for Android's alarms: what is registered, that an alarm fires once and not before its time, changed and removed reminders, a reminder that repeats, a reboot, a missed alarm, the clock set forward and back, a new time zone, more than 100 alarms, a handler that fails (the notice, and the sync after it), and that a change in the app does not set the other alarms again. |
 | `AlarmManagerSchedulerTest` | What is asked of `AlarmManager`: exact, on the wall clock, waking the device, one alarm for each id, a broadcast that only this app can send and that carries only the id. |
-| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. The hidden form while the app lock is on, also when `hidesText` fails, and the shown notifications posted again in it with the same key and tap target and no new alert. |
-| `ManifestTest` | The module's manifest: the three permissions and no other, two receivers, not exported, nothing that runs before the first unlock, and exactly the four broadcasts. |
+| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. The hidden form while the app lock is on, also when `hidesText` fails, and the shown notifications posted again in it with the same key and tap target and no new alert. The buttons: their labels, the unlock, their pending intents and what a press carries, a press through the receiver, at most three, none in the hidden form. The end of a notification, kept in the hidden form. The notice when a handler fails, and that the next alarm still comes. |
+| `ManifestTest` | The module's manifest: the three permissions and no other, three receivers, not exported, nothing that runs before the first unlock, exactly the four broadcasts, and no intent filter on the receivers of alarms and buttons. |
 | `NotifyBoundaryTest` | No other module under `android/` names `AlarmManager` or a notification class of Android or AndroidX. It reads source, like `CryptoBoundaryTest` ([build.md](../development/build.md#unit-tests)). |
 
 The clock in these tests is `TestClock` of `core/testing`. Nothing in
 `core/notify` reads the device's clock itself.
+
+The module's test fixtures hold `NotifyTestDevice`, for the unit tests
+of an app with reminders, on Robolectric's Android. It reads what a
+notification shows and which alarms wait, and does what the user and
+Android do: allow notifications or not, turn a channel off, press a
+button, fire an alarm, forget the alarms at a reboot, send a broadcast.
+So an app's tests check its reminders without naming Android's alarm and
+notification classes, which `NotifyBoundaryTest` forbids also in tests.
+The APK rules check fails an app that holds one of its classes
+([build.md](../development/build.md#test-fixtures)). Added in Phase 2,
+step 4, for Water.
 
 Tests on an emulator, with a real Android and the device's clock, are in
 [emulator-tests.md](../development/emulator-tests.md#the-tests-of-corenotify).
@@ -310,14 +398,13 @@ three devices.
 
 ## Open
 
-1. The screen for the permission, and its words (Phase 2, step 4).
-2. Buttons on a notification, such as "Done" or "Later". `core/notify`
-   has none yet. They come with the first app that needs them. Water
-   has two, **Drank** and **Later**
-   ([spec.md](../apps/water/spec.md#buttons-on-a-reminder)). The rules
-   for every app are in
-   [ADR 0034](../adr/0034-notification-buttons.md), accepted on
-   2026-11-13. Built in Phase 2, step 4.
+1. The screen for the permission, and its words. Built in Water in
+   Phase 2, step 4
+   ([The permission and the states](#the-permission-and-the-states)).
+2. Buttons on a notification. Built in Phase 2, step 4, with Water's
+   **Drank** and **Later**
+   ([Buttons on a notification](#buttons-on-a-notification),
+   [ADR 0034](../adr/0034-notification-buttons.md)).
 3. A notification that is not a reminder, for example progress in the
    Sync app. Today every app that uses `core/notify` gets all three
    permissions and both receivers.
@@ -327,7 +414,10 @@ three devices.
 5. What a notification shows while the app lock is on. Decided in
    Phase 1, step 7, session B
    ([While the app lock is on](#while-the-app-lock-is-on)).
-6. What the user sees when an app's alarm handler fails. Today the
-   reminder is marked as fired and is lost without a word
-   ([How alarms are kept right](#how-alarms-are-kept-right)). Decided in
-   Phase 2, step 4, with the reminders of Water.
+6. What the user sees when an app's alarm handler fails. Decided by the
+   owner in Phase 2, step 4, with the reminders of Water: a notice from
+   `core/notify` in place of the reminder, and the next reminder still
+   comes ([How alarms are kept right](#how-alarms-are-kept-right), when
+   Android fires an alarm, point 5).
+7. A failing `AlarmSource` still stops the app's process: nothing can be
+   registered then. Not changed in step 2.4.
