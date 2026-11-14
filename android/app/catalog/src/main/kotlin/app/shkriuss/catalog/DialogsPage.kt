@@ -26,8 +26,9 @@ import app.shkriuss.core.design.ShkTonalButton
 /**
  * The dialog with text and two buttons, with one button, with a choice,
  * with its confirm button turned off and with long text, each drawn in
- * place. Then one to try, which opens in its window. Only the button
- * under "Try it" does something when tapped.
+ * place. Then one to try, which opens in its window, and last one whose
+ * Save keeps it open with an error under its field. Only the button under
+ * "Try it" does something when tapped.
  */
 @OptIn(ShkInPlace::class)
 @Composable
@@ -89,6 +90,26 @@ fun DialogsPage(modifier: Modifier = Modifier) {
                     )
                 },
                 ComponentState(R.string.state_try_dialog) { DialogToTry() },
+                // Save checks the value first: the dialog stays open and the
+                // field says what is wrong (closesDialog = false).
+                ComponentState(R.string.state_stays_open_with_error) {
+                    ShkDialogInPlace(
+                        title = stringResource(R.string.sample_glasses_a_day),
+                        confirmAction = ShkDialogAction(
+                            text = stringResource(R.string.sample_save),
+                            onClick = {},
+                            closesDialog = false,
+                        ),
+                        dismissAction = cancelAction(),
+                    ) {
+                        ShkTextField(
+                            value = stringResource(R.string.sample_glasses_value),
+                            onValueChange = {},
+                            label = stringResource(R.string.sample_glasses_label),
+                            errorText = stringResource(R.string.sample_glasses_error),
+                        )
+                    }
+                },
             ),
             wideColumns = 2,
             // Each panel keeps its own height, as in its window.

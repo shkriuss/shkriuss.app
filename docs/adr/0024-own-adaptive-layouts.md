@@ -47,7 +47,9 @@
    the stack, so it needs no record of its own (owner decision on pull
    request 16).
 7. Not decided here: whether the apps use Navigation 3. That is decided
-   when the first app is built.
+   when the first app is built. Water, the first app, does not use it
+   ([0003](0003-kotlin-compose-material-3-navigation-3.md), point 2,
+   decided in step 2.3).
 
 ## Options rejected
 

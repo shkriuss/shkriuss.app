@@ -64,7 +64,7 @@ How a record may be edited or replaced is in point 7 of
 |---|---|---|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
 | 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025 |
-| 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031 |
+| 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031; Navigation 3 not used by Water (step 2.3) |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027; point 4 superseded by 0036 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md |

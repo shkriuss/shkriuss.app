@@ -18,9 +18,13 @@ Code:
 
 - `android/feature/water`: the data and logic, from step 2.2. The
   database, the repository, the rules of the specification as plain code,
-  the ViewModels and the backup content. The screens come in step 2.3.
-- `android/app/water`: the app, from step 2.2. Until step 2.3 it shows
-  one line in place of the screens.
+  the ViewModels and the backup content. Its package `ui` holds the
+  screens, from step 2.3: Today, History with the open day, Settings, the
+  drink sheet and the dialogs.
+- `android/app/water`: the app, from step 2.2. Its one activity shows the
+  screens inside the app lock's gate. Its tests hold the screenshots of
+  every screen, sheet and dialog, and the check that each is behind the
+  app lock.
 - What changed in each version:
   [CHANGELOG.md](../../../android/app/water/CHANGELOG.md).
 - How the modules fit together:

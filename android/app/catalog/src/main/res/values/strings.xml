@@ -36,6 +36,8 @@
     <string name="page_selection_summary">Checkboxes, switches and radio buttons.</string>
     <string name="page_sliders_title">Sliders</string>
     <string name="page_sliders_summary">Picking a value in a range.</string>
+    <string name="page_progress_bars_title">Progress bars</string>
+    <string name="page_progress_bars_summary">Showing how far something has got.</string>
     <string name="page_cards_title">Cards</string>
     <string name="page_cards_summary">Raised surfaces that set one item apart.</string>
     <string name="page_lists_title">Lists</string>
@@ -228,6 +230,15 @@
     <string name="state_clock_24">24-hour clock</string>
     <string name="state_impossible_time">An impossible time, refused</string>
     <string name="state_try_time">Try it: tap the button to open the time picker.</string>
+    <string name="state_time_refused">A time refused, with the reason</string>
+    <string name="state_stays_open_with_error">Stays open: a value refused under its field</string>
+    <string name="state_with_suffix">With a unit after the text</string>
+    <string name="state_with_trailing_icon">With an icon at the end</string>
+    <string name="state_progress_empty">Empty</string>
+    <string name="state_progress_part">Part of the way</string>
+    <string name="state_progress_full">Full</string>
+    <string name="state_progress_past">Past the end, shown full</string>
+    <string name="state_try_progress" formatted="false">Try it: tap Add 10% to fill the bar, or Reset to empty it.</string>
     <string name="state_try_list_detail">Try it: tap a note to open it. This one follows the window: in one pane, Back or the back gesture returns to the list. In a window at least 840\u00A0dp wide, the note opens beside the list.</string>
 
     <!-- Component pages: the words on the sample components. -->
@@ -265,6 +276,26 @@
     <string name="sample_volume">Volume</string>
     <!-- A percentage, for example "40%". -->
     <string name="sample_percent">%1$d%%</string>
+    <!-- How far a progress bar is, as TalkBack reads it: "62 percent". -->
+    <plurals name="sample_percent_spoken">
+        <item quantity="one">%1$d percent</item>
+        <item quantity="other">%1$d percent</item>
+    </plurals>
+    <string name="sample_water_today">Water today</string>
+    <string name="sample_add_ten_percent" formatted="false">Add 10%</string>
+    <string name="sample_reset">Reset</string>
+    <!-- A dialog whose Save refuses a value: it stays open and names what is wrong. -->
+    <string name="sample_glasses_a_day">Glasses a day</string>
+    <string name="sample_glasses_label">Glasses</string>
+    <string name="sample_glasses_value">0</string>
+    <string name="sample_glasses_error">Enter a number from 1 to 20.</string>
+    <!-- A time picker that refuses a time, and why. -->
+    <string name="sample_time_refused">Choose a time from 06:00 to 22:00.</string>
+    <!-- A text field with a unit after the text. TalkBack reads the unit in words. -->
+    <string name="sample_amount">Amount</string>
+    <string name="sample_amount_value">250</string>
+    <string name="sample_unit_ml">ml</string>
+    <string name="sample_unit_ml_spoken">millilitres</string>
     <string name="sample_daily_goal">Daily goal</string>
     <!-- The daily goal, for example "8 glasses". -->
     <plurals name="sample_glasses">
@@ -402,6 +433,11 @@
     <string name="selection_switch_use">A setting that takes effect at once. When on, it is filled and its thumb shows a check mark.</string>
     <string name="selection_radio_title">Radio button</string>
     <string name="selection_radio_use">One choice out of a few, all shown. Exactly one is selected. TalkBack reads its place in the group.</string>
+
+    <!-- Progress bars page. -->
+    <string name="progress_bars_intro">TalkBack reads the label and the value in words, not a bare number. The bars cannot be moved; only the buttons under Try it change the one there.</string>
+    <string name="progress_bar_title">Progress bar</string>
+    <string name="progress_bar_use">How far something has got, such as how much of a daily goal is drunk. Past the end it stays full.</string>
 
     <!-- Sliders page. -->
     <string name="sliders_intro">TalkBack reads the label and the value in words, not a percentage. Only the slider under Try it moves.</string>

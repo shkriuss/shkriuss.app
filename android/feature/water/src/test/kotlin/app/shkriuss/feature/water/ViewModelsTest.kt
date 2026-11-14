@@ -2,8 +2,11 @@ package app.shkriuss.feature.water
 
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.water.data.WaterDatabase
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -148,7 +151,8 @@ class ViewModelsTest {
         assertFalse(model.sheetThat { it.minuteOfDay == 23 * 60 + 30 }.timeError)
 
         model.save()
-        val saved = model.state.await { it.drinks.isNotEmpty() }
+        // The snackbar comes when the drink is written, the list when Room tells of it: either can come first.
+        val saved = model.state.await { it.drinks.isNotEmpty() && it.snackbar != null }
         assertEquals(THE_DAY.minusDays(1), saved.drinks.single().day)
         assertEquals(DrinkSnackbar.Kind.ADDED, saved.snackbar?.kind)
     }
@@ -255,6 +259,66 @@ class ViewModelsTest {
         clock.setTo(THE_DAY.plusDays(1).atTime(0, 1))
         model.checkTheDay()
         assertEquals(THE_DAY, model.state.value.day)
+    }
+
+    @Test
+    fun fromShowUntilTheNewDaysDrinksAreReadTheDayIsNotLoadedAndNothingOfTheDayBeforeShows() {
+        val before = THE_DAY.minusDays(2)
+        val opened = THE_DAY.minusDays(1)
+        runBlocking {
+            repository.addDrink(before, 600, 300)
+            repository.addDrink(opened, 610, 400)
+        }
+        val model = dayOf(before)
+        model.state.await { it.loaded && it.totalMl == 300 }
+        // Every state the screen gets from now on.
+        val seen = CopyOnWriteArrayList<DayScreen>()
+        val watching = CoroutineScope(Dispatchers.Unconfined).launch { model.state.collect { seen += it } }
+        try {
+            seen.clear()
+
+            model.show(opened)
+
+            // From the moment show() is called: the new day, not loaded, with nothing of the day before.
+            val right = model.state.value
+            assertEquals(opened, right.day)
+            assertFalse("not loaded until the new day's drinks are read", right.loaded)
+            assertEquals(0, right.totalMl)
+            assertEquals(emptyList<Drink>(), right.drinks)
+            // Then the new day's drinks.
+            assertEquals(400, model.state.await { it.loaded }.totalMl)
+            assertTrue("no state shows the day before: $seen", seen.none { it.day == before })
+            assertTrue("a loaded state is the new day's: $seen", seen.filter { it.loaded }.all { it.day == opened && it.totalMl == 400 })
+            assertFalse("the first state after show() is not loaded", seen.first().loaded)
+        } finally {
+            watching.cancel()
+        }
+    }
+
+    @Test
+    fun theOpenDayMovesToTheDayHistoryOpensAndClosesTheSheetAndSnackbarOfTheDayBefore() {
+        runBlocking {
+            repository.addDrink(THE_DAY.minusDays(2), 600, 300)
+            repository.addDrink(THE_DAY.minusDays(1), 610, 400)
+        }
+        val model = dayOf(THE_DAY)
+        model.loaded()
+
+        model.show(THE_DAY.minusDays(2))
+        assertEquals(300, model.state.await { it.day == THE_DAY.minusDays(2) && it.totalMl == 300 }.totalMl)
+        model.openAdd()
+        model.sheetThat()
+
+        model.show(THE_DAY.minusDays(1))
+        val next = model.state.await { it.day == THE_DAY.minusDays(1) && it.totalMl == 400 }
+        assertNull("The sheet of the day before closed", next.sheet)
+        assertNull(next.snackbar)
+        assertFalse(next.isToday)
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun todayFollowsTheClockAndRefusesToShowAnotherDay() {
+        today().show(THE_DAY.minusDays(1))
     }
 
     // History.

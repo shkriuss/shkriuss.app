@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Settings, in the navigation: three sliders. Drawn for the suite on the
+    24 dp grid; not taken from an icon set. The colour is replaced by the
+    navigation's icon colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4,7H7M11,7H20M4,12H13M17,12H20M4,17H5M9,17H20M7,7A2,2 0,1 0,11 7A2,2 0,1 0,7 7ZM13,12A2,2 0,1 0,17 12A2,2 0,1 0,13 12ZM5,17A2,2 0,1 0,9 17A2,2 0,1 0,5 17Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

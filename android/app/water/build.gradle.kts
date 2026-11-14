@@ -17,8 +17,13 @@ android {
 }
 
 dependencies {
-    implementation(project(":feature:water"))
+    // core/design comes before feature/water on purpose. With feature/water
+    // first, Gradle reads the metadata of an old Compose UI (1.0.1, asked
+    // for by Activity Compose) before the Compose BOM settles the version,
+    // and dependency verification refuses it. The versions resolved are the
+    // same either way.
     implementation(project(":core:design"))
+    implementation(project(":feature:water"))
     // The app lock: SecurityHost, AppLockWatcher and AppLockGate. Until
     // step 2.5 the manifest removes the module's two permissions and its
     // six screens (docs/security/permissions.md).

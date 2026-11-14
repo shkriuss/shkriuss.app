@@ -9,6 +9,7 @@ import app.shkriuss.core.design.ShkDivider
 import app.shkriuss.core.design.ShkListItem
 import app.shkriuss.core.design.ShkScreen
 import app.shkriuss.core.design.ShkSectionHeader
+import app.shkriuss.core.design.R as DesignR
 
 /**
  * The list item in every state, the section header alone, long and above
@@ -77,6 +78,14 @@ fun ListsPage(modifier: Modifier = Modifier) {
                         trailingText = stringResource(R.string.sample_time),
                         icon = painterResource(R.drawable.sample_icon_alarm),
                         onClick = {},
+                    )
+                },
+                // The icon at the end is decorative: the text says what it shows.
+                ComponentState(R.string.state_with_trailing_icon) {
+                    ShkListItem(
+                        headline = stringResource(R.string.sample_call_dentist),
+                        trailingText = stringResource(R.string.sample_done),
+                        trailingIcon = painterResource(DesignR.drawable.shk_icon_check),
                     )
                 },
             ),

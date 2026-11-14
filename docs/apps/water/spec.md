@@ -17,6 +17,12 @@ what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
   `android/app/water`. The screens come in step 2.3. In the same step the
   owner corrected [rule 3](#when-the-next-reminder-comes), on the snooze
   and a drink ([Decided by the owner](#decided-by-the-owner)).
+- Step 2.3 built the screens on 2026-11-14, in `android/feature/water`
+  (package `ui`), and `ShkProgressBar` in `core/design`. The owner
+  decided the points this page left open for it
+  ([Decided by the owner](#decided-by-the-owner)): no Navigation 3, which
+  parts of Settings wait for steps 2.4 and 2.5, four optional additions to
+  `core/design`, and the buttons of the dialogs of Settings.
 - If this page is wrong or silent, the fix is a change to this page
   first, agreed with the owner ("If the spec is wrong or silent, stop and
   ask" in the prompt of steps 2.2 to 2.5).
@@ -94,7 +100,12 @@ your phone, with no account and no network.
 6. The screens of the recovery key and the app lock are activities of
    `core/security`. Settings opens them
    ([Settings](#settings-screen)).
-7. Whether Water uses Navigation 3 for this is [open](#open).
+7. Water does not use Navigation 3. The chosen destination is saved
+   state of the screen, the open day is in History's ViewModel, and Back
+   works through Activity Compose's `BackHandler`. The owner decided this
+   in step 2.3
+   ([ADR 0003](../../adr/0003-kotlin-compose-material-3-navigation-3.md),
+   point 2).
 
 Window widths, as in [ADR 0024](../../adr/0024-own-adaptive-layouts.md):
 compact under 600dp (phones), medium from 600dp (small tablets, a phone
@@ -306,6 +317,32 @@ otherwise below.
 
 Layout: one column on every width, in the screen margins of the design
 system. Dialogs are `ShkDialog`s.
+
+The dialogs (owner's decisions in step 2.3):
+
+1. Each dialog's title is the name of its item, such as "Daily goal".
+2. Its buttons are **Save** and **Cancel**, as in the drink sheet.
+3. In "Unit" and "Every", the choice takes effect on **Save**.
+4. In "Daily goal" and "Quick amounts", **Save** checks what was typed
+   first. A value outside its limits is named under its field, and the
+   dialog stays open. **Cancel** keeps the old value.
+5. "From" and "Until" are `ShkTimePicker`s. When a time is refused, the
+   picker stays open with the time typed and says why, and the setting
+   keeps its old time. The time can be changed, or the picker cancelled.
+6. A number field shows its unit after the number, "ml" or "fl oz", as
+   the drink sheet does.
+
+What each step shows (owner's decision in step 2.3). Nothing waits as a
+button that does nothing:
+
+| Part | Step |
+|---|---|
+| Drinking: Daily goal, Unit, Quick amounts | 2.3 |
+| Reminders: Every, From, Until, and the line when no reminder fits | 2.3 |
+| Reminders: the switch "Remind me to drink" and the line about notifications | 2.4 |
+| Backup, and Security | 2.5 |
+| About: Version | 2.3. It shows the version name of the installed app, such as `1.0.0-alpha.1`. |
+| About: Licences | 2.5 |
 
 ### Asking for notifications
 
@@ -1016,8 +1053,13 @@ off do not matter for Water.
 12. **Notification buttons** have only their visible text. Whether
     TalkBack reads "ml" well there is [open](#open), for the TalkBack
     pass of step 2.6.
-13. The automated accessibility checks of the emulator tests run on
-    every screen, as for Catalog.
+13. Automated accessibility checks on an emulator do not exist yet, for
+    Catalog either. They need the AndroidX test runner and new
+    dependencies, which are owner-only files
+    ([ADR 0028](../../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
+    Step 2.3 checks the same rules in unit tests: touch targets, labels,
+    headings and items read as one. Whether Water 1.0 needs the checks on
+    an emulator is [open](#open), for step 2.6.
 
 ## Out of scope for version 1.0
 
@@ -1054,7 +1096,9 @@ Water needs these. Each is built in the step named, not on this page.
 |---|---|---|
 | `core/testing` | The check that every screen of an app is behind the app lock: `AppLockCheck`, its app classes and `MergedManifest` ([security-screens.md](../../architecture/security-screens.md#every-screen-is-behind-the-gate)). Built. | 2.2 |
 | `core/security` | `AppLockGate` tags its lock screen with `LOCK_SCREEN_TEST_TAG`, so the check can find it. Nothing that shows changes. Built. | 2.2 |
-| `core/design` | `ShkProgressBar`, a progress bar with a value from 0 to 1. Features cannot draw Material 3's own. With its page in Catalog, its screenshots and its tests. | 2.3 |
+| `core/design` | `ShkProgressBar`, a progress bar with a value from 0 to 1. Features cannot draw Material 3's own. With its page in Catalog, its screenshots and its tests. Built. | 2.3 |
+| `core/design` | Four optional additions, each with a default that leaves every existing use as it was, a sample in Catalog and tests: a dialog button that keeps the dialog open (`ShkDialogAction.closesDialog`), a time refused in the time picker with its reason (`ShkTimePicker`'s `refuse`), a unit after the text of a field (`ShkTextField`'s `suffix`), and an icon at the end of a list row (`ShkListItem`'s `trailingIcon`). Built. | 2.3 |
+| `core/testing` | The check that every sheet and dialog of an app is behind the app lock: an app class whose app lock is on and open (`AppLockOnForTests`), and `AppLockCheck.checkLockedNow` ([security-screens.md](../../architecture/security-screens.md#every-screen-is-behind-the-gate)). Built. | 2.3 |
 | `core/notify` | Buttons on a notification: a third receiver, not exported, the rules of [ADR 0034](../../adr/0034-notification-buttons.md), no buttons in the hidden form, and a timeout for a notification. `ManifestTest` and [permissions.md](../../security/permissions.md) follow. | 2.4 |
 | `core/security` | The first-need dialog of [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md), with its Catalog page. | 2.5 |
 | The APK rules check | Water's allow list of five permissions, and the rule of ADR 0033 | 2.4 and 2.5, as the prompts say |
@@ -1064,9 +1108,9 @@ Water needs these. Each is built in the step named, not on this page.
 | Step | Builds |
 |---|---|
 | 2.2 | The database, the repositories, the rules of [the goal of a day](#the-goal-of-a-day), [the settings in use](#the-settings-in-use), [units](#units) and [the next reminder](#when-the-next-reminder-comes) as plain code with unit tests, the view models, the backup content readers and writers, and the check that every screen is behind the app lock |
-| 2.3 | Every screen of [Screens](#screens) except backup and restore, and `ShkProgressBar` |
-| 2.4 | Reminders: `AlarmSource`, `AlarmHandler`, the buttons, the permission question, and the `core/notify` changes |
-| 2.5 | Backup and restore screens, the first-need dialog, the app lock in Settings, the file key move of [Files](#files) with its warning as a comment on the call, and the Licences screen |
+| 2.3 | Every screen of [Screens](#screens) except backup and restore, and `ShkProgressBar`. Built, without the parts that need steps 2.4 and 2.5 ([Settings screen](#settings-screen)). |
+| 2.4 | Reminders: `AlarmSource`, `AlarmHandler`, the buttons, the permission question, the reminder line of Today, the switch "Remind me to drink" and the line about notifications in Settings, and the `core/notify` changes |
+| 2.5 | Backup and restore screens, the first-need dialog, the sections Backup and Security of Settings with the app lock, the file key move of [Files](#files) with its warning as a comment on the call, and the Licences screen |
 | 2.6 | The user guide `docs/user/water.md`, the changelog, the release checklist |
 
 ## Decided by the owner
@@ -1083,6 +1127,7 @@ On 2026-11-13, in the planning session of this step.
 | The decision records and the assumptions (on [pull request 36](https://github.com/shkriuss/shkriuss.app/pull/36)) | [ADR 0034](../../adr/0034-notification-buttons.md), [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md) and [ADR 0036](../../adr/0036-app-settings-as-records.md) accepted. The 18 [assumptions](#assumptions) accepted as written. |
 | The file key move (on pull request 36) | Water may finish a pending move at once only because it stores no files. A later version that stores files must take this call out first, or files sealed with the old key are lost. The spec says so under [Files](#files), and the code carries the same warning as a comment on that call. |
 | A drink while a snooze is set (step 2.2, on 2026-11-14) | Rule 3 and the case "A drink is logged" said different things when a snooze was set. The owner decided: a snooze holds only while the press of **Later** is still the latest of the four. A drink timed at or after the press ends it; a drink entered with an earlier time does not. Rule 3 and two rows of [the table](#when-the-next-reminder-comes) say so. |
+| Step 2.3, on 2026-11-14, in the planning of the step | Water does not use Navigation 3 ([Navigation](#navigation), item 7, and [ADR 0003](../../adr/0003-kotlin-compose-material-3-navigation-3.md), point 2). Settings shows Every, From and Until in step 2.3, and the switch "Remind me to drink" and the line about notifications with the reminders in step 2.4. Everything else that needs steps 2.4 and 2.5 waits for its step, with no button that does nothing. Four optional additions to `core/design`, whose defaults change nothing that exists, each announced by TalkBack where it shows an error, with a sample in Catalog. The dialogs of Settings have **Save** and **Cancel**. History's "Goal reached" has its check at the end of the row. The owner confirmed six choices of the plan: emulator accessibility checks are open for step 2.6 ([TalkBack](#talkback-and-accessibility), point 13); the three destination icons are drawn for the suite; on a phone the four buttons of Today take a row each when one does not fit in half the width; the navigation bar stays while a day is open; Version shows the installed version name; TalkBack's words for a row or a button are given by Water where the spec names them. |
 | On pull request 40 (step 2.2, on 2026-11-14) | The words for a goal and for a quick amount outside their limits ([Settings screen](#settings-screen)). Three rules the code had chosen, accepted: on the same `updatedAt` the larger `id` counts, until step 5.1; a change of "From" that leaves less than 30 minutes before "Until" is refused, like a change of "Until"; setting the goal to the value it already has writes nothing. The receiver of `androidx.profileinstaller` is removed from Water's manifest ([Permissions](#permissions)). |
 
 ## Assumptions
@@ -1130,10 +1175,8 @@ The owner read them on pull request 36 and accepted them as written, on
 
 What is left, with the step that decides it.
 
-1. **Navigation 3 or not.** Water has three destinations and one open
-   day. Whether it uses Navigation 3 is the open point 2 of
-   [ADR 0003](../../adr/0003-kotlin-compose-material-3-navigation-3.md).
-   Step 2.3.
+1. **Navigation 3 or not.** Decided in step 2.3: Water does not use it
+   ([Decided by the owner](#decided-by-the-owner)).
 2. **What the user sees when the alarm handler fails.** Today the
    reminder is marked as fired and lost without a word
    ([notifications.md](../../architecture/notifications.md#open), item
@@ -1156,3 +1199,7 @@ What is left, with the step that decides it.
    ([backup-format.md](../../architecture/backup-format.md#the-restore-rule)).
    Step 5.1. Until then, the larger `id` counts (owner's decision on pull
    request 40).
+8. **Accessibility checks on an emulator.** Whether Water 1.0 needs them.
+   They need the AndroidX test runner and owner-only changes
+   ([TalkBack](#talkback-and-accessibility), point 13). Step 2.6 decides,
+   with the TalkBack pass on the phone.

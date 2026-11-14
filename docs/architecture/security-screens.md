@@ -53,8 +53,9 @@ Why activities and not screens inside the app's own window:
   activity finishes.
 - A turn of the phone keeps the key in the ViewModel. It is never in a
   saved state.
-- No navigation library is needed. Whether the apps use Navigation 3 is
-  still open ([ADR 0003](../adr/0003-kotlin-compose-material-3-navigation-3.md),
+- No navigation library is needed. Water, the first app, does not use
+  Navigation 3 either
+  ([ADR 0003](../adr/0003-kotlin-compose-material-3-navigation-3.md),
   point 2).
 
 ## What protects the words
@@ -211,9 +212,13 @@ user guide says so honestly ([app-lock.md](../user/app-lock.md)).
    default, so no app can forget them.
 4. Its settings open `SecurityScreens.appLockIntent`. The security
    screen has a button for it too.
-5. Its unit tests have one test that starts every screen of the app
+5. It draws every sheet and dialog from inside the gate, so that they go
+   with the rest of the screen when the app locks.
+6. Its unit tests have one test that starts every screen of the app
    locked, and fails unless each shows the lock screen and nothing of its
-   own. Copy Water's `EveryScreenIsBehindTheAppLockTest`
+   own, and that opens each sheet and dialog, locks the app, and fails
+   unless only the lock screen shows. Copy Water's
+   `EveryScreenIsBehindTheAppLockTest`
    ([Every screen is behind the gate](#every-screen-is-behind-the-gate)).
 
 ```kotlin
@@ -236,7 +241,7 @@ class WaterApp : Application(), SecurityHost, NotifyHost {
 class WaterActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { ShkTheme { AppLockGate { WaterScreen() } } }
+        setContent { ShkTheme { AppLockGate { WaterScreens(models, versionName) } } }
     }
 }
 ```
@@ -306,9 +311,29 @@ What it does, for each app, as a unit test that runs in `check`:
 4. It fails too if the manifest has no screen to check, so it cannot
    pass by checking nothing.
 
-Each app has one such test: Water's `EveryScreenIsBehindTheAppLockTest`,
-which every later app copies with its own locked app class. The helper
-is in `core/testing`, which the build keeps out of every app
+A screen that starts locked never draws its content, so the check above
+never sees a sheet or a dialog. A second part checks them, added in step
+2.3 with Water's screens:
+
+1. The app class of the test, `AppLockOnForTests` of `core/testing`,
+   turns the app lock on but keeps the app open, as after the system
+   prompt.
+2. For each sheet and dialog of the app, a test starts the screen, opens
+   the sheet or the dialog as the user would, and checks that it opened
+   in a window of its own.
+3. It turns the screen off, as the user would. The app locks.
+4. `AppLockCheck.checkLockedNow` then fails, naming what shows, unless
+   only the lock screen shows, in every window of the screen.
+
+A sheet or a dialog drawn from inside the gate leaves with the rest of
+the screen. One drawn beside the gate would stay, and the check would
+name it. After the system prompt it comes back as it was, with what was
+typed in it.
+
+Each app has one such test class: Water's
+`EveryScreenIsBehindTheAppLockTest`, which every later app copies with
+its own app classes and its own sheets and dialogs. The helper is in
+`core/testing`, which the build keeps out of every app
 ([build.md](../development/build.md#shared-test-helpers)).
 
 What it cannot see:

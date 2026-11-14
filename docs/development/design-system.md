@@ -13,7 +13,9 @@ Batch 4: the top bar, the navigation bar and rail that switch by window
 size, and the list-and-detail scaffold. Batch 5: the dialog, the bottom
 sheet, the snackbar, the menu, and the date and time pickers. See
 [Components](#components), [Window sizes](#window-sizes) and
-[Windows of their own](#windows-of-their-own).
+[Windows of their own](#windows-of-their-own). Step 2.3 of Phase 2
+added the progress bar for Water, and four optional parts of existing
+components ([Added in step 2.3](#added-in-step-23)).
 
 ## Rules
 
@@ -51,6 +53,7 @@ sheet, the snackbar, the menu, and the date and time pickers. See
 | `ShkTextField.kt` | `ShkTextField`, and `TextFieldInStyle`, the same field with typed text in another style, for the time picker. The second is internal to `core/design`. |
 | `ShkSelectionControls.kt` | `ShkCheckbox`, `ShkSwitch`, `ShkRadioButton` and `ShkRadioGroup`. |
 | `ShkSlider.kt` | `ShkSlider`. |
+| `ShkProgressBar.kt` | `ShkProgressBar`, and `drawProgressBar`, its drawing, internal to `core/design`. |
 | `ShkCard.kt` | `ShkCard`, with and without `onClick`. |
 | `ShkLists.kt` | `ShkListItem`, `ShkDivider` and `ShkSectionHeader`. |
 | `ShkContentStates.kt` | `ShkEmptyState`, `ShkLoadingState`, `ShkErrorState`, and `ShkStateAction`, the button of a state. |
@@ -327,6 +330,7 @@ icon rule asks, and the rail grows with its labels.
 | `ShkSwitch` | A setting that takes effect as soon as it changes, such as "Daily reminder" on a settings screen. | An option in a form that is saved later. Use a checkbox. |
 | `ShkRadioButton` | One choice out of a few that are all shown, such as the unit "Millilitres" or "Ounces". Put them in a `ShkRadioGroup`. | More than about six options, or options that change. Use a list. |
 | `ShkSlider` | A value in a range where the exact number matters less than where it sits, such as a daily goal. | A value that must be exact. Use a text field. |
+| `ShkProgressBar` | How far something has got, such as how much of a daily goal is drunk. | Picking a value: use a slider. A wait whose end is not known: use a loading state. |
 | `ShkCard` | One item set apart from the things around it, such as a note in a list of notes. Give it `onClick` when tapping it opens the item. | Rows of things that look alike. Use list items. |
 | `ShkListItem` | One row in a list of things that look alike, such as tasks, settings or files. Give it `onClick` when tapping it opens or changes something, and `selected` when it is the item open beside the list. | A setting that turns on and off. Use a switch. |
 | `ShkSectionHeader` | The heading of a group on a screen, such as "Today" above a list of tasks. | The title of a screen. Each screen has one title. |
@@ -352,7 +356,9 @@ decision on pull request 13).
 Batch 2 leaves out these parts of Material 3: the checkbox with a third,
 mixed state, the range slider and the vertical slider, and text field
 icons, prefixes, suffixes and placeholders. They are built when the first
-app needs them, not before (owner decision on pull request 14).
+app needs them, not before (owner decision on pull request 14). Water
+needed a suffix for its amounts: it came in step 2.3
+([Added in step 2.3](#added-in-step-23)).
 
 Batch 3 leaves out, in the same way: the elevated and the filled card, a
 card that can be selected, a list item with a third "overline" line or
@@ -413,6 +419,18 @@ The inputs of batch 2:
 | Switch | Track `surfaceHigh`, outlined in `outline`. Thumb `outline`. | Track `accent`. Thumb `textOnAccent`, with a check mark in `accent`. | Fully round | 52 by 32 dp, at the end of a row at least 48 dp tall |
 | Radio button | Ring in `textSecondary` | Ring and dot in `accent` | Circle | 20 dp, in a row at least 48 dp tall. It grows with the font size. |
 | Slider | Track after the thumb in `outline`, its step marks in `background` | Track before the thumb, and the thumb, in `accent`. Its step marks in `textOnAccent`. | Rounded track | Track 16 dp tall, thumb 4 by 44 dp |
+
+The progress bar, from step 2.3:
+
+| Component | The part not yet reached | The part reached | Shape | Drawn size |
+|---|---|---|---|---|
+| Progress bar | `outline` | `accent`, from the start edge, so from the right in right-to-left languages | Round ends | 8 dp tall, as wide as the space it is given |
+
+- It uses the slider's pair of colours: the outline is at least 3:1 on
+  every background, as WCAG asks for the parts of a control.
+- It is drawn with Foundation's canvas, not Material 3's linear
+  indicator, which leaves a gap between the two parts and draws a dot at
+  the end.
 
 The parts of batch 3:
 
@@ -659,6 +677,21 @@ owner accepted this answer (owner decision on pull request 17). Material
 3 puts it in the rail on wide windows; keeping it in the screen keeps one
 rule for every width and keeps the rail unchanged.
 
+### Added in step 2.3
+
+Water's screens needed four parts that the components did not have. Each
+is optional, and its default leaves every existing use as it was: with
+the four changes alone, no Catalog screenshot changed (owner's decision
+in step 2.3). Each has a sample at the end of its component's page in
+the Catalog.
+
+| Component | Part | What it does |
+|---|---|---|
+| `ShkDialog` | `ShkDialogAction(closesDialog = false)` | A tap only calls the action, and the dialog stays open. Use it for Save in a dialog with a field: when the value is refused, show the reason as the field's `errorText`, which TalkBack announces, and stop showing the dialog once the value is taken. |
+| `ShkTimePicker` | `refuse` | "OK" asks it first. When it returns words, such as "Until must be at least 30 minutes after From.", the dialog stays open, keeps the time typed, and shows the words under the fields in `error`, as a polite live region that TalkBack announces. Typing hides them. |
+| `ShkTextField` | `suffix` and `suffixDescription` | A short unit after the typed text, inside the box, such as "ml", in `textSecondary`. TalkBack reads `suffixDescription`, such as "millilitres", with the label, or the suffix itself without one. |
+| `ShkListItem` | `trailingIcon` | A decorative icon at the very end of the row, after the trailing text, in `textSecondary`, such as a check next to "Goal reached". It grows with the text. Say in the text what it shows. |
+
 ### States
 
 | State | Which components |
@@ -670,6 +703,11 @@ rule for every width and keeps the rail unchanged.
 | On (`checked = true`) | Checkbox, switch. |
 | Error (`errorText` given) | Text field. |
 | With steps (`steps` more than 0) | Slider. |
+| Past its end (`value` more than 1) | Progress bar: it shows full. Below 0 it shows empty. |
+| With a unit after the text (`suffix` given) | Text field. |
+| Refusing a time (`refuse` gives words) | Time picker: it stays open and shows the words under the fields. |
+| Keeping the dialog open (`closesDialog = false`) | A button of a dialog: a tap only calls it. |
+| With an icon at the end (`trailingIcon` given) | List item. |
 | Collapsed (`expanded = false`) | Extended floating action button. |
 | Tappable (`onClick` given) | Card, list item. A card that can be tapped has no disabled state: when it cannot be opened, leave out `onClick` (owner decision on pull request 15). |
 | With supporting or trailing text, with an icon | List item. |
@@ -714,7 +752,7 @@ works too. A row's touch target is as wide as the space it is given and
 8 dp more on each side ([Rows](#rows)). A text field is at
 least 56 dp tall, and a tap anywhere on it, its label included, focuses
 it. A slider is drawn 44 dp tall, and Material 3 reserves 48 dp of space
-around it.
+around it. A progress bar cannot be touched, so it has no touch target.
 
 The Back button and the actions of a top bar are icon buttons: each has
 48 by 48 dp of space, side by side without overlap. Each destination in
@@ -754,7 +792,7 @@ an icon button.
   request 14). See [Icons](#icons).
 - The switch and the slider keep their size at every font size (owner
   decisions on pull request 14). The slider's track already fills the
-  width.
+  width. So does the progress bar, which keeps its 8 dp.
 - The text of a card, a list item, a section header and the states
   wraps. In a list item, the text at the end keeps its place beside the
   main lines, which wrap, and the icon stays centred on them.
@@ -813,6 +851,11 @@ an icon button.
   TalkBack never reads a bare number or a percentage. The label and the
   value shown above the slider are hidden from TalkBack, so they are not
   read twice.
+- A progress bar is read by its label and its value in words, for example
+  "Water today, 62 percent", as a slider is. `valueText` is required.
+  Where the screen already says the same in an item read as one, such as
+  Water's summary, the screen clears the bar's own words, so TalkBack
+  does not read them twice.
 - A card that can be tapped is read as one item: all the text in it,
   then "button". So it must hold text, and no button or other control of
   its own. Material 3 gives it no role, so `ShkCard` sets "button". A
@@ -1017,6 +1060,33 @@ for every component with an icon next to text.
    this check fails at both font scales: the label sticks out above the
    field. The error check fails too: Material 3 reads "Invalid input".
 
+`ShkProgressBarTest` checks the progress bar at font scale 1.0 and 2.0:
+
+1. TalkBack hears its label and its value in words, and gets how far it
+   is, from 0 to 1.
+2. A value below 0 shows empty, and 1 or more shows full.
+3. It fills the width it is given and is 8 dp tall at every font size.
+4. The part reached is drawn in proportion from the start edge, on the
+   right in right-to-left languages, with round ends. The drawing is
+   checked pixel by pixel on a plain image.
+
+The four parts added in step 2.3 are checked where their component is:
+
+1. `ShkDialogTest`: a button with `closesDialog = false` keeps the dialog
+   open, and the error that the caller then shows under the field is the
+   field's error, which TalkBack announces. By default every button
+   closes the dialog.
+2. `ShkTimePickerTest`: a refused time keeps the dialog open, does not
+   reach the caller, keeps the time typed, and shows its words as a
+   polite live region, which TalkBack announces. Typing hides them. By
+   default every time is taken.
+3. `ShkTextFieldTest`: the suffix is drawn inside the box, TalkBack hears
+   its words with the label and not the short unit as well, and an error
+   is still read once as the error.
+4. `ShkComponentsTest`: a list item with an icon at the end, like every
+   other component there: 48 dp, read once, and the icon grows with the
+   text.
+
 `ShkSliderTest` checks the slider at font scale 1.0 and 2.0:
 
 1. It takes at least 48 dp under its text.
@@ -1187,8 +1257,9 @@ results" is announced and "No notes yet" is not, and the states under
 the components under "Try it": the filter
 chips select and clear, the checkboxes and switches turn on and off, a
 radio button clears the others in its group, the text field takes typing
-and shows its error past 20 characters, and the slider moves and says its
-new value. On Lists, exactly one list item, the selected sample, is
+and shows its error past 20 characters, the slider moves and says its
+new value, and the progress bar fills and empties and says its value in
+words. On Lists, exactly one list item, the selected sample, is
 read as selected. On Navigation, a tap selects a destination and shows
 its name as the title. On List and detail, a tap on a note opens it in
 place of the list, and the back gesture, then Back in its top bar, closes
@@ -1236,53 +1307,57 @@ Components:
    few of each to try.
 10. **Sliders**: the slider without steps, with steps, disabled and with
     a long label, then one to try.
-11. **Cards**: the card that cannot be tapped, alone and with a button,
+11. **Progress bars**: the progress bar empty, part of the way, full and
+    past its end, then one to try, with **Add 10%** and **Reset**.
+12. **Cards**: the card that cannot be tapped, alone and with a button,
     and the card that can be tapped, with short and long text.
-12. **Lists**: the list item with one line, with supporting text, with an
-    icon, with trailing text, tappable, disabled, selected and with long
-    text; the
+13. **Lists**: the list item with one line, with supporting text, with an
+    icon, with trailing text, tappable, disabled, selected, with long
+    text and with an icon at the end; the
     section header with one line, with long text and above list items;
     the divider between list items.
-13. **Empty, loading and error**: the empty state with an icon and a
+14. **Empty, loading and error**: the empty state with an icon and a
     button, answering a search (announced), with a title only and with
     long text; the
     loading state with short and long text; the error state with and
     without a button and with long text; then an error state to try,
     which turns into a loading state (owner decision on pull request 15).
-14. **Top bars**: the top bar with a title only, with Back, with actions,
+15. **Top bars**: the top bar with a title only, with Back, with actions,
     with Back and an action, with an action turned off, and with a long
     title. Each is in a frame that stands for the top of a screen.
-15. **Navigation**: the bar and the rail, each with short labels and with
+16. **Navigation**: the bar and the rail, each with short labels and with
     a long one, then one to try. Each is in a frame that stands for a
     window. The samples are drawn for a fixed window width, so the bar
     and the rail show on every device. The one to try follows the window.
-16. **List and detail**: one pane showing the list, and showing a note
+17. **List and detail**: one pane showing the list, and showing a note
     with Back. In a window at least 840 dp wide, also two panes with
     nothing open and with a note open, which is selected in the list; in
     a narrower one, a line says where to see them. Then one to try, which
     follows the window.
 
-17. **Dialogs**: the dialog with text and two buttons, with one button,
+18. **Dialogs**: the dialog with text and two buttons, with one button,
     with a choice, with its confirm button turned off and with long text,
-    then one to try.
-18. **Bottom sheets**: the sheet with a title, without one and with long
+    then one to try, and last one that stays open with an error under its
+    field.
+19. **Bottom sheets**: the sheet with a title, without one and with long
     text, then one to try.
-19. **Snackbars**: the snackbar with a message only, with an action and
+20. **Snackbars**: the snackbar with a message only, with an action and
     with long text, then a screen to try, whose floating action button
     shows a snackbar above itself.
-20. **Menus**: the menu with text only, with icons, with a row turned
+21. **Menus**: the menu with text only, with icons, with a row turned
     off, with a row that deletes and with long text, then a top bar to
     try, with its "More options".
-21. **Date pickers**: the picker with nothing chosen, with a date chosen,
+22. **Date pickers**: the picker with nothing chosen, with a date chosen,
     with an earliest and a latest date, typing the date, and with a long
     title, each on March 2026, then one to try.
-22. **Time pickers**: the picker with the 12-hour clock, with the 24-hour
+23. **Time pickers**: the picker with the 12-hour clock, with the 24-hour
     clock, with an impossible time and with a long title, then one to
-    try, which follows the phone's clock setting.
+    try, which follows the phone's clock setting, and last a time refused
+    with its reason.
 
 Shared screens:
 
-23. **Recovery key screens**: every state of the screens of
+24. **Recovery key screens**: every state of the screens of
     `core/security`, with sample words that are no real key: the
     security screen with no key yet, set up and kept with keys in
     StrongBox, with no screen lock and keys in software, and with a setup
@@ -1294,7 +1369,7 @@ Shared screens:
     app; it is off by default
     ([security-screens.md](../architecture/security-screens.md#catalog)).
 
-The samples of pages 17 to 22 are drawn in place
+The samples of pages 18 to 23 are drawn in place
 ([Windows of their own](#windows-of-their-own)); only the one under "Try
 it" opens a window. The date picker samples show a month in the past, so
 they do not change with today's date, and no day in them is marked as
@@ -1368,7 +1443,8 @@ before the capture.
    selected. Disabled ones are read as "disabled".
 8. On Text fields, tap the field under "Try it" and type. Its border and
    label turn the accent colour. Type more than 20 characters to see the
-   error, then delete some to clear it.
+   error, then delete some to clear it. The last sample shows "ml" after
+   the number, inside the box; TalkBack reads it as "millilitres".
 9. On Selection controls, tap the rows under "Try it", on the text as
    well as on the control. The checkboxes and radio buttons start at the
    left edge of the page title, and the switches end at the right edge of
@@ -1379,77 +1455,84 @@ before the capture.
 10. On Sliders, drag the slider under "Try it". The number of glasses
     changes. With TalkBack on, the slider is read as "Daily goal" and the
     number of glasses, not a percentage.
-11. On Cards, touch and hold the tappable cards to see them pressed. With
+11. On Progress bars, tap **Add 10%** a few times under "Try it": the
+    bar fills from the left, and the line above it counts up. Past 100%
+    the bar stays full. Tap **Reset**. With TalkBack on, the bar is read
+    as "Water today" and the percent in words.
+12. On Cards, touch and hold the tappable cards to see them pressed. With
     TalkBack on, a tappable card is read as one item with all its text,
     then "button". In the card with a button, the card's text and the
     Edit button are read one at a time.
-12. On Lists, the text of every list item and section header starts at
+13. On Lists, the text of every list item and section header starts at
     the left edge of the page title. Touch and hold the tappable list
     items: only the highlight reaches past that edge. The dividers are a
     lighter grey than the outlines of the cards. With TalkBack on,
     each list item is read as one item with all its text, the disabled
     one as "disabled", and the selected one as "selected". The selected
-    one has a short bar in the accent colour before its text. Set
-    TalkBack's reading control to "Headings": moving by heading then
-    stops at each section header.
-13. On Empty, loading and error, check that the loading circles turn.
+    one has a short bar in the accent colour before its text. The last
+    list item has a check at its end, after "Done"; TalkBack reads only
+    the text. Set TalkBack's reading control to "Headings": moving by
+    heading then stops at each section header.
+14. On Empty, loading and error, check that the loading circles turn.
     With TalkBack on, a loading state is read as its text and "in
     progress", and the title and body of each empty and error state as
     one item. Under "Try it", tap Try again: TalkBack announces "Loading
     the list". Then turn the switch off: TalkBack stays on the switch and
     announces "Could not load the list" and the line under it.
-14. On Colours, each background lists the divider with its contrast,
+15. On Colours, each background lists the divider with its contrast,
     between 1.5:1 and the outline's.
-15. On Top bars, in each frame, a title without an arrow starts as far
+16. On Top bars, in each frame, a title without an arrow starts as far
     in from the frame's left edge as the arrows do, and the last icon
     ends as far in from the right edge. With TalkBack on, each title is read
     as a heading, the arrow as "Back, button", and the clock as "Add a
     reminder", and "disabled" where it is grey.
-16. On Navigation, the selected destination has a filled pill. Under
+17. On Navigation, the selected destination has a filled pill. Under
     "Try it", tap Notes and Search: the pill moves and the title changes.
     With TalkBack on, each destination is read as its name, "tab", and
     "selected" for the one with the pill.
-17. Turn the phone sideways, or open Navigation on the tablet: the one to
+18. Turn the phone sideways, or open Navigation on the tablet: the one to
     try becomes a rail. At the largest font size the rail is wider and
     the labels wrap; nothing is cut off.
-18. On List and detail, under "Try it", tap a note. On a phone held
+19. On List and detail, under "Try it", tap a note. On a phone held
     upright it opens in place of the list. Use the back gesture: the list
     shows again, and the page stays open. Open a note again and tap the
     arrow: the same. Use the back gesture once more: the start screen
     shows.
-19. Turn the phone sideways, or open List and detail on the tablet held
+20. Turn the phone sideways, or open List and detail on the tablet held
     sideways. The two-pane samples show, and under "Try it" a tapped note
     opens beside the list, with no arrow in its top bar. The open note is
     marked in the list, with a bar before its text, and TalkBack reads it
     as "selected". On the tablet held upright there is still one pane.
-20. On Dialogs, under "Try it", tap "Delete the note". The dialog opens
+21. On Dialogs, under "Try it", tap "Delete the note". The dialog opens
     over the dimmed page, 16 dp from the edges. Tap Delete: the line
     under the button says so. Open it again and tap outside it, then go
     back: each closes it. With TalkBack on, the title is announced when
     it opens. At the largest font size, the buttons of the long sample
-    are one above the other, Delete on top.
-21. On Bottom sheets, under "Try it", tap "Show the actions". The sheet
+    are one above the other, Delete on top. The last sample shows a
+    dialog that stays open, with its error under the field.
+22. On Bottom sheets, under "Try it", tap "Show the actions". The sheet
     slides up; its title and rows start where the page title does. Tap a
     row: the sheet slides down and the line under the button names the
     row.
     Open it again and swipe it down. With TalkBack on, find "Drag handle"
     and use "Dismiss" from TalkBack's actions.
-22. On Snackbars, under "Try it", tap the plus. "Note added" shows above
+23. On Snackbars, under "Try it", tap the plus. "Note added" shows above
     it, with Undo, and the plus does not move. Tap Undo: the count goes
     back. Tap the plus and wait: the snackbar goes away by itself. With
     TalkBack on, "Note added" is announced.
-23. On Menus, under "Try it", tap the three dots. The menu opens over
+24. On Menus, under "Try it", tap the three dots. The menu opens over
     them. Tap "Sort by date": the menu closes and the line under the top
     bar says so. Delete is red in the samples.
-24. On Date pickers, under "Try it", tap "Choose a due date". March 2026
+25. On Date pickers, under "Try it", tap "Choose a due date". March 2026
     opens, with the 12th chosen. Tap another day and OK. Tap the pencil to
     type a date instead. With TalkBack on, each day is read in full.
-25. On Time pickers, under "Try it", tap "Choose a reminder time". Type 13
+26. On Time pickers, under "Try it", tap "Choose a reminder time". Type 13
     as the hour: an error shows under it and OK turns off. Type 7, choose
     PM and tap OK: the line under the button says 7:05 PM or the time you
     typed. Turn on "Use 24-hour format" in the system settings, open it
-    again: AM and PM are gone, and the hour takes 0 to 23.
-26. Set the display size to the largest in the system settings and open
+    again: AM and PM are gone, and the hour takes 0 to 23. The last
+    sample shows a refused time, with its reason in red under the fields.
+27. Set the display size to the largest in the system settings and open
     the date picker under "Try it". If the window is too narrow for the
     month, it offers typing the date, with no pencil. Nothing is cut off.
 
@@ -1457,16 +1540,18 @@ before the capture.
 
 - The "Use" columns above are starting guidance, to be refined by the
   component batches.
-- `ScreenshotConfig` and `captureWholeScreen` live in the Catalog's tests.
-  They move to `core/testing` when that module is made.
+- `ScreenshotConfig` and `captureWholeScreen` live in the tests of the
+  Catalog, and copies in Water's. Moving them to `core/testing` is left
+  for later.
 - A shared icon set for the apps. Each icon is drawn for the suite until
   then.
 - Focus uses Material 3's light state layer. There is no separate focus
   ring for keyboards.
 - When to look again at the suite's own adaptive layouts, for example for
   foldable devices: see [ADR 0024](../adr/0024-own-adaptive-layouts.md).
-  Whether the apps use Navigation 3 is decided when the first app is
-  built.
+  Water, the first app, does not use Navigation 3
+  ([ADR 0003](../adr/0003-kotlin-compose-material-3-navigation-3.md),
+  point 2).
 - What batch 4 leaves out (see [Components](#components)), until an app
   needs it.
 - A month that fits a window narrower than 360 dp would need the

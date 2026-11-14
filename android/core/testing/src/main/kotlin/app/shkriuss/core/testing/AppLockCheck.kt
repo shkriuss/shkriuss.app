@@ -32,16 +32,17 @@ import java.util.concurrent.Executor
 /**
  * An app class for the screen tests of an app: a `SecurityHost` with real
  * cryptography on the stand-in for the Keystore (ADR 0029), and a recovery
- * key. With [startsLocked], its app lock is on and the app is locked before
- * any screen starts, as after Android stopped the app. Otherwise the app
- * lock is off and every screen shows its content.
+ * key. [start] says how the app lock is when the first screen starts: on
+ * and locked, as after Android stopped the app; on and open, as after the
+ * system prompt; or off, so that every screen shows its content.
  *
- * An app's test extends [LockedAppForTests] or [UnlockedAppForTests] and
+ * An app's test extends [LockedAppForTests], [AppLockOnForTests] or
+ * [UnlockedAppForTests] and
  * adds what the app's screens need from the app class, such as the app's
  * own host interface. Its tests add the test fixtures of `core/crypto`,
  * which this class needs at run time.
  */
-abstract class HostAppForTests(private val appName: AppName, private val startsLocked: Boolean) : Application(), SecurityHost {
+abstract class HostAppForTests(private val appName: AppName, private val start: AppLockAtStart) : Application(), SecurityHost {
     private val keys: SoftwareKeysApp by lazy { SoftwareKeysApp(File(filesDir, "shk-keys"), appName) }
 
     final override val crypto: ShkCrypto
@@ -57,11 +58,11 @@ abstract class HostAppForTests(private val appName: AppName, private val startsL
         super.onCreate()
         val recoveryKey = crypto.setup.createRecoveryKey()
         crypto.setup.storeDerivedKeys(recoveryKey)
-        if (startsLocked) {
+        if (start != AppLockAtStart.OFF) {
             val proof = checkNotNull(crypto.setup.checkAllWords(recoveryKey)) { "The words of the new key were refused" }
             crypto.appLock.beginTurnOn(proof).finish()
             // Without the file keys in memory the app starts locked.
-            crypto.appLock.lock()
+            if (start == AppLockAtStart.LOCKED) crypto.appLock.lock()
         }
         appLock.start()
     }
@@ -71,11 +72,31 @@ abstract class HostAppForTests(private val appName: AppName, private val startsL
     }
 }
 
+/** How the app lock of a [HostAppForTests] is when the first screen starts. */
+enum class AppLockAtStart {
+    /** On, and the app is locked. */
+    LOCKED,
+
+    /** On, and the app is open, as after the system prompt. A test can lock it while a screen shows. */
+    OPEN,
+
+    /** Off. */
+    OFF,
+}
+
 /** The app class of the check that every screen of an app is behind the app lock ([AppLockCheck]): locked from the start. */
-abstract class LockedAppForTests(appName: AppName) : HostAppForTests(appName, startsLocked = true)
+abstract class LockedAppForTests(appName: AppName) : HostAppForTests(appName, AppLockAtStart.LOCKED)
+
+/**
+ * The app class of the check that every sheet and dialog of an app is
+ * behind the app lock ([AppLockCheck.checkLockedNow]): the app lock is on
+ * and the app is open, so a test can open a sheet or a dialog, then lock
+ * the app, as when the screen turns off.
+ */
+abstract class AppLockOnForTests(appName: AppName) : HostAppForTests(appName, AppLockAtStart.OPEN)
 
 /** An app class whose app lock is off, for screenshots and tests of the screens' content. */
-abstract class UnlockedAppForTests(appName: AppName) : HostAppForTests(appName, startsLocked = false)
+abstract class UnlockedAppForTests(appName: AppName) : HostAppForTests(appName, AppLockAtStart.OFF)
 
 /**
  * The check that every screen of an app is behind the app lock
@@ -95,6 +116,10 @@ abstract class UnlockedAppForTests(appName: AppName) : HostAppForTests(appName, 
  *   only group or tag.
  * - The screen's content view holds Compose views only, so no plain view
  *   can show beside the gate.
+ *
+ * A screen that starts locked never draws its content, so its sheets and
+ * dialogs are checked apart: [checkLockedNow], after the app locked while
+ * one showed.
  *
  * What it cannot see: something drawn without any semantics, such as a
  * picture with no label in a window of its own, or a dialog that is a
@@ -135,6 +160,27 @@ object AppLockCheck {
             })
         }
         return screens
+    }
+
+    /**
+     * Fails, naming what shows, unless the screen that shows now shows the
+     * lock screen and nothing of its own, in any of its windows: no sheet,
+     * no dialog, no picker. Call it after the app locked while [screen],
+     * the name of its activity, showed a sheet or a dialog, as when the
+     * screen turns off. The app class is [AppLockOnForTests].
+     */
+    fun checkLockedNow(compose: ComposeTestRule, screen: String) {
+        compose.waitForIdle()
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val gate = (app as? SecurityHost)?.appLock?.gate?.value
+        if (gate != AppGate.LOCKED) failWith("The app must be locked now, but its gate is $gate")
+        val problems = semanticsProblems(screen, compose)
+        if (problems.isNotEmpty()) {
+            failWith(buildString {
+                appendLine("Something shows while the app is locked. Draw every sheet and dialog from inside AppLockGate:")
+                problems.forEach { appendLine("- $it") }
+            })
+        }
     }
 
     private fun failWith(message: String): Nothing = throw AssertionError(message)

@@ -23,6 +23,25 @@ development.
 - Permissions: still none. Catalog also removes `HIDE_OVERLAY_WINDOWS`,
   which `core/security` now asks for
   ([ADR 0033](../../../docs/adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+- A new page, **Progress bars**, after Sliders: `ShkProgressBar` empty,
+  part of the way, full, and past its end, then one to try with **Add
+  10%** and **Reset**. TalkBack reads its value in words, such as "62
+  percent". The start screen lists 25 pages. Water's summary uses the
+  bar (step 2.3).
+- Four optional additions to existing components, for Water's screens.
+  Each one's default leaves every existing use as it was: with the four
+  changes alone, every Catalog screenshot stayed the same. Each has a new
+  sample at the end of its component's page:
+  - **Dialogs**: a button that checks a value first and keeps the dialog
+    open, so the error shows under the field (`closesDialog`). The new
+    sample shows such a dialog with its error.
+  - **Time pickers**: a time can be refused with a reason (`refuse`).
+    The picker stays open, keeps the time typed and shows the reason in
+    red, and TalkBack announces it. The new sample shows a refused time.
+  - **Text fields**: a unit after the typed text, such as "ml"
+    (`suffix`). TalkBack reads the unit in words, such as "millilitres".
+  - **Lists**: an icon at the end of a row, after its trailing text
+    (`trailingIcon`), such as a check next to "Done". It is decorative.
 
 ## 0.3.0 (2026-11-13)
 

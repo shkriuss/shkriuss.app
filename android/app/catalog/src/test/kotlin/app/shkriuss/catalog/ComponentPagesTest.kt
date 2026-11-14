@@ -97,7 +97,7 @@ class ComponentPagesTest {
         // Buttons: filled, tonal, text and icon. Chips: two filter chips and
         // one assist chip. Floating action buttons have no disabled state.
         // Selection controls: two each of checkbox, switch and radio button,
-        // off and on. Lists: one list item. Cards, and the buttons of the
+        // off and on. Progress bars cannot be turned off. Lists: one list item. Cards, and the buttons of the
         // empty and error states, have no disabled state. Top bars: one
         // action. Destinations and the list and detail have none. Dialogs:
         // the confirm button turned off. Menus: one row. Date pickers: OK
@@ -110,6 +110,7 @@ class ComponentPagesTest {
             CatalogPage.TextFields to 1,
             CatalogPage.SelectionControls to 6,
             CatalogPage.Sliders to 1,
+            CatalogPage.ProgressBars to 0,
             CatalogPage.Cards to 0,
             CatalogPage.Lists to 1,
             CatalogPage.ContentStates to 0,
@@ -194,6 +195,24 @@ class ComponentPagesTest {
 
         val three = compose.activity.resources.getQuantityString(R.plurals.sample_glasses, 3, 3)
         slider.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, three))
+    }
+
+    @Test
+    fun progressBarToTryFillsAndSaysItsValueInWords() {
+        open(CatalogPage.ProgressBars)
+        // The bar to try is the last one on the page, and starts empty.
+        val bar = compose.onAllNodes(IS_PROGRESS_BAR).onLast()
+        val zero = compose.activity.resources.getQuantityString(R.plurals.sample_percent_spoken, 0, 0)
+        bar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, zero))
+
+        compose.onNode(hasText(text(R.string.sample_add_ten_percent))).performScrollTo().performClick()
+        compose.onNode(hasText(text(R.string.sample_add_ten_percent))).performClick()
+        val twenty = compose.activity.resources.getQuantityString(R.plurals.sample_percent_spoken, 20, 20)
+        bar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, twenty))
+        bar.assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(0.2f, 0f..1f)))
+
+        compose.onNode(hasText(text(R.string.sample_reset))).performClick()
+        bar.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, zero))
     }
 
     @Test
@@ -454,6 +473,7 @@ class ComponentPagesTest {
 
         val IS_TEXT_FIELD = SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText)
         val IS_SLIDER = SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress)
+        val IS_PROGRESS_BAR = SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)
         val IS_GROUP = SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)
 
         /**
