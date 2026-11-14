@@ -2,7 +2,10 @@ package app.shkriuss.core.security
 
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Intent
 import android.os.Bundle
+import android.os.Looper
+import android.os.PowerManager
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -12,13 +15,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.design.ShkDialog
 import app.shkriuss.core.design.ShkDialogAction
 import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTheme
 import app.shkriuss.core.testing.AppLockCheck
+import app.shkriuss.core.testing.AppLockOnForTests
 import app.shkriuss.core.testing.LockedAppForTests
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -139,6 +145,81 @@ class AppLockCheckWithoutALockedAppTest {
             AppLockCheck.checkEveryScreen(compose, listOf(GatedScreen::class.java.name))
         }.message.orEmpty()
         assertTrue(failure, failure.contains("The app must start locked, but its gate is OPEN"))
+    }
+}
+
+/**
+ * The check for sheets and dialogs (`AppLockCheck.checkLockedNow`): with
+ * the app lock on and the app open, a screen shows a dialog, the screen
+ * turns off and the app locks. A dialog drawn from inside the gate goes
+ * with the rest of the screen; one outside it stays, and the check names
+ * it. The check also refuses to run while the app is open.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(application = OpenSampleApp::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class AppLockCheckLockedNowTest {
+    @get:Rule
+    val compose = createEmptyComposeRule()
+
+    private fun showThenLock(screen: Class<out Activity>, check: () -> Unit) {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, screen))
+        ActivityScenario.launch<Activity>(Intent.makeMainActivity(ComponentName(app, screen))).use {
+            compose.waitForIdle()
+            compose.onNode(hasText(SECRET)).assertExists()
+            shadowOf(app.getSystemService(PowerManager::class.java)).turnScreenOn(false)
+            app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF))
+            shadowOf(Looper.getMainLooper()).idle()
+            check()
+        }
+    }
+
+    @Test
+    fun aDialogInsideTheGateGoesWhenTheAppLocks() {
+        showThenLock(DialogInsideTheGateScreen::class.java) {
+            AppLockCheck.checkLockedNow(compose, DialogInsideTheGateScreen::class.java.name)
+        }
+    }
+
+    @Test
+    fun aDialogOutsideTheGateStaysAndFails() {
+        showThenLock(DialogOutsideTheGateScreen::class.java) {
+            val failure = assertThrows(AssertionError::class.java) {
+                AppLockCheck.checkLockedNow(compose, DialogOutsideTheGateScreen::class.java.name)
+            }.message.orEmpty()
+            assertTrue(failure, failure.contains("${DialogOutsideTheGateScreen::class.java.name} shows \"A secret record\" beside the lock screen"))
+        }
+    }
+
+    @Test
+    fun theCheckRefusesToRunWhileTheAppIsOpen() {
+        val app = RuntimeEnvironment.getApplication()
+        shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, DialogInsideTheGateScreen::class.java))
+        ActivityScenario.launch<Activity>(Intent.makeMainActivity(ComponentName(app, DialogInsideTheGateScreen::class.java))).use {
+            val failure = assertThrows(AssertionError::class.java) {
+                AppLockCheck.checkLockedNow(compose, DialogInsideTheGateScreen::class.java.name)
+            }.message.orEmpty()
+            assertTrue(failure, failure.contains("The app must be locked now, but its gate is OPEN"))
+        }
+    }
+}
+
+/** The app class of [AppLockCheckLockedNowTest]: its app lock is on, and the app is open at the start. */
+class OpenSampleApp : AppLockOnForTests(AppName.of("water"))
+
+/** A screen that shows a dialog from inside the gate, as every sheet and dialog of an app must be. */
+class DialogInsideTheGateScreen : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            ShkTheme {
+                AppLockGate {
+                    ShkText("The rest")
+                    ShkDialog(title = SECRET, confirmAction = ShkDialogAction("Close", {}), onDismissRequest = {})
+                }
+            }
+        }
     }
 }
 
