@@ -32,6 +32,10 @@ import org.w3c.dom.Element
  * - Rule 4, and no permission an app is not allowed: an app requests only
  *   the permissions on its own allow list ([ALLOWED_PERMISSIONS]), and no
  *   app declares one ([permissionProblems]).
+ * - ADR 0033, point 5: an app whose merged manifest declares a screen of
+ *   `core/security` requests both `USE_BIOMETRIC` and
+ *   `HIDE_OVERLAY_WINDOWS` ([securityScreenProblems]). Without the second
+ *   one a screen still starts, but hides no other app's window.
  * - ADR 0029: no class of the test fixtures of `core/crypto`. They hold a
  *   stand-in for the Android Keystore that keeps keys in memory, and are
  *   for tests only. Nor of the test fixtures of `core/notify`, which change
@@ -47,8 +51,9 @@ import org.w3c.dom.Element
  *
  * It runs every time an APK is assembled. Apps that are allowed an
  * exception get an explicit allow list here, decided in their ADR: Water
- * the three permissions of core/notify (step 2.4); later Sync and the
- * network permission, Grammar and native code.
+ * the three permissions of core/notify (step 2.4) and the two of
+ * core/security (step 2.5), five in all; later Sync and the network
+ * permission, Grammar and native code.
  */
 abstract class CheckApkRulesTask : DefaultTask() {
     /** The folder AGP writes the variant's APK to. */
@@ -226,7 +231,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
             setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
         }
         val document = factory.newDocumentBuilder().parse(manifest)
-        val problems = permissionProblems(document, appName.get()).toMutableList()
+        val problems = (permissionProblems(document, appName.get()) + securityScreenProblems(document)).toMutableList()
         val metaData = document.getElementsByTagName("meta-data")
         for (index in 0 until metaData.length) {
             val name = (metaData.item(index) as Element).getAttributeNS(ANDROID_NAMESPACE, "name")
@@ -533,6 +538,10 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 "android.permission.POST_NOTIFICATIONS",
                 "android.permission.USE_EXACT_ALARM",
                 "android.permission.RECEIVE_BOOT_COMPLETED",
+                // The two of core/security, for the system prompt (ADR 0031) and for hiding other apps' windows
+                // over its screens and the lock screen (ADR 0033). Owner's request in step 2.5.
+                "android.permission.USE_BIOMETRIC",
+                "android.permission.HIDE_OVERLAY_WINDOWS",
             ),
         )
 
@@ -559,6 +568,44 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 }
             }
             return problems
+        }
+
+        /** How the name of every screen of `core/security` starts in a merged manifest. */
+        const val SECURITY_SCREEN_PREFIX = "app.shkriuss.core.security."
+
+        /** What a screen of `core/security` needs: the system prompt (ADR 0031) and hiding other apps' windows (ADR 0033). */
+        val SECURITY_SCREEN_PERMISSIONS = listOf(
+            "android.permission.USE_BIOMETRIC",
+            "android.permission.HIDE_OVERLAY_WINDOWS",
+        )
+
+        /**
+         * ADR 0033, point 5, for the merged manifest [document]: an app that
+         * declares a screen of `core/security`, an `<activity>` whose name
+         * starts with [SECURITY_SCREEN_PREFIX], requests both
+         * [SECURITY_SCREEN_PERMISSIONS] with `<uses-permission>`. One problem
+         * for each permission that is missing. An app with no such screen
+         * needs neither: Catalog removes the screens and the permissions.
+         *
+         * Why: without `HIDE_OVERLAY_WINDOWS` a screen still starts and only
+         * stops hiding other apps' windows, so nothing else would notice.
+         * The owner asked for this rule in step 2.5.
+         */
+        fun securityScreenProblems(document: Document): List<String> {
+            val screens = namesOf(document, "activity").filter { it.startsWith(SECURITY_SCREEN_PREFIX) }
+            if (screens.isEmpty()) return emptyList()
+            val requested = namesOf(document, "uses-permission")
+            val named = screens.first() + if (screens.size > 1) " and ${screens.size - 1} more" else ""
+            return SECURITY_SCREEN_PERMISSIONS.filter { it !in requested }.map { permission ->
+                "<activity> $named of core/security in the manifest, but no <uses-permission> $permission " +
+                    "(ADR 0033: an app with a screen of core/security requests USE_BIOMETRIC and HIDE_OVERLAY_WINDOWS)"
+            }
+        }
+
+        /** The `android:name` of every element [tag] of [document]. */
+        private fun namesOf(document: Document, tag: String): List<String> {
+            val nodes = document.getElementsByTagName(tag)
+            return List(nodes.length) { (nodes.item(it) as Element).getAttributeNS(ANDROID_NAMESPACE, "name") }
         }
 
         const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"
