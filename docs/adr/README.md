@@ -54,7 +54,8 @@ step 2.7, the rehearsal of restoring and rotating the signing key: how a
 rotation works, and what to do if the key is stolen. 0037 supersedes
 point 7 of 0013. The owner decided the place of the rehearsal, where the
 lineage is kept and the answer to a stolen key in that session, on
-2026-11-14. Claude proposed the rest.
+2026-11-14. Claude proposed the rest. The owner accepted both on
+2026-11-14, after parts A and B of the rehearsal passed.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -97,5 +98,5 @@ How a record may be edited or replaced is in point 7 of
 | 0034 | [Buttons on notifications](0034-notification-buttons.md) | Accepted |
 | 0035 | [The recovery key comes when it is first needed](0035-recovery-key-when-first-needed.md) | Accepted |
 | 0036 | [An app's settings are records](0036-app-settings-as-records.md) | Accepted |
-| 0037 | [Signing key rotation](0037-signing-key-rotation.md) | Proposed |
-| 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Proposed |
+| 0037 | [Signing key rotation](0037-signing-key-rotation.md) | Accepted |
+| 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Accepted |

@@ -52,5 +52,63 @@ These two steps were checked with the first update, Catalog 0.1.0 to
 a Pixel Tablet and a Pixel 6a.
 
 Android installs an update only if it is signed with the same key as the
-app on your phone. So once you have checked an app with AppVerifier, an
-update from anyone else cannot replace it.
+app on your phone, or with a new key that the old key approved. The
+second happens only when the project changes its signing key, which is
+announced ([When the signing key changes](#when-the-signing-key-changes)).
+So once you have checked an app with AppVerifier, an update from anyone
+who does not hold the key cannot replace it.
+
+Update the apps only in Obtainium. If Android asks "Update this app using
+Package installer?", tap **Cancel**. It means something other than
+Obtainium is trying to update the app.
+
+## When the signing key changes
+
+Every app of the suite is signed with one key. The project may move to a
+new key, as a plan or after a theft. The release notes and the website
+then announce it, and Obtainium warns once for each app.
+
+1. In Obtainium, tap the app, then **Update**.
+2. Obtainium shows "Signing certificate mismatch". It says that
+   installing it "will most likely fail". After a real key change, it
+   works.
+3. Compare the hashes in that dialog. Every pair of characters must be
+   the same.
+   - The first line under "Downloaded certificate hash" must be the same
+     as "Expected certificate hash". That is the key of the app on your
+     phone now.
+   - The last line under "Downloaded certificate hash" must be the new
+     fingerprint on <https://shkriuss.app/verify/>.
+4. If both match, tap **Install anyway**. If Android asks whether to
+   update the app, allow it. The app keeps its data.
+5. If either does not match, tap **Don't install**. Report it privately,
+   as the [security policy](../../SECURITY.md) explains.
+6. Check the app with AppVerifier, as
+   [After a new signing key](verify.md#after-a-new-signing-key) says.
+7. If you typed fingerprints into the app's settings in Obtainium, add
+   the new one.
+
+Why the last line matters: until you update, the app on your phone still
+has the old key. Anyone who holds the old key, for example a thief, could
+make a file that your phone would also accept. Obtainium would warn about
+it in the same way. Only the last downloaded hash shows whose new key it
+is. Once your app has our new key, Android refuses the old key alone, and
+a new key that a thief made from it.
+
+These steps were checked on 2026-11-14 in a rehearsal with throwaway
+keys, on a Pixel 9 Pro with Obtainium 1.7.4. A thief's file over an app
+that still has the old key was not tried. The warning above follows from
+how Android checks a new key.
+
+## If Obtainium says "Too many requests"
+
+Obtainium may stop with "Error 403" for an address that starts with
+`https://api.github.com/`, and "Too many requests (rate limited) - try
+again in" some minutes. GitHub has refused too many requests from your
+phone's internet address. Nothing is wrong with the app.
+
+1. Wait a few minutes, then try again.
+2. Or switch between mobile data and Wi-Fi, then try again.
+
+This happened on mobile data on 2026-11-14. It worked a few minutes
+later.

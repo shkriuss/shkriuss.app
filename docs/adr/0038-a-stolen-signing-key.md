@@ -1,12 +1,14 @@
 # 0038 A stolen signing key
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-14
 - Source: Phase 2, step 2.7 of
   [PROMPTS.md](../development/PROMPTS.md#27-restore-and-rotation-rehearsal),
   and point 11 under "Found while writing this page" in the
   [threat model](../security/threat-model.md#found-while-writing-this-page).
-  The owner decided on 2026-11-14: rotate at once.
+  The owner decided on 2026-11-14: rotate at once. The owner accepted the
+  record on 2026-11-14, after parts A and B of the rehearsal showed what
+  it rests on.
 
 ## Context
 
@@ -25,12 +27,21 @@
   account, a thief must get users to install a file from somewhere else.
 - A rotation with rollback off ([0037](0037-signing-key-rotation.md))
   locks a phone that has updated to the new key. Neither the old key
-  alone, nor any other lineage made from it, can update that app again
-  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md),
+  alone, nor any other lineage made from it, can update that app again.
+  The rehearsal showed this on 2026-11-14: Android answered both with
+  "App not installed"
+  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#results),
   B4 and B5).
 - Before that update, a phone is still open. Someone with the old key can
   make a lineage to a key of their own. A phone that installs their
   update first stays with them, and then refuses ours.
+  - Obtainium warns for their update in the same way as for ours:
+    "Signing certificate mismatch", with the old key as the expected
+    hash. The downloaded hashes are the old key, then the thief's. Only
+    the last hash differs from our rotation.
+  - This was not tested. It follows from how a lineage works: the phone
+    checks only that the key it has signed the new key, with the right
+    to hand over the app. Our lineage and a thief's both pass that check.
 - Published releases cannot be changed
   ([release.md](../development/release.md#2-immutable-releases)). Each
   one that the release workflow made has a workflow run, a commit and a
@@ -120,16 +131,20 @@ Until this advisory says that the new key is out:
 - Do not install an APK of these apps that someone sends you.
 
 When the new key is out:
-1. Update each app in Obtainium. Obtainium warns that the signing
-   certificate changed. Go on only if the new fingerprint below is the
-   same here, on https://shkriuss.app/verify/ and in
-   docs/security/fingerprints.md on GitHub.
+1. Update each app in Obtainium. Obtainium shows "Signing certificate
+   mismatch". Tap "Install anyway" only if the last "Downloaded
+   certificate hash" is the new fingerprint below, and the new
+   fingerprint is the same here, on https://shkriuss.app/verify/ and in
+   docs/security/fingerprints.md on GitHub. Otherwise tap "Don't
+   install".
 2. Open AppVerifier and tap the app. The last fingerprint it shows must
-   be the new one.
+   be the new one. Copy the package name and the new fingerprint, as two
+   lines, and tap "Verify from clipboard". It must show "Verification
+   Status: SUCCESS".
 3. If it shows any other fingerprint last, or Android refuses the
-   update, the app on your phone did not come from us. Uninstall it,
-   install it again with Obtainium, and restore a backup that you made
-   before <date>.
+   update with "App not installed", the app on your phone did not come
+   from us. Uninstall it, install it again with Obtainium, and restore a
+   backup that you made before <date>.
 
 New fingerprint: <new SHA-256>
 Old fingerprint, stolen: <old SHA-256>
@@ -165,8 +180,9 @@ Releases that are not ours: <tags, or none>
 
 - The first day depends on the rotation of
   [0037](0037-signing-key-rotation.md). That includes a `rotate` action
-  in signing-ceremony, which does not exist yet (Open in 0037). Until it
-  exists, the first day takes longer.
+  in signing-ceremony, which does not exist yet (Open in 0037). It must
+  also make the new key, because the ceremony's `create` refuses while a
+  backup exists. Until it exists, the first day takes longer.
 - A phone that took the thief's update first cannot take ours. Its user
   must uninstall and install again. Data made after the theft may be lost.
 - Users who never update keep the app signed with the old key. The thief
@@ -177,7 +193,5 @@ Releases that are not ours: <tags, or none>
   words were entered or kept. This waits for the design of a new recovery
   key ([crypto-design.md](../security/crypto-design.md#open-questions),
   question 6).
-- Open: Obtainium's exact warning, for the text in point 5. The rehearsal
-  records it.
 - The threat model links this record under
   [The owner's GitHub account](../security/threat-model.md#the-owners-github-account).

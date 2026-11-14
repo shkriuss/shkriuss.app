@@ -188,15 +188,83 @@ the real backup and its two copies, is in
 ### Restore the signing key
 
 When the secrets of `release` are lost, deleted or wrong, for example
-after "SIGNING_KEYSTORE_B64 is not a base64-encoded keystore":
+after "SIGNING_KEYSTORE_B64 is not a base64-encoded keystore".
 
-1. In signing-ceremony, run its workflow with the action `restore`
-   (ADR 0013, point 11).
-2. In shkriuss.app, open **Settings**, **Environments**, `release`. The
-   three secrets must each show as updated just now.
-3. The next release checks the key: the job **Sign** compares its
-   certificate with [fingerprints.md](../security/fingerprints.md), and
-   uploads nothing if they differ.
+The signing-ceremony workflow writes the three secrets again
+(ADR 0013, point 11). While it runs, it reads two repository secrets of
+signing-ceremony: `CEREMONY_TOKEN`, a token for shkriuss.app, and
+`BACKUP_PASSPHRASE`, the passphrase of the backup. You add both just
+before the run and delete both right after it. Never paste either into a
+Claude session.
+
+Before you start:
+
+1. The `release` environment must exist, with its protection rules. A
+   restore writes into it, and cannot create it. Check it as
+   [The release environment](#1-the-release-environment) says, steps 1
+   to 7.
+
+Make the token:
+
+2. Open `github.com/settings/personal-access-tokens/new`.
+3. **Token name**: `signing-ceremony`. **Expiration**: **Custom**, 7 days
+   from today. **Resource owner**: you.
+4. **Repository access**: **Only select repositories**, then
+   `shkriuss.app` and nothing else.
+5. **Permissions**, under **Repository permissions**:
+   - **Environments**: **Read and write**.
+   - **Secrets**: **Read and write**.
+   - Everything else: **No access**.
+
+   These are the two that the ceremony's notes ask for. GitHub's
+   documentation names only Environments for these calls. Environments
+   alone was not tested
+   ([signing-key-rehearsal.md](signing-key-rehearsal.md#open-points),
+   point 2).
+6. Tap **Generate token**. GitHub shows it once. Copy it.
+
+Store the two secrets:
+
+7. In signing-ceremony, open **Settings**, then **Secrets and variables**,
+   then **Actions**. Tap **New repository secret**.
+8. **Name**: `CEREMONY_TOKEN`. **Secret**: paste the token. Tap **Add
+   secret**.
+9. Tap **New repository secret** again. **Name**: `BACKUP_PASSPHRASE`.
+   **Secret**: the passphrase of the backup. Tap **Add secret**.
+
+Run the restore:
+
+10. In signing-ceremony, open **Actions** and tap the ceremony workflow.
+    Tap **Run workflow**.
+11. Leave the branch at `main`. **action**: pick `restore`. **confirm**:
+    type `YES`. Tap **Run workflow**, and open the new run.
+12. When it is green, it shows "Signing key: restore finished" and the
+    certificate's SHA-256. It must be the same as in
+    [fingerprints.md](../security/fingerprints.md).
+13. In shkriuss.app, open **Settings**, **Environments**, `release`. The
+    three secrets must each show as updated just now.
+
+Clean up at once:
+
+14. In signing-ceremony, open **Settings**, **Secrets and variables**,
+    **Actions**. Under **Repository secrets**, tap the bin next to
+    `BACKUP_PASSPHRASE`, and confirm. Do the same for `CEREMONY_TOKEN`.
+15. Open `github.com/settings/personal-access-tokens`, tap
+    `signing-ceremony`, then **Delete**, and confirm.
+
+The next release checks the key: the job **Sign** compares its
+certificate with [fingerprints.md](../security/fingerprints.md), and
+uploads nothing if they differ.
+
+If the restore fails with "failed to fetch public key: HTTP 404: Not
+Found" and "The backup is saved, but the secrets were not all stored.
+Check CEREMONY_TOKEN, then run restore.":
+
+1. Check that `release` exists in shkriuss.app. In the rehearsal, this
+   error came from an environment that had been deleted.
+2. Check that the token reaches shkriuss.app, with the permissions of
+   step 5.
+3. Run `restore` again. Then clean up as in steps 14 and 15.
 
 To check that the backup opens without touching `release`, use part D of
 [signing-key-rehearsal.md](signing-key-rehearsal.md#part-d-check-the-real-backup).
@@ -210,15 +278,19 @@ same steps follow the first hour of
 
 Prepare. Users see nothing yet.
 
-1. In signing-ceremony:
-   1. Make the new key with `generate`.
+1. In signing-ceremony, run a `rotate` action. It does not exist yet
+   (ADR 0037, Open). The ceremony's `create` cannot make the new key: it
+   refuses while a backup exists, with "A backup already exists. This
+   workflow never replaces a signing key." So `rotate` must do all of
+   this:
+   1. Make the new key.
    2. Make the lineage, from the old key to the new one, with the old
-      key's rights of ADR 0037, point 3. This needs a `rotate` action,
-      which does not exist yet (ADR 0037, Open).
-   3. Back up the new key with the lineage. Make the two copies, and
-      check all three (parts D and E of
-      [signing-key-rehearsal.md](signing-key-rehearsal.md)).
+      key's rights of ADR 0037, point 3.
+   3. Back up the new key with the lineage.
    4. Keep the old key's backup.
+
+   Then make the two copies of the new backup, and check all three
+   (parts D and E of [signing-key-rehearsal.md](signing-key-rehearsal.md)).
 2. Ask Claude in a session for the rotation pull request. Ask for exactly
    these changes to owner-only files:
    - `release.yml`: sign with the lineage, and check it (ADR 0037, points
@@ -240,25 +312,38 @@ Switch, all on one day:
 4. Merge. From now on, a release signed with the old key fails in the job
    **Sign**, before anything is uploaded. The hub shows the new
    fingerprint, and the old one as previous.
-5. In signing-ceremony, run `restore` for the new key. `release` now holds
-   it.
+5. In signing-ceremony, run `restore` for the new key, with the two
+   repository secrets and a new token, as
+   [Restore the signing key](#restore-the-signing-key) says. Delete both
+   secrets and the token right after it. `release` now holds the new key.
 6. Release a new version of every app ([Run a release](#run-a-release)).
    In each run's summary, the certificate is the new one, and the lineage
    lists the old certificate, then the new one.
 7. Update each app on your own phone first, with Obtainium:
-   1. Obtainium warns that the signing certificate changed. Go on.
-   2. Android updates the app, and its data stays.
+   1. Obtainium shows "Signing certificate mismatch". "Expected
+      certificate hash" must be the old key. "Downloaded certificate
+      hash" shows two lines: the first must be the old key, and the last
+      the new one.
+   2. Tap **Install anyway**. Android updates the app, and its data
+      stays.
    3. AppVerifier shows two fingerprints, the old one first and the new
-      one last.
+      one last. Copy the package name and the new fingerprint, as two
+      lines, and tap **Verify from clipboard**. It must show
+      "Verification Status: SUCCESS".
 8. Open `https://shkriuss.app/verify/`. It shows the new fingerprint, and
    the old one as previous.
 
-What users do:
+What users do
+([install.md](../user/install.md#when-the-signing-key-changes),
+[verify.md](../user/verify.md#after-a-new-signing-key)):
 
-9. They update as usual. Obtainium warns once for each app. They go on
-   when the hub shows the new fingerprint.
-10. AppVerifier then shows two fingerprints. The last one must be the new
-    one.
+9. They update as usual. Obtainium shows "Signing certificate mismatch"
+   once for each app. Before **Install anyway**, they check that the
+   first downloaded hash is the expected one, and that the last is the
+   new fingerprint on the hub.
+10. AppVerifier then shows two fingerprints, the old one first and the
+    new one last. With the new one, "Verify from clipboard" shows
+    "Verification Status: SUCCESS".
 11. Users who typed fingerprints into an app's settings in Obtainium add
     the new one.
 

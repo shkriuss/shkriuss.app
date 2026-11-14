@@ -121,7 +121,8 @@ same: "Whoever has the words can read your backups and your synced data"
    rehearsal of restoring and rotating it, with throwaway keys, and the
    check that the real backup and its copies open, are in
    [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
-   Open until the owner has done it.
+   The owner did it on 2026-11-14, and every part passed
+   ([Results](../development/signing-key-rehearsal.md#results)).
 
 ### The release pipeline
 
@@ -455,12 +456,12 @@ What a takeover can do:
    can ask for any permission: the APK rules check runs only on builds
    of this repository.
 6. **Download the encrypted copy of the key** from `signing-ceremony`.
-   Its passphrase is only with the owner (ADR 0013, point 10).
-   - Open: the ceremony takes the passphrase as a typed input, and GitHub
-     keeps typed inputs with each run. The rehearsal page asks the owner
-     to delete those runs, and to mask the passphrase in the ceremony
-     ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#open-points),
-     point 1).
+   Its passphrase is with the owner (ADR 0013, point 10).
+   - The passphrase and the ceremony's token are repository secrets of
+     signing-ceremony only while the ceremony runs. They must be deleted
+     afterwards
+     ([release.md](../development/release.md#restore-the-signing-key)).
+     While they are there, a workflow in signing-ceremony can read them.
 
 What limits it, and no more than this:
 
@@ -484,8 +485,16 @@ What limits it, and no more than this:
    - A phone that has the rotated app refuses the old key alone, and any
      other lineage made from it.
    - A phone that takes a thief's update first stays with the thief.
-   - Both records are Proposed. They are Open until the rehearsal is
-     recorded.
+   - Before that update, Obtainium warns in the same way for our new key
+     and for a thief's lineage. Only the last downloaded hash tells them
+     apart, and users compare it with the new fingerprint
+     ([install.md](../user/install.md#when-the-signing-key-changes)).
+     This was not tested. It follows from how a lineage works.
+   - Both records are accepted. Parts A and B of the rehearsal showed
+     what they rest on, on 2026-11-14: a rotated update installed over
+     the old app, and Android refused the old key alone and a thief's
+     lineage over the rotated app
+     ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#results)).
 
 #### Claude's machine account
 
@@ -1453,8 +1462,11 @@ Other:
     Step 2.7 wrote the rehearsal
     ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md))
     and the records [ADR 0037](../adr/0037-signing-key-rotation.md) and
-    [ADR 0038](../adr/0038-a-stolen-signing-key.md). Open until the owner
-    has done the rehearsal and recorded the results.
+    [ADR 0038](../adr/0038-a-stolen-signing-key.md).
+    **Done on 2026-11-14**: the owner did the rehearsal, and every part
+    passed
+    ([Results](../development/signing-key-rehearsal.md#results)). ADR 0037
+    and ADR 0038 are accepted.
 20. Whether the emulator job for Android 17 becomes required (decided
     again at the Phase 2 gate), and the unpinned images
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
@@ -1462,11 +1474,12 @@ Other:
     ([CODEOWNERS](../../.github/CODEOWNERS)).
 22. Code scanning for Kotlin
     ([plan section 17](../plan/PLAN.md#17-to-confirm-in-phase-0)).
-23. A `rotate` action in signing-ceremony, before a real rotation, and
-    masking the typed passphrase there
+23. A `rotate` action in signing-ceremony, before a real rotation. It
+    must also make and back up the new key, because the ceremony's
+    `create` refuses while a backup exists
     ([ADR 0037](../adr/0037-signing-key-rotation.md);
     [signing-key-rehearsal.md](../development/signing-key-rehearsal.md#open-points),
-    points 1 and 2).
+    point 1).
 24. Whether, and when, the old key's right to hand over installed apps is
     turned off after a rotation
     ([ADR 0037](../adr/0037-signing-key-rotation.md)).
@@ -1542,8 +1555,10 @@ Open until its step is done.
     [ADR 0038](../adr/0038-a-stolen-signing-key.md) (a stolen key) and
     the rehearsal in
     [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
-    Open until the owner has done the rehearsal and recorded the
-    results.
+    **Done on 2026-11-14**: the owner did the rehearsal on the Pixel 9
+    Pro, and every part passed
+    ([Results](../development/signing-key-rehearsal.md#results)). ADR 0037
+    and ADR 0038 are accepted.
 12. Whether the recovery words alone can add a device to the sync
     server (Phase 5).
     **Step 5.1.**

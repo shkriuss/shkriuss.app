@@ -924,14 +924,38 @@ and ADR 0038 accepted if they are still Proposed. Never ask for or print
 a secret.
 ```
 
+Done on 2026-11-14. The owner did the rehearsal on the Pixel 9 Pro, with
+Obtainium 1.7.4, and every part, 0 to E, passed. Claude recorded the
+results in the session that followed
+([Results](signing-key-rehearsal.md#results)):
+
+- The steps now match the real ceremony: the actions `create` and
+  `restore` with `YES`, and the two repository secrets
+  `BACKUP_PASSPHRASE` and `CEREMONY_TOKEN`, which are deleted right after
+  each run. No passphrase is typed into the ceremony.
+- [ADR 0037](../adr/0037-signing-key-rotation.md) and
+  [ADR 0038](../adr/0038-a-stolen-signing-key.md) are accepted.
+- Point 8 of [ADR 0013](../adr/0013-signing-key-custody-and-rotation.md),
+  and point 11 and open question 19 of the
+  [threat model](../security/threat-model.md#open-questions), are closed.
+- [install.md](../user/install.md#when-the-signing-key-changes) and
+  [verify.md](../user/verify.md#after-a-new-signing-key) say what users
+  see and compare after a new signing key, and what to do when Obtainium
+  is rate limited.
+- [release.md](release.md#restore-the-signing-key) has the full steps of
+  a restore.
+- Still Open: a `rotate` action in signing-ceremony, which must also
+  make and back up the new key, and the other points under
+  [Open points](signing-key-rehearsal.md#open-points).
+
 ### Phase 2 gate (you)
 
 Work through the release checklist on the Pixel 9 Pro, check the layout on the
 other two devices, use the app daily for two weeks, then run the release.
 
 Also at this gate: decide again whether "Emulator (Android 17)" becomes a
-required check ([ci.md](ci.md#the-emulator-jobs)). Do the rehearsal of step
-2.7 before you run the release of Water, if it is not done yet.
+required check ([ci.md](ci.md#the-emulator-jobs)). The rehearsal of step
+2.7 was done on 2026-11-14, so it does not hold up the release of Water.
 
 ---
 
