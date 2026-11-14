@@ -103,9 +103,11 @@ data class DrinkSnackbar(
 }
 
 /**
- * The ViewModel of Today ([fixedDay] null) and of one Day of History.
+ * The ViewModel of Today ([fixedDay] null) and of the open Day of History.
  * Today follows the phone's clock: at midnight it moves to the new day by
  * itself, and [checkTheDay] moves it when the screen comes to the front.
+ * The open Day starts at [fixedDay], and [show] moves it to the day that
+ * History opens, so one ViewModel serves every day opened.
  *
  * Every change runs in [work] on top of the ViewModel's scope. Tests pass
  * `Dispatchers.Unconfined`.
@@ -157,6 +159,19 @@ class DayViewModel(
     /** Today moves to the new day after midnight. The screen calls it each time it comes to the front. */
     fun checkTheDay() {
         if (fixedDay == null) day.value = time.today()
+    }
+
+    /**
+     * The open Day of History shows [shown] from now on. The sheet and the
+     * snackbar of the day before close. Today follows the phone's clock,
+     * so it refuses this.
+     */
+    fun show(shown: LocalDate) {
+        check(fixedDay != null) { "Today follows the phone's clock" }
+        if (day.value == shown) return
+        sheet.value = null
+        snackbar.value = null
+        day.value = shown
     }
 
     /** A tap on quick amount number [index] (0 to 2): a drink of that amount, now. */

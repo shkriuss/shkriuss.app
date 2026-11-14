@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Today, in the navigation: a drop of water. Drawn for the suite as one
+    stroke on the 24 dp grid; not taken from an icon set. The colour is
+    replaced by the navigation's icon colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,3.5C12,3.5 6,10 6,14.5A6,6 0,0 0,18 14.5C18,10 12,3.5 12,3.5Z"
+        android:strokeWidth="2"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

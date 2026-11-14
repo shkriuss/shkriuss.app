@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Every word of Water's screens (docs/apps/water/spec.md, "Screens").
+    Amounts come as a number already in the phone's number format, such as
+    "1,250", so the plurals take it as text and the number as the quantity.
+    What TalkBack reads uses the full unit: "250 millilitres", not "250 ml".
+-->
+<resources>
+    <!-- The three destinations. -->
+    <string name="water_today">Today</string>
+    <string name="water_history">History</string>
+    <string name="water_settings">Settings</string>
+
+    <!-- Amounts as shown, and the unit after a number field. -->
+    <string name="water_amount_ml">%1$s ml</string>
+    <string name="water_amount_fl_oz">%1$s fl oz</string>
+    <string name="water_unit_ml">ml</string>
+    <string name="water_unit_fl_oz">fl oz</string>
+
+    <!-- Amounts as TalkBack reads them. -->
+    <plurals name="water_amount_ml_spoken">
+        <item quantity="one">%1$s millilitre</item>
+        <item quantity="other">%1$s millilitres</item>
+    </plurals>
+    <plurals name="water_amount_fl_oz_spoken">
+        <item quantity="one">%1$s fluid ounce</item>
+        <item quantity="other">%1$s fluid ounces</item>
+    </plurals>
+    <!-- What TalkBack reads for the unit after a number field. -->
+    <string name="water_unit_ml_spoken">millilitres</string>
+    <string name="water_unit_fl_oz_spoken">fluid ounces</string>
+    <plurals name="water_percent_spoken">
+        <item quantity="one">%1$s percent</item>
+        <item quantity="other">%1$s percent</item>
+    </plurals>
+
+    <!-- The summary of Today and of a day: "1,250 ml", then "of 2,000 ml · 62%". -->
+    <string name="water_of_goal">of %1$s · %2$s%%</string>
+    <string name="water_goal_reached">Goal reached</string>
+    <!-- TalkBack reads the summary as one item: "1,250 of 2,000 millilitres today, 62 percent". -->
+    <string name="water_summary_spoken_today">%1$s of %2$s today, %3$s</string>
+    <string name="water_summary_spoken_day">%1$s of %2$s, %3$s</string>
+    <!-- Added after the summary when the goal is met. -->
+    <string name="water_summary_goal_reached_spoken">%1$s. Goal reached</string>
+    <!-- The name of the progress bar. TalkBack reads it only where the bar is not part of the summary. -->
+    <string name="water_progress_label">Share of the goal</string>
+
+    <!-- Quick add on Today. The buttons show "+250 ml" and are read "Add 250 millilitres". -->
+    <string name="water_quick_add">+%1$s</string>
+    <string name="water_quick_add_spoken">Add %1$s</string>
+    <string name="water_other_amount">Other amount</string>
+
+    <!-- The drinks of a day. -->
+    <string name="water_drinks_today">Drinks today</string>
+    <string name="water_drinks_of_day">Drinks</string>
+    <string name="water_no_drinks_today">No drinks yet today.</string>
+    <string name="water_no_drinks_on_day">No drinks on this day.</string>
+    <!-- One drink: "14:05 · 250 ml", read "14:05, 250 millilitres". -->
+    <string name="water_drink_row">%1$s · %2$s</string>
+    <string name="water_drink_row_spoken">%1$s, %2$s</string>
+    <!-- What a tap on a drink does, as TalkBack offers it. -->
+    <string name="water_edit">Edit</string>
+
+    <!-- The snackbars after a new drink and a delete. -->
+    <string name="water_added">Added %1$s</string>
+    <string name="water_drink_deleted">Drink deleted</string>
+    <string name="water_undo">Undo</string>
+
+    <!-- The sheet "Add a drink" and "Edit drink". -->
+    <string name="water_add_drink">Add a drink</string>
+    <string name="water_edit_drink">Edit drink</string>
+    <string name="water_amount">Amount</string>
+    <string name="water_time">Time</string>
+    <string name="water_save">Save</string>
+    <string name="water_cancel">Cancel</string>
+    <string name="water_delete">Delete</string>
+    <!-- "Enter an amount from 1 to 3,000 ml.", in the unit shown. -->
+    <string name="water_amount_error">Enter an amount from %1$s to %2$s.</string>
+    <string name="water_time_not_yet">That time has not come yet.</string>
+
+    <!-- History. One row: "Thu, 12 Nov", then "1,800 of 2,000 ml". -->
+    <string name="water_yesterday">Yesterday</string>
+    <string name="water_day_total">%1$s of %2$s</string>
+    <!-- One row as TalkBack reads it: "Thursday 12 November, 1,800 of 2,000 millilitres". -->
+    <string name="water_day_row_spoken">%1$s, %2$s of %3$s</string>
+    <string name="water_day_row_goal_reached_spoken">%1$s, goal reached</string>
+    <string name="water_history_empty_title">No history yet.</string>
+    <string name="water_history_empty_body">The drinks you log show here.</string>
+    <string name="water_choose_a_day">Choose a day.</string>
+
+    <!-- Settings. -->
+    <string name="water_section_drinking">Drinking</string>
+    <string name="water_section_reminders">Reminders</string>
+    <string name="water_section_about">About</string>
+    <string name="water_daily_goal">Daily goal</string>
+    <string name="water_goal_note">The new goal counts from today. Past days keep theirs.</string>
+    <!-- "Enter a goal from 500 to 10,000 ml.", in the unit in use. -->
+    <string name="water_goal_error">Enter a goal from %1$s to %2$s.</string>
+    <string name="water_unit">Unit</string>
+    <string name="water_unit_millilitres">Millilitres (ml)</string>
+    <string name="water_unit_fluid_ounces">US fluid ounces (fl oz)</string>
+    <string name="water_quick_amounts">Quick amounts</string>
+    <!-- The three quick amounts in a row: "150 ml, 250 ml, 500 ml". -->
+    <string name="water_three_amounts">%1$s, %2$s, %3$s</string>
+    <string name="water_first">First</string>
+    <string name="water_second">Second</string>
+    <string name="water_third">Third</string>
+    <string name="water_quick_amounts_note">The first amount is also the one that a reminder\'s Drank button adds.</string>
+    <!-- A setting and its value, as TalkBack reads it: "Daily goal, 2,000 millilitres". -->
+    <string name="water_setting_spoken">%1$s, %2$s</string>
+    <string name="water_every">Every</string>
+    <string name="water_every_30">30 minutes</string>
+    <string name="water_every_45">45 minutes</string>
+    <string name="water_every_60">1 hour</string>
+    <string name="water_every_90">1 hour 30 minutes</string>
+    <string name="water_every_120">2 hours</string>
+    <string name="water_every_180">3 hours</string>
+    <string name="water_from">From</string>
+    <string name="water_until">Until</string>
+    <string name="water_until_too_early">Until must be at least 30 minutes after From.</string>
+    <string name="water_no_reminder_fits">No reminder fits between From and Until. Choose a shorter interval or longer hours.</string>
+    <string name="water_version">Version</string>
+</resources>

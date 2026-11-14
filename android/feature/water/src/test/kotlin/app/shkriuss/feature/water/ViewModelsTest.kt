@@ -257,6 +257,32 @@ class ViewModelsTest {
         assertEquals(THE_DAY, model.state.value.day)
     }
 
+    @Test
+    fun theOpenDayMovesToTheDayHistoryOpensAndClosesTheSheetAndSnackbarOfTheDayBefore() {
+        runBlocking {
+            repository.addDrink(THE_DAY.minusDays(2), 600, 300)
+            repository.addDrink(THE_DAY.minusDays(1), 610, 400)
+        }
+        val model = dayOf(THE_DAY)
+        model.loaded()
+
+        model.show(THE_DAY.minusDays(2))
+        assertEquals(300, model.state.await { it.day == THE_DAY.minusDays(2) && it.totalMl == 300 }.totalMl)
+        model.openAdd()
+        model.sheetThat()
+
+        model.show(THE_DAY.minusDays(1))
+        val next = model.state.await { it.day == THE_DAY.minusDays(1) && it.totalMl == 400 }
+        assertNull("The sheet of the day before closed", next.sheet)
+        assertNull(next.snackbar)
+        assertFalse(next.isToday)
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun todayFollowsTheClockAndRefusesToShowAnotherDay() {
+        today().show(THE_DAY.minusDays(1))
+    }
+
     // History.
 
     @Test
