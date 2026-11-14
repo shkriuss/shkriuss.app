@@ -2,6 +2,7 @@ package app.shkriuss.water
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performTextReplacement
@@ -68,6 +69,28 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         start()
         compose.waitForText("12:40", substring = true)
         compose.captureWholeScreen("TodayDrinks", config)
+    }
+
+    /**
+     * Today right after a tap on "+250 ml": the snackbar "Added 250 ml"
+     * with Undo, at the bottom of the screen. The tap is TalkBack's, so no
+     * ripple is left on the button. One image: the snackbar stays at the
+     * bottom while the screen scrolls, and the whole screen is in
+     * TodayDrinks.
+     */
+    @Test
+    fun todayWithTheSnackbarAfterAQuickAmount() {
+        seed {
+            addDrink(THE_DAY, 8 * 60 + 10, 300)
+            addDrink(THE_DAY, 10 * 60 + 20, 250)
+            addDrink(THE_DAY, 12 * 60 + 40, 500)
+        }
+        start()
+        compose.waitForText("12:40", substring = true)
+        compose.onNode(hasContentDescription("Add 250 millilitres")).tapAsTalkBack()
+        compose.waitForText(words(R.string.water_added, "250 ml"))
+        compose.waitForText(words(R.string.water_undo))
+        captureWindows("TodaySnackbar")
     }
 
     @Test
