@@ -13,7 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.design.ShkEmptyState
 import app.shkriuss.core.design.ShkListDetailScaffold
@@ -96,6 +96,6 @@ private fun PartNotice(part: LicensedPart, onBack: (() -> Unit)?) {
 /** The text of the raw resource [id], as it is in the app: a notice or a licence, never translated. */
 @Composable
 private fun rawText(@RawRes id: Int): String {
-    val resources = LocalContext.current.resources
+    val resources = LocalResources.current
     return remember(id, resources) { resources.openRawResource(id).bufferedReader().use { it.readText() }.trimEnd() }
 }

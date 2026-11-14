@@ -48,7 +48,7 @@ class TestDocuments : ContentProvider() {
         var onOpen: (mode: String) -> Unit = {}
 
         /** The URI of the document [name], as the picker would give it. */
-        fun uri(name: String): Uri = Uri.parse("content://$AUTHORITY/$name")
+        fun uri(name: String): Uri = Uri.Builder().scheme("content").authority(AUTHORITY).appendPath(name).build()
 
         /** The file behind the document [name]. */
         fun file(name: String): File = File(folder, name)
