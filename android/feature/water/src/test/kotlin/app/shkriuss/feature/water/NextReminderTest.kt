@@ -169,4 +169,62 @@ class NextReminderTest {
             NextReminder.after(THE_DAY.plusDays(1).atTime(9, 0), hourly, facts())
         }
     }
+
+    // A reminder that is due and has not reached the handler yet (point 7, the owner's decision in step 2.4).
+
+    @Test
+    fun aReminderThatIsDueAndNotHandledYetStaysTheNextOneForOneMinute() {
+        // The drink at 10:20 set the alarm for 11:20. It has not reached the handler yet.
+        val due = facts(latestDrink = minute(10, 20)).copy(pending = at(11, 20))
+        assertEquals(at(11, 20), next(at(11, 20), due))
+        assertEquals(at(11, 20), next(at(11, 20, 1), due))
+        assertEquals(at(11, 20), next(at(11, 20, 59), due))
+        // One minute after its time it is missed, and skipped.
+        assertEquals(at(12, 20), next(at(11, 21), due))
+        assertEquals(at(12, 20), next(at(11, 40), due))
+    }
+
+    @Test
+    fun aTimeThatJustPassedWithoutAnAlarmSetForItIsNotTheNextReminder() {
+        // At 14:10:20 a drink for 13:10 is added. No alarm was set for 14:10, so none comes now.
+        assertEquals(at(15, 10), next(at(14, 10, 20), facts(latestDrink = minute(13, 10))))
+        // An alarm set for another time does not count either.
+        assertEquals(at(15, 10), next(at(14, 10, 20), facts(latestDrink = minute(13, 10)).copy(pending = at(15, 0))))
+    }
+
+    @Test
+    fun aReminderThatIsDueIsNoLongerTheNextOneOnceSomethingAnsweredIt() {
+        val due = facts(latestDrink = minute(10, 20)).copy(pending = at(11, 20))
+        // A drink at 11:20.
+        assertEquals(at(12, 20), next(at(11, 20, 30), due.copy(latestDrinkMinute = minute(11, 20))))
+        // The goal is met.
+        assertEquals(tomorrowAtNine, next(at(11, 20, 30), due.copy(goalMet = true)))
+        // Later, pressed at 11:20 on the reminder before.
+        assertEquals(at(11, 35), next(at(11, 20, 30), due.copy(lastShown = at(10, 0), lastLater = at(11, 20, 10), snooze = at(11, 35))))
+        // Reminders off.
+        assertNull(next(at(11, 20, 30), due, hourly.copy(remindersOn = false)))
+    }
+
+    @Test
+    fun aSnoozeThatIsDueAndNotHandledYetStaysForOneMinuteToo() {
+        val snoozed = facts(lastShown = at(12, 0), lastLater = at(12, 22), snooze = at(12, 37)).copy(pending = at(12, 37))
+        assertEquals(at(12, 37), next(at(12, 37, 30), snoozed))
+        // Missed: the count is the press of Later.
+        assertEquals(at(13, 22), next(at(12, 38), snoozed))
+    }
+
+    @Test
+    fun aPendingTimeAheadOrOnAnotherDayChangesNothing() {
+        assertEquals(at(11, 20), next(at(10, 30), facts(latestDrink = minute(10, 20)).copy(pending = at(11, 20))))
+        val yesterday = THE_DAY.minusDays(1).atTime(11, 20)
+        assertEquals(at(12, 20), next(at(11, 20, 30), facts(latestDrink = minute(10, 20)).copy(pending = yesterday)))
+    }
+
+    @Test
+    fun afterARestartAReminderMissedByMoreThanOneMinuteIsSkipped() {
+        // The alarm was set for 11:00. The phone was off from 10:30 to 12:20.
+        assertEquals(at(13, 0), next(at(12, 20), facts(lastShown = at(10, 0)).copy(pending = at(11, 0))))
+        // Unlocked 30 seconds after the time: it still comes, half a minute late.
+        assertEquals(at(11, 0), next(at(11, 0, 30), facts(lastShown = at(10, 0)).copy(pending = at(11, 0))))
+    }
 }

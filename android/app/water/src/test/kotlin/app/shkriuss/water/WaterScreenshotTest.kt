@@ -9,6 +9,8 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ActivityScenario
 import app.shkriuss.feature.water.R
 import app.shkriuss.feature.water.SettingsRules
+import app.shkriuss.feature.water.WaterReminders
+import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.feature.water.WaterUnit
 import app.shkriuss.core.design.R as DesignR
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
@@ -19,6 +21,7 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -32,7 +35,8 @@ import org.robolectric.annotation.GraphicsMode
  *
  * A screen that scrolls is captured to its end, in parts. A sheet or a
  * dialog is captured with the screen dimmed behind it. On the tablet,
- * Today and History show two panes.
+ * Today and History show two panes. The reminder line of Today has one
+ * screenshot for each of its six states.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(application = UnlockedWaterApp::class)
@@ -196,6 +200,100 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         compose.captureWholeScreen("SettingsNoReminderFits", config)
     }
 
+    // Reminders (step 2.4): the reminder line of Today in each of its six states, Settings with reminders on, and the question.
+
+    @Test
+    fun todayWithTheNextReminder() {
+        seed {
+            changeSettings { it.copy(remindersOn = true) }
+            addDrink(THE_DAY, 10 * 60 + 20, 250)
+            addDrink(THE_DAY, 13 * 60 + 50, 500)
+        }
+        start()
+        compose.waitForText("Next reminder at 14:50")
+        compose.captureWholeScreen("TodayReminderNext", config)
+    }
+
+    @Test
+    fun todayWhenTheGoalIsReachedWithRemindersOn() {
+        seed {
+            changeSettings { it.copy(remindersOn = true) }
+            addDrink(THE_DAY, 9 * 60, 1_200)
+            addDrink(THE_DAY, 13 * 60 + 30, 900)
+        }
+        start()
+        compose.waitForText(words(R.string.water_reminder_goal_reached))
+        compose.captureWholeScreen("TodayReminderGoalReached", config)
+    }
+
+    @Test
+    fun todayWithNoMoreRemindersToday() {
+        seed { changeSettings { it.copy(remindersOn = true, untilMinute = 14 * 60) } }
+        start()
+        compose.waitForText(words(R.string.water_reminder_none_left))
+        compose.captureWholeScreen("TodayReminderNoneLeft", config)
+    }
+
+    @Test
+    fun todayBeforeAndroidAskedForNotifications() {
+        notificationsAllowed(false)
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        start()
+        compose.waitForText(words(R.string.water_allow))
+        compose.captureWholeScreen("TodayNotAsked", config)
+    }
+
+    @Test
+    fun todayWithNotificationsOff() {
+        notificationsAllowed(false)
+        testApp.test.notify.permissionAnswered()
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        start()
+        compose.waitForText(words(R.string.water_reminder_denied))
+        compose.captureWholeScreen("TodayDenied", config)
+    }
+
+    @Test
+    fun todayWithTheChannelOff() {
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        // The user turns the channel off in Android's settings. The app's start made the channel.
+        NotifyTestDevice(RuntimeEnvironment.getApplication()).turnOff(WaterReminders.CHANNEL)
+        start()
+        compose.waitForText(words(R.string.water_reminder_channel_off))
+        compose.captureWholeScreen("TodayChannelOff", config)
+    }
+
+    @Test
+    fun settingsWithRemindersOn() {
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        start()
+        compose.tap(R.string.water_settings)
+        compose.waitForText("Next reminder at 15:00")
+        compose.captureWholeScreen("SettingsRemindersOn", config)
+    }
+
+    @Test
+    fun settingsWithNotificationsOff() {
+        notificationsAllowed(false)
+        testApp.test.notify.permissionAnswered()
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        start()
+        compose.tap(R.string.water_settings)
+        compose.waitForText(words(R.string.water_reminder_denied))
+        compose.captureWholeScreen("SettingsDenied", config)
+    }
+
+    @Test
+    fun theQuestionForNotifications() {
+        notificationsAllowed(false)
+        start()
+        compose.tap(R.string.water_settings)
+        compose.waitForText(words(R.string.water_version))
+        compose.tap(R.string.water_remind_me)
+        compose.waitForText(words(R.string.water_question_text))
+        captureWindows("NotificationQuestion")
+    }
+
     @Test
     fun theGoalDialogRefusesAGoalTooSmall() {
         openSetting(R.string.water_daily_goal)
@@ -235,6 +333,9 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         compose.waitForText(words(R.string.water_until_too_early))
         captureWindows("UntilRefused")
     }
+
+    /** Whether Android lets Water show notifications. */
+    private fun notificationsAllowed(allowed: Boolean) = NotifyTestDevice(RuntimeEnvironment.getApplication()).allowNotifications(allowed)
 
     /** Starts Water on Today. */
     private fun start() {

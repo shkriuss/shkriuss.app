@@ -20,6 +20,7 @@ import org.junit.runners.Suite
 @Suite.SuiteClasses(
     PermissionOnAndroidTest::class,
     AlarmsOnAndroidTest::class,
+    ButtonsOnAndroidTest::class,
     ClockChangesOnAndroidTest::class,
 )
 class InstrumentedTests

@@ -16,6 +16,10 @@ dependencies {
     // Water's records in a backup (WaterBackupContent). The screens of
     // backup and restore come in step 2.5.
     implementation(project(":core:backup"))
+    // Reminders (step 2.4): Water's AlarmSource, AlarmHandler and
+    // ButtonHandler, and the state of the notification permission. Alarms
+    // and notifications only through core/notify (CLAUDE.md).
+    implementation(project(":core:notify"))
     implementation(libs.lifecycle.viewmodel)
     // The screens (step 2.3): the Shk* components, and BackHandler from
     // Activity Compose, which the app has already. No navigation library:
@@ -24,6 +28,9 @@ dependencies {
     implementation(libs.activity.compose)
 
     testImplementation(project(":core:testing"))
+    // What the reminders show and which alarms wait, on Robolectric's
+    // Android, without naming Android's alarm or notification classes.
+    testImplementation(testFixtures(project(":core:notify")))
     // Real keys for the backup round trip, where no Android Keystore
     // exists (ADR 0029). Test fixtures are never part of an app.
     testImplementation(testFixtures(project(":core:crypto")))

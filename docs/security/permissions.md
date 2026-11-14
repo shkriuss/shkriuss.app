@@ -11,10 +11,14 @@ and has its own decision record ([CLAUDE.md](../../CLAUDE.md)).
 - No storage permissions. Files come and go only through the system
   pickers.
 - Every APK build fails if the app's final manifest declares or requests a
-  permission it is not allowed. Today no app is allowed any. A per-app
-  allow list comes with Water (steps 2.4 and 2.5 in
-  [PROMPTS.md](../development/PROMPTS.md)). The check is
-  described in [build.md](../development/build.md#apk-rules-check).
+  permission it is not allowed. Each app has an allow list in the APK
+  rules check. Only the owner changes it, after the app's ADR and its
+  entry on this page. Today only Water is allowed any: the three of
+  `core/notify`, since step 2.4. Step 2.5 adds the two of
+  `core/security` for Water ([PROMPTS.md](../development/PROMPTS.md)).
+  An app that is not on the list may request none, and no app may
+  declare a permission of its own. The check is described in
+  [build.md](../development/build.md#apk-rules-check).
 
 ## Apps
 
@@ -55,13 +59,25 @@ turned off.
 
 ### Water (`app.shkriuss.water`)
 
-No permissions yet. Step 2.2 built Water's data and logic and its app
-module, and step 2.3 its screens, with no permission. Steps 2.4 and 2.5
-add its five permissions, with its allow list in the APK rules check,
-as its [specification](../apps/water/spec.md#permissions) says.
+Three permissions, from `core/notify`, for its reminders, since step
+2.4:
 
-Until then Water's manifest removes what its libraries ask for. The
-owner decided this in step 2.2, on 2026-11-14:
+| Permission | From | Why |
+|---|---|---|
+| `android.permission.POST_NOTIFICATIONS` | `core/notify` | To show a reminder. The user allows it or not: Water explains first, then Android asks ([spec.md](../apps/water/spec.md#asking-for-notifications)). |
+| `android.permission.USE_EXACT_ALARM` | `core/notify` | To remind at the exact minute ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)). Granted at install. |
+| `android.permission.RECEIVE_BOOT_COMPLETED` | `core/notify` | To set the alarm again after a restart. Granted at install. |
+
+- They are Water's allow list in the APK rules check, which the owner
+  asked for in step 2.4. A build of Water with any other permission
+  fails.
+- What they allow and do not allow is under
+  [Apps that use core/notify](#apps-that-use-corenotify).
+- Step 2.5 adds the two of `core/security`, as Water's
+  [specification](../apps/water/spec.md#permissions) says.
+
+Until then Water's manifest removes what its libraries ask for beyond
+these. The owner decided this in step 2.2, on 2026-11-14:
 
 | Permission | Added by | What happens to it |
 |---|---|---|
@@ -69,10 +85,13 @@ owner decided this in step 2.2, on 2026-11-14:
 | `android.permission.USE_BIOMETRIC` | `core/security` | Removed in Water's manifest until step 2.5. Nothing in Water opens the screens of `core/security` before then, and the app lock cannot be turned on. |
 | `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | Removed in Water's manifest until step 2.5, for the same reason. |
 
-Water does not use `core/notify` before step 2.4, so its three
-permissions are not in Water yet.
-
 Other components that libraries add, none of them a permission:
+
+- The three receivers of `core/notify`, none exported
+  ([Receivers](#receivers)): `AlarmReceiver` for Water's one alarm,
+  `SystemEventReceiver` for a restart, an update and a new time or time
+  zone, and `ButtonReceiver` for **Drank** and **Later** on a reminder.
+  `WaterManifestTest` checks that these three are Water's receivers.
 
 - The six screens of `core/security`: removed in Water's manifest until
   step 2.5, with the two permissions. A screen of the module needs both
@@ -108,9 +127,9 @@ are turned off.
 
 `core/notify` sets the alarms and shows the notifications of an app with
 reminders ([notifications.md](../architecture/notifications.md)). Its
-manifest declares three permissions and two receivers. Every app that
-uses the module gets them when the app is built. No app uses it yet.
-The first one will be Water. Calendar, Reminders and Tasks follow
+manifest declares three permissions and three receivers. Every app that
+uses the module gets them when the app is built. Water uses it since
+step 2.4. Calendar, Reminders and Tasks follow
 ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)).
 
 An app does not get them unnoticed. The APK rules check fails the app
@@ -147,22 +166,29 @@ A receiver is a part of an app that Android can start for a broadcast.
 |---|---|---|---|
 | `app.shkriuss.core.notify.AlarmReceiver` | No | The app's own alarm, sent by Android's `AlarmManager` at the alarm's time. It has no intent filter. | It hands the alarm's id to the app, which reads the reminder from its database and shows the notification. Then the alarms are set again. |
 | `app.shkriuss.core.notify.SystemEventReceiver` | No | Four broadcasts of Android: `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET` and `TIMEZONE_CHANGED`. | It sets the app's alarms again. It reads nothing from the broadcast. |
+| `app.shkriuss.core.notify.ButtonReceiver` | No | A press of a button on a notification of the app, after the phone's unlock: the button's own pending intent, which the app made. It has no intent filter. | It hands the press to the app, which logs a drink or sets a snooze, for example ([ADR 0034](../adr/0034-notification-buttons.md)). |
 
-- Neither receiver is exported. No other app can start them. Android
-  itself can.
+- No receiver is exported. No other app can start them. Android itself
+  can, and so can a pending intent the app made.
 - Only Android can send the four broadcasts. They are protected: an
   app that tries is refused.
 - The alarm's broadcast carries the alarm's id and nothing else. The id
   is the id of a record or a fixed name, never a title or a text.
-- Neither receiver is `directBootAware`, and the module does not listen
-  for `LOCKED_BOOT_COMPLETED`. So nothing of the app runs between a
-  restart and the first unlock
+- A press carries the notification's key, the button's action, the
+  notification's time and the button's fixed value, such as an amount.
+  Never a title or a text. Its pending intent is immutable.
+- Every button asks Android for the phone's unlock first. A locked
+  phone's notification cannot change a record.
+- No receiver is `directBootAware`, and the module does not listen for
+  `LOCKED_BOOT_COMPLETED`. So nothing of the app runs between a restart
+  and the first unlock
   ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)).
 - A receiver ignores every broadcast that is not one of its own.
 
 The unit test `ManifestTest` in `core/notify` fails if the module's
 manifest declares another permission, a receiver that is exported, a
-receiver that runs before the first unlock, or another broadcast.
+receiver that runs before the first unlock, another broadcast, or an
+intent filter on the receiver of alarms or of buttons.
 
 ## Apps that use `core/security`
 

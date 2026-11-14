@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     What core/notify adds to every app that uses it: three permissions and
-    two receivers. See docs/architecture/notifications.md,
-    docs/security/permissions.md and ADR 0030.
+    three receivers. See docs/architecture/notifications.md,
+    docs/security/permissions.md, ADR 0030 and ADR 0034.
 
-    Neither receiver is exported, so no other app can reach them. Android
-    itself still can. Neither is directBootAware: nothing here runs between
-    a reboot and the first unlock (ADR 0010).
+    No receiver is exported, so no other app can reach them. Android
+    itself still can, and so can a pending intent this app made. None is
+    directBootAware: nothing here runs between a reboot and the first
+    unlock (ADR 0010).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -54,6 +55,16 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!--
+            Android starts it when the user presses a button on a
+            notification of this app, after the phone's unlock (ADR 0034).
+            Only the button's own pending intent, which this app made,
+            names it. No intent filter.
+        -->
+        <receiver
+            android:name="app.shkriuss.core.notify.ButtonReceiver"
+            android:exported="false" />
 
     </application>
 

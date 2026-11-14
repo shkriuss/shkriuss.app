@@ -206,13 +206,15 @@ The tests below use the real `AlarmManager` and `NotificationManager`,
 and the emulator's own clock.
 
 The test APK is set up as an app with reminders is. Its app class,
-`DeviceApp`, is a `NotifyHost` and starts `Notify`. The three
-permissions and the two receivers come from the module's manifest.
+`DeviceApp`, is a `NotifyHost` and starts `Notify`, with a button
+handler. The three permissions and the three receivers come from the
+module's manifest.
 
 | Test class | What it checks |
 |---|---|
 | `PermissionOnAndroidTest` | A newly installed app shows no notifications, and the state is "never asked". After the answer "no" it is "denied". After the permission is granted it is "ready". The app has the three permissions of the module's manifest and no other. `Notify.start` made the channel, with its name, description and importance. |
 | `AlarmsOnAndroidTest` | Android allows exact alarms with `USE_EXACT_ALARM`, without asking the user. An alarm set seven seconds ahead fires, not before its time, through the receiver that is not exported, and the app's notification is shown. Two alarms with two ids both fire. An alarm that is no longer wanted does not fire. An alarm whose time has passed fires within seconds. |
+| `ButtonsOnAndroidTest` | Android takes a notification with two buttons, and each asks for the phone's unlock. The pending intent of a button reaches the receiver that is not exported, and the app gets the press with the key, the action, the time and the value. Added in Phase 2, step 4. |
 | `ClockChangesOnAndroidTest` | The time zone is changed: Android tells the receiver, and the app is asked for its alarms again. The clock is set eleven minutes ahead: an alarm that is now due fires, and the app is asked again. |
 
 How the tests reach what an app cannot:
@@ -333,7 +335,8 @@ a device:
 | A secondary user profile and Private Space | The images are plain AOSP with one user. |
 | Deep sleep with the screen off for a long time | The job keeps the emulator awake, and a run takes minutes. |
 | A channel the user turned off, Do Not Disturb, an app with restricted battery use | No test changes these settings on the emulator. The state for a channel that is off is tested with Robolectric. |
-| The dialog for the notification permission | No screen asks yet. The test answers through `UiAutomation`. |
+| The dialog for the notification permission | Water asks from Phase 2, step 4, but Water has no emulator tests. The test of `core/notify` answers through `UiAutomation`. Robolectric shows no question either. [Part 1 of the reminder steps](#steps-for-the-three-devices-reminders) checks it. |
+| A press of a button on the screen, and the unlock it asks for | `ButtonsOnAndroidTest` sends the button's pending intent, as Android does after the unlock. No test taps the notification shade or unlocks the phone. |
 | GrapheneOS | The images are plain AOSP. |
 
 ### Steps for the three devices
@@ -444,90 +447,168 @@ loss of power, and the time before the first unlock.
 
 ### Steps for the three devices: reminders
 
-For the Pixel 9 Pro. Parts 1 and 2 also on the Pixel Tablet and the
+For the Pixel 9 Pro. Parts 1 to 4 also on the Pixel Tablet and the
 Pixel 6a.
 
-These steps cannot be done today. They need an app with reminders.
-Water is the first (Phase 2, step 4). The steps name what a screen
-does, not its final title. Step 10 of part 1 of the
-[release checklist](release-checklist.md) will point here.
+The steps use Water, the first app with reminders (Phase 2, step 4),
+and the words of its screens. Water skips a reminder whose time passed
+more than a minute ago, for example while the phone was off. It never
+shows one late ([spec.md](../apps/water/spec.md#missed-reminders)).
+Step 10 of part 1 of the [release checklist](release-checklist.md) will
+point here.
 
 Before you start: use the preview build of a pull request
-([test-a-pull-request.md](test-a-pull-request.md)), and allow its
-notifications.
+([test-a-pull-request.md](test-a-pull-request.md)). Do the steps
+between 00:30 and 23:00.
 
-Part 1, on time with the screen off:
+Two things the parts use:
 
-1. Set a reminder for a time 30 minutes from now.
-2. Turn the screen off, unplug the phone and leave it alone.
-3. Check: the reminder comes in the minute it was set for.
+**Start fresh.** Uninstall Water preview, and install the same preview
+APK again. Water then has no drink, no reminder of today, and has never
+asked for notifications.
 
-Part 2, a restart and the first unlock:
+**Set the next reminder for about two minutes from now.**
 
-4. Set one reminder for 5 minutes from now and one for 30 minutes from
-   now.
-5. Restart the phone. Do not unlock it. Wait until the first time has
-   passed.
-6. Check: nothing showed on the lock screen and nothing made a sound.
-7. Unlock the phone. Do not open the app.
-8. Check: the first reminder shows now, late. The second one comes at
-   its time.
+1. Open Water preview and tap **Settings**.
+2. Tap **Every**, choose **30 minutes** and tap **Save**.
+3. If it is later than 21:00, tap **Until**, type 23 and 59, and tap
+   **OK**.
+4. Tap **From**. Type the time 28 minutes before now: at 14:05, type 13
+   and 37. Tap **OK**.
+5. If **Remind me to drink** is off, turn it on.
+6. Check: under **Until**, Water says "Next reminder at", two minutes
+   from now (14:07 in the example).
 
-Part 3, an app update:
+This works only while today has no drink and no reminder later than
+**From**, so each part starts fresh.
 
-9. Set a reminder for 15 minutes from now.
-10. Install a newer preview build over the app. Do not open it.
-11. Check: the reminder comes at its time.
+Part 1, the question, on time with the screen off, and **Drank**:
 
-Part 4, a new time zone:
+1. Start fresh. Set the next reminder for about two minutes from now.
+   When you turn on **Remind me to drink**, a dialog "Allow
+   notifications" explains first.
+2. Tap **Not now**. Check: the switch stays on, and the line says
+   "Reminders are on, but Water may not show notifications yet.", with
+   **Allow**.
+3. Tap **Allow**, then **Continue**. Android asks. Tap **Allow** in
+   Android's question. Check: the line says "Next reminder at" and the
+   time.
+4. Turn the screen off, unplug the phone and leave it alone.
+5. Check: the reminder comes in the minute it was set for: "Time for
+   some water", "0 of 2,000 ml today", and the buttons **Drank 150 ml**
+   and **Later**.
+6. On the lock screen, tap **Drank 150 ml**. Check: Android asks you to
+   unlock the phone first, and nothing happens before. Unlock.
+7. Check: the reminder is gone. Open Water: Today shows "150 ml" at the
+   top of the drinks, with the time of the tap. The line says "Next
+   reminder at", 30 minutes after the tap.
+8. Tap the drink, tap **Delete**, then **Undo** in the snackbar. Check:
+   the drink is back.
 
-12. Set a reminder that repeats every day at a time one hour from now.
-13. In Settings, search for **Time zone**. Turn off the automatic time
-    zone and choose a zone that is one hour ahead.
-14. Check: the reminder comes within a minute, because its time on the
-    wall clock is now. Choose a zone that is one hour behind your own.
-    Check tomorrow: it comes at its time on the wall clock of that zone.
-15. Turn the automatic time zone on again.
+Part 2, **Later**:
 
-Part 5, a secondary user profile:
+9. Start fresh. Set the next reminder for about two minutes from now,
+   and allow notifications: **Continue**, then **Allow**.
+10. When the reminder comes, tap **Later**, and unlock. Check: the
+    reminder is gone. Open Water: the line says "Next reminder at", 15
+    minutes after the tap.
+11. Wait 15 minutes. Check: the reminder comes again, with the numbers
+    of that moment.
+12. Tap the notification itself, not a button. Check: Water opens on
+    Today, also if it was open on **Settings** before.
 
-16. Install the app in a secondary user, as in step 8 of part 1 of the
-    release checklist. In that user, allow notifications and set a
-    reminder for 10 minutes from now.
-17. Switch back to the Owner without ending the session.
-18. Check: with **Send notifications to current user** off, nothing
+Part 3, a reminder while notifications are not allowed:
+
+13. Start fresh. Set the next reminder for about two minutes from now.
+    In the dialog, tap **Continue**. In Android's question, tap **Don't
+    allow**.
+14. Check: the line says "Notifications are off for Water. Reminders are
+    silent.", with **Open settings**.
+15. Wait until two minutes after the time. Check: no reminder showed and
+    nothing made a sound.
+16. Tap **Open settings**. Check: Android's notification page of Water
+    preview opens. Allow its notifications there, and go back.
+17. Check: the line says "Next reminder at", 30 minutes after the silent
+    one. The silent reminder counted as shown.
+18. Tap **Open settings** again. On Android's page, tap **Drink
+    reminders** and turn it off. Go back. Check: the line says "Drink
+    reminders are turned off in Android's settings. Reminders are
+    silent.", and **Open settings** opens the page of **Drink
+    reminders**. Turn it on again.
+
+Part 4, a restart of the phone:
+
+19. Start fresh. Allow notifications. Set the next reminder as above,
+    but type in **From** the time 26 minutes before now, so that it
+    comes in about four minutes.
+20. Restart the phone at once. Unlock it before the time. Do not open
+    Water.
+21. Check: the reminder comes at its minute. Do not answer it.
+22. About 25 minutes later, restart the phone again. Do not unlock it
+    until two minutes after the next time, 30 minutes after the
+    reminder of step 21.
+23. Check: nothing showed on the lock screen and nothing made a sound.
+24. Unlock the phone. Check: no reminder appears. Open Water: the line
+    says "Next reminder at", one hour after the reminder of step 21.
+
+Part 5, an app update. Only from Water's first release (step 2.6): two
+preview builds have different keys, so one cannot update the other
+([test-a-pull-request.md](test-a-pull-request.md)).
+
+25. Set the next reminder for about two minutes from now.
+26. Install the newer release over the app. Do not open it.
+27. Check: the reminder comes at its time.
+
+Part 6, a new time zone:
+
+28. Start fresh. Allow notifications. Set the next reminder for about
+    two minutes from now, and let it come. Do not answer it.
+29. In Android's Settings, search for **Time zone**. Turn off the
+    automatic time zone and choose a zone that is one hour ahead.
+30. Open Water. Check: the line says "Next reminder at" a time in the
+    new zone's clock: 30 minutes after the reminder of step 28, one hour
+    later on the clock. It comes at that time.
+31. Turn the automatic time zone on again.
+
+Part 7, a secondary user profile:
+
+32. Install Water preview in a secondary user, as in step 8 of part 1 of
+    the release checklist. In that user, set the next reminder for about
+    two minutes from now and allow notifications.
+33. Switch back to the Owner without ending the session.
+34. Check: with **Send notifications to current user** off, nothing
     shows in the Owner. After a switch to the secondary user, the
     reminder is there, with its time.
-19. Turn **Send notifications to current user** on in the secondary
-    user. Set another reminder and switch to the Owner. Check: the
-    reminder shows in the Owner at its time.
-20. Set a reminder for 10 minutes from now, then end the session of
-    the secondary user. Check: nothing shows. Switch to the secondary
-    user after the time has passed and unlock it. Check: the reminder
-    shows now, late.
+35. Turn **Send notifications to current user** on in the secondary
+    user. In Water there, tap **Later**, and switch to the Owner. Check:
+    15 minutes later the reminder shows in the Owner.
+36. In the secondary user, note the time on Water's line, then end its
+    session. Switch to it after that time has passed and unlock it.
+    Check: no reminder appears. Water's line names the next one.
 
-Part 6, Private Space:
+Part 8, Private Space:
 
-21. Install the app in the Private Space, as in step 9 of part 1 of the
-    release checklist. Allow notifications and set a reminder for 10
-    minutes from now.
-22. Lock the Private Space. Wait until the time has passed.
-23. Check: nothing showed.
-24. Unlock the Private Space. Do not open the app.
-25. Check: the reminder shows now, late.
+37. Install Water preview in the Private Space, as in step 9 of part 1
+    of the release checklist. Set the next reminder for about two
+    minutes from now and allow notifications.
+38. Lock the Private Space. Wait until two minutes after the time.
+39. Check: nothing showed.
+40. Unlock the Private Space. Do not open Water. Check: no reminder
+    appears. Open Water: the line names the next one.
 
-Part 7, "Force stop" and notifications turned off:
+Part 9, "Force stop":
 
-26. Set a reminder for 10 minutes from now. On **App info**, tap
-    **Force stop**. Check: the reminder does not come. Open the app.
-    Check: it shows now, late.
-27. On **App info**, tap **Notifications** and turn the switch off.
-    Open the app. Check: it says that reminders will not appear, and
-    its button opens that same page.
+41. Start fresh. Allow notifications. Set the next reminder for about
+    two minutes from now.
+42. On **App info** of Water preview, tap **Force stop**. Wait until two
+    minutes after the time.
+43. Check: the reminder did not come. Open Water. Check: no reminder
+    appears, and the line names the next one.
 
 Tell Claude in a session what did not match. Claude records the result
-in this page, in [notifications.md](../architecture/notifications.md)
-and in the user page [reminders.md](../user/reminders.md).
+in this page, in [notifications.md](../architecture/notifications.md),
+in Water's [specification](../apps/water/spec.md) and in the user page
+[reminders.md](../user/reminders.md).
 
 ### Steps for the three devices: the app lock
 

@@ -18,6 +18,7 @@ import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.w3c.dom.Document
 import org.w3c.dom.Element
 
 /**
@@ -28,11 +29,14 @@ import org.w3c.dom.Element
  * - Rule 3: no use of Google Play services. This checks for the emoji font
  *   loader, which asks a system font provider for a font, and for any class
  *   under `com.google.android.gms` in the APK's dex files.
- * - Rule 4, and "no permissions" for every app so far: no permission is
- *   declared or requested.
+ * - Rule 4, and no permission an app is not allowed: an app requests only
+ *   the permissions on its own allow list ([ALLOWED_PERMISSIONS]), and no
+ *   app declares one ([permissionProblems]).
  * - ADR 0029: no class of the test fixtures of `core/crypto`. They hold a
  *   stand-in for the Android Keystore that keeps keys in memory, and are
- *   for tests only.
+ *   for tests only. Nor of the test fixtures of `core/notify`, which change
+ *   what Robolectric's Android holds of an app's alarms and notifications
+ *   (owner's decision in step 2.4).
  * - Android's own backup and device transfer are off (crypto-design.md,
  *   "Where keys are stored", point 1; MASVS-STORAGE-2). Read from the APK's
  *   compiled manifest and resources, as they ship ([backupProblems]).
@@ -41,9 +45,10 @@ import org.w3c.dom.Element
  *   network, and no call that loads or runs code from a file path
  *   ([shippedCodeProblems]).
  *
- * It runs every time an APK is assembled. Apps that are later allowed an
- * exception (Sync and the network permission, Grammar and native code) get
- * an explicit allow list here, decided in their ADR.
+ * It runs every time an APK is assembled. Apps that are allowed an
+ * exception get an explicit allow list here, decided in their ADR: Water
+ * the three permissions of core/notify (step 2.4); later Sync and the
+ * network permission, Grammar and native code.
  */
 abstract class CheckApkRulesTask : DefaultTask() {
     /** The folder AGP writes the variant's APK to. */
@@ -83,7 +88,8 @@ abstract class CheckApkRulesTask : DefaultTask() {
     @TaskAction
     fun check() {
         val problems = manifestProblems(mergedManifest.get().asFile) + nativeLibraryProblems() +
-            playServicesClassProblems() + cryptoTestFixtureClassProblems() + apkBackupProblems() +
+            playServicesClassProblems() + cryptoTestFixtureClassProblems() + notifyTestFixtureClassProblems() +
+            apkBackupProblems() +
             (if (shipped.get()) apkShippedCodeProblems() else emptyList())
         if (problems.isNotEmpty()) {
             throw GradleException(
@@ -95,9 +101,11 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 },
             )
         }
+        val allowed = ALLOWED_PERMISSIONS[appName.get()].orEmpty()
         report.get().asFile.writeText(
-            "No permissions, no native libraries, no emoji font loader, no Play services classes, " +
-                "no test fixtures of core/crypto. Android backup and device transfer are off. " +
+            (if (allowed.isEmpty()) "No permissions" else "No permissions but the allowed ones: ${allowed.sorted().joinToString()}") +
+                ", no native libraries, no emoji font loader, no Play services classes, " +
+                "no test fixtures of core/crypto or core/notify. Android backup and device transfer are off. " +
                 if (shipped.get()) {
                     "No WebView, no class loader that reads code, no call that loads or runs code from a file path.\n"
                 } else {
@@ -170,6 +178,19 @@ abstract class CheckApkRulesTask : DefaultTask() {
         failWithoutDex = false,
     )
 
+    /**
+     * No class under `app.shkriuss.core.notify.fixtures`, the package of the
+     * test fixtures of `core/notify`, in any dex file of the APK. They are
+     * for the unit tests of apps with reminders only. Found the same way as
+     * the fixtures of `core/crypto`. The owner asked for this rule in step
+     * 2.4, when the fixtures were added.
+     */
+    private fun notifyTestFixtureClassProblems(): List<String> = classProblems(
+        NOTIFY_TEST_FIXTURES_DESCRIPTOR,
+        "the test fixtures of core/notify are for tests only and never part of an app",
+        failWithoutDex = false,
+    )
+
     /** The classes under [descriptor] that the dex files of the APK name, each as a problem that cites [rule]. */
     private fun classProblems(descriptor: String, rule: String, failWithoutDex: Boolean): List<String> {
         val artifacts = builtArtifactsLoader.get().load(apkFolder.get())
@@ -205,14 +226,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
             setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
         }
         val document = factory.newDocumentBuilder().parse(manifest)
-        val problems = mutableListOf<String>()
-        for (tag in PERMISSION_TAGS) {
-            val nodes = document.getElementsByTagName(tag)
-            for (index in 0 until nodes.length) {
-                val name = (nodes.item(index) as Element).getAttributeNS(ANDROID_NAMESPACE, "name")
-                problems += "<$tag> $name in the manifest (rule 4: no permissions)"
-            }
-        }
+        val problems = permissionProblems(document, appName.get()).toMutableList()
         val metaData = document.getElementsByTagName("meta-data")
         for (index in 0 until metaData.length) {
             val name = (metaData.item(index) as Element).getAttributeNS(ANDROID_NAMESPACE, "name")
@@ -230,6 +244,9 @@ abstract class CheckApkRulesTask : DefaultTask() {
 
         /** How a dex file starts the name of every class of the test fixtures of `core/crypto`. */
         const val CRYPTO_TEST_FIXTURES_DESCRIPTOR = "Lapp/shkriuss/core/crypto/fixtures/"
+
+        /** How a dex file starts the name of every class of the test fixtures of `core/notify`. */
+        const val NOTIFY_TEST_FIXTURES_DESCRIPTOR = "Lapp/shkriuss/core/notify/fixtures/"
 
         /** A failing build names this many classes for each dex file, and counts the rest. */
         const val MOST_CLASSES_SHOWN = 20
@@ -502,6 +519,46 @@ abstract class CheckApkRulesTask : DefaultTask() {
         private fun isDottedNameByte(byte: Byte): Boolean {
             val char = byte.toInt().toChar()
             return char in 'a'..'z' || char in 'A'..'Z' || char in '0'..'9' || char == '.' || char == '$' || char == '_'
+        }
+
+        /**
+         * The permissions each app may request, by its module name, the same
+         * for every build type. The owner adds them, after the app's ADR and
+         * its entry in docs/security/permissions.md. An app that is not
+         * listed may request none.
+         */
+        val ALLOWED_PERMISSIONS: Map<String, Set<String>> = mapOf(
+            // The three of core/notify, for Water's reminders (ADR 0010, ADR 0030). Owner's request in step 2.4.
+            "water" to setOf(
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.USE_EXACT_ALARM",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
+            ),
+        )
+
+        /**
+         * Rule 4 for the merged manifest [document] of the app [app]: a
+         * `<uses-permission>` passes only if its name is on the app's allow
+         * list. Every other permission tag fails, whatever its name: an app
+         * declares no permission of its own, and asks for none through
+         * `<uses-permission-sdk-23>`.
+         */
+        fun permissionProblems(document: Document, app: String): List<String> {
+            val allowed = ALLOWED_PERMISSIONS[app].orEmpty()
+            val problems = mutableListOf<String>()
+            for (tag in PERMISSION_TAGS) {
+                val nodes = document.getElementsByTagName(tag)
+                for (index in 0 until nodes.length) {
+                    val name = (nodes.item(index) as Element).getAttributeNS(ANDROID_NAMESPACE, "name")
+                    if (tag == "uses-permission" && name in allowed) continue
+                    problems += if (allowed.isEmpty()) {
+                        "<$tag> $name in the manifest (rule 4: no permissions)"
+                    } else {
+                        "<$tag> $name in the manifest (rule 4: not on the allow list of $app)"
+                    }
+                }
+            }
+            return problems
         }
 
         const val ANDROID_NAMESPACE = "http://schemas.android.com/apk/res/android"

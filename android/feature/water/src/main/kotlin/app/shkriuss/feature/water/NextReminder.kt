@@ -23,13 +23,19 @@ data class ReminderFacts(
     val lastLater: LocalDateTime? = null,
     /** The time of the snooze that Later set, or null. */
     val snooze: LocalDateTime? = null,
+    /**
+     * The reminder Water set an alarm for that has not reached Water's
+     * handler yet, or null. While it is due by less than
+     * [NextReminder.GRACE_SECONDS], it is still the next reminder.
+     */
+    val pending: LocalDateTime? = null,
 )
 
 /**
  * The rule of the next reminder, as plain code
  * (docs/apps/water/spec.md, "When the next reminder comes"). Water keeps
- * one alarm at a time. Step 2.4 names it in its `AlarmSource` at the time
- * this gives, and calls the rule again after every change.
+ * one alarm at a time. `WaterReminders` names it at the time this gives,
+ * and Water calls the rule again after every change.
  *
  * 1. **The count** starts at the latest of these four, all of today:
  *    "From", the time of the latest drink, the time the last reminder was
@@ -45,6 +51,14 @@ data class ReminderFacts(
  * 5. Reminders off: no alarm.
  * 6. If "From" + 1 interval is after "Until", no reminder fits on any day:
  *    no alarm.
+ * 7. **A reminder that is due and not handled yet stays for one minute.**
+ *    Water set an alarm for it, and its time came less than a minute ago,
+ *    but the alarm has not reached Water's handler yet. If the rule still
+ *    gives it, it is still the next reminder. Without this, a sync in
+ *    those seconds would move the alarm on and the reminder would be lost:
+ *    when Android starts Water's process for the alarm, the start of the
+ *    app runs a sync before the alarm comes (the owner's decision in step
+ *    2.4).
  *
  * Times count in whole minutes. A press of Later at 12:22:40 counts as
  * 12:22, and its snooze is at 12:37.
@@ -53,18 +67,28 @@ object NextReminder {
     /** How long Later waits. It cannot be changed. */
     const val SNOOZE_MINUTES: Int = 15
 
+    /** How long a reminder that is due and not handled yet stays the next one (point 7). */
+    const val GRACE_SECONDS: Long = 60
+
     /**
      * The time of the next reminder after [now], or null for no alarm.
      * [facts] must be about the day of [now].
      */
     fun after(now: LocalDateTime, settings: WaterSettings, facts: ReminderFacts): LocalDateTime? {
         require(facts.day == now.toLocalDate()) { "The facts are about another day" }
+        val pending = facts.pending?.takeIf { it.toLocalDate() == facts.day && it <= now && now < it.plusSeconds(GRACE_SECONDS) }
+        // Just before its time the rule gave it. If it still does, nothing has answered it.
+        if (pending != null && afterMinute(minuteOf(pending) - 1, settings, facts) == pending) return pending
+        return afterMinute(minuteOf(now), settings, facts)
+    }
+
+    /** The rule of points 1 to 6, for a now in the minute [nowMinute] of the day of [facts]. */
+    private fun afterMinute(nowMinute: Int, settings: WaterSettings, facts: ReminderFacts): LocalDateTime? {
         if (!settings.remindersOn || !settings.reminderFits) return null
         val today = facts.day
         val tomorrow = firstOf(today.plusDays(1), settings)
         if (facts.goalMet) return tomorrow
 
-        val nowMinute = minuteOf(now)
         val drink = facts.latestDrinkMinute
         val shown = facts.lastShown?.takeIf { it.toLocalDate() == today }?.let(::minuteOf)
         val later = facts.lastLater?.takeIf { it.toLocalDate() == today }?.let(::minuteOf)

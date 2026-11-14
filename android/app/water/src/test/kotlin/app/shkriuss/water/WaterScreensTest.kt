@@ -1,8 +1,11 @@
 package app.shkriuss.water
 
+import android.Manifest
+import android.provider.Settings
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
@@ -20,6 +23,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.design.ShkSpacing
+import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.design.R as DesignR
 import app.shkriuss.feature.water.R
 import java.time.ZoneOffset
@@ -28,12 +32,14 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -395,6 +401,132 @@ class WaterScreensTest {
 
         compose.waitForText(words(R.string.water_until_too_early))
         assertEquals(8 * 60, settings().fromMinute)
+    }
+
+    // Reminders.
+
+    private fun notificationsAllowed(allowed: Boolean) = NotifyTestDevice(testAppContext()).allowNotifications(allowed)
+
+    private fun testAppContext() = RuntimeEnvironment.getApplication()
+
+    private fun openSettings() {
+        start()
+        compose.tap(R.string.water_settings)
+        compose.waitForText(words(R.string.water_version))
+    }
+
+    /** Android's own question was asked, for the notification permission. */
+    private fun androidWasAsked() = scenario.onActivity { activity ->
+        val asked = checkNotNull(shadowOf(activity).lastRequestedPermission) { "Android's question was not asked" }
+        assertEquals(listOf(Manifest.permission.POST_NOTIFICATIONS), asked.requestedPermissions.toList())
+    }
+
+    @Test
+    fun theSwitchTurnsRemindersOnAndTodayAndSettingsSayWhenTheNextOneComes() {
+        openSettings()
+        compose.onNode(hasText(words(R.string.water_remind_me)) and hasClickAction())
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.Off))
+
+        compose.tap(R.string.water_remind_me)
+
+        compose.waitForText("Next reminder at 15:00")
+        assertTrue(settings().remindersOn)
+        compose.onNode(hasText(words(R.string.water_remind_me)) and hasClickAction())
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On))
+        compose.tap(R.string.water_today)
+        compose.waitForText("Next reminder at 15:00")
+    }
+
+    @Test
+    fun turningRemindersOffTakesTheLineAway() {
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        openSettings()
+        compose.waitForText("Next reminder at 15:00")
+
+        compose.tap(R.string.water_remind_me)
+
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Next reminder at 15:00")).fetchSemanticsNodes().isEmpty() }
+        assertFalse(settings().remindersOn)
+    }
+
+    @Test
+    fun beforeAndroidAskedTheSwitchExplainsFirstAndNotNowKeepsRemindersOn() {
+        notificationsAllowed(false)
+        openSettings()
+
+        compose.tap(R.string.water_remind_me)
+        compose.waitForText(words(R.string.water_question_text))
+        compose.waitForText(words(R.string.water_question_title))
+        compose.tap(R.string.water_not_now)
+
+        compose.waitForText(words(R.string.water_reminder_not_asked))
+        assertTrue(settings().remindersOn)
+        scenario.onActivity { assertNull("Android was not asked", shadowOf(it).lastRequestedPermission) }
+    }
+
+    @Test
+    fun allowOnTodayStartsTheQuestionAndAYesNamesTheNextReminder() {
+        notificationsAllowed(false)
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        start()
+        compose.waitForText(words(R.string.water_reminder_not_asked))
+
+        compose.tap(R.string.water_allow)
+        compose.waitForText(words(R.string.water_question_text))
+        // The user says yes in Android's question: Android grants the permission and allows notifications.
+        notificationsAllowed(true)
+        compose.tap(R.string.water_continue)
+
+        compose.waitForText("Next reminder at 15:00")
+    }
+
+    @Test
+    fun aNoMakesTheLineSayRemindersAreSilentAndWaterNeverAsksAgain() {
+        notificationsAllowed(false)
+        openSettings()
+        compose.tap(R.string.water_remind_me)
+
+        compose.tap(R.string.water_continue)
+
+        androidWasAsked()
+        // Robolectric shows no question: the request comes back without a yes, as a no does.
+        compose.waitForText(words(R.string.water_reminder_denied))
+        compose.waitForText(words(R.string.water_open_settings))
+        // Off and on again: no question. The switch shows the new value once the database has it, so wait for that first.
+        compose.tap(R.string.water_remind_me)
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText(words(R.string.water_reminder_denied))).fetchSemanticsNodes().isEmpty() }
+        compose.tap(R.string.water_remind_me)
+        compose.waitForText(words(R.string.water_reminder_denied))
+        assertTrue(compose.onAllNodes(hasText(words(R.string.water_question_text))).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun openSettingsOpensAndroidsNotificationPageForWater() {
+        notificationsAllowed(false)
+        testApp.test.notify.permissionAnswered()
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        start()
+        compose.waitForText(words(R.string.water_reminder_denied))
+
+        compose.tap(R.string.water_open_settings)
+
+        val opened = checkNotNull(shadowOf(testAppContext()).nextStartedActivity)
+        assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, opened.action)
+        assertEquals(testAppContext().packageName, opened.getStringExtra(Settings.EXTRA_APP_PACKAGE))
+    }
+
+    @Test
+    fun theReminderLineIsReadAfterTheQuickAmountsAndItsButtonAfterIt() {
+        notificationsAllowed(false)
+        seed { changeSettings { it.copy(remindersOn = true) } }
+        start()
+        compose.waitForText(words(R.string.water_reminder_not_asked))
+
+        val other = compose.onNode(hasText(words(R.string.water_other_amount)) and hasClickAction()).fetchSemanticsNode().boundsInRoot
+        val line = compose.onNode(hasText(words(R.string.water_reminder_not_asked))).fetchSemanticsNode().boundsInRoot
+        val allow = compose.onNode(hasText(words(R.string.water_allow)) and hasClickAction())
+        assertTrue("the line is under the quick amounts", line.top >= other.bottom)
+        assertTrue("its button is under the line", allow.fetchSemanticsNode().boundsInRoot.top >= line.bottom)
     }
 
     private fun openSetting(name: Int) {

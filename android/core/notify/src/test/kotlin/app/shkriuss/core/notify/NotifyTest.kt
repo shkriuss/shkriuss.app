@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Looper
 import android.provider.Settings
 import app.shkriuss.core.testing.TestClock
@@ -15,6 +16,7 @@ import java.time.LocalTime
 import java.util.concurrent.Executor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -33,8 +35,9 @@ import org.robolectric.annotation.Config
  * time zone.
  *
  * The alarms go to Android's `AlarmManager` and come back as broadcasts
- * to the receivers of this module's manifest. The clock is the test's.
- * It starts at 2026-01-01T00:00:00Z.
+ * to the receivers of this module's manifest. So do the presses of the
+ * buttons on a notification (ADR 0034). The clock is the test's. It
+ * starts at 2026-01-01T00:00:00Z.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestApp::class)
@@ -485,5 +488,330 @@ class NotifyTest {
         context.notify.hideShownText()
 
         assertEquals("Water the plants", shownBy.getNotification("one", 0).extras.getString(Notification.EXTRA_TITLE))
+    }
+
+    // Buttons on a notification (ADR 0034).
+
+    /** Every press the app's button handler got, in order. */
+    private val presses = mutableListOf<ButtonPress>()
+
+    /** What the app's button handler does, as an app would: it takes the press and removes the notification. */
+    private var onPress: (ButtonPress, Notifications) -> Unit = { press, notifications ->
+        presses += press
+        notifications.cancel(press.key)
+    }
+
+    /** The app class of an app with buttons: it passes a button handler. */
+    private fun newNotifyWithButtons() = Notify(
+        context,
+        listOf(reminders, summaries),
+        app,
+        handler,
+        clock,
+        hidesText = { hidesText() },
+        worker = Executor { it.run() },
+        buttons = { press, notifications -> onPress(press, notifications) },
+    )
+
+    private val drank = ShkNotificationButton("Drank 250 ml", "drank", 250)
+    private val later = ShkNotificationButton("Later", "later")
+
+    private fun withButtons(buttons: List<ShkNotificationButton> = listOf(drank, later), endsAt: Long? = null) =
+        ShkNotification("next", reminders, "Water the plants", "In the kitchen", android.R.drawable.ic_dialog_info, open, start + HOUR, buttons, endsAt)
+
+    private fun actionsOf(shown: Notification): List<Notification.Action> = shown.actions?.toList().orEmpty()
+
+    /** The user presses the button [index] of the notification [key]: Android sends its pending intent. */
+    private fun press(key: String, index: Int) {
+        actionsOf(shownBy.getNotification(key, 0))[index].actionIntent.send()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+
+    @Test
+    fun aNotificationShowsItsButtonsInOrderAndEachAsksForTheUnlockFirst() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+
+        context.notify.notifications.show(withButtons())
+
+        val actions = actionsOf(shownBy.getNotification("next", 0))
+        assertEquals(listOf("Drank 250 ml", "Later"), actions.map { it.title.toString() })
+        actions.forEach { assertTrue(it.title.toString(), it.isAuthenticationRequired) }
+    }
+
+    @Test
+    fun aButtonIsABroadcastOnlyToThisAppThatCarriesTheKeyTheActionTheTimeAndTheValueAndNoText() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        context.notify.notifications.show(withButtons())
+        val actions = actionsOf(shownBy.getNotification("next", 0))
+
+        val first = shadowOf(actions[0].actionIntent)
+        assertTrue(first.isBroadcast)
+        assertTrue(first.isImmutable)
+        val sent = first.savedIntent
+        assertEquals(ComponentName(context, ButtonReceiver::class.java), sent.component)
+        assertEquals(ButtonReceiver.ACTION_BUTTON, sent.action)
+        assertEquals("next/drank", sent.identifier)
+        val extras = checkNotNull(sent.extras)
+        assertEquals(
+            setOf(ButtonReceiver.EXTRA_KEY, ButtonReceiver.EXTRA_ACTION, ButtonReceiver.EXTRA_AT, ButtonReceiver.EXTRA_VALUE),
+            extras.keySet(),
+        )
+        assertEquals("next", extras.getString(ButtonReceiver.EXTRA_KEY))
+        assertEquals("drank", extras.getString(ButtonReceiver.EXTRA_ACTION))
+        assertEquals(start + HOUR, extras.getLong(ButtonReceiver.EXTRA_AT))
+        assertEquals(250L, extras.getLong(ButtonReceiver.EXTRA_VALUE))
+        // The two buttons are two presses.
+        assertNotEquals(actions[0].actionIntent, actions[1].actionIntent)
+        assertEquals("next/later", shadowOf(actions[1].actionIntent).savedIntent.identifier)
+    }
+
+    @Test
+    fun aPressReachesTheAppsButtonHandlerOnce() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        context.notify.notifications.show(withButtons())
+
+        press("next", 0)
+
+        assertEquals(listOf(ButtonPress("next", "drank", start + HOUR, 250)), presses)
+        assertNull("the app removed it", shownBy.getNotification("next", 0))
+    }
+
+    @Test
+    fun thePressOfTheSecondButtonCarriesItsOwnAction() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        context.notify.notifications.show(withButtons())
+
+        press("next", 1)
+
+        assertEquals(listOf(ButtonPress("next", "later", start + HOUR, 0)), presses)
+    }
+
+    @Test
+    fun aPressThatFailsChangesNothingMoreAndDoesNotStopTheApp() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        onPress = { _, _ -> throw IllegalStateException("the record cannot be written") }
+        context.notify.notifications.show(withButtons())
+
+        press("next", 0)
+
+        assertEquals("the notification stays, so the user can open the app", 1, shownBy.size())
+    }
+
+    @Test
+    fun aPressInAnAppWithoutAButtonHandlerOnlyRemovesTheNotification() {
+        context.notify.start()
+        context.notify.notifications.show(withButtons(buttons = emptyList()))
+
+        context.sendBroadcast(ButtonReceiver.intentFor(context, ButtonPress("next", "drank", start + HOUR, 250)))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertNull(shownBy.getNotification("next", 0))
+    }
+
+    @Test
+    fun aBroadcastThatIsNoPressIsIgnored() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+
+        ButtonReceiver().onReceive(context, Intent("org.example.SOMETHING"))
+        ButtonReceiver().onReceive(context, Intent(ButtonReceiver.ACTION_BUTTON))
+        ButtonReceiver().onReceive(context, Intent(ButtonReceiver.ACTION_BUTTON).putExtra(ButtonReceiver.EXTRA_KEY, "next"))
+
+        assertEquals(emptyList<ButtonPress>(), presses)
+    }
+
+    @Test
+    fun buttonsNeedAButtonHandler() {
+        context.notify.start()
+
+        assertThrows(IllegalArgumentException::class.java) { context.notify.notifications.show(withButtons()) }
+        assertEquals(0, shownBy.size())
+    }
+
+    @Test
+    fun aNotificationHasAtMostThreeButtonsEachWithItsOwnAction() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        val notifications = context.notify.notifications
+        val four = List(4) { ShkNotificationButton("Button $it", "b$it") }
+
+        assertThrows(IllegalArgumentException::class.java) { notifications.show(withButtons(buttons = four)) }
+        assertThrows(IllegalArgumentException::class.java) { notifications.show(withButtons(buttons = listOf(drank, drank))) }
+        notifications.show(withButtons(buttons = four.take(3)))
+        assertEquals(3, actionsOf(shownBy.getNotification("next", 0)).size)
+    }
+
+    @Test
+    fun aButtonsActionIsAFixedNameAndNeverText() {
+        listOf("", "Drank 250 ml", "a".repeat(33), "drank/later").forEach { action ->
+            assertThrows(action, IllegalArgumentException::class.java) { ShkNotificationButton("Label", action) }
+        }
+        ShkNotificationButton("Label", "drank.later_2-b")
+    }
+
+    @Test
+    fun whileTheAppLockHidesTheTextANotificationHasNoButtons() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        hidesText = { true }
+
+        context.notify.notifications.show(withButtons())
+
+        val shown = shownBy.getNotification("next", 0)
+        assertHidden(shown, context.getString(android.R.string.ok))
+        assertEquals(emptyList<Notification.Action>(), actionsOf(shown))
+    }
+
+    @Test
+    fun whenTheStateOfTheAppLockCannotBeReadANotificationHasNoButtons() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        hidesText = { throw IllegalStateException("The keyset file cannot be read now") }
+
+        context.notify.notifications.show(withButtons())
+
+        assertEquals(emptyList<Notification.Action>(), actionsOf(shownBy.getNotification("next", 0)))
+    }
+
+    @Test
+    fun hideShownTextTakesTheButtonsAwayWithTheText() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        context.notify.notifications.show(withButtons())
+        assertEquals(2, actionsOf(shownBy.getNotification("next", 0)).size)
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        val shown = shownBy.getNotification("next", 0)
+        assertHidden(shown, context.getString(android.R.string.ok))
+        assertEquals(emptyList<Notification.Action>(), actionsOf(shown))
+    }
+
+    // The end of a notification.
+
+    @Test
+    fun aNotificationWithAnEndIsRemovedByAndroidAtThatMoment() {
+        context.notify.start()
+
+        context.notify.notifications.show(withButtons(buttons = emptyList(), endsAt = start + 10 * HOUR))
+
+        assertEquals(10 * HOUR, shownBy.getNotification("next", 0).timeoutAfter)
+    }
+
+    @Test
+    fun aNotificationWithoutAnEndStaysUntilItIsRemoved() {
+        context.notify.start()
+
+        context.notify.notifications.show(withButtons(buttons = emptyList()))
+
+        assertEquals(0L, shownBy.getNotification("next", 0).timeoutAfter)
+    }
+
+    @Test
+    fun hideShownTextKeepsTheSameEnd() {
+        context.notify.start()
+        context.notify.notifications.show(withButtons(buttons = emptyList(), endsAt = start + 10 * HOUR))
+
+        clock.advanceBy(HOUR)
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        assertEquals("the end is counted from the moment it is posted again", 9 * HOUR, shownBy.getNotification("next", 0).timeoutAfter)
+    }
+
+    @Test
+    fun aNotificationWhoseEndHasPassedIsNotShownAndRemovesTheOldOne() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(withButtons(buttons = emptyList()))
+
+        notifications.show(withButtons(buttons = emptyList(), endsAt = start))
+
+        assertEquals(0, shownBy.size())
+    }
+
+    // A handler that fails.
+
+    /** Makes the screen [component] the app's start screen, as an app's launcher activity is. */
+    private fun aStartScreen(component: ComponentName) {
+        val packages = shadowOf(context.packageManager)
+        packages.addActivityIfNotPresent(component)
+        packages.addIntentFilterForActivity(
+            component,
+            IntentFilter(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) },
+        )
+    }
+
+    @Test
+    fun whenTheHandlerFailsANoticeShowsInPlaceOfTheReminderAndTheNextOneStillComes() {
+        val startScreen = ComponentName(context, "app.shkriuss.core.notify.StartScreen")
+        aStartScreen(startScreen)
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        app.reminders += TestReminder.Once(AlarmId("b"), start + 2 * HOUR)
+        context.notify.start()
+        app.failure = IllegalStateException("the record cannot be read")
+
+        advanceBy(HOUR)
+
+        val shown = shownBy.getNotification("a", 0)
+        // The first channel's name, the fixed text, and nothing of the app's own.
+        assertEquals(context.getString(android.R.string.ok), shown.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        assertEquals(context.getString(R.string.notify_reminder_failed), shown.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        textsOf(shown).forEach { text -> assertFalse("user content in $text", "plants" in text || "kitchen" in text) }
+        assertEquals("reminders", shown.channelId)
+        assertEquals(start + HOUR, shown.`when`)
+        assertEquals(emptyList<Notification.Action>(), actionsOf(shown))
+        assertEquals(Notification.VISIBILITY_PRIVATE, shown.visibility)
+        val tap = shadowOf(shown.contentIntent)
+        assertTrue(tap.isActivity)
+        assertTrue(tap.isImmutable)
+        assertEquals(startScreen, tap.savedIntent.component)
+        // The next one is registered, and comes.
+        assertEquals(mapOf<String?, Long>("b" to start + 2 * HOUR), waiting())
+        app.failure = null
+        advanceBy(HOUR)
+        assertEquals("Water the plants", shownBy.getNotification("b", 0).extras.getString(Notification.EXTRA_TITLE))
+    }
+
+    @Test
+    fun theNextNotificationOfTheSameAlarmReplacesTheNotice() {
+        app.reminders += TestReminder.Daily(a, LocalTime.of(9, 0))
+        context.notify.start()
+        app.failure = IllegalStateException("the record cannot be read")
+        advanceBy(9 * HOUR)
+        assertEquals(context.getString(R.string.notify_reminder_failed), shownBy.getNotification("a", 0).extras.getString(Notification.EXTRA_TEXT))
+
+        // The app works again. Its next reminder for "a" has the same key.
+        app.failure = null
+        context.notify.notifications.show(
+            ShkNotification("a", reminders, "Water the plants", "In the kitchen", android.R.drawable.ic_dialog_info, open, start + 9 * HOUR),
+        )
+
+        assertEquals(1, shownBy.size())
+        assertEquals("Water the plants", shownBy.getNotification("a", 0).extras.getString(Notification.EXTRA_TITLE))
+    }
+
+    @Test
+    fun aNoticeWithoutAStartScreenHasNoTapTarget() {
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        context.notify.start()
+        app.failure = IllegalStateException("the record cannot be read")
+
+        advanceBy(HOUR)
+
+        assertNull(shownBy.getNotification("a", 0).contentIntent)
+    }
+
+    @Test
+    fun anAppNeedsAtLeastOneChannel() {
+        assertThrows(IllegalArgumentException::class.java) {
+            Notify(context, emptyList(), app, handler, clock, { false }, FakeAlarmScheduler(), Executor { it.run() })
+        }
     }
 }

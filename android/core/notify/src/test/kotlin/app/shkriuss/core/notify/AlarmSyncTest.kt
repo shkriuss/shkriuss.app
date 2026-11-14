@@ -28,6 +28,9 @@ class AlarmSyncTest {
     private val app = TestReminders(clock)
     private lateinit var sync: AlarmSync
 
+    /** Every alarm whose handler failed, for which the user was shown the notice. */
+    private val failures = mutableListOf<Alarm>()
+
     private val start = TestClock.START_MILLIS
     private val a = AlarmId("a")
     private val b = AlarmId("b")
@@ -40,7 +43,9 @@ class AlarmSyncTest {
     /** What a new start of the app builds: the same file, nothing kept in memory. */
     private fun newSync(): AlarmSync {
         val context = RuntimeEnvironment.getApplication()
-        return AlarmSync(app, app, Notifications(context, hidesText = { false }), android, AlarmRegistry(context.notifyStore()), clock)
+        return AlarmSync(app, app, Notifications(context, hidesText = { false }, clock), android, AlarmRegistry(context.notifyStore()), clock) {
+            failures += it
+        }
     }
 
     /** The app changed its reminders and says so. */
@@ -326,12 +331,44 @@ class AlarmSyncTest {
         clock.advanceBy(HOUR)
         app.failure = IllegalStateException("the record cannot be read")
 
-        assertThrows(IllegalStateException::class.java) { android.fireDue(clock, sync::fired) }
+        android.fireDue(clock, sync::fired)
 
         // The app starts again. The alarm is still named, and is done.
         appStarts()
         android.fireDue(clock, sync::fired)
         assertEquals(1, app.handled.size)
+        assertEquals(listOf(Alarm(a, start + HOUR)), failures)
+    }
+
+    @Test
+    fun whenTheHandlerFailsTheUserIsToldAndTheAlarmsAreRegisteredAgain() {
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        app.reminders += TestReminder.Once(b, start + 2 * HOUR)
+        appChanged()
+        app.failure = IllegalStateException("the record cannot be read")
+        val askedBefore = app.asked
+
+        // The failure does not leave fired(): the sync after it runs.
+        advanceBy(HOUR)
+
+        assertEquals(listOf(Alarm(a, start + HOUR)), failures)
+        assertEquals(askedBefore + 1, app.asked)
+        assertEquals(mapOf(b to start + 2 * HOUR), android.waiting)
+
+        app.failure = null
+        advanceBy(HOUR)
+        assertEquals(listOf(Alarm(a, start + HOUR), Alarm(b, start + 2 * HOUR)), app.handled)
+        assertEquals(1, failures.size)
+    }
+
+    @Test
+    fun aHandlerThatWorksShowsNoNotice() {
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        appChanged()
+
+        advanceBy(HOUR)
+
+        assertEquals(emptyList<Alarm>(), failures)
     }
 
     @Test

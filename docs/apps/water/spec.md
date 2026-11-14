@@ -23,6 +23,14 @@ what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
   ([Decided by the owner](#decided-by-the-owner)): no Navigation 3, which
   parts of Settings wait for steps 2.4 and 2.5, four optional additions to
   `core/design`, and the buttons of the dialogs of Settings.
+- Step 2.4 built the reminders on 2026-11-14: `WaterReminders`, the
+  phone-only `ReminderBook` and `RemindersViewModel` in
+  `android/feature/water`, the buttons, the third receiver, the timeout
+  and the notice of a failed handler in `core/notify`, and Water's allow
+  list of three permissions in the APK rules check. The owner decided the
+  open items 2 and 3 of this page, how the reminder line of Settings and
+  Today reads in two cases, and the title of the dialog before Android's
+  question ([Decided by the owner](#decided-by-the-owner)).
 - If this page is wrong or silent, the fix is a change to this page
   first, agreed with the owner ("If the spec is wrong or silent, stop and
   ask" in the prompt of steps 2.2 to 2.5).
@@ -57,7 +65,7 @@ your phone, with no account and no network.
 | Units | Millilitres or US fluid ounces. Stored as whole millilitres. |
 | Reminders | Every 30 minutes to 3 hours, between "From" and "Until", counted from your last drink. None once the goal is met. One alarm at a time. |
 | Notification buttons | **Drank** (the first quick amount) and **Later** (15 minutes) |
-| Missed reminders | Skipped. Never shown late. |
+| Missed reminders | Skipped. Never shown more than a minute late. |
 | First start | Straight to Today. No setup. |
 | Recovery key | Only when first needed: a backup, a restore, the app lock |
 | Backup | Data version 1. Three record types. No files. |
@@ -152,6 +160,12 @@ The reminder line:
 - The states are the ones of
   [notifications.md](../../architecture/notifications.md#the-permission-and-the-states).
   The screen asks for the state each time it comes to the front.
+- The three lines about notifications come before the three about the
+  next reminder: while reminders are silent, "Next reminder at 14:30"
+  would hide it.
+- When no reminder fits between "From" and "Until" on any day, the line
+  says "No more reminders today." (owner's decision in step 2.4).
+  Settings says why ([Settings](#settings-screen)).
 - `NotAsked` can happen after a restore: the reminders come back on from
   the backup, and Android has not asked yet on this phone.
 
@@ -281,7 +295,10 @@ otherwise below.
 
 - Under these items, while reminders are on: the same line and button as
   the [reminder line of Today](#today), for the four states of the
-  notification permission.
+  notification permission. When notifications are allowed (`Ready`), it
+  is the line about the next reminder, such as "Next reminder at 14:30",
+  so a change of "Every", "From" or "Until" shows at once what it does
+  (owner's decision in step 2.4).
 - "Every", "From" and "Until" can be changed while reminders are off.
 - "Until" must be at least 30 minutes after "From". A change of "Until",
   or a change of "From", that would leave less than 30 minutes between
@@ -339,7 +356,7 @@ button that does nothing:
 |---|---|
 | Drinking: Daily goal, Unit, Quick amounts | 2.3 |
 | Reminders: Every, From, Until, and the line when no reminder fits | 2.3 |
-| Reminders: the switch "Remind me to drink" and the line about notifications | 2.4 |
+| Reminders: the switch "Remind me to drink" and the line about notifications | 2.4. Built. |
 | Backup, and Security | 2.5 |
 | About: Version | 2.3. It shows the version name of the installed app, such as `1.0.0-alpha.1`. |
 | About: Licences | 2.5 |
@@ -349,9 +366,10 @@ button that does nothing:
 When you turn on "Remind me to drink", or tap **Allow** on the reminder
 line, and Android has not asked yet (`NotAsked`):
 
-1. A dialog explains: "Water reminds you with a notification. Android
-   asks next whether Water may show notifications." Buttons:
-   **Continue** and **Not now**.
+1. A dialog, "Allow notifications", explains: "Water reminds you with a
+   notification. Android asks next whether Water may show
+   notifications." Buttons: **Continue** and **Not now**. The owner chose
+   the title in step 2.4.
 2. **Continue** starts Android's own question for
    `Notify.PERMISSION`. When the answer is in, Water calls
    `notify.permissionAnswered()`.
@@ -514,7 +532,7 @@ record, not in a backup and will not be synced
 
 | What | Where |
 |---|---|
-| The bookkeeping of reminders: when the last reminder was shown, when **Later** was last pressed, the time of a snooze, and which reminder is showing now | One small file of Android's preferences, `app.shkriuss.water`, in Water's private storage. Times only. No amount and no text. |
+| The bookkeeping of reminders: when the last reminder was shown, when **Later** was last pressed, the time of a snooze, which reminder is showing now, the time of the alarm Water set last, and the time of the last alarm that reached Water's handler (the last two since step 2.4, for [rule 7](#when-the-next-reminder-comes)) | One small file of Android's preferences, `app.shkriuss.water`, in Water's private storage. Times only. No amount and no text. |
 | The alarms that are registered | `core/notify`'s own file ([notifications.md](../../architecture/notifications.md#what-goes-where)) |
 | The three settings of the app lock | `core/security`'s own file ([ADR 0032](../../adr/0032-app-lock-settings-in-android-preferences.md)) |
 | Keys | `core/crypto` ([crypto-design.md](../../security/crypto-design.md#where-keys-are-stored)) |
@@ -612,6 +630,20 @@ The rule:
 5. Reminders off: no alarm.
 6. If "From" + 1 interval is after "Until", no reminder fits on any
    day: no alarm. Settings says so.
+7. **A reminder that is due and has not reached the handler stays for
+   one minute.** Water set its alarm, its time came less than a minute
+   ago, and the alarm has not reached Water's handler yet. While the
+   rule still gives it (nothing answered it), it is still the next
+   reminder, and the alarm stays. A reminder Water set no alarm for never
+   comes this way. The owner decided this in step 2.4 ([Open](#open),
+   item 3).
+   - Why: when Android starts Water's process for an alarm, the start of
+     the app moves the alarms before the alarm reaches the handler. So
+     does any change in those seconds. Without this point, the rule would
+     already give the next time, and the reminder would be lost. Without
+     a running process, that is the usual case.
+   - So a reminder can come up to one minute late, for example right
+     after an unlock.
 
 "The time of your latest drink" is the latest `minuteOfDay` among
 today's drinks that are not deleted, as you entered it. A reminder
@@ -633,7 +665,9 @@ Each case, with reminder hours from 08:00 until 22:00 and every hour:
 | The next time is after "Until" | None today. Tomorrow at "From" + 1 interval. | Last drink at 21:30: next tomorrow at 09:00 |
 | The goal is met | None today. Tomorrow at "From" + 1 interval. The shown reminder is removed. | |
 | A drink is deleted or changed, and the goal is no longer met | The rule again, from now | |
-| A restart of the phone | Nothing before the first unlock ([ADR 0010](../../adr/0010-exact-alarms-and-reminder-storage.md)). After the unlock, reminders whose time passed are skipped, and so is a snooze whose time passed. The next one is the first "the count + n intervals" after the unlock. | Last reminder at 10:00, phone off from 10:30 to 12:20: no reminder at 11:00 or 12:00, next at 13:00 |
+| A restart of the phone | Nothing before the first unlock ([ADR 0010](../../adr/0010-exact-alarms-and-reminder-storage.md)). After the unlock, reminders whose time passed more than a minute ago are skipped, and so is such a snooze ([rule 7](#when-the-next-reminder-comes)). The next one is the first "the count + n intervals" after the unlock. | Last reminder at 10:00, phone off from 10:30 to 12:20: no reminder at 11:00 or 12:00, next at 13:00 |
+| The alarm's time comes while Water starts, or while something changes | The reminder still comes, if the change does not answer it ([rule 7](#when-the-next-reminder-comes)) | Alarm for 11:20. Android starts Water for it at 11:20:01: the reminder shows |
+| The alarm reaches the handler more than a minute late | Skipped, as a missed reminder. 1 interval after it. | Alarm for 11:20 comes at 11:21:05: no reminder, next at 12:20 |
 | Water was stopped with **Force stop** | The same as a restart, from the moment Water is opened again | |
 | Reminders turned on, or "Every", "From" or "Until" changed | The rule again, from now | Turned on at 14:10, last drink at 13:50: next at 14:50 |
 | The time zone or the clock changed | The rule again, in the new local time | |
@@ -649,10 +683,14 @@ does not move the count.
 2. Text: today's total and goal, in your unit: "1,250 of 2,000 ml today".
 3. Two buttons: **Drank 250 ml** and **Later**
    ([Buttons](#buttons-on-a-reminder)).
-4. A tap opens Water on Today.
+4. A tap opens Water on Today. The screen starts anew, so it is on
+   Today even when Water was open on another destination; an open sheet
+   or an open day of History closes.
 5. One reminder at a time. A new one replaces the old one.
 6. The reminder is removed when:
-   - a drink is logged anywhere,
+   - a drink is logged anywhere: any new drink, on any day, at any time.
+     A change, a delete or an Undo removes it only when the goal is then
+     met,
    - reminders are turned off,
    - the goal is met,
    - midnight comes. Android's notification timeout removes it, so
@@ -710,7 +748,9 @@ Rules for both:
    which need no prompt, and the phone must be unlocked
    ([crypto-design.md](../../security/crypto-design.md#what-works-while-an-app-is-locked)).
 4. **Each button works once**, and only while its reminder is the one
-   showing. A press on an older reminder only removes it.
+   showing. A press on an older reminder only removes it. It never
+   removes a newer one: an older reminder that is still on screen has the
+   same key, so the newer one has replaced it already.
 5. **No undo in the notification.** A drink logged with **Drank** is an
    ordinary drink. It is at the top of Today's list at once. To undo it:
    1. Open Water. Today shows the drink at the top, with its time.
@@ -727,13 +767,16 @@ The owner decided: a missed reminder is skipped, never shown late.
 
 1. A reminder whose time passed while the phone was off, before the
    first unlock after a restart, while Water was force-stopped, or while
-   its profile or Private Space was stopped, is not shown later.
+   its profile or Private Space was stopped, is not shown later. Only one
+   whose time passed less than a minute before the phone is back still
+   comes ([rule 7](#when-the-next-reminder-comes)).
 2. The next reminder comes at the time the rule gives after the phone
    is back ([the table](#when-the-next-reminder-comes)).
 3. So right after you unlock the phone, no old reminder appears.
 
-What happens in the seconds when an alarm is due and Water moves the
-alarm at the same moment is [open](#open), for step 2.4.
+An alarm that is due while Water moves its alarm, in the same seconds,
+is not missed: it stays for one minute ([rule 7](#when-the-next-reminder-comes),
+owner's decision in step 2.4).
 
 ### How Water uses `core/notify`
 
@@ -744,24 +787,41 @@ says:
    channel `drink-reminders`, an `AlarmSource`, an `AlarmHandler`,
    `Clock.System`, and `hidesText = appLock::hidesNotificationText`.
 2. **`AlarmSource`**: names `next-drink` at the time of
-   [the rule](#when-the-next-reminder-comes), or nothing. It never names
-   a time in the past.
+   [the rule](#when-the-next-reminder-comes), or nothing, and writes that
+   time into the phone-only file. It never names a time in the past,
+   except a reminder that is due and has not reached the handler yet, for
+   one minute ([rule 7](#when-the-next-reminder-comes)).
 3. **`AlarmHandler`**, when `next-drink` fires at its time T:
-   1. If reminders are off, or today's goal is met, or T is outside
-      today's reminder hours: it shows nothing.
-   2. Otherwise it shows the reminder, and writes into the phone-only
-      file: last reminder shown at T, the reminder showing now is T, no
-      snooze.
-   3. Doing it twice gives the same result: the same notification key,
-      the same values.
+   1. First it writes into the phone-only file: the last alarm that
+      reached the handler is T. So if anything after this fails, the
+      rule never names T again, and the next reminder still comes.
+   2. If the rule no longer gives T, it shows nothing. That is the case
+      when reminders are off, today's goal is met, T is outside today's
+      reminder hours, something answered the reminder in the same
+      moment, or the alarm came more than a minute late.
+   3. Otherwise it writes: last reminder shown at T, the reminder showing
+      now is T, no snooze. Then it shows the reminder.
+   4. Doing it twice gives the same result: the second time the rule no
+      longer gives T, and the reminder already shows.
 4. Water calls `notify.sync()` after every change that can move the
    alarm:
    - a drink added, changed, deleted or brought back,
    - a goal or setting changed,
    - a button pressed,
    - a restore.
-5. What the user sees when the handler fails is [open](#open), for
-   step 2.4.
+5. **When the handler fails**, `core/notify` shows a notice in place of
+   the reminder: "Drink reminders" and "A reminder could not be shown.
+   Open the app to see it.", with no buttons and no numbers. A tap opens
+   Water. The next reminder still comes, and replaces the notice. The
+   owner decided this in step 2.4, for every app
+   ([notifications.md](../../architecture/notifications.md#how-alarms-are-kept-right)).
+6. It is all in `WaterReminders`, in `android/feature/water`. The app
+   class passes it to `Notify` as the `AlarmSource`, the `AlarmHandler`
+   and the `ButtonHandler`. The repository calls it after every write
+   that changed something. It removes a reminder that is answered, and
+   calls `notify.sync()`. The handler, a press and that call take turns
+   on one lock, so a drink logged in the very moment a reminder is due
+   never leaves that reminder on screen.
 
 The limits of Android (after a restart, Private Space, other profiles,
 force stop) are the ones in [reminders.md](../../user/reminders.md).
@@ -1022,7 +1082,9 @@ off do not matter for Water.
    - the screen-off receiver of the app lock, registered at runtime.
 6. Steps 2.4 and 2.5 list all of this under Water in
    [permissions.md](../../security/permissions.md) and add Water's allow
-   list to the APK rules check.
+   list to the APK rules check. Step 2.4 added the list with the three
+   permissions of `core/notify`, and the three receivers. Step 2.5 adds
+   the two of `core/security`.
 
 ## TalkBack and accessibility
 
@@ -1099,9 +1161,10 @@ Water needs these. Each is built in the step named, not on this page.
 | `core/design` | `ShkProgressBar`, a progress bar with a value from 0 to 1. Features cannot draw Material 3's own. With its page in Catalog, its screenshots and its tests. Built. | 2.3 |
 | `core/design` | Four optional additions, each with a default that leaves every existing use as it was, a sample in Catalog and tests: a dialog button that keeps the dialog open (`ShkDialogAction.closesDialog`), a time refused in the time picker with its reason (`ShkTimePicker`'s `refuse`), a unit after the text of a field (`ShkTextField`'s `suffix`), and an icon at the end of a list row (`ShkListItem`'s `trailingIcon`). Built. | 2.3 |
 | `core/testing` | The check that every sheet and dialog of an app is behind the app lock: an app class whose app lock is on and open (`AppLockOnForTests`), and `AppLockCheck.checkLockedNow` ([security-screens.md](../../architecture/security-screens.md#every-screen-is-behind-the-gate)). Built. | 2.3 |
-| `core/notify` | Buttons on a notification: a third receiver, not exported, the rules of [ADR 0034](../../adr/0034-notification-buttons.md), no buttons in the hidden form, and a timeout for a notification. `ManifestTest` and [permissions.md](../../security/permissions.md) follow. | 2.4 |
+| `core/notify` | Buttons on a notification: a third receiver, not exported, the rules of [ADR 0034](../../adr/0034-notification-buttons.md), no buttons in the hidden form, and a timeout for a notification. `ManifestTest` and [permissions.md](../../security/permissions.md) follow. Also the notice when an app's handler fails, the owner's decision in step 2.4. Built. | 2.4 |
+| `core/notify` | Test fixtures, `NotifyTestDevice`, so that Water's tests check the reminders without naming Android's alarm and notification classes (`NotifyBoundaryTest`), and the rule of the APK rules check that keeps them out of every app (owner's decision in step 2.4). Built. | 2.4 |
 | `core/security` | The first-need dialog of [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md), with its Catalog page. | 2.5 |
-| The APK rules check | Water's allow list of five permissions, and the rule of ADR 0033 | 2.4 and 2.5, as the prompts say |
+| The APK rules check | Water's allow list of five permissions, and the rule of ADR 0033 | 2.4 and 2.5, as the prompts say. Step 2.4 built the list per app, with the three permissions of `core/notify`. |
 
 ## Steps that build it
 
@@ -1109,7 +1172,7 @@ Water needs these. Each is built in the step named, not on this page.
 |---|---|
 | 2.2 | The database, the repositories, the rules of [the goal of a day](#the-goal-of-a-day), [the settings in use](#the-settings-in-use), [units](#units) and [the next reminder](#when-the-next-reminder-comes) as plain code with unit tests, the view models, the backup content readers and writers, and the check that every screen is behind the app lock |
 | 2.3 | Every screen of [Screens](#screens) except backup and restore, and `ShkProgressBar`. Built, without the parts that need steps 2.4 and 2.5 ([Settings screen](#settings-screen)). |
-| 2.4 | Reminders: `AlarmSource`, `AlarmHandler`, the buttons, the permission question, the reminder line of Today, the switch "Remind me to drink" and the line about notifications in Settings, and the `core/notify` changes |
+| 2.4 | Reminders: `AlarmSource`, `AlarmHandler`, the buttons, the permission question, the reminder line of Today, the switch "Remind me to drink" and the line about notifications in Settings, and the `core/notify` changes. Built. |
 | 2.5 | Backup and restore screens, the first-need dialog, the sections Backup and Security of Settings with the app lock, the file key move of [Files](#files) with its warning as a comment on the call, and the Licences screen |
 | 2.6 | The user guide `docs/user/water.md`, the changelog, the release checklist |
 
@@ -1128,6 +1191,7 @@ On 2026-11-13, in the planning session of this step.
 | The file key move (on pull request 36) | Water may finish a pending move at once only because it stores no files. A later version that stores files must take this call out first, or files sealed with the old key are lost. The spec says so under [Files](#files), and the code carries the same warning as a comment on that call. |
 | A drink while a snooze is set (step 2.2, on 2026-11-14) | Rule 3 and the case "A drink is logged" said different things when a snooze was set. The owner decided: a snooze holds only while the press of **Later** is still the latest of the four. A drink timed at or after the press ends it; a drink entered with an earlier time does not. Rule 3 and two rows of [the table](#when-the-next-reminder-comes) say so. |
 | Step 2.3, on 2026-11-14, in the planning of the step | Water does not use Navigation 3 ([Navigation](#navigation), item 7, and [ADR 0003](../../adr/0003-kotlin-compose-material-3-navigation-3.md), point 2). Settings shows Every, From and Until in step 2.3, and the switch "Remind me to drink" and the line about notifications with the reminders in step 2.4. Everything else that needs steps 2.4 and 2.5 waits for its step, with no button that does nothing. Four optional additions to `core/design`, whose defaults change nothing that exists, each announced by TalkBack where it shows an error, with a sample in Catalog. The dialogs of Settings have **Save** and **Cancel**. History's "Goal reached" has its check at the end of the row. The owner confirmed six choices of the plan: emulator accessibility checks are open for step 2.6 ([TalkBack](#talkback-and-accessibility), point 13); the three destination icons are drawn for the suite; on a phone the four buttons of Today take a row each when one does not fit in half the width; the navigation bar stays while a day is open; Version shows the installed version name; TalkBack's words for a row or a button are given by Water where the spec names them. |
+| Step 2.4, on 2026-11-14, in the planning of the step | **A handler that fails**: `core/notify` shows a notice in place of the reminder, for every app: the channel's name and "A reminder could not be shown. Open the app to see it.", no buttons, no content of the app, and a tap opens the app. The next reminder still comes and replaces it ([How Water uses core/notify](#how-water-uses-corenotify), point 5; [Open](#open), item 2). **An alarm that is due while Water moves it**: a grace of one minute. A reminder Water set an alarm for stays the next one until one minute after its time, unless its handler ran or something answered it; the handler shows it only while the rule still gives its time ([rule 7](#when-the-next-reminder-comes); [Open](#open), item 3). Claude found that without it most reminders would be lost: when Android starts Water for an alarm, the start of the app moves the alarm first. **The reminder line**: Settings shows the same line as Today, also "Next reminder at 14:30" while notifications are allowed; Today says "No more reminders today." when no reminder fits between "From" and "Until" on any day. **The dialog before Android's question** has the title "Allow notifications". |
 | On pull request 40 (step 2.2, on 2026-11-14) | The words for a goal and for a quick amount outside their limits ([Settings screen](#settings-screen)). Three rules the code had chosen, accepted: on the same `updatedAt` the larger `id` counts, until step 5.1; a change of "From" that leaves less than 30 minutes before "Until" is refused, like a change of "Until"; setting the goal to the value it already has writes nothing. The receiver of `androidx.profileinstaller` is removed from Water's manifest ([Permissions](#permissions)). |
 
 ## Assumptions
@@ -1177,15 +1241,14 @@ What is left, with the step that decides it.
 
 1. **Navigation 3 or not.** Decided in step 2.3: Water does not use it
    ([Decided by the owner](#decided-by-the-owner)).
-2. **What the user sees when the alarm handler fails.** Today the
-   reminder is marked as fired and lost without a word
-   ([notifications.md](../../architecture/notifications.md#open), item
-   6). Step 2.4, with the owner.
-3. **An alarm that is due while Water moves it.** If a sync runs in the
-   seconds between an alarm's time and Android's broadcast, the
-   `AlarmSource` names the next time and that one reminder is lost. Step
-   2.4 decides whether this needs a fix, for example a grace of a few
-   seconds, with a test.
+2. **What the user sees when the alarm handler fails.** Decided in step
+   2.4: a notice from `core/notify` in place of the reminder, and the
+   next reminder still comes
+   ([How Water uses core/notify](#how-water-uses-corenotify), point 5).
+3. **An alarm that is due while Water moves it.** Decided in step 2.4:
+   a grace of one minute ([rule 7](#when-the-next-reminder-comes)), with
+   tests (`NextReminderTest` in `feature/water`, and `WaterRemindersTest`
+   in `feature/water` and in `app/water`).
 4. **When a backup is checked.** After every backup, or when the user
    asks ([backup-format.md](../../architecture/backup-format.md#open-questions),
    open question 2). Step 2.5, with the owner.

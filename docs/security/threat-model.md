@@ -1396,9 +1396,11 @@ Phase 2, Water:
 1. Done in step 2.2: a check that every screen is behind the app lock's
    gate
    ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
-2. The screen that asks for the notification permission. Step 2.4
-   ([notifications.md](../architecture/notifications.md#open),
-   question 1).
+2. Done in step 2.4: the screen that asks for the notification
+   permission, in Water
+   ([spec.md](../apps/water/spec.md#asking-for-notifications)). The
+   buttons on a reminder ask for the phone's unlock and carry no text
+   ([ADR 0034](../adr/0034-notification-buttons.md)).
 3. When the app checks a backup, and what keeps a long backup running
    while the screen is off. Step 2.5
    ([backup-format.md](../architecture/backup-format.md#open-questions),

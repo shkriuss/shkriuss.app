@@ -120,4 +120,31 @@
     <string name="water_until_too_early">Until must be at least 30 minutes after From.</string>
     <string name="water_no_reminder_fits">No reminder fits between From and Until. Choose a shorter interval or longer hours.</string>
     <string name="water_version">Version</string>
+
+    <!-- Reminders (step 2.4). The switch in Settings. -->
+    <string name="water_remind_me">Remind me to drink</string>
+    <!-- The reminder line of Today and Settings. The time is in the phone's format: "Next reminder at 14:30". -->
+    <string name="water_reminder_next">Next reminder at %1$s</string>
+    <string name="water_reminder_goal_reached">Goal reached. No more reminders today.</string>
+    <string name="water_reminder_none_left">No more reminders today.</string>
+    <string name="water_reminder_not_asked">Reminders are on, but Water may not show notifications yet.</string>
+    <string name="water_reminder_denied">Notifications are off for Water. Reminders are silent.</string>
+    <string name="water_reminder_channel_off">Drink reminders are turned off in Android\'s settings. Reminders are silent.</string>
+    <string name="water_allow">Allow</string>
+    <string name="water_open_settings">Open settings</string>
+    <!-- The dialog before Android's own question for notifications. The owner chose the title in step 2.4. -->
+    <string name="water_question_title">Allow notifications</string>
+    <string name="water_question_text">Water reminds you with a notification. Android asks next whether Water may show notifications.</string>
+    <string name="water_continue">Continue</string>
+    <string name="water_not_now">Not now</string>
+
+    <!-- The reminder itself. Its text: "1,250 of 2,000 ml today", in the unit in use. -->
+    <string name="water_reminder_title">Time for some water</string>
+    <string name="water_reminder_text">%1$s of %2$s today</string>
+    <!-- The first button of a reminder, with the first quick amount: "Drank 250 ml". -->
+    <string name="water_reminder_drank">Drank %1$s</string>
+    <string name="water_reminder_later">Later</string>
+    <!-- The notification channel, as Android's settings show it. -->
+    <string name="water_channel_name">Drink reminders</string>
+    <string name="water_channel_description">Reminds you to drink during the hours you choose.</string>
 </resources>

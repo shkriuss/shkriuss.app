@@ -4,13 +4,11 @@ Some apps of the suite remind you at a time you set: Water, Reminders,
 Tasks and Calendar. This page says when a reminder shows, and when it
 cannot.
 
-No released app has reminders yet. The first one will be Water. This
-page says what is already fixed. It was written on 2026-11-13, with the
-code that sets the alarms.
-
-Open: the names of the buttons and where they are in an app. They are
-set when the first app gets its reminder screen. This page is updated
-then.
+No released app has reminders yet. The first one will be Water, whose
+reminders were built in Phase 2, step 4. This page says what is already
+fixed. It was written on 2026-11-13, with the code that sets the alarms,
+and updated on 2026-11-14 with Water's buttons. How to use Water itself
+comes with its user guide.
 
 ## The short version
 
@@ -55,8 +53,32 @@ Good to know:
   shows. Set it in Android's settings: search for **Notifications on
   lock screen**.
 - While the app lock of an app is on, its notifications show no text,
-  only their kind. You can show the text again on the app lock screen
-  ([The app lock](app-lock.md#notifications)).
+  only their kind, and no buttons. You can show the text again on the
+  app lock screen ([The app lock](app-lock.md#notifications)).
+
+## Buttons on a reminder
+
+Some reminders have buttons. Water's has **Drank** with your first
+quick amount, such as **Drank 150 ml**, which logs that drink, and
+**Later**, which reminds you again in 15 minutes.
+
+1. On the lock screen, a button first asks you to unlock the phone.
+   Without the unlock it does nothing.
+2. A button does what it says, even if you changed the app's settings
+   since the reminder came.
+3. A button works once. A button on an older reminder does nothing.
+4. There is no undo in the notification. To undo what a button did,
+   open the app and change it there. In Water: tap the drink at the top
+   of Today, then **Delete**.
+5. While the app lock hides the text of notifications, a reminder has no
+   buttons. Open the app to answer it.
+
+## When a reminder cannot be shown
+
+Rarely, an app cannot read or show a reminder at its time. Then you see
+a notification in its place, with the kind of reminder, such as "Drink
+reminders", and the words "A reminder could not be shown. Open the app
+to see it." Open the app. The next reminder still comes.
 
 ## After a restart of the phone
 

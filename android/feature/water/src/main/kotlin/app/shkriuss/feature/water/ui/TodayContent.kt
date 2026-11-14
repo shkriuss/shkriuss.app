@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -30,16 +31,21 @@ import app.shkriuss.core.design.rememberShkSnackbarHostState
 import app.shkriuss.feature.water.DayScreen
 import app.shkriuss.feature.water.DayViewModel
 import app.shkriuss.feature.water.R
+import app.shkriuss.feature.water.RemindersViewModel
 
 /**
  * Today, the start screen (docs/apps/water/spec.md, "Today"): the summary,
- * the quick amounts and "Other amount", and the drinks of today. One
- * column that scrolls below 840dp; from 840dp two panes side by side,
- * each scrolling on its own. The reminder line comes with the reminders,
- * in step 2.4.
+ * the quick amounts and "Other amount", the reminder line while reminders
+ * are on, and the drinks of today. One column that scrolls below 840dp;
+ * from 840dp two panes side by side, each scrolling on its own, with the
+ * reminder line in the start pane.
  */
 @Composable
-internal fun TodayContent(model: DayViewModel, windowWidth: ShkWindowWidth = ShkWindowWidth.current) {
+internal fun TodayContent(
+    model: DayViewModel,
+    reminders: RemindersViewModel,
+    windowWidth: ShkWindowWidth = ShkWindowWidth.current,
+) {
     val screen by model.state.collectAsState()
     val format = rememberWaterFormat()
     val snackbars = rememberShkSnackbarHostState()
@@ -57,6 +63,7 @@ internal fun TodayContent(model: DayViewModel, windowWidth: ShkWindowWidth = Shk
                     DaySummary(screen, format)
                     Spacer(Modifier.height(ShkSpacing.ExtraLarge))
                     QuickAdd(screen, model, format, twoByTwo = false)
+                    ReminderLineRow(reminders, format, Modifier.padding(top = ShkSpacing.Large))
                 }
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
                     DrinkList(screen, format, onEdit = model::openEdit)
@@ -66,11 +73,13 @@ internal fun TodayContent(model: DayViewModel, windowWidth: ShkWindowWidth = Shk
             DaySummary(screen, format)
             Spacer(Modifier.height(ShkSpacing.ExtraLarge))
             QuickAdd(screen, model, format, twoByTwo = windowWidth == ShkWindowWidth.Compact)
+            ReminderLineRow(reminders, format, Modifier.padding(top = ShkSpacing.Large))
             Spacer(Modifier.height(ShkSpacing.Small))
             DrinkList(screen, format, onEdit = model::openEdit)
         }
     }
     DrinkSheetHost(screen, model, format)
+    NotificationQuestion(reminders)
 }
 
 /**

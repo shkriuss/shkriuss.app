@@ -40,16 +40,38 @@ data class DayFacts(
         get() = totalMl >= goalMl
 }
 
+/** What a write of [WaterRepository] changed, so that the reminders can follow it. */
+enum class WaterChange {
+    /** A new drink was logged, on any day. It answers a reminder that is showing. */
+    DRINK_ADDED,
+
+    /** A drink was changed, deleted or brought back. */
+    DRINK_CHANGED,
+
+    /** The daily goal changed. */
+    GOAL,
+
+    /** A setting changed. */
+    SETTINGS,
+}
+
 /**
  * The drinks, the goals and the settings of Water. Every write goes
  * through one `RecordWriter` per table, so it is stamped, gets a change
  * number and never removes a row (docs/architecture/data.md). Every read
  * that shows records leaves deleted ones out.
  *
- * Step 2.4 calls `notify.sync()` after every write here that can move the
- * alarm.
+ * After every write that changed something, it calls [onChange], so that
+ * the reminders follow: Water's `WaterReminders` removes a reminder that
+ * is answered and calls `notify.sync()` (docs/apps/water/spec.md, "How
+ * Water uses core/notify", point 4).
  */
-class WaterRepository(private val database: WaterDatabase, clock: Clock, ids: IdSource) {
+class WaterRepository(
+    private val database: WaterDatabase,
+    clock: Clock,
+    ids: IdSource,
+    private val onChange: suspend (WaterChange) -> Unit = {},
+) {
     private val intake = database.intake()
     private val goals = database.goals()
     private val settings = database.settings()
@@ -87,6 +109,7 @@ class WaterRepository(private val database: WaterDatabase, clock: Clock, ids: Id
         val stored = drinkWriter.create { fields, number ->
             IntakeEntity(fields, number, amountMl = amountMl, day = day.asWaterDay(), minuteOfDay = minuteOfDay)
         }
+        onChange(WaterChange.DRINK_ADDED)
         return drinkOf(stored)
     }
 
@@ -97,14 +120,18 @@ class WaterRepository(private val database: WaterDatabase, clock: Clock, ids: Id
      */
     suspend fun changeDrink(id: String, minuteOfDay: Int, amountMl: Int): Drink? {
         requireDrink(minuteOfDay, amountMl)
-        return drinkWriter.update(id) { it.copy(minuteOfDay = minuteOfDay, amountMl = amountMl) }?.let(::drinkOf)
+        return drinkWriter.update(id) { it.copy(minuteOfDay = minuteOfDay, amountMl = amountMl) }
+            ?.also { onChange(WaterChange.DRINK_CHANGED) }
+            ?.let(::drinkOf)
     }
 
     /** Marks the drink with [id] as deleted. The row stays. Null if there is none to delete. */
-    suspend fun deleteDrink(id: String): Drink? = drinkWriter.markDeleted(id)?.let(::drinkOf)
+    suspend fun deleteDrink(id: String): Drink? =
+        drinkWriter.markDeleted(id)?.also { onChange(WaterChange.DRINK_CHANGED) }?.let(::drinkOf)
 
     /** Brings back the deleted drink with [id], as Undo does. Null if there is none to bring back. */
-    suspend fun bringBackDrink(id: String): Drink? = drinkWriter.restore(id)?.let(::drinkOf)
+    suspend fun bringBackDrink(id: String): Drink? =
+        drinkWriter.restore(id)?.also { onChange(WaterChange.DRINK_CHANGED) }?.let(::drinkOf)
 
     /**
      * Sets the daily goal to [amountMl] from [today] on. Past days keep
@@ -113,15 +140,17 @@ class WaterRepository(private val database: WaterDatabase, clock: Clock, ids: Id
     suspend fun setGoal(today: LocalDate, amountMl: Int) {
         require(amountMl in Amounts.GOAL_ML) { "A goal is from 500 to 10,000 ml" }
         val day = today.asWaterDay()
-        database.withWriteTransaction {
+        val changed = database.withWriteTransaction {
             when (val change = GoalRules.change(day, amountMl, goals.live())) {
-                GoalChange.NoChange -> Unit
-                is GoalChange.Update -> goalWriter.update(change.id) { it.copy(amountMl = amountMl) }
-                GoalChange.Create -> goalWriter.create { fields, number ->
-                    GoalEntity(fields, number, amountMl = amountMl, fromDay = day)
+                GoalChange.NoChange -> false
+                is GoalChange.Update -> goalWriter.update(change.id) { it.copy(amountMl = amountMl) } != null
+                GoalChange.Create -> {
+                    goalWriter.create { fields, number -> GoalEntity(fields, number, amountMl = amountMl, fromDay = day) }
+                    true
                 }
             }
         }
+        if (changed) onChange(WaterChange.GOAL)
     }
 
     /**
@@ -130,8 +159,8 @@ class WaterRepository(private val database: WaterDatabase, clock: Clock, ids: Id
      * Every later change updates the record in use. Water never deletes one
      * (spec, "The settings in use").
      */
-    suspend fun changeSettings(change: (WaterSettings) -> WaterSettings): WaterSettings =
-        database.withWriteTransaction {
+    suspend fun changeSettings(change: (WaterSettings) -> WaterSettings): WaterSettings {
+        val (before, next) = database.withWriteTransaction {
             val record = SettingsRules.inUse(settings.live())
             val current = SettingsRules.settingsOf(record)
             val next = change(current)
@@ -143,8 +172,14 @@ class WaterRepository(private val database: WaterDatabase, clock: Clock, ids: Id
                 }
                 else -> settingsWriter.update(record.record.id) { SettingsRules.recordWith(it, next) }
             }
-            next
+            current to next
         }
+        if (next != before) onChange(WaterChange.SETTINGS)
+        return next
+    }
+
+    /** The settings in use, read once. */
+    suspend fun settingsNow(): WaterSettings = SettingsRules.settingsOf(SettingsRules.inUse(settings.live()))
 
     private fun requireDrink(minuteOfDay: Int, amountMl: Int) {
         require(amountMl in Amounts.DRINK_ML) { "A drink is from 1 to 3,000 ml" }

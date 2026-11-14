@@ -39,8 +39,12 @@ interface NotifyHost {
  * the app lock passes `AppLockWatcher.hidesNotificationText`, an app
  * without one passes `{ false }` and says so. [worker] runs everything
  * that reads the app's records, one piece at a time. The default is one
- * background thread. The design is in
- * docs/architecture/notifications.md.
+ * background thread. [buttons] gets the presses of the buttons on the
+ * app's notifications (ADR 0034). An app without buttons leaves it out.
+ * The design is in docs/architecture/notifications.md.
+ *
+ * The first of [channels] is also where `core/notify` shows that the app
+ * could not show a reminder, when the app's handler fails.
  */
 class Notify(
     context: Context,
@@ -51,14 +55,21 @@ class Notify(
     hidesText: () -> Boolean,
     scheduler: AlarmScheduler = AlarmManagerScheduler(context.applicationContext),
     private val worker: Executor = Executors.newSingleThreadExecutor { Thread(it, "core-notify") },
+    private val buttons: ButtonHandler? = null,
 ) {
+    init {
+        require(channels.isNotEmpty()) { "An app with notifications has at least one channel" }
+    }
+
     private val app = context.applicationContext
     private val preferences = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
 
     /** Shows and removes notifications. */
-    val notifications = Notifications(app, hidesText)
+    val notifications = Notifications(app, hidesText, clock, takesPresses = buttons != null)
 
-    private val alarms = AlarmSync(source, handler, notifications, scheduler, AlarmRegistry(preferences), clock)
+    private val alarms = AlarmSync(source, handler, notifications, scheduler, AlarmRegistry(preferences), clock) { alarm ->
+        notifications.showFailure(channels.first(), alarm)
+    }
 
     /**
      * Call once when the app starts. It tells Android the channels and
@@ -122,6 +133,22 @@ class Notify(
     internal fun alarmFired(id: AlarmId, done: () -> Unit) = worker.execute {
         try {
             alarms.fired(id)
+        } finally {
+            done()
+        }
+    }
+
+    /**
+     * The user pressed a button on a notification. [done] runs when the
+     * app has handled it. A press that fails changes nothing more: the
+     * notification stays, so the user can open the app.
+     */
+    internal fun buttonPressed(press: ButtonPress, done: () -> Unit) = worker.execute {
+        try {
+            val handler = buttons
+            if (handler == null) notifications.cancel(press.key) else handler.onButton(press, notifications)
+        } catch (_: Exception) {
+            // Nothing is logged in core/notify (hard rule 10).
         } finally {
             done()
         }

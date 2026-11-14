@@ -8,6 +8,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.testing.AppLockCheck
 import app.shkriuss.feature.water.R
 import kotlinx.coroutines.runBlocking
@@ -91,6 +92,14 @@ class EveryScreenIsBehindTheAppLockTest {
     @Test
     @Config(application = AppLockOnWaterApp::class)
     fun theTimePickerUntilGoesWhenTheAppLocks() = openSetting(R.string.water_until)
+
+    @Test
+    @Config(application = AppLockOnWaterApp::class)
+    fun theQuestionForNotificationsGoesWhenTheAppLocks() {
+        // Android has not asked yet, so turning reminders on opens the dialog before its question.
+        NotifyTestDevice(ApplicationProvider.getApplicationContext<AppLockOnWaterApp>()).allowNotifications(false)
+        openSetting(R.string.water_remind_me)
+    }
 
     /** Opens Settings, then the dialog of the setting named [name]. */
     private fun openSetting(@StringRes name: Int) = openThenLock {
