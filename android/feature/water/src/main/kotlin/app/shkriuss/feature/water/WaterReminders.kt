@@ -37,7 +37,8 @@ import kotlinx.coroutines.withContext
  * - As the [AlarmHandler], it shows the reminder when its time comes.
  * - As the [ButtonHandler], it logs a drink or sets a snooze.
  * - [afterChange] runs after every write of [repository]: it removes a
- *   reminder that is answered and calls `notify.sync()`.
+ *   reminder that is answered and calls `notify.sync()`. [afterRestore]
+ *   does the same after a backup was restored.
  *
  * The handler, a press and [afterChange] take turns on one lock, so a
  * drink logged in the very moment a reminder is due never leaves that
@@ -209,6 +210,16 @@ class WaterReminders(
         }
         notify().sync()
     }
+
+    /**
+     * Runs after a restore (spec, "After a restore"). The restored records
+     * are written past [repository], so it does not call [afterChange] by
+     * itself. The reminders follow the restored data as they follow an
+     * edit: a reminder that is showing is removed when reminders are now
+     * off, today's goal is now met, or it is from another day, and then
+     * the alarm moves to the time the rule gives now.
+     */
+    suspend fun afterRestore() = afterChange(WaterChange.RESTORED)
 
     // For the screens.
 

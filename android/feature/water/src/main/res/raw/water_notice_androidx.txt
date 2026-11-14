@@ -1,0 +1,9 @@
+AndroidX libraries, also called Jetpack
+
+Copyright The Android Open Source Project
+
+Licensed under the Apache License, Version 2.0.
+
+Source: https://github.com/androidx/androidx
+
+In Water: Activity, Annotation, Arch Core, Autofill, Collection, Concurrent Futures, Core, Custom View, Emoji2, Graphics Path, Interpolator, Lifecycle, Navigation Event, Profile Installer, Room, Saved State, SQLite, Startup, Tracing, Versioned Parcelable and Window.

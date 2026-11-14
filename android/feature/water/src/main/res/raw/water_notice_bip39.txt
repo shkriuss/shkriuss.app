@@ -1,0 +1,7 @@
+BIP-39 English word list
+
+Copyright (c) 2013-2016 Pavol Rusnak
+
+Source: https://github.com/trezor/python-mnemonic
+
+The 2048 English words that a recovery key is shown in. The list is unchanged. Its licence, the MIT License, follows.

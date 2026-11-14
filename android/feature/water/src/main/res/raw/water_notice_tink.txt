@@ -1,0 +1,10 @@
+Tink for Java
+
+Copyright 2017 Google Inc.
+Copyright 2022 Google LLC
+
+Licensed under the Apache License, Version 2.0.
+
+Source: https://github.com/tink-crypto/tink-java
+
+Tink is the cryptography library of the app. Its files carry copyright lines of several years, such as the two above.

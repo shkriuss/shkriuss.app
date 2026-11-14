@@ -31,7 +31,9 @@ import app.shkriuss.core.design.ShkTextField
 import app.shkriuss.core.design.ShkTheme
 import app.shkriuss.core.design.ShkTimePicker
 import app.shkriuss.core.design.ShkTopBar
+import app.shkriuss.core.security.RecoveryKeyFirstNeedState
 import app.shkriuss.feature.water.AmountInput
+import app.shkriuss.feature.water.BackupViewModel
 import app.shkriuss.feature.water.R
 import app.shkriuss.feature.water.RemindersViewModel
 import app.shkriuss.feature.water.SettingsRules
@@ -48,12 +50,21 @@ import java.time.LocalTime
  * Step 2.3 shows Drinking, the hours of Reminders and the version under
  * About. Step 2.4 adds the switch "Remind me to drink" and, while
  * reminders are on, the same reminder line as Today, under the hours (the
- * owner's decision in step 2.4). Backup, Security and Licences come in
- * step 2.5.
+ * owner's decision in step 2.4). Step 2.5 adds Backup and Security
+ * ([BackupAndSecuritySections]), whose rows start [firstNeed], and
+ * Licences under About, which [onLicences] opens.
  */
 @Composable
-internal fun SettingsContent(model: SettingsViewModel, reminders: RemindersViewModel, versionName: String) {
+internal fun SettingsContent(
+    model: SettingsViewModel,
+    reminders: RemindersViewModel,
+    backup: BackupViewModel,
+    firstNeed: RecoveryKeyFirstNeedState,
+    versionName: String,
+    onLicences: () -> Unit,
+) {
     val screen by model.state.collectAsState()
+    val keys by backup.state.collectAsState()
     val format = rememberWaterFormat()
     var dialog by rememberSaveable { mutableStateOf<SettingsDialog?>(null) }
     val close = { dialog = null }
@@ -113,8 +124,11 @@ internal fun SettingsContent(model: SettingsViewModel, reminders: RemindersViewM
         }
         ReminderLineRow(reminders, format, Modifier.padding(top = ShkSpacing.Small))
 
+        BackupAndSecuritySections(keys, firstNeed)
+
         ShkSectionHeader(stringResource(R.string.water_section_about))
         ShkListItem(headline = stringResource(R.string.water_version), supportingText = versionName)
+        ShkListItem(headline = stringResource(R.string.water_licences), onClick = onLicences)
     }
 
     when (dialog) {
@@ -138,7 +152,7 @@ private enum class SettingsDialog { GOAL, UNIT, QUICK_AMOUNTS, EVERY, FROM, UNTI
  * unit, such as "2,000 millilitres" for "2,000 ml".
  */
 @Composable
-private fun SettingItem(name: String, value: String, onClick: () -> Unit, spokenValue: String = value) {
+internal fun SettingItem(name: String, value: String, onClick: () -> Unit, spokenValue: String = value) {
     val spoken = stringResource(R.string.water_setting_spoken, name, spokenValue)
     ShkListItem(
         headline = name,

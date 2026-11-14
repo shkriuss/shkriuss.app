@@ -27,8 +27,8 @@ import java.nio.ByteBuffer
  * [UnreadableBackupException] at the first thing this version cannot
  * read. Then the transaction rolls back and nothing changes.
  *
- * Step 2.5 builds the screens that use it, with `Backups` of
- * `core/backup`, and calls `notify.sync()` after a restore.
+ * `WaterBackups` uses it with `Backups` of `core/backup`, and lets the
+ * reminders follow the restored data after a restore (step 2.5).
  */
 class WaterBackupContent(private val database: WaterDatabase, clock: Clock, ids: IdSource) : BackupContent {
     // takeFromBackup keeps the record fields it is given; the clock and the ID source are never used for it.

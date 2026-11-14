@@ -67,6 +67,18 @@ class WaterFormatTest {
     }
 
     @Test
+    fun aDateWithItsTimeIsInThePhonesFormat() {
+        assertEquals("13 November 2026, 14:05", uk.dateTime(THE_DAY.atTime(14, 5)))
+        assertEquals("November 13, 2026, 2:05 PM", us.dateTime(THE_DAY.atTime(14, 5)).replace('\u202f', ' '))
+    }
+
+    @Test
+    fun aCountOfDrinksIsInThePhonesNumberFormat() {
+        assertEquals("1,250", uk.count(1_250))
+        assertEquals("0", uk.count(0))
+    }
+
+    @Test
     fun daysAreTodayYesterdayOrADate() {
         assertEquals("Today", uk.dayName(THE_DAY, THE_DAY))
         assertEquals("Yesterday", uk.dayName(THE_DAY.minusDays(1), THE_DAY))

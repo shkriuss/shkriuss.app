@@ -10,11 +10,13 @@ import org.junit.Test
 import org.w3c.dom.Element
 
 /**
- * What Water's merged manifest holds until step 2.5
- * (docs/security/permissions.md, "Water"): the three permissions of
- * core/notify and no other, its three receivers, one screen, and nothing
- * else that another app can reach. The receiver of the profile installer
- * is removed (owner's decision on pull request 40).
+ * What Water's merged manifest holds (docs/security/permissions.md,
+ * "Water"): five permissions and no other, the three of core/notify and,
+ * since step 2.5, the two of core/security; the three receivers of
+ * core/notify; Water's one screen and the six screens of core/security;
+ * and nothing that another app can reach but Water's own screen. The
+ * receiver of the profile installer is removed (owner's decision on pull
+ * request 40).
  *
  * The APK rules check fails an APK with any permission that is not on
  * Water's allow list too. This test also checks that the screen is the
@@ -33,23 +35,18 @@ class WaterManifestTest {
     private fun Element.android(name: String): String = getAttributeNS(ANDROID, name)
 
     @Test
-    fun waterHoldsTheThreePermissionsOfCoreNotifyAndNoOther() {
+    fun waterHoldsTheThreePermissionsOfCoreNotifyTheTwoOfCoreSecurityAndNoOther() {
         val tags = listOf("uses-permission", "uses-permission-sdk-23", "permission", "permission-group", "permission-tree")
         assertEquals(
             listOf(
                 "<uses-permission> android.permission.POST_NOTIFICATIONS",
                 "<uses-permission> android.permission.USE_EXACT_ALARM",
                 "<uses-permission> android.permission.RECEIVE_BOOT_COMPLETED",
+                "<uses-permission> android.permission.USE_BIOMETRIC",
+                "<uses-permission> android.permission.HIDE_OVERLAY_WINDOWS",
             ).sorted(),
             tags.flatMap { tag -> elements(tag).map { "<$tag> ${it.android("name")}" } }.sorted(),
         )
-    }
-
-    @Test
-    fun theTwoPermissionsOfCoreSecurityStayRemovedUntilStep25() {
-        val names = elements("uses-permission").map { it.android("name") }
-        assertFalse("android.permission.USE_BIOMETRIC" in names)
-        assertFalse("android.permission.HIDE_OVERLAY_WINDOWS" in names)
     }
 
     @Test
@@ -67,10 +64,21 @@ class WaterManifestTest {
     }
 
     @Test
-    fun waterHasOneScreenAndNoneOfCoreSecurityUntilStep25() {
-        assertEquals(listOf(WaterActivity::class.java.name), elements("activity").map { it.android("name") })
-        val launcher = elements("activity").single().getElementsByTagName("category").item(0) as Element
+    fun waterHasItsOwnScreenAndTheSixOfCoreSecurity() {
+        val screens = elements("activity")
+        assertEquals((SECURITY_SCREENS + WaterActivity::class.java.name).toSet(), screens.map { it.android("name") }.toSet())
+        assertEquals("each screen once", SECURITY_SCREENS.size + 1, screens.size)
+        val own = screens.single { it.android("name") == WaterActivity::class.java.name }
+        val launcher = own.getElementsByTagName("category").item(0) as Element
         assertEquals("android.intent.category.LAUNCHER", launcher.android("name"))
+    }
+
+    @Test
+    fun noScreenOfCoreSecurityIsExportedOrStartsFromOutside() {
+        elements("activity").filter { it.android("name") in SECURITY_SCREENS }.forEach { screen ->
+            assertEquals(screen.android("name"), "false", screen.android("exported"))
+            assertEquals("${screen.android("name")} has no intent filter", 0, screen.getElementsByTagName("intent-filter").length)
+        }
     }
 
     @Test
@@ -89,5 +97,15 @@ class WaterManifestTest {
 
     private companion object {
         const val ANDROID = "http://schemas.android.com/apk/res/android"
+
+        /** The six screens of core/security, written out here, so that a seventh fails this test first. */
+        val SECURITY_SCREENS = listOf(
+            "app.shkriuss.core.security.SecurityActivity",
+            "app.shkriuss.core.security.CreateRecoveryKeyActivity",
+            "app.shkriuss.core.security.EnterRecoveryKeyActivity",
+            "app.shkriuss.core.security.ShowRecoveryKeyActivity",
+            "app.shkriuss.core.security.AppLockActivity",
+            "app.shkriuss.core.security.TurnOnAppLockActivity",
+        )
     }
 }

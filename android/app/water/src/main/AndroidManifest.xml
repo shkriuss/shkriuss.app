@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Water (app.shkriuss.water). Its permissions are listed in
-    docs/security/permissions.md. Since step 2.4 it holds the three of
-    core/notify, for its reminders, which are its allow list in the APK
-    rules check; core/notify adds them and its three receivers, none
-    exported. Until step 2.5 adds the two of core/security, this manifest
-    removes the other ones its libraries ask for.
+    docs/security/permissions.md. It holds five, which are its allow list
+    in the APK rules check, and none of its own:
+
+    - the three of core/notify, for its reminders (step 2.4). core/notify
+      adds them and its three receivers, none exported;
+    - the two of core/security, for the system prompt (ADR 0031) and for
+      hiding other apps' windows (ADR 0033) (step 2.5). core/security adds
+      them and its six screens, none exported. Settings opens those
+      screens: the recovery key and the app lock. The APK rules check
+      fails an app that has the screens without both permissions.
 
     Water stores its data in its own database and backs it up only into the
     backup file of the suite, so Android backup and device-to-device
@@ -26,20 +31,6 @@
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         tools:node="remove" />
 
-    <!--
-        Removed until step 2.5. core/security asks for these two for its
-        screens: the system prompt (ADR 0031) and hiding other apps' windows
-        (ADR 0033). Nothing in Water opens those screens before step 2.5,
-        which adds both permissions to Water's allow list in the APK rules
-        check and takes these two removals out.
-    -->
-    <uses-permission
-        android:name="android.permission.USE_BIOMETRIC"
-        tools:node="remove" />
-    <uses-permission
-        android:name="android.permission.HIDE_OVERLAY_WINDOWS"
-        tools:node="remove" />
-
     <application
         android:name=".WaterApp"
         android:allowBackup="false"
@@ -49,7 +40,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Shk">
 
-        <!-- The one screen of Water, and the only exported part. Every screen puts its content in AppLockGate. -->
+        <!--
+            The one screen of Water's own, and the only exported part. All of
+            its content is in AppLockGate. The six screens of core/security
+            come from that module's manifest, and none of them is exported.
+        -->
         <activity
             android:name=".WaterActivity"
             android:exported="true">
@@ -58,31 +53,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <!--
-            Removed until step 2.5, with the two permissions above: the six
-            screens of core/security. A screen of the module needs both
-            permissions (ADR 0033, point 5), and Settings opens them only
-            from step 2.5, which takes these six removals out.
-        -->
-        <activity
-            android:name="app.shkriuss.core.security.SecurityActivity"
-            tools:node="remove" />
-        <activity
-            android:name="app.shkriuss.core.security.CreateRecoveryKeyActivity"
-            tools:node="remove" />
-        <activity
-            android:name="app.shkriuss.core.security.EnterRecoveryKeyActivity"
-            tools:node="remove" />
-        <activity
-            android:name="app.shkriuss.core.security.ShowRecoveryKeyActivity"
-            tools:node="remove" />
-        <activity
-            android:name="app.shkriuss.core.security.AppLockActivity"
-            tools:node="remove" />
-        <activity
-            android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
-            tools:node="remove" />
 
         <!--
             androidx.profileinstaller adds this receiver, exported to every

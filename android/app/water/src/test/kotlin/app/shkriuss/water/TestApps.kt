@@ -8,6 +8,8 @@ import app.shkriuss.core.notify.NotifyHost
 import app.shkriuss.core.security.SecurityHost
 import app.shkriuss.core.testing.AppLockOnForTests
 import app.shkriuss.core.testing.LockedAppForTests
+import app.shkriuss.core.testing.NewAppForTests
+import app.shkriuss.core.testing.StoppedSetupAppForTests
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.core.testing.UnlockedAppForTests
@@ -22,7 +24,7 @@ import java.time.ZoneOffset
 import java.util.concurrent.Executor
 
 /** The name of the app in keys, as `WaterApp` has it. */
-private val WATER: AppName = AppName.of("water")
+private val WATER: AppName = WaterServices.APP_NAME
 
 /** The day of the spec's examples, Friday 13 November 2026, which the screens of the tests show as today. */
 val THE_DAY: LocalDate = LocalDate.of(2026, 11, 13)
@@ -48,7 +50,17 @@ class TestWater(
     open: Intent = Intent(app, WaterActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
 ) {
     /** What the app class hands to the screens. */
-    val services: WaterServices = WaterServices(app, database, clock, ids, open, notify = { notify }, zone = { ZoneOffset.UTC })
+    val services: WaterServices = WaterServices(
+        app,
+        database,
+        clock,
+        ids,
+        open,
+        notify = { notify },
+        // The keys of the test's app class, as `WaterApp` passes its own.
+        crypto = (app as SecurityHost).crypto,
+        zone = { ZoneOffset.UTC },
+    )
 
     /** The app's one `Notify`. The text of notifications is hidden while the app lock of the test's app class says so. */
     val notify: Notify = Notify(
@@ -63,6 +75,7 @@ class TestWater(
     )
 
     init {
+        services.start()
         notify.start()
     }
 }
@@ -98,6 +111,20 @@ class AppLockOnWaterApp : AppLockOnForTests(WATER), WaterTestApp {
 
 /** Water's app class with the app lock off, for screenshots and tests of the screens. */
 class UnlockedWaterApp : UnlockedAppForTests(WATER), WaterTestApp {
+    override val test: TestWater by lazy { TestWater(this) }
+}
+
+/**
+ * Water's app class with no recovery key yet, as right after Water was
+ * installed, for what Settings shows before the recovery key is first
+ * needed (spec, "The recovery key when first needed").
+ */
+class NewWaterApp : NewAppForTests(WATER), WaterTestApp {
+    override val test: TestWater by lazy { TestWater(this) }
+}
+
+/** Water's app class after a setup of the recovery key that stopped half way. */
+class StoppedSetupWaterApp : StoppedSetupAppForTests(WATER), WaterTestApp {
     override val test: TestWater by lazy { TestWater(this) }
 }
 

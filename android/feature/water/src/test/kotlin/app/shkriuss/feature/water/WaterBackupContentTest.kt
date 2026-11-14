@@ -1,10 +1,5 @@
 package app.shkriuss.feature.water
 
-import android.content.ContentProvider
-import android.content.ContentValues
-import android.database.Cursor
-import android.net.Uri
-import android.os.ParcelFileDescriptor
 import app.shkriuss.core.backup.BackupRecord
 import app.shkriuss.core.backup.BackupSink
 import app.shkriuss.core.backup.Backups
@@ -15,12 +10,12 @@ import app.shkriuss.core.backup.RestoreResult
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.data.RecordFields
+import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.water.data.GoalEntity
 import app.shkriuss.feature.water.data.IntakeEntity
 import app.shkriuss.feature.water.data.SettingsEntity
 import app.shkriuss.feature.water.data.WaterDatabase
-import java.io.File
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -32,7 +27,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 
 /**
@@ -235,9 +229,8 @@ class WaterBackupContentTest {
         repository.addDrink(THE_DAY, 600, 250)
         repository.setGoal(THE_DAY, 2_500)
         repository.changeSettings { it.copy(remindersOn = true, intervalMinutes = 90) }
-        Documents.folder = temporary.newFolder()
-        Robolectric.setupContentProvider(Documents::class.java, AUTHORITY)
-        val document = Uri.parse("content://$AUTHORITY/water-2026-11-13.shkbackup")
+        pickerDocumentsIn(temporary.newFolder())
+        val document = TestDocuments.uri("water-2026-11-13.shkbackup")
         val keys = SoftwareKeysApp(temporary.newFolder(), WATER)
         val recoveryKey = keys.crypto.setup.createRecoveryKey().also { keys.crypto.setup.storeDerivedKeys(it) }
 
@@ -282,30 +275,7 @@ class WaterBackupContentTest {
         override suspend fun forEachFile(action: suspend (CheckedFile) -> Unit) = Unit
     }
 
-    /** Documents of the system file picker, as files behind a content provider of the test. */
-    class Documents : ContentProvider() {
-        override fun onCreate(): Boolean = true
-
-        override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor =
-            ParcelFileDescriptor.open(File(folder, uri.lastPathSegment!!), ParcelFileDescriptor.parseMode(mode))
-
-        override fun getType(uri: Uri): String? = null
-
-        override fun query(uri: Uri, columns: Array<String>?, where: String?, arguments: Array<String>?, order: String?): Cursor? = null
-
-        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
-
-        override fun delete(uri: Uri, where: String?, arguments: Array<String>?): Int = 0
-
-        override fun update(uri: Uri, values: ContentValues?, where: String?, arguments: Array<String>?): Int = 0
-
-        companion object {
-            lateinit var folder: File
-        }
-    }
-
     private companion object {
         val WATER: AppName = AppName.of("water")
-        const val AUTHORITY = "app.shkriuss.feature.water.test.documents"
     }
 }
