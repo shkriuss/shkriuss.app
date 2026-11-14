@@ -8,22 +8,25 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.plus
 
 /**
  * What the screens Today and Day show (docs/apps/water/spec.md, "Today"
  * and "Day"). Amounts are millilitres; the screen shows them in [unit].
  */
 data class DayScreen(
-    /** False until the first read of the database is in. */
+    /**
+     * False until the drinks of [day] are read: at the start, and again
+     * from the moment the day changes until the new day's drinks are in.
+     * So a screen never shows one day with another day's numbers.
+     */
     val loaded: Boolean,
     /** The day shown. */
     val day: LocalDate,
@@ -122,30 +125,54 @@ class DayViewModel(
     private val day = MutableStateFlow(fixedDay ?: time.today())
     private val sheet = MutableStateFlow<DrinkSheet?>(null)
     private val snackbar = MutableStateFlow<DrinkSnackbar?>(null)
+    private val screen = MutableStateFlow(notLoaded(day.value))
 
-    /** What the screen shows. */
-    val state: StateFlow<DayScreen> = combine(
-        day.flatMapLatest { shown -> repository.drinksOf(shown).map { shown to it } },
+    /** Guards [day] and [screen] together, so a late result of another day never replaces the one shown. */
+    private val dayLock = Any()
+
+    /**
+     * What the screen shows. It is always of the day asked for last: from
+     * the moment that day changes until its drinks are read, it is that day,
+     * not loaded.
+     */
+    val state: StateFlow<DayScreen> = screen.asStateFlow()
+
+    /** Every state of the database for the day asked for, in the order Room gives them. */
+    private val fromTheDatabase = combine(
+        // A new day starts with no drinks read, so the day before is never shown in its place.
+        day.flatMapLatest { shown ->
+            repository.drinksOf(shown)
+                .map<List<Drink>, DrinksOfDay> { DrinksOfDay(shown, it) }
+                .onStart { emit(DrinksOfDay(shown, drinks = null)) }
+        },
         repository.settings(),
         repository.goals(),
         sheet,
         snackbar,
-    ) { (shown, drinks), settings, goals, openSheet, shownSnackbar ->
+    ) { ofDay, settings, goals, openSheet, shownSnackbar ->
+        val shown = ofDay.day
+        val drinks = ofDay.drinks
         DayScreen(
-            loaded = true,
+            loaded = drinks != null,
             day = shown,
             isToday = shown == time.today(),
             unit = settings.unit,
-            totalMl = drinks.sumOf { it.amountMl },
+            totalMl = drinks.orEmpty().sumOf { it.amountMl },
             goalMl = goals.goalOf(shown.asWaterDay()),
-            drinks = drinks,
+            drinks = drinks.orEmpty(),
             quickAmountsMl = settings.quickAmountsMl,
             sheet = openSheet,
             snackbar = shownSnackbar,
         )
-    }.stateIn(viewModelScope + work, SharingStarted.Eagerly, DayScreen(loaded = false, day = day.value, isToday = fixedDay == null))
+    }
 
     init {
+        viewModelScope.launch(work) {
+            fromTheDatabase.collect { next ->
+                // A result for a day asked for before is late: it is dropped.
+                synchronized(dayLock) { if (next.day == day.value) screen.value = next }
+            }
+        }
         if (fixedDay == null) {
             viewModelScope.launch(work) {
                 while (isActive) {
@@ -162,17 +189,31 @@ class DayViewModel(
     }
 
     /**
-     * The open Day of History shows [shown] from now on. The sheet and the
-     * snackbar of the day before close. Today follows the phone's clock,
-     * so it refuses this.
+     * The open Day of History shows [shown] from now on. Until its drinks
+     * are read, the state is not loaded: nothing of the day before shows
+     * in its place. The sheet and the snackbar of the day before close.
+     * Today follows the phone's clock, so it refuses this.
      */
     fun show(shown: LocalDate) {
         check(fixedDay != null) { "Today follows the phone's clock" }
-        if (day.value == shown) return
-        sheet.value = null
-        snackbar.value = null
-        day.value = shown
+        synchronized(dayLock) {
+            if (day.value == shown) return
+            sheet.value = null
+            snackbar.value = null
+            day.value = shown
+            // Unless the new day already shows, it shows as not loaded from now on.
+            if (screen.value.day != shown) screen.value = notLoaded(shown, screen.value)
+        }
     }
+
+    /** [shown] with none of its drinks read yet, in the unit and with the quick amounts of [before]. */
+    private fun notLoaded(shown: LocalDate, before: DayScreen? = null) = DayScreen(
+        loaded = false,
+        day = shown,
+        isToday = shown == time.today(),
+        unit = before?.unit ?: WaterUnit.MILLILITRES,
+        quickAmountsMl = before?.quickAmountsMl ?: WaterUnit.MILLILITRES.defaultQuickAmountsMl,
+    )
 
     /** A tap on quick amount number [index] (0 to 2): a drink of that amount, now. */
     fun addQuick(index: Int) {
@@ -288,6 +329,9 @@ class DayViewModel(
     }
 
     private fun isInTheFuture(on: LocalDate, minuteOfDay: Int): Boolean = on == time.today() && minuteOfDay > time.minuteNow()
+
+    /** The drinks of [day], or null while they are not read yet. */
+    private data class DrinksOfDay(val day: LocalDate, val drinks: List<Drink>?)
 
     private companion object {
         /** Where the time of a drink starts on a day that is not today: 12:00. */

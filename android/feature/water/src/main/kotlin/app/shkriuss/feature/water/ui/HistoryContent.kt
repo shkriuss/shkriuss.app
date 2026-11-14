@@ -60,7 +60,7 @@ internal fun HistoryContent(
             if (day == null) {
                 ShkScreen { ShkEmptyState(title = stringResource(R.string.water_choose_a_day), modifier = Modifier.weight(1f)) }
             } else {
-                key(day) { DayContent(openDay, onBack) }
+                key(day) { DayContent(openDay, day, isToday = day == screen.today, onBack = onBack) }
             }
         },
         windowWidth = windowWidth,
@@ -119,19 +119,23 @@ private fun DayRow(row: HistoryDay, today: LocalDate, unit: WaterUnit, format: W
  * One day from History, today included (docs/apps/water/spec.md, "Day"):
  * the full date, the summary with the goal that day had, "Add a drink",
  * and its drinks, with the same sheet and snackbars as Today.
+ *
+ * [day] is the day History opened. The title is always that day's, and
+ * the rest shows only once [model] holds that day's drinks, so nothing of
+ * the day open before shows in its place, not even for one frame.
  */
 @Composable
-internal fun DayContent(model: DayViewModel, onBack: (() -> Unit)?) {
+internal fun DayContent(model: DayViewModel, day: LocalDate, isToday: Boolean, onBack: (() -> Unit)?) {
     val screen by model.state.collectAsState()
     val format = rememberWaterFormat()
     val snackbars = rememberShkSnackbarHostState()
     DaySnackbars(screen, model, snackbars, format)
     ShkScreen(
-        topBar = { ShkTopBar(title = format.dayTitle(screen.day, screen.isToday), onBack = onBack) },
+        topBar = { ShkTopBar(title = format.dayTitle(day, isToday), onBack = onBack) },
         scrollable = true,
         snackbarHostState = snackbars,
     ) {
-        if (!screen.loaded) return@ShkScreen
+        if (!screen.loaded || screen.day != day) return@ShkScreen
         DaySummary(screen, format)
         Spacer(Modifier.height(ShkSpacing.ExtraLarge))
         ShkTonalButton(text = stringResource(R.string.water_add_drink), onClick = model::openAdd)

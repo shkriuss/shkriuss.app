@@ -2,8 +2,11 @@ package app.shkriuss.feature.water
 
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.water.data.WaterDatabase
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -255,6 +258,40 @@ class ViewModelsTest {
         clock.setTo(THE_DAY.plusDays(1).atTime(0, 1))
         model.checkTheDay()
         assertEquals(THE_DAY, model.state.value.day)
+    }
+
+    @Test
+    fun fromShowUntilTheNewDaysDrinksAreReadTheDayIsNotLoadedAndNothingOfTheDayBeforeShows() {
+        val before = THE_DAY.minusDays(2)
+        val opened = THE_DAY.minusDays(1)
+        runBlocking {
+            repository.addDrink(before, 600, 300)
+            repository.addDrink(opened, 610, 400)
+        }
+        val model = dayOf(before)
+        model.state.await { it.loaded && it.totalMl == 300 }
+        // Every state the screen gets from now on.
+        val seen = CopyOnWriteArrayList<DayScreen>()
+        val watching = CoroutineScope(Dispatchers.Unconfined).launch { model.state.collect { seen += it } }
+        try {
+            seen.clear()
+
+            model.show(opened)
+
+            // From the moment show() is called: the new day, not loaded, with nothing of the day before.
+            val right = model.state.value
+            assertEquals(opened, right.day)
+            assertFalse("not loaded until the new day's drinks are read", right.loaded)
+            assertEquals(0, right.totalMl)
+            assertEquals(emptyList<Drink>(), right.drinks)
+            // Then the new day's drinks.
+            assertEquals(400, model.state.await { it.loaded }.totalMl)
+            assertTrue("no state shows the day before: $seen", seen.none { it.day == before })
+            assertTrue("a loaded state is the new day's: $seen", seen.filter { it.loaded }.all { it.day == opened && it.totalMl == 400 })
+            assertFalse("the first state after show() is not loaded", seen.first().loaded)
+        } finally {
+            watching.cancel()
+        }
     }
 
     @Test
