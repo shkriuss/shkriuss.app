@@ -33,6 +33,12 @@ Parts D and E run in signing-ceremony, with
 [`check-backup.yml`](signing-key-rehearsal/check-backup.yml). They read
 the real backup and change nothing.
 
+- signing-ceremony allows only actions from your own repositories, and
+  you keep that setting. So `check-backup.yml` uses no action at all. It
+  checks out with plain git and the job's read-only token.
+- key-rehearsal must allow GitHub's own actions, because `rehearsal.yml`
+  uses three of them ([Part 0, step 3](#3-allow-githubs-actions)).
+
 | Part | What it shows | Where |
 |---|---|---|
 | [0](#part-0-set-up) | The throwaway repository is ready | key-rehearsal |
@@ -66,6 +72,28 @@ committed or kept. What it showed:
 What only a phone shows is in parts A and B: Android's answer to each
 install, Obtainium's warning and what AppVerifier shows.
 
+Later on 2026-11-14, Claude tried the checkout of `check-backup.yml`,
+which uses no action. The test ran against a throwaway repository, served
+by `git http-backend` behind a server that refuses every request without
+the token. It showed:
+
+- The checkout fetched exactly the commit it was asked for, the newest one
+  and an older one, one commit deep.
+- A wrong token and a commit that does not exist both failed at once.
+- The token, and the header made from it, were found nowhere: not in
+  `.git`, not in the git config, not in the URLs the server saw, and not
+  in the output once masked.
+- The unchanged check then ran in that checkout, in all three modes.
+  Neither the passphrase nor the keystore password showed.
+
+What only GitHub shows:
+
+- that it starts the workflow in signing-ceremony;
+- that it gives the run's commit to the job's token;
+- that its log masks the token.
+
+[D2](#d2-run-it-without-the-passphrase) shows the first two.
+
 ## Part 0: Set up
 
 ### 1. Read the ceremony workflow first
@@ -89,7 +117,31 @@ never paste the value.
 2. Name it `key-rehearsal`. Pick **Public**. Tick **Add a README file**.
 3. Tap **Create repository**.
 
-### 3. Create the environment
+### 3. Allow GitHub's actions
+
+`rehearsal.yml` uses three of GitHub's own actions: `actions/checkout`,
+`actions/upload-artifact` and `actions/download-artifact`.
+signing-ceremony would refuse them, because it allows only your own
+actions. key-rehearsal must allow GitHub's actions too.
+
+1. In key-rehearsal, open **Settings**, then **Actions**, then
+   **General**.
+2. Under **Actions permissions**, pick **Allow shkriuss, and select
+   non-shkriuss, actions and reusable workflows**.
+3. Tick **Allow actions created by GitHub**. Leave **Allow actions by
+   Marketplace verified creators** unticked, and leave the list of other
+   actions empty.
+4. Tap **Save**.
+
+If GitHub's words differ, pick the choice that allows your own actions
+and GitHub's, and nothing else. The ceremony workflow runs in
+signing-ceremony, so it uses no action but your own, and this choice
+allows those too.
+
+What to look for: the choice is still picked when you open the page
+again.
+
+### 4. Create the environment
 
 1. In key-rehearsal, open **Settings**, then **Environments**, then
    **New environment**.
@@ -103,7 +155,7 @@ never paste the value.
 What to look for: `rehearsal` is listed with "1 protection rule" or more,
 and no secrets.
 
-### 4. Make the token
+### 5. Make the token
 
 The copy of the ceremony needs a credential to write the three secrets
 into `rehearsal`. Make a new one that can do only that:
@@ -135,7 +187,7 @@ add **Contents: Read and write**, still for key-rehearsal only.
 You delete this token together with the repository, in part C. Never
 paste it into a Claude session.
 
-### 5. Copy the ceremony workflow
+### 6. Copy the ceremony workflow
 
 1. In signing-ceremony, open the workflow file. Tap the button that
    copies the raw file.
@@ -152,21 +204,21 @@ Optional, and a good idea: make the masking change of
 [Open points](#open-points), point 1, in this copy now. Then the
 rehearsal tests the change before the real ceremony gets it.
 
-### 6. Add the rehearsal workflow
+### 7. Add the rehearsal workflow
 
 1. Open [`rehearsal.yml`](signing-key-rehearsal/rehearsal.yml) in
    shkriuss.app. Tap the button that copies the raw file.
 2. In key-rehearsal, create the file `.github/workflows/rehearsal.yml`,
    paste, and commit to `main`.
 
-### 7. Make a throwaway passphrase
+### 8. Make a throwaway passphrase
 
 Make a new passphrase for the throwaway backup, for example with your
 password manager. Never use the real one, or one you use anywhere else.
 The repository is public, and the copy may show what you type in its
 logs.
 
-### 8. Prepare the phone
+### 9. Prepare the phone
 
 Use the Pixel 9 Pro.
 
@@ -314,7 +366,8 @@ What to look for: the token and the repository are gone.
 
 This is the only part that touches the real backup. It writes no secret,
 has no token that can write, and prints only names, sizes, SHA-256 values
-and the certificate's public fingerprint.
+and the certificate's public fingerprint. It uses no action, because
+signing-ceremony allows only your own. It checks out with plain git.
 
 The cost: like every restore, the real key is in the memory of a GitHub
 runner while the check runs. It is never written to the runner's disk.
@@ -332,10 +385,35 @@ How it keeps the secrets out of the log:
 
 1. Open [`check-backup.yml`](signing-key-rehearsal/check-backup.yml) in
    shkriuss.app. Copy the raw file.
-2. In signing-ceremony, create `.github/workflows/check-backup.yml`, paste
-   it and commit to `main`.
+2. In signing-ceremony, open `.github/workflows/check-backup.yml`.
+   - If it is there already, tap the pencil and replace all of it with
+     what you copied.
+   - If it is not there, create it and paste.
+3. Commit to `main`.
+4. If a run of the old file stopped with "not allowed", and you typed the
+   passphrase into it, delete that run as [D5](#d5-delete-the-runs) says.
+   GitHub keeps what you typed with the run, also when the run never
+   started.
 
-### D2. List the files in the backup
+What to look for: the file in signing-ceremony has no line with `uses:`.
+
+### D2. Run it without the passphrase
+
+First a run that needs nothing secret. It shows that GitHub starts the
+check, and that the check finds the backup.
+
+1. Open **Actions**, **Check backup**, **Run workflow**.
+2. **mode**: `files`. Leave the passphrase and the file names empty.
+3. Tap **Run workflow**, and open the run.
+
+What to look for: a green run. The step **Check out** ends with "Checked
+out" and the commit of the run. The summary lists
+`backup/signing-key.tar.gpg` with its SHA-256.
+
+If the run fails, or does not start, stop here and do not type the
+passphrase. Tell Claude in a session what the run says.
+
+### D3. List the files in the backup
 
 1. Open **Actions**, **Check backup**, **Run workflow**.
 2. **mode**: `list`. **passphrase**: the real passphrase. Leave the
@@ -347,10 +425,10 @@ What to look for: a green run. The summary lists the SHA-256 of
 backup. The log shows no passphrase anywhere. Note the name of the
 keystore file and of the file with its password.
 
-### D3. Check the key
+### D4. Check the key
 
 1. Run it again. **mode**: `check`. Type the passphrase, and the two
-   names exactly as D2 showed them.
+   names exactly as D3 showed them.
 
 What to look for: every line of the summary says **Yes**:
 
@@ -364,11 +442,11 @@ What to look for: every line of the summary says **Yes**:
 If any line says **No**, change nothing. Tell Claude in a session what
 the summary says, never the passphrase.
 
-### D4. Delete the runs
+### D5. Delete the runs
 
 1. Open each run of **Check backup**, tap the menu at the top right and
    **Delete workflow run**.
-2. Only after D3 passed: do the same for every earlier run of the real
+2. Only after D4 passed: do the same for every earlier run of the real
    ceremony workflow in which you typed the passphrase.
 
 What to look for: no run is left that you typed the passphrase into.
