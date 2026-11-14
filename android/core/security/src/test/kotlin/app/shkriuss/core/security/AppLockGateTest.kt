@@ -15,6 +15,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.test.ComposeTimeoutException
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -43,6 +45,13 @@ import org.robolectric.annotation.GraphicsMode
  * [AppLockGate] around a screen of an app: nothing of the screen while
  * the app is locked, the screen back as it was after the system prompt,
  * and the result of a picker the screen opened kept across a lock.
+ *
+ * The lock screen opens and finishes its system prompt on a background
+ * thread, as in an app (`Dispatchers.IO`). Compose's `waitForIdle` does not
+ * wait for that thread. So this test waits for what it reads next: the
+ * prompt ([waitForThePrompt]), and the screen back after it
+ * ([waitForTheLockScreenToGo]). Without the waits, a slow start of that
+ * thread failed the test (found in step 2.5).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestHostApp::class)
@@ -91,14 +100,40 @@ class AppLockGateTest {
         }
     }
 
+    /** Waits, for a background thread, until [condition] holds. Fails with [what] if it does not in time. */
+    private fun waitFor(what: String, condition: () -> Boolean) {
+        try {
+            compose.waitUntil(WAIT_MILLIS, condition)
+        } catch (late: ComposeTimeoutException) {
+            throw AssertionError("$what, after $WAIT_MILLIS ms", late)
+        }
+    }
+
+    /** The ViewModel of the lock screen. It is there once the lock screen is composed. */
+    private fun lockScreen(): UnlockViewModel {
+        compose.waitForIdle()
+        return ViewModelProvider(compose.activity)[UnlockViewModel::class.java]
+    }
+
+    /** Waits until the lock screen has opened its system prompt, on its background thread, and gives it. */
+    private fun waitForThePrompt(what: String = "the system prompt is open"): PromptRequest {
+        val model = lockScreen()
+        waitFor(what) { model.state.value.prompt != null }
+        return checkNotNull(model.state.value.prompt)
+    }
+
+    /** Waits until a prompt that succeeded has unlocked the app: the lock screen is gone, and the screen is back. */
+    private fun waitForTheLockScreenToGo() {
+        waitFor("the lock screen goes after the prompt") { compose.onAllNodes(hasText("Unlock")).fetchSemanticsNodes().isEmpty() }
+        compose.waitForIdle()
+    }
+
     /** Answers the system prompt of the lock screen, as Android does when the user answers it. */
     private fun answerTheLockScreen(outcome: PromptOutcome) {
-        compose.waitForIdle()
-        val model = ViewModelProvider(compose.activity)[UnlockViewModel::class.java]
-        val prompt = model.state.value.prompt
-        assertNotNull("the system prompt is open", prompt)
-        compose.runOnUiThread { model.onPromptResult(prompt!!, outcome) }
-        compose.waitForIdle()
+        val model = lockScreen()
+        val prompt = waitForThePrompt()
+        compose.runOnUiThread { model.onPromptResult(prompt, outcome) }
+        if (outcome == PromptOutcome.SUCCEEDED) waitForTheLockScreenToGo() else compose.waitForIdle()
     }
 
     private fun leaveAndComeBack() {
@@ -127,8 +162,8 @@ class AppLockGateTest {
         compose.onNodeWithText("A secret record", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Unlock").assertExists()
         assertEquals("not one frame of the screen on the way back", drawsBefore, drawn)
-        val model = ViewModelProvider(compose.activity)[UnlockViewModel::class.java]
-        assertNotNull("the prompt shows by itself", model.state.value.prompt)
+        waitForThePrompt("the prompt shows by itself")
+        assertEquals("not one frame of the screen while the prompt opened", drawsBefore, drawn)
     }
 
     @Test
@@ -222,6 +257,11 @@ class AppLockGateTest {
         assertEquals(AppLockState.RESET, app.crypto.appLock.state())
         compose.onNodeWithText(compose.activity.getString(R.string.sec_notice_reset_title)).assertExists()
         compose.onNodeWithText("A secret record, tapped 0 times").assertExists()
+    }
+
+    private companion object {
+        /** How long a test waits for the lock screen's background thread. It is done in a few milliseconds. */
+        const val WAIT_MILLIS = 5_000L
     }
 }
 
