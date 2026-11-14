@@ -151,7 +151,8 @@ class ViewModelsTest {
         assertFalse(model.sheetThat { it.minuteOfDay == 23 * 60 + 30 }.timeError)
 
         model.save()
-        val saved = model.state.await { it.drinks.isNotEmpty() }
+        // The snackbar comes when the drink is written, the list when Room tells of it: either can come first.
+        val saved = model.state.await { it.drinks.isNotEmpty() && it.snackbar != null }
         assertEquals(THE_DAY.minusDays(1), saved.drinks.single().day)
         assertEquals(DrinkSnackbar.Kind.ADDED, saved.snackbar?.kind)
     }
