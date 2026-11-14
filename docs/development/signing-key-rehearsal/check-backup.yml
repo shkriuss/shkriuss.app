@@ -1,6 +1,9 @@
 # Checks the real backup of the suite key. It changes nothing: it writes no
 # secret, has no token that can write, and makes no artifact and no cache.
 #
+# It uses no action: signing-ceremony allows only the owner's own actions.
+# It checks out with plain git.
+#
 # Paste this file into signing-ceremony, as
 # .github/workflows/check-backup.yml.
 #
@@ -23,6 +26,11 @@
 # Every mode also prints the SHA-256 of every .gpg file, for part E.
 #
 # How it handles the secrets:
+# - The job's token can only read (contents: read). It goes to git for the
+#   one fetch of the checkout, as an HTTP header, through git's environment:
+#   not in the URL, not on the command line and not in any git config file.
+#   GitHub masks the token. The step masks the header made from it before
+#   using it.
 # - GitHub prints a step's script and its env values in the log. So the
 #   passphrase is never in an env block or in the script text. It is read
 #   from the run's event file and masked before anything else.
@@ -81,10 +89,32 @@ jobs:
       group: check-backup
       cancel-in-progress: false
     steps:
+      # No action: signing-ceremony allows only the owner's own actions.
+      # Plain git fetches exactly the commit of this run, with the job's
+      # read-only token. The token goes to git as an HTTP header, for this
+      # one fetch only, through git's environment: not in the URL, not on
+      # the command line and not in any git config file.
       - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          header="$(printf 'x-access-token:%s' "$TOKEN" | base64 --wrap=0)"
+          printf '::add-mask::%s\n' "$header"
+          git init --quiet --initial-branch=check
+          GIT_TERMINAL_PROMPT=0 \
+            GIT_CONFIG_COUNT=2 \
+            GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $header" \
+            GIT_CONFIG_KEY_1=protocol.version \
+            GIT_CONFIG_VALUE_1=2 \
+            git fetch --quiet --no-tags --depth=1 "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_SHA"
+          git checkout --quiet --detach "$GITHUB_SHA"
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "::error::The checkout is not the commit of this run."
+            exit 1
+          fi
+          echo "Checked out $GITHUB_SHA."
 
       # One step, so that the passphrase never passes between steps. The
       # passphrase is deliberately not in this env block.
