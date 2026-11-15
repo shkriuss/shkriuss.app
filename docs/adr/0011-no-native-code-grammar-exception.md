@@ -1,6 +1,7 @@
 # 0011 No native code, Grammar exception
 
-- Status: Accepted
+- Status: Accepted. Its sentence on the GrapheneOS checklist superseded
+  by [0039](0039-no-manual-checklist-for-a-release.md).
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 2 (decision 7), 3 and 16, the
   owner's review of
@@ -51,5 +52,9 @@
   ([PROMPTS.md](../development/PROMPTS.md)).
 - Grammar passes the same GrapheneOS checklist as every other app. See
   [0002](0002-grapheneos-first-minimum-android-13.md).
+  - Superseded by [0039](0039-no-manual-checklist-for-a-release.md),
+    on 2026-11-15: no release waits for a manual checklist. 0039 is
+    decided again before the first release of Grammar, because of its
+    native code.
 - No WebView and no runtime code loading are in
   [0019](0019-no-webview-no-runtime-code-loading.md).

@@ -431,7 +431,7 @@ step 5 again.
 
 ### Before every release
 
-Part 4 of the [release checklist](release-checklist.md#part-4-release)
+Step 4 of [Before and after a release](release.md#before-and-after-a-release)
 asks that the newest run of this workflow is green, and that no alert is
 open. If one is, tell Claude in a session which library it names. Claude
 checks whether the library ships in the app, and updates it as prompt R5
@@ -582,8 +582,8 @@ left the question open:
   [30](https://github.com/shkriuss/shkriuss.app/pull/30)). The job keeps
   running on every pull request and every push to `main`. A red result
   is information, not a block.
-- The owner decides again at the Phase 2 gate whether "Emulator (Android
-  17)" becomes required.
+- Whether "Emulator (Android 17)" becomes required is an open point
+  with no date. The owner decides it when asking for it.
 
 A pull request that renames one of the emulator jobs, or changes the
 list of Android versions, must say so in its description. Otherwise

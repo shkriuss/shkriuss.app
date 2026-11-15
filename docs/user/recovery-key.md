@@ -4,8 +4,7 @@ The recovery key is your account. It is 24 words that you write on
 paper. With it you can read your backups and your synced data, and set
 up the apps on a new phone.
 
-Water is the first app that has these screens. It is not released yet.
-This page was written on 2026-11-13, with the screens, and updated on
+Water is the first app that has these screens. This page was written on 2026-11-13, with the screens, and updated on
 2026-11-14, when Water got them.
 
 Where they are, in Water: open **Settings**. Under **Security**, tap

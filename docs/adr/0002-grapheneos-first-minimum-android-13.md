@@ -2,7 +2,8 @@
 
 - Status: Accepted. Point 4 extended by
   [0025](0025-secure-app-spawning-in-grapheneos-checklist.md): secure app
-  spawning on.
+  spawning on. Point 4 superseded by
+  [0039](0039-no-manual-checklist-for-a-release.md).
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 8), 13, 16
   and 17, and the owner's review of
@@ -32,6 +33,10 @@
    - Works in a secondary user profile and in Private Space.
    - Layout check on Pixel Tablet and Pixel 6a.
    - Reminders fire on time with the screen off, after reboot and unlock.
+   - Superseded by [0039](0039-no-manual-checklist-for-a-release.md),
+     on 2026-11-15: no release waits for a manual checklist. The owner runs every release on GrapheneOS with
+     its exploit protection left on, and never turns on its
+     compatibility mode for an app of the suite.
 
 ## Options rejected
 

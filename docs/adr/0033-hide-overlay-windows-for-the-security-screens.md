@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 1, step 1.10
-  ([PROMPTS.md](../development/PROMPTS.md#110-overlays-and-accessibility-data-on-the-security-screens)).
+  ([PROMPTS.md](../development/PROMPTS.md)).
   The owner decided the points below in that session, before any code.
   Claude wrote them down in
   [pull request 35](https://github.com/shkriuss/shkriuss.app/pull/35).
@@ -82,8 +82,8 @@
      `HIDE_OVERLAY_WINDOWS`.
    - From step 2.5: a rule of the APK rules check. An app whose merged
      manifest declares a screen of `core/security` must request both
-     permissions, or its build fails. The owner's sentence for it is in
-     [PROMPTS.md](../development/PROMPTS.md#22-to-25-build-it), step 2.5.
+     permissions, or its build fails. The owner asked for it in step 2.5
+     ([pull request 44](https://github.com/shkriuss/shkriuss.app/pull/44)).
 6. **An ignored tap shows nothing.** The user guide explains it.
 7. **The accessibility marking needs the owner's check.** It stays only
    if TalkBack reads these screens on the owner's phone, with the Catalog

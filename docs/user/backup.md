@@ -4,8 +4,7 @@ A backup is one file that holds everything one app has stored. You choose
 where the file goes. You can restore it later, on the same phone or on
 another one.
 
-Water is the first app that makes backups. It is not released yet. This
-page was written on 2026-11-12, with the code that reads and writes
+Water is the first app that makes backups. This page was written on 2026-11-12, with the code that reads and writes
 backup files, and updated on 2026-11-14, when Water got its backup
 screens.
 

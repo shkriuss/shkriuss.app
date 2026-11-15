@@ -20,3 +20,6 @@ These add to CLAUDE.md. They never replace it.
 - Only the owner provides the values in `docs/security/fingerprints.md`.
 - No secrets or tokens. No personal data, such as an email address, unless
   the owner provides it.
+- Say how things are now. No step numbers, no dates of checks, no
+  "done in", no notes about sessions or pull requests.
+- No page that only records that something was done or checked.

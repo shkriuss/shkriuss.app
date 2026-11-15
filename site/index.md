@@ -2,8 +2,9 @@
 
 Open-source Android apps that keep your data on your phone.
 
-**Early development.** The apps are not ready for daily use yet. The
-[apps page](../docs/user/apps.md) shows how far each one is.
+**Early development.** The first app for daily use is
+[Water](../docs/user/water.md). The [apps page](../docs/user/apps.md)
+shows how far each one is.
 
 ## What the apps are
 

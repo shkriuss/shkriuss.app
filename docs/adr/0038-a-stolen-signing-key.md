@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-14
 - Source: Phase 2, step 2.7 of
-  [PROMPTS.md](../development/PROMPTS.md#27-restore-and-rotation-rehearsal),
+  [PROMPTS.md](../development/PROMPTS.md),
   and point 11 under "Found while writing this page" in the
   [threat model](../security/threat-model.md#found-while-writing-this-page).
   The owner decided on 2026-11-14: rotate at once. The owner accepted the
@@ -30,8 +30,7 @@
   alone, nor any other lineage made from it, can update that app again.
   The rehearsal showed this on 2026-11-14: Android answered both with
   "App not installed"
-  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#results),
-  B4 and B5).
+  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)).
 - Before that update, a phone is still open. Someone with the old key can
   make a lineage to a key of their own. A phone that installs their
   update first stays with them, and then refuses ours.
@@ -107,8 +106,8 @@ Do these in order.
 2. Make the new key and the lineage there, as
    [0037](0037-signing-key-rotation.md) says. Back them up, make the two
    copies, and check them
-   ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md),
-   parts D and E).
+   ([Check the real backup](../development/signing-key-rehearsal.md#check-the-real-backup)
+   and [Check the two copies](../development/signing-key-rehearsal.md#check-the-two-copies)).
 3. Follow [Rotate the signing key](../development/release.md#rotate-the-signing-key)
    in release.md. In fingerprints.md, the old certificate goes under
    "Previous certificates". There it is marked stolen on the date, with

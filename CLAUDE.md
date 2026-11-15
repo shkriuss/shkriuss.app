@@ -124,28 +124,54 @@ Emulator tests, signing and releases run only in GitHub Actions.
 
 ## Documentation
 
-- A change is not done until its docs are updated in the same PR: user guide,
-  `docs/architecture/`, `docs/security/permissions.md` for any permission, and
-  the app's `CHANGELOG.md`.
-- A decision that is costly to reverse gets an ADR in `docs/adr/` using the
-  template there.
-- Write in plain English, short sentences, steps numbered. Instructions are for
-  a phone browser first.
+- Docs say how things are now. No history: no step numbers, no dates of
+  checks, no "done in", no notes about sessions or pull requests. Git
+  holds the history.
+- A change updates, in the same PR, only the pages it makes wrong.
+  Always check these four: the user guide (what the user sees),
+  `docs/security/permissions.md` (a permission or an exported part),
+  `docs/security/data-inventory.md` (anything stored, and anything that
+  leaves the phone) and the app's `CHANGELOG.md`.
+- `docs/architecture/`, `docs/security/crypto-design.md` and
+  `docs/security/threat-model.md` change only when a format, a key, a
+  permission, a dependency or what an attacker can do changes.
+- A decision that is costly to reverse gets an ADR in `docs/adr/` using
+  the template there. Nothing smaller does.
+- No new page where a section of an existing page will do. No page that
+  only records that something was done or checked.
+- Write in plain English, short sentences, steps numbered. Instructions
+  are for a phone browser first.
+
+## How an app is built
+
+1. A short specification, `docs/apps/<app>/spec.md`: what the app does,
+   each screen, the data, limits and defaults, and what is left out.
+   The owner approves it.
+2. The app, in as few pull requests as stay easy to read. The owner
+   merges when CI is green.
+3. One audit before a release: security and privacy against the threat
+   model, the specification against the code and its tests, and the
+   docs against the code. One pull request fixes what it finds.
+4. The release, as `docs/development/release.md` says.
+
+The owner tries things on a phone when they want to. No step waits for
+it, and no page records it.
 
 ## Pull requests
 
 One topic per PR. The description states:
 
 1. What changed and why.
-2. How to check it on a phone (which APK, which steps).
-3. Which docs were updated.
-4. Risks, open questions, and anything you were unsure about.
+2. What to look at on a phone, if the change can be seen there.
+3. Risks, open questions, and anything you were unsure about. Name
+   every owner-only file you changed and the owner's sentence that
+   asked for it.
 
 ## Definition of done
 
 - `./gradlew check` and screenshot verification pass.
 - Tests cover the new behaviour.
-- Docs and changelog updated.
+- The docs that the change makes wrong are updated, and the changelog.
 - No hard rule broken, no new permission or dependency without an ADR.
 
 ## When stuck

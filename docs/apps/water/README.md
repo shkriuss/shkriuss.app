@@ -11,10 +11,6 @@ Pages:
   out of scope for version 1.0. Written in step 2.1. Steps 2.2 to 2.5
   built the app from it.
 
-- [Release checklist 1.0.0](release-checklist-1.0.0.md): every check on
-  the phones before and after the release of 1.0.0, with the steps
-  written out. Written in step 2.6.
-
 For users:
 
 - The user guide: [water.md](../../user/water.md), with the known

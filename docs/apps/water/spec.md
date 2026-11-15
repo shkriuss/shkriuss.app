@@ -4,7 +4,7 @@ What Water does, screen by screen, what it stores, how it reminds, and
 what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
 
 - Status: written on 2026-11-13 in Phase 2, step 2.1
-  ([PROMPTS.md](../../development/PROMPTS.md#21-specification)). The
+  ([PROMPTS.md](../../development/PROMPTS.md#1-specification)). The
   owner answered four questions and added notes on the same day
   ([Decided by the owner](#decided-by-the-owner)). Everything else this
   page chose is listed under [Assumptions](#assumptions). The owner
@@ -41,7 +41,7 @@ what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
   ([Decided by the owner](#decided-by-the-owner)).
 - Step 2.6 prepared the release of 1.0.0 on 2026-11-15: the user guide
   [water.md](../../user/water.md), the
-  [release checklist](release-checklist-1.0.0.md), the changelog and the
+  [release checklist](../../development/release.md#before-and-after-a-release), the changelog and the
   version. The app's behaviour did not change. The owner decided
   [open item 8](#open), corrected two tables of this page, and added
   [open item 9](#open) ([Decided by the owner](#decided-by-the-owner)).
@@ -1224,16 +1224,15 @@ off do not matter for Water.
 11. **Focus after a sheet or dialog closes** returns to the element that
     opened it.
 12. **Notification buttons** have only their visible text. Whether
-    TalkBack reads "ml" well there is [open](#open). The TalkBack pass of
-    the [release checklist](release-checklist-1.0.0.md) checks it.
+    TalkBack reads "ml" well there is [open](#open).
 13. Automated accessibility checks on an emulator do not exist yet, for
     Catalog either. They need the AndroidX test runner and new
     dependencies, which are owner-only files
     ([ADR 0028](../../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
     Step 2.3 checks the same rules in unit tests: touch targets, labels,
     headings and items read as one. **Water 1.0 has no accessibility
-    checks on an emulator.** The TalkBack pass on the phone, in the
-    [release checklist](release-checklist-1.0.0.md), stands in for them.
+    checks on an emulator.** The TalkBack pass on the phone, before the
+    release of 1.0.0, stands in for them.
     The owner decided this in step 2.6 ([Open](#open), item 8).
 
 ## Out of scope for version 1.0
@@ -1374,9 +1373,7 @@ What is left, with the step that decides it.
    [backup-format.md](../../architecture/backup-format.md#open-questions),
    open question 2).
 5. **How TalkBack reads "ml" and "fl oz" on the notification buttons.**
-   Still open. The TalkBack pass in the
-   [release checklist](release-checklist-1.0.0.md) checks it, before
-   the release. A later session records the result here.
+   Still open. No check on a phone has noted it yet.
 6. **Reminder settings with sync.** The reminder settings are a record,
    so with sync they reach every device, and every device would remind.
    The sync design decides which settings are per device. Step 5.1.
@@ -1390,8 +1387,8 @@ What is left, with the step that decides it.
    ([TalkBack](#talkback-and-accessibility), point 13). Step 2.6 decides,
    with the TalkBack pass on the phone. **Decided by the owner in step
    2.6**, on 2026-11-15: no accessibility checks on an emulator for
-   Water 1.0. The TalkBack pass on the phone, in the
-   [release checklist](release-checklist-1.0.0.md), stands in.
+   Water 1.0. The TalkBack pass on the phone, before the release of
+   1.0.0, stands in.
 9. **Reminders "local only", or a setting for it.** A reminder's text and
    buttons reach another app only if the user gave that app notification
    access. Such an app can pass them on to a watch. Marking a reminder

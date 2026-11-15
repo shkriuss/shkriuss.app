@@ -3,9 +3,9 @@
 An open-source suite of native Android apps, built from shared core modules.
 Every app has an ID of the form `app.shkriuss.<name>`.
 
-**Status: early development.** The only app released so far is Catalog, a
-gallery of the design components and shared screens for development. Its
-newest version is 0.3.0. No app is ready for daily use yet.
+**Status: early development.** Two apps are released: Water 1.0.0, which
+logs the water you drink and reminds you, and Catalog 0.3.0, a gallery of
+the design components and shared screens for development.
 
 ## What it is
 

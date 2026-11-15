@@ -6,7 +6,7 @@ Thank you for your interest. The project is in early development.
    human or AI.
 2. Read [docs/development/](docs/development/README.md) for how the project
    is built, tested and released.
-3. Keep one topic per pull request. The pull request template asks four
+3. Keep one topic per pull request. The pull request template asks three
    questions. Answer all of them.
 
 Report security problems privately, as described in

@@ -397,8 +397,7 @@ step 4, for Water.
 
 Tests on an emulator, with a real Android and the device's clock, are in
 [emulator-tests.md](../development/emulator-tests.md#the-tests-of-corenotify).
-That page also lists what no emulator can check, and the steps for the
-three devices.
+That page also lists what no emulator can check.
 
 ## Open
 
@@ -412,13 +411,23 @@ three devices.
 3. A notification that is not a reminder, for example progress in the
    Sync app. Today every app that uses `core/notify` gets all three
    permissions and both receivers.
-4. The checks on a GrapheneOS device: after a reboot, in a secondary
-   profile and in Private Space
-   ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices-reminders)).
-   Still open. Part 1, step 10 of Water's
-   [release checklist for 1.0.0](../apps/water/release-checklist-1.0.0.md#part-1-grapheneos-on-the-pixel-9-pro)
-   checks them, before Water's release. A later session records the
-   results here.
+4. A GrapheneOS device: after a reboot, in a secondary profile and in
+   Private Space. Closed. Water's reminders behave as
+   [Limits of Android](#limits-of-android) says:
+   1. After a reboot, nothing fires and nothing shows before the first
+      unlock. After it, the alarms are registered again without the app
+      being opened, and a reminder comes at its minute. Water skips a
+      reminder whose time passed more than a minute ago
+      ([spec.md](../apps/water/spec.md#when-the-next-reminder-comes)).
+   2. A secondary profile fires its reminders while it runs in the
+      background, and they belong to it. GrapheneOS passes them to the
+      current user only with **Send notifications to current user** on.
+      After "End session", nothing fires until the profile runs again.
+   3. While Private Space is locked, nothing fires. After the unlock,
+      the next reminder is registered, and a missed one is skipped.
+   4. After "Force stop", nothing fires until the app is opened.
+   5. After a change of time zone, the next reminder moves to the new
+      local time.
 5. What a notification shows while the app lock is on. Decided in
    Phase 1, step 7, session B
    ([While the app lock is on](#while-the-app-lock-is-on)).

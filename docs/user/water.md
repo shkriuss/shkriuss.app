@@ -5,12 +5,7 @@ tap and see how close you are to your daily goal. It can remind you
 during the hours you choose. Everything stays on your phone, with no
 account and no network.
 
-Water is not released yet. This guide was written on 2026-11-15, for
-version 1.0.0.
-
 ## Install it
-
-When Water is released:
 
 1. Install it with Obtainium, as [Install with Obtainium](install.md)
    says. In **Filter release titles by regular expression**, type
@@ -135,24 +130,33 @@ When reminders come:
 
 - Every interval you chose, counted from your last drink, between
   **From** and **Until**.
+- At their minute, also while the screen is off.
 - None once you reached today's goal.
 - A reminder says "Time for some water" and how much you drank, such as
   "1,250 of 2,000 ml today".
 
 The two buttons:
 
-- **Drank 150 ml** logs a drink of your first quick amount, now.
+- **Drank 150 ml** logs a drink of your first quick amount, now. The
+  next reminder then comes one interval after it.
 - **Later** reminds you again in 15 minutes.
 - On the lock screen, a button first asks you to unlock the phone.
+  Before the unlock it does nothing.
 - To undo **Drank**, open Water, tap the drink at the top of Today, and
   tap **Delete**.
 
 A tap on the reminder opens Today.
 
+If notifications are not allowed, or **Drink reminders** is turned off
+in Android's settings, Water still keeps time but shows nothing. The
+line on Today says so, and its button opens the right page of Android's
+settings. A reminder that was due while notifications were off counts
+as shown: the next one comes one interval after it.
+
 What happens when the phone was off, after a restart, in Private Space
 or in another user profile is in
 [Reminders and notifications](reminders.md). In short: a missed reminder
-is skipped, never shown late.
+is skipped, never shown late, and Water names the next one.
 
 Who else can see a reminder:
 
@@ -190,6 +194,18 @@ Restore a backup:
 
 For every drink, goal and setting, the newest edit stays. A restore
 cannot undo a deletion or an edit you made after the backup.
+
+Restore on a new phone:
+
+1. Install Water, and tap **Restore a backup**. Water says "Enter your
+   recovery key first".
+2. Tap **Enter the words**, and type your 24 words. The file picker then
+   opens by itself.
+3. Pick the file, and tap **Restore** at the question. Your drinks,
+   goals and settings are back.
+4. If reminders were on, the line on Today says "Reminders are on, but
+   Water may not show notifications yet." Tap **Allow**, then
+   **Continue**, then **Allow** in Android's question.
 
 In Water's backup: every drink, every goal, and the settings of
 **Drinking** and **Reminders**. Not in it: the app lock and its
@@ -245,54 +261,46 @@ Water's keys. A backup then opens only with your 24 words.
 
 Version 1.0.0 has these known problems and limits.
 
-Not checked on a phone yet, before the release:
+Not checked on a phone yet:
 
-1. Reminders on a real phone: on time with the screen off, after a
-   restart, in a second user profile, in Private Space, and after
-   **Force stop**.
-2. The app lock on a real phone, and backup and restore with Android's
-   real file picker and a second phone.
-3. How TalkBack reads "ml" and "fl oz" on the buttons of a reminder.
-
-These are checked before the release, and this page is corrected if a
-phone shows something else.
+1. How TalkBack reads "ml" and "fl oz" on the buttons of a reminder.
 
 Limits of reminders:
 
-4. No reminder comes after a restart until you unlock the phone once.
+2. No reminder comes after a restart until you unlock the phone once.
    Water cannot run before that.
-5. A missed reminder is skipped, never shown late. A reminder can come
+3. A missed reminder is skipped, never shown late. A reminder can come
    up to a minute late.
-6. No reminder comes while Water's profile or Private Space is stopped,
+4. No reminder comes while Water's profile or Private Space is stopped,
    or after **Force stop**, until you open Water again.
-7. A reminder's text and buttons reach apps you gave notification
+5. A reminder's text and buttons reach apps you gave notification
    access, and such an app can pass them on to a watch. Water does not
    mark its reminders "local only". Whether it should, or offers a
    setting, is decided after this release.
-8. With the app lock off, the lock screen shows a reminder's text if
+6. With the app lock off, the lock screen shows a reminder's text if
    your phone's setting allows it.
 
 Limits of the app lock:
 
-9. If you choose a time in **Lock the app** and turn the screen off
+7. If you choose a time in **Lock the app** and turn the screen off
    from another app, Water may stay unlocked until that time has passed
    ([The app lock](app-lock.md#when-the-app-locks)).
-10. The app lock hides your drinks. It does not encrypt them. Android's
-    own encryption protects them, with your screen lock.
+8. The app lock hides your drinks. It does not encrypt them. Android's
+   own encryption protects them, with your screen lock.
 
 Limits of backups:
 
-11. A restore keeps the newest edit of each drink, goal and setting. It
-    cannot bring back exactly how Water was on the day of the backup.
-12. Some storage apps do not let Water read a file again right away.
+9. A restore keeps the newest edit of each drink, goal and setting. It
+   cannot bring back exactly how Water was on the day of the backup.
+10. Some storage apps do not let Water read a file again right away.
     Water then says "Backup written, not checked". Check such a file
     with **Restore a backup**, and tap **Cancel** at the question.
 
 Other:
 
-13. Never type your real recovery words into a preview build of a pull
+11. Never type your real recovery words into a preview build of a pull
     request. Use test words.
-14. No accessibility checks run on an emulator for Water. A TalkBack
+12. No accessibility checks run on an emulator for Water. A TalkBack
     pass on a phone stands in for them.
 
 Not in version 1.0.0:

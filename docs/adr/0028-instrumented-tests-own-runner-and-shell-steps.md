@@ -133,8 +133,9 @@
   what a run does, and the log of a run says which revisions it used.
 - The owner decided at the Phase 1 gate, on 2026-11-13: the jobs for
   Android 13, 14 and 15 become required checks, and the job for Android
-  17 does not, while its image crashes Android's system process. The
-  owner decides again at the Phase 2 gate. See
+  17 does not, while its image crashes Android's system process. It
+  stays not required. Whether it becomes required is an open point with
+  no date: the owner decides it when asking for it. See
   [ci.md](../development/ci.md#the-emulator-jobs).
 - Compose's test rule for instrumented tests
   (`androidx.compose.ui:ui-test-junit4`) expects the AndroidX runner. The

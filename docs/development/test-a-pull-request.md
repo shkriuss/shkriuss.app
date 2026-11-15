@@ -4,6 +4,10 @@ Every pull request that changes an app gets a preview APK of that app, and a
 zip file with the screenshots it adds or changes. This page says how to get
 them onto a phone with only a browser.
 
+Looking at a preview is your choice, never a step. No step of the project
+waits for it, and no page records it. A pull request is merged when CI is
+green ([How an app is built](../../CLAUDE.md#how-an-app-is-built)).
+
 The [PR preview workflow](../../.github/workflows/pr-preview.yml) makes
 them. How it works is in [ci.md](ci.md#pr-preview).
 

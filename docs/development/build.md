@@ -394,7 +394,7 @@ second build must write the same mapping file, or the release stops. See
     the two intents of the system file picker.
   - No test opens the picker itself. That is checked by hand with the
     first app, Water
-    ([emulator-tests.md](emulator-tests.md#steps-for-the-three-devices-backup-and-restore)).
+    ([emulator-tests.md](emulator-tests.md#what-an-emulator-cannot-check)).
   - From step 2.5, `RoundTripTest` also checks the counts of records
     that are not deleted, per type name: the same when a backup is
     written and when it is checked.

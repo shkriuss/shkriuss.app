@@ -4,7 +4,7 @@ What the suite protects, against whom, what stops each attacker and what
 does not. It ends with the OWASP MASVS controls and every open question.
 
 - Status: written on 2026-11-13, in Phase 1, step 1.8
-  ([PROMPTS.md](../development/PROMPTS.md#18-threat-model)).
+  ([PROMPTS.md](../development/PROMPTS.md)).
 - Sources: section 10 of the [plan](../plan/PLAN.md#10-security-and-privacy),
   [crypto-design.md](crypto-design.md), and the decision records in
   [docs/adr](../adr/README.md).
@@ -119,12 +119,11 @@ same: "Whoever has the words can read your backups and your synced data"
    (ADR 0013, point 10).
 5. How the key is rotated to a new one is in
    [ADR 0037](../adr/0037-signing-key-rotation.md). What to do if it is
-   stolen is in [ADR 0038](../adr/0038-a-stolen-signing-key.md). The
-   rehearsal of restoring and rotating it, with throwaway keys, and the
-   check that the real backup and its copies open, are in
-   [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
-   The owner did it on 2026-11-14, and every part passed
-   ([Results](../development/signing-key-rehearsal.md#results)).
+   stolen is in [ADR 0038](../adr/0038-a-stolen-signing-key.md). What
+   the rehearsal of restoring and rotating it with throwaway keys
+   showed, and how to check that the real backup and its copies open,
+   are in
+   [signing-key-rehearsal.md](../development/signing-key-rehearsal.md#what-the-rehearsal-showed).
 
 ### The release pipeline
 
@@ -563,7 +562,7 @@ What limits it, and no more than this:
      what they rest on, on 2026-11-14: a rotated update installed over
      the old app, and Android refused the old key alone and a thief's
      lineage over the rotated app
-     ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#results)).
+     ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)).
 
 #### Claude's machine account
 
@@ -596,6 +595,11 @@ What does not:
 
 The account is `shkriuss-bot`. It has worked since Phase 0
 ([working-with-claude.md](../development/working-with-claude.md#claude)).
+
+Review tools of other vendors can be connected to this repository only,
+and `main`, the tags and the `release` environment stay closed to them,
+as to the machine account
+([working-with-claude.md](../development/working-with-claude.md#other-ai-tools)).
 
 #### The Cloudflare account
 
@@ -693,8 +697,9 @@ What does not:
    anyone reviews it, without secrets
    ([ci.md](../development/ci.md#what-a-pull-request-can-do-in-these-workflows)).
 5. The emulator job for Android 17 is not a required check, while its
-   image crashes Android's system process. The owner decides again at
-   the Phase 2 gate
+   image crashes Android's system process. Whether it becomes required
+   is an open point with no date: the owner decides it when asking for
+   it
    ([ci.md](../development/ci.md#the-emulator-jobs),
    [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 
@@ -709,9 +714,11 @@ reason below is the plain technical one.
    protect itself from the system it runs on. The handover between apps
    relies on this too
    ([crypto-design.md](crypto-design.md#setting-up-a-second-app-on-the-same-phone)).
-   GrapheneOS lowers the chance. Each release is checked with its
-   hardening on
-   ([release-checklist.md](../development/release-checklist.md#part-1-grapheneos-on-the-pixel-9-pro)).
+   GrapheneOS lowers the chance. The owner runs every release on
+   GrapheneOS with its exploit protection left on, and never turns on
+   its compatibility mode for an app of the suite. A fault that shows
+   only with the hardening on is a bug, fixed before the next release
+   ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)).
 2. **An unlocked phone in an attacker's hands.** To Android, whoever
    holds the unlocked phone is its user. It cannot tell them apart. See
    [How the optional app lock fits](#how-the-optional-app-lock-fits).
@@ -1302,9 +1309,9 @@ Status: **Partly met.**
     which runs it, on 2026-11-15.
   - Gaps: the build tools, the test libraries and the Gradle wrapper are
     not in the list, and actions pinned to a commit get no alerts. Wrangler's
-    lockfile is read by GitHub itself. Before every release, the release
-    checklist asks that no alert is open
-    ([release-checklist.md](../development/release-checklist.md#part-4-release)).
+    lockfile is read by GitHub itself. Before every release,
+    [Before and after a release](../development/release.md#before-and-after-a-release)
+    asks that no alert is open.
   - Code scanning of our own code stays Open (open question 22).
 - MASWE-0045, the compiler's security features: does not apply. The apps
   have no native code (hard rule 2). Grammar's Rust code is the later
@@ -1446,13 +1453,11 @@ further reason. All four controls are **Not applied, by decision**.
 | MASVS-RESILIENCE-3: The app implements anti-static analysis mechanisms. | No obfuscation (MASWE-0059 to 0062). The build never renames classes, because "the code is public, so renaming hides nothing" ([build.md](../development/build.md#the-decision)). The APK rules check depends on it. |
 | MASVS-RESILIENCE-4: The app implements anti-dynamic analysis techniques. | No debugger or tool detection (MASWE-0063 to 0065). |
 
-This is not the GrapheneOS release checklist. That checklist makes sure
-that each app works with GrapheneOS's hardening turned on: the hardened
-memory allocator, memory tagging, secure app spawning and restricted
-dynamic code loading
-([release-checklist.md](../development/release-checklist.md#part-1-grapheneos-on-the-pixel-9-pro)).
-It protects the app through the platform. It is not a resilience
-control.
+This is not GrapheneOS's hardening. The owner runs every release with
+it on: the hardened memory allocator, memory tagging, secure app
+spawning and restricted dynamic code loading
+([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)). It protects the app through the platform. It
+is not a resilience control.
 
 ## Decided on pull request 30
 
@@ -1463,7 +1468,7 @@ page above.
 |---|---|
 | The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted. Confirmed by the owner on 2026-11-13 ([Status words](#status-words)). |
 | The points under [Found while writing this page](#found-while-writing-this-page) | Decided at the Phase 1 gate, on 2026-11-13: a step for each, written next to the point. The points stay Open until their step is done, except point 5, which is an accepted deviation. |
-| Required checks | The emulator jobs for Android 13, 14 and 15 become required. The job for Android 17 does not, for now. The owner decides again at the Phase 2 gate ([ci.md](../development/ci.md#the-emulator-jobs)). |
+| Required checks | The emulator jobs for Android 13, 14 and 15 become required. The job for Android 17 stays not required. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
 | The seventh deviation | No forced update (MASVS-CODE-2). Accepted by the owner on 2026-11-13. Step 5.1 decides again for the Sync app. |
 | The name of Claude's machine account | `shkriuss-bot`. It has worked since Phase 0. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
 
@@ -1487,7 +1492,7 @@ preparation of Water 1.0.0. Each is built into the page above.
 
 | Question | Decision |
 |---|---|
-| Point 4: how dependencies are checked for known vulnerabilities | A workflow of the project, Dependency graph, with dependency verification on. The job that runs Gradle has no write token; the job that sends the list runs no code of the build. Only on pushes to `main` and by hand, never on pull requests, and with no new action. The owner turns on the dependency graph and Dependabot alerts. Automatic dependency submission, Dependabot security updates and version updates stay off ([CODE-3](#code)). The release checklist asks that no alert is open. |
+| Point 4: how dependencies are checked for known vulnerabilities | A workflow of the project, Dependency graph, with dependency verification on. The job that runs Gradle has no write token; the job that sends the list runs no code of the build. Only on pushes to `main` and by hand, never on pull requests, and with no new action. The owner turns on the dependency graph and Dependabot alerts. Automatic dependency submission, Dependabot security updates and version updates stay off ([CODE-3](#code)). [Before and after a release](../development/release.md#before-and-after-a-release) asks that no alert is open. |
 | Points 9 and 10: the owner's accounts and the domain | Seven rules, three of them for the domain, and no details ([The rules](#the-rules-for-the-owners-accounts-and-the-domain)). The domain has no CAA record: that stays Open. |
 | Reminders that reach a watch | A known problem, decided after the release of Water 1.0.0 ([Other apps on the phone](#other-apps-on-the-phone), "What does not", point 2). |
 
@@ -1515,12 +1520,17 @@ Phase 2, Water:
    Water stores no files.
 4. Done in step 2.6: the data inventory, what data each app stores, and
    where ([data-inventory.md](data-inventory.md)).
-5. The checks of reminders on a GrapheneOS phone: after a restart, in a
-   second profile and in Private Space
+5. Reminders on a GrapheneOS phone: after a restart, in a second
+   profile and in Private Space. Closed. Water's reminders behave as
+   [Limits of Android](../architecture/notifications.md#limits-of-android)
+   says. Before the first unlock after a restart, while a profile is
+   stopped and while Private Space is locked, nothing runs and nothing
+   shows. Once they run again, a missed reminder is skipped and the next
+   one comes at its time. A profile in the background shows its own
+   reminders, and passes them to the current user only with **Send
+   notifications to current user** on
    ([notifications.md](../architecture/notifications.md#open),
-   question 4). Still Open. They are checked in part 1 of Water's
-   [release checklist for 1.0.0](../apps/water/release-checklist-1.0.0.md#part-1-grapheneos-on-the-pixel-9-pro),
-   before its release. A later session records the results here.
+   question 4).
 6. Done in step 2.5: the check that every app that uses `core/security`
    requests `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`, in the APK rules
    check
@@ -1589,10 +1599,10 @@ Other:
     [ADR 0038](../adr/0038-a-stolen-signing-key.md).
     **Done on 2026-11-14**: the owner did the rehearsal, and every part
     passed
-    ([Results](../development/signing-key-rehearsal.md#results)). ADR 0037
+    ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)). ADR 0037
     and ADR 0038 are accepted.
-20. Whether the emulator job for Android 17 becomes required (decided
-    again at the Phase 2 gate), and the unpinned images
+20. Whether the emulator job for Android 17 becomes required (no date:
+    the owner decides it when asking for it), and the unpinned images
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 21. The path of any signing configuration inside the Gradle project
     ([CODEOWNERS](../../.github/CODEOWNERS)).
@@ -1613,9 +1623,7 @@ Other:
 ### Found while writing this page
 
 The owner decided a step for each point at the Phase 1 gate, on
-2026-11-13. The steps are in
-[PROMPTS.md](../development/PROMPTS.md#phase-1-gate-you). A point stays
-Open until its step is done.
+2026-11-13. A point stays Open until its step is done.
 
 1. No build check made sure that every app turns Android's own backup
    and device transfer off (STORAGE-2).
@@ -1696,7 +1704,7 @@ Open until its step is done.
     [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
     **Done on 2026-11-14**: the owner did the rehearsal on the Pixel 9
     Pro, and every part passed
-    ([Results](../development/signing-key-rehearsal.md#results)). ADR 0037
+    ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)). ADR 0037
     and ADR 0038 are accepted.
 12. Whether the recovery words alone can add a device to the sync
     server (Phase 5).

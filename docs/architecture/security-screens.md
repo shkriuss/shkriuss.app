@@ -365,7 +365,7 @@ reachable while the app cannot be unlocked.
 The gate protects only the screens that put their content in it. A
 check makes sure every screen does. Built in step 2.2, before Water's
 first screen
-([PROMPTS.md](../development/PROMPTS.md#22-to-25-build-it)).
+([PROMPTS.md](../development/PROMPTS.md#2-build)).
 
 What it does, for each app, as a unit test that runs in `check`:
 
@@ -667,7 +667,7 @@ prompt, a real keyboard, a real picker, an app that Android stops while
 a picker is open, and how a real phone delivers the screen-off
 broadcast. Also: that Android really hides other apps' windows and drops
 a covered tap, and which accessibility services it lets read a screen.
-They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
 TalkBack on the shielded screens was checked already: the owner's check
 with Catalog passed on 2026-11-13
 ([Overlays and accessibility services](#overlays-and-accessibility-services)).

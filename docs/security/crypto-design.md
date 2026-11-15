@@ -15,9 +15,8 @@ follows this page.
 - Session C tested the hardware keys on emulators with the real Android
   Keystore, on the same day
   ([emulator-tests.md](../development/emulator-tests.md#what-the-tests-showed)).
-  What an emulator cannot show is a list of steps for the owner's three
-  devices
-  ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices)).
+  What an emulator cannot show is listed in
+  [emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check).
 - Step 1.7, session A, on 2026-11-13: starting over after a setup that
   stopped, repairing a damaged keyset file, and giving up file keys that
   no words can bring back, with fixes to the code of session B
@@ -1560,10 +1559,10 @@ pull request 22. The app-lock screen and the user guide say it plainly.
    hardware keys wrap only keysets, and why `core/crypto` uses them one
    at a time.
 8. The owner's three test devices all have StrongBox. An emulator has
-   none. So the release checklist of every app that holds keys checks,
-   on each of the three devices, that the security screen shows
-   StrongBox for every key. Step 1.7, session A added it as part 3 of
-   [release-checklist.md](../development/release-checklist.md).
+   none, so no automatic test takes the StrongBox path. No release waits
+   for a check of it on a device
+   ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)).
+   The security screen shows the level of each key (point 4).
 
 ## Key rotation
 
@@ -1870,8 +1869,8 @@ constructor, and the tests pass a software one with the same byte layout.
    the table in "When things change" says. What an emulator cannot do,
    such as StrongBox and a real fingerprint, becomes a list of steps for
    the owner's three devices. Built: the tests are in
-   `android/core/crypto/src/androidTest/`, and the steps are in
-   [emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices).
+   `android/core/crypto/src/androidTest/`, and what they cannot check is
+   in [emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check).
 10. Step 1.7, session A: start over. Stopped before each change, then
     started over with the same words and with other words; files added
     in between; Android 13 and 14, and the move to Android 15 between
@@ -1941,7 +1940,7 @@ owner. Each one is a place to object.
     - Still to confirm on the three devices: a fingerprint added or
       removed, GrapheneOS, a second profile, Private Space, and app data
       cleared
-      ([the steps](../development/emulator-tests.md#steps-for-the-three-devices)).
+      ([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
 12. A key that accepts fingerprint and device credential can be made with
     no fingerprint enrolled. Read in Android 16's source. Session C
     confirmed it on emulators with Android 13, 14, 15 and 17: they have no
