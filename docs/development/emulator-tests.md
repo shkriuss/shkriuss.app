@@ -339,8 +339,8 @@ a device:
 | A press of a button on the screen, and the unlock it asks for | `ButtonsOnAndroidTest` sends the button's pending intent, as Android does after the unlock. No test taps the notification shade or unlocks the phone. |
 | GrapheneOS | The images are plain AOSP. |
 
-The owner checked the points of Water's release checklist for 1.0.0 by
-hand on GrapheneOS, on a Pixel 9 Pro, a Pixel Tablet and a Pixel 6a.
+No automatic test covers these points, and no release waits for a check
+of them ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)).
 
 ## Decided
 
