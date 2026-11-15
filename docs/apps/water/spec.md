@@ -39,6 +39,12 @@ what goes into its backup. Steps 2.2 to 2.5 build the app from this page.
   with the rule of ADR 0033 in the APK rules check. The owner decided
   [open item 4](#open), when a backup is checked, and three more points
   ([Decided by the owner](#decided-by-the-owner)).
+- Step 2.6 prepared the release of 1.0.0 on 2026-11-15: the user guide
+  [water.md](../../user/water.md), the
+  [release checklist](release-checklist-1.0.0.md), the changelog and the
+  version. The app's behaviour did not change. The owner decided
+  [open item 8](#open), corrected two tables of this page, and added
+  [open item 9](#open) ([Decided by the owner](#decided-by-the-owner)).
 - If this page is wrong or silent, the fix is a change to this page
   first, agreed with the owner ("If the spec is wrong or silent, stop and
   ask" in the prompt of steps 2.2 to 2.5).
@@ -605,9 +611,16 @@ record, not in a backup and will not be synced
 | What | Where |
 |---|---|
 | The bookkeeping of reminders: when the last reminder was shown, when **Later** was last pressed, the time of a snooze, which reminder is showing now, the time of the alarm Water set last, and the time of the last alarm that reached Water's handler (the last two since step 2.4, for [rule 7](#when-the-next-reminder-comes)) | One small file of Android's preferences, `app.shkriuss.water`, in Water's private storage. Times only. No amount and no text. |
-| The alarms that are registered | `core/notify`'s own file ([notifications.md](../../architecture/notifications.md#what-goes-where)) |
-| The three settings of the app lock | `core/security`'s own file ([ADR 0032](../../adr/0032-app-lock-settings-in-android-preferences.md)) |
+| The alarms that are registered, the time each alarm last fired, and whether Android's question for notifications was answered | `core/notify`'s own file ([notifications.md](../../architecture/notifications.md#what-goes-where)) |
+| The three settings of the app lock. Whether the app lock is on is not one of them: it is which hardware key wraps the `file-key` keyset ([crypto-design.md](../../security/crypto-design.md#the-app-lock)) | `core/security`'s own file ([ADR 0032](../../adr/0032-app-lock-settings-in-android-preferences.md)) |
 | Keys | `core/crypto` ([crypto-design.md](../../security/crypto-design.md#where-keys-are-stored)) |
+| Copies of keyset files that could not be read, kept before the file is written again | `core/crypto`'s folder `shk-keys-set-aside/` ([data-inventory.md](../../security/data-inventory.md#on-the-phone)) |
+| The records of a backup while a restore runs, not encrypted. Deleted when the restore ends, and at every start | `core/backup`'s folder `shk-restore/` ([data-inventory.md](../../security/data-inventory.md#on-the-phone)) |
+
+Everything Water stores, file by file, is in the
+[data inventory](../../security/data-inventory.md#water-appshkriusswater).
+The owner added the last three rows of this table, and the precise words
+of the first rows, in step 2.6 ([Decided by the owner](#decided-by-the-owner)).
 
 ### Files
 
@@ -914,7 +927,9 @@ Every setting, its default, and where it is kept.
 | Every | 1 hour | 30 min, 45 min, 1 h, 1 h 30 min, 2 h, 3 h | `settings` | Yes |
 | From | 08:00 | Any minute, up to 23:29 | `settings` | Yes |
 | Until | 22:00 | At least 30 minutes after "From", up to 23:59 | `settings` | Yes |
-| App lock, its timer, "Show the text in notifications", "Hide in recent apps and block screenshots" | Off | As in [app-lock.md](../../user/app-lock.md) | `core/security`'s file | No |
+| App lock | Off | On, off. Not a setting in a file: it is which hardware key wraps the `file-key` keyset ([crypto-design.md](../../security/crypto-design.md#the-app-lock)) | `core/crypto`'s key files | No |
+| "Lock the app" | When it leaves the screen | When it leaves the screen, or 1, 5 or 15 minutes, or 1 hour after, as in [app-lock.md](../../user/app-lock.md#when-the-app-locks) | `core/security`'s file | No |
+| "Show the text in notifications", "Hide in recent apps and block screenshots" | Off | On, off | `core/security`'s file | No |
 | Reminder bookkeeping | | | Water's phone-only file | No |
 
 - A change takes effect at once. There is no Save button in Settings.
@@ -967,7 +982,7 @@ recovery key. Three things do:
      that you write on paper. They are the way back in if the app lock
      cannot be opened."
 2. Buttons:
-   - **Create a recovery key**: opens "Create your recovery key"
+   - **Create a recovery key**: opens "Create a recovery key"
      (`SecurityScreens.createIntent`).
    - **I already have one**: opens "Enter your recovery key"
      (`SecurityScreens.enterIntent`). For example, words you made in
@@ -1209,15 +1224,17 @@ off do not matter for Water.
 11. **Focus after a sheet or dialog closes** returns to the element that
     opened it.
 12. **Notification buttons** have only their visible text. Whether
-    TalkBack reads "ml" well there is [open](#open), for the TalkBack
-    pass of step 2.6.
+    TalkBack reads "ml" well there is [open](#open). The TalkBack pass of
+    the [release checklist](release-checklist-1.0.0.md) checks it.
 13. Automated accessibility checks on an emulator do not exist yet, for
     Catalog either. They need the AndroidX test runner and new
     dependencies, which are owner-only files
     ([ADR 0028](../../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
     Step 2.3 checks the same rules in unit tests: touch targets, labels,
-    headings and items read as one. Whether Water 1.0 needs the checks on
-    an emulator is [open](#open), for step 2.6.
+    headings and items read as one. **Water 1.0 has no accessibility
+    checks on an emulator.** The TalkBack pass on the phone, in the
+    [release checklist](release-checklist-1.0.0.md), stands in for them.
+    The owner decided this in step 2.6 ([Open](#open), item 8).
 
 ## Out of scope for version 1.0
 
@@ -1273,7 +1290,7 @@ Water needs these. Each is built in the step named, not on this page.
 | 2.3 | Every screen of [Screens](#screens) except backup and restore, and `ShkProgressBar`. Built, without the parts that need steps 2.4 and 2.5 ([Settings screen](#settings-screen)). |
 | 2.4 | Reminders: `AlarmSource`, `AlarmHandler`, the buttons, the permission question, the reminder line of Today, the switch "Remind me to drink" and the line about notifications in Settings, and the `core/notify` changes. Built. |
 | 2.5 | Backup and restore screens, the first-need dialog, the sections Backup and Security of Settings with the app lock, the file key move of [Files](#files) with its warning as a comment on the call, and the Licences screen. Built. |
-| 2.6 | The user guide `docs/user/water.md`, the changelog, the release checklist |
+| 2.6 | The user guide `docs/user/water.md`, the changelog, the release checklist. Done on 2026-11-15, with version 1.0.0, the data inventory and the privacy page. No change to the app's behaviour. |
 
 ## Decided by the owner
 
@@ -1294,6 +1311,7 @@ On 2026-11-13, in the planning session of this step.
 | On pull request 40 (step 2.2, on 2026-11-14) | The words for a goal and for a quick amount outside their limits ([Settings screen](#settings-screen)). Three rules the code had chosen, accepted: on the same `updatedAt` the larger `id` counts, until step 5.1; a change of "From" that leaves less than 30 minutes before "Until" is refused, like a change of "Until"; setting the goal to the value it already has writes nothing. The receiver of `androidx.profileinstaller` is removed from Water's manifest ([Permissions](#permissions)). |
 
 | Step 2.5, on 2026-11-14, in the planning of the step | **When a backup is checked**: after every backup, by itself. Water reads the file again and checks it to its last byte. There is no item to check a file on its own; **Restore a backup** checks first and can be cancelled ([Backup and restore screens](#backup-and-restore-screens); [Open](#open), item 4). **How many drinks a backup holds**: `core/backup` counts the records of each type name that are not deleted, and Water shows the count of `intake`. No change to the file format. **Two dialogs the design system lacked**: `ShkProgressDialog` and a third button for `ShkDialog`, added to `core/design`. **The APK rules check**: beside the three changes of the prompt, its class comment is brought up to date. The owner also accepted, with the plan of the step: the same progress dialog while a restore runs; the three outcomes of the check after a backup, and that Water does not delete a file that fails it; which reminder "no longer fits" after a restore ([After a restore](#after-a-restore)); "Off" for the app lock after a reset; that Water goes on when the flow's screen closes and the keys are there, however it was closed; that the first-need dialog is checked behind the app lock in `core/security`, because it can never show while the app lock is on; Licences as one entry per project, opened in place of Settings; and the words of the dialogs. |
+| Step 2.6, on 2026-11-15, in the planning of the step | **Accessibility checks on an emulator**: none for Water 1.0. The TalkBack pass on the phone, in the release checklist, stands in ([Open](#open), item 8). **Two tables of this page corrected**, as the code has always worked: the app lock's on and off is not in `core/security`'s file but is which key wraps `file-key`, and "Lock the app" starts at "When it leaves the screen" ([Settings](#settings)); "On this phone only" names `core/notify`'s fired times and its question flag, the set-aside key files and the restore staging folder ([On this phone only](#on-this-phone-only)). **Reminders and a watch**: a known problem of 1.0.0, decided after its release ([Open](#open), item 9). |
 
 ## Assumptions
 
@@ -1356,7 +1374,9 @@ What is left, with the step that decides it.
    [backup-format.md](../../architecture/backup-format.md#open-questions),
    open question 2).
 5. **How TalkBack reads "ml" and "fl oz" on the notification buttons.**
-   The TalkBack pass of step 2.6.
+   Still open. The TalkBack pass in the
+   [release checklist](release-checklist-1.0.0.md) checks it, before
+   the release. A later session records the result here.
 6. **Reminder settings with sync.** The reminder settings are a record,
    so with sync they reach every device, and every device would remind.
    The sync design decides which settings are per device. Step 5.1.
@@ -1368,4 +1388,17 @@ What is left, with the step that decides it.
 8. **Accessibility checks on an emulator.** Whether Water 1.0 needs them.
    They need the AndroidX test runner and owner-only changes
    ([TalkBack](#talkback-and-accessibility), point 13). Step 2.6 decides,
-   with the TalkBack pass on the phone.
+   with the TalkBack pass on the phone. **Decided by the owner in step
+   2.6**, on 2026-11-15: no accessibility checks on an emulator for
+   Water 1.0. The TalkBack pass on the phone, in the
+   [release checklist](release-checklist-1.0.0.md), stands in.
+9. **Reminders "local only", or a setting for it.** A reminder's text and
+   buttons reach another app only if the user gave that app notification
+   access. Such an app can pass them on to a watch. Marking a reminder
+   "local only" would not hide it from apps with notification access. It
+   only asks apps that pass notifications to a watch not to pass it.
+   Today, with the app lock on, a reminder shows its hidden form, without
+   amounts and without buttons, unless "Show the text in notifications"
+   is on. Whether Water marks its reminders local only, or offers a
+   setting for it, the owner decides after the release of 1.0.0. Found
+   in step 2.6.

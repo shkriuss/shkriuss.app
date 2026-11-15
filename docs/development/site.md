@@ -25,6 +25,7 @@ fingerprint, and a link to the source. Set up in Phase 0, step 7.
 | `/apps/` | [`docs/user/apps.md`](../user/apps.md) |
 | `/install/` | [`docs/user/install.md`](../user/install.md) |
 | `/verify/` | [`docs/user/verify.md`](../user/verify.md), plus the fingerprint and package names from [`fingerprints.md`](../security/fingerprints.md) |
+| `/privacy/` | [`docs/user/privacy.md`](../user/privacy.md). Added in step 2.6. |
 | Any other address | [`site/404.md`](../../site/404.md) |
 
 Every page has a link to the source code on GitHub. A link in a page to

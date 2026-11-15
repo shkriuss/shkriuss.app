@@ -92,56 +92,6 @@ Water's manifest still removes one permission that a library asks for:
 
 Other components that libraries add, none of them a permission:
 
-- The six screens of `core/security`: removed in Catalog's manifest,
-  for the same reason. Catalog draws their content on two pages of its
-  own. Catalog has no app lock, so nothing registers the screen-off
-  receiver of the app lock either.
-
-- `androidx.startup.InitializationProvider`: not exported. Starts
-  libraries when the app starts.
-- `androidx.profileinstaller.ProfileInstallReceiver`: exported, but only
-  callers with `android.permission.DUMP` can reach it. Normal apps cannot
-  get that permission; the system and the developer shell have it. It
-  installs the app's start-up profile.
-  - Open, for the next change to Catalog: remove it, as Water does
-    (owner's decision on pull request 40;
-    [Water](#water-appshkriusswater)).
-- The emoji font loader from `androidx.emoji2` is removed, because it would
-  ask a system font provider, usually Google Play services, for a font.
-
-Catalog stores no data, so Android backup and device-to-device transfer are
-turned off.
-
-### Water (`app.shkriuss.water`)
-
-Three permissions, from `core/notify`, for its reminders, since step
-2.4:
-
-| Permission | From | Why |
-|---|---|---|
-| `android.permission.POST_NOTIFICATIONS` | `core/notify` | To show a reminder. The user allows it or not: Water explains first, then Android asks ([spec.md](../apps/water/spec.md#asking-for-notifications)). |
-| `android.permission.USE_EXACT_ALARM` | `core/notify` | To remind at the exact minute ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)). Granted at install. |
-| `android.permission.RECEIVE_BOOT_COMPLETED` | `core/notify` | To set the alarm again after a restart. Granted at install. |
-
-- They are Water's allow list in the APK rules check, which the owner
-  asked for in step 2.4. A build of Water with any other permission
-  fails.
-- What they allow and do not allow is under
-  [Apps that use core/notify](#apps-that-use-corenotify).
-- Step 2.5 adds the two of `core/security`, as Water's
-  [specification](../apps/water/spec.md#permissions) says.
-
-Until then Water's manifest removes what its libraries ask for beyond
-these. The owner decided this in step 2.2, on 2026-11-14:
-
-| Permission | Added by | What happens to it |
-|---|---|---|
-| `app.shkriuss.water.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Water's manifest, for good, as in Catalog. `androidx.core` uses it only on Android 12 and older. |
-| `android.permission.USE_BIOMETRIC` | `core/security` | Removed in Water's manifest until step 2.5. Nothing in Water opens the screens of `core/security` before then, and the app lock cannot be turned on. |
-| `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | Removed in Water's manifest until step 2.5, for the same reason. |
-
-Other components that libraries add, none of them a permission:
-
 - The three receivers of `core/notify`, none exported
   ([Receivers](#receivers)): `AlarmReceiver` for Water's one alarm,
   `SystemEventReceiver` for a restart, an update and a new time or time
@@ -346,7 +296,7 @@ at it.
 | Test APK | Permission | Why |
 |---|---|---|
 | `app.shkriuss.core.crypto.test` | `android.permission.USE_BIOMETRIC` | Android's own system prompt needs it. The tests of the Lock key and the Recovery guard show the prompt and answer it with the emulator's PIN. |
-| `app.shkriuss.core.notify.test` | `android.permission.POST_NOTIFICATIONS`, `android.permission.USE_EXACT_ALARM`, `android.permission.RECEIVE_BOOT_COMPLETED` | The three permissions of `core/notify`, from the module's own manifest, as an app gets them. The tests set real alarms and show real notifications on the emulator. The test APK also has the module's two receivers. |
+| `app.shkriuss.core.notify.test` | `android.permission.POST_NOTIFICATIONS`, `android.permission.USE_EXACT_ALARM`, `android.permission.RECEIVE_BOOT_COMPLETED` | The three permissions of `core/notify`, from the module's own manifest, as an app gets them. The tests set real alarms and show real notifications on the emulator. The test APK also has the module's three receivers. |
 
 No app gets `USE_BIOMETRIC` from the test APK. Apps get it from
 `core/security`

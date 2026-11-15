@@ -79,10 +79,38 @@ value.
       preview, as in step 8.
    3. Open the app in Private Space and use every screen.
 10. [ ] Reminders fire on time with the screen off, after a reboot, and
-    after the first unlock. Only for an app with reminders. Open: the
-    exact steps come with the first app that has reminders. What they
-    must cover is already listed in
-    [emulator-tests.md](emulator-tests.md#steps-for-the-three-devices-reminders).
+    after the first unlock. Only for an app with reminders. Do every part
+    of
+    [Steps for the three devices: reminders](emulator-tests.md#steps-for-the-three-devices-reminders)
+    with the preview, in the app's own words:
+    1. Part 1: the question for notifications, a reminder on time with
+       the screen off, and its buttons on the lock screen.
+    2. Part 2: **Later**, and a tap on the reminder.
+    3. Part 3: a reminder while notifications are not allowed, and while
+       its channel is off.
+    4. Part 4: a restart, before and after the first unlock.
+    5. Part 5: an app update. Only from the app's second release. Before
+       that, write "Does not apply" and why.
+    6. Part 6: a new time zone.
+    7. Part 7: a secondary user profile.
+    8. Part 8: Private Space.
+    9. Part 9: **Force stop**.
+
+    The copy for the version writes every step out in the app's words.
+11. [ ] A TalkBack pass over every screen, sheet and dialog, for every
+    app. Turn on TalkBack (in Settings, search for **TalkBack**). Move
+    through each one with a swipe. Check:
+    1. TalkBack reads every button, field, switch and row with a name,
+       and reads nothing that is only decoration.
+    2. Amounts, times and units are read in words, as the app's
+       specification says.
+    3. After a sheet or a dialog closes, the focus goes back to what
+       opened it.
+    4. For an app with buttons on its notifications: how TalkBack reads
+       each button.
+
+    The copy for the version lists every screen, sheet and dialog by
+    name. Then turn TalkBack off.
 
 ## Part 2: Layout, on the Pixel Tablet and the Pixel 6a
 
@@ -95,12 +123,18 @@ value.
    3. upright and turned sideways.
 3. [ ] No text is cut off, clipped or on top of other text, and nothing
    sits under the system bars.
+4. [ ] Reminders, on both devices. Only for an app with reminders. Parts
+   1 to 4 of
+   [Steps for the three devices: reminders](emulator-tests.md#steps-for-the-three-devices-reminders),
+   as in part 1, step 10.
 
 ## Part 3: Keys, on all three devices
 
-Steps 1 and 2 are only for an app that holds keys. Catalog holds none:
-write "Does not apply" next to them. An emulator has no StrongBox, so
-only these devices can check it
+Steps 1 and 2 are only for an app that holds keys, step 3 for an app
+with the app lock, and step 4 for an app that makes backups. Catalog has
+none of these: write "Does not apply" next to them. Use test words in
+every step, never your real recovery words. An emulator has no
+StrongBox, so only these devices can check it
 ([crypto-design.md](../security/crypto-design.md#strongbox-and-other-hardware),
 point 8).
 
@@ -110,7 +144,20 @@ point 8).
 2. [ ] On each of the three, open the app's security screen. Under
    **Keys on this phone**, every key says **StrongBox: a separate
    security chip**.
-3. [ ] Uninstall the previews on all three devices when you are done
+3. [ ] The app lock, on all three devices. Only for an app with the app
+   lock. Every step of
+   [Steps for the three devices: the app lock](emulator-tests.md#steps-for-the-three-devices-the-app-lock):
+   turning it on, when it locks, the recent apps, the pickers and
+   sharing, the app lock screen and screenshots, and notifications. For
+   an app with reminders, check that a reminder shows its hidden form
+   and has no buttons while the app lock is on.
+4. [ ] Backup and restore, on all three devices. Only for an app that
+   makes backups. Every step of
+   [Steps for the three devices: backup and restore](emulator-tests.md#steps-for-the-three-devices-backup-and-restore).
+   A backup made on one device is restored on a second device, after
+   the same test words are entered there. Check that everything the
+   backup holds is there.
+5. [ ] Uninstall the previews on all three devices when you are done
    ([Install a newer preview](test-a-pull-request.md#install-a-newer-preview),
    step 1).
 
@@ -119,13 +166,23 @@ point 8).
 1. [ ] Merge the pull request.
 2. [ ] CI is green on the newest commit of `main`
    ([Run a release](release.md#run-a-release), "Before you start").
-3. [ ] Run the release workflow with the app and the version. Approve
+3. [ ] No known vulnerability is open
+   ([Dependency graph](ci.md#dependency-graph)).
+   1. Open
+      `github.com/shkriuss/shkriuss.app/actions/workflows/dependency-graph.yml`.
+      The newest run on `main` is green. If the merge changed `android/`,
+      it is the run for the merge.
+   2. Open `github.com/shkriuss/shkriuss.app/security/dependabot`. No
+      alert is open.
+   3. If an alert is open, stop. Tell Claude in a session which library
+      it names. Claude checks whether it ships in the app.
+4. [ ] Run the release workflow with the app and the version. Approve
    **Sign** ([Run a release](release.md#run-a-release)).
-4. [ ] Check the draft
+5. [ ] Check the draft
    ([Check and publish the draft](release.md#check-and-publish-the-draft),
    steps 1 to 3).
-5. [ ] Publish the draft (the same section, steps 4 to 6).
-6. [ ] Open `github.com/shkriuss/shkriuss.app/tags`. The tag
+6. [ ] Publish the draft (the same section, steps 4 to 6).
+7. [ ] Open `github.com/shkriuss/shkriuss.app/tags`. The tag
    `<app>-v<version>` is there, on the commit from the notes.
 
 ## Part 5: After publishing
@@ -134,7 +191,10 @@ point 8).
    shows the update. Tap the app, then **Update**. It installs as an
    update, without uninstalling, and the app's data is kept. For an app's
    first release, install it instead
-   ([Install with Obtainium](../user/install.md)).
+   ([Install with Obtainium](../user/install.md)). If the version is a
+   pre-release (it has a hyphen, such as `1.0.0-rc.1`), first turn on
+   **Include prereleases** in the app's settings in Obtainium
+   ([Pre-releases](../user/install.md#pre-releases)).
 2. [ ] Check the app with AppVerifier
    ([Verify with AppVerifier](../user/verify.md)).
 3. [ ] Long-press the app's icon and tap **App info**. It shows the new

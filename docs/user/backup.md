@@ -46,8 +46,9 @@ What is not in a backup:
   has not fetched to this phone, it cannot put them in. It tells you how
   many files are not in the backup.
 
-Open: which settings of each app are in its backup. Each app's own guide
-says so.
+Which settings of each app are in its backup: each app's own guide says
+so. For Water, see [Back up and restore](water.md#back-up-and-restore) in
+its guide.
 
 What the file shows to anyone who has it, without the words:
 

@@ -9,10 +9,9 @@ android {
 
     defaultConfig {
         applicationId = "app.shkriuss.water"
-        // Not released yet. Step 2.6 sets 1.0.0. The code follows from the
-        // name by the rule in ADR 0021, and CI checks it.
-        versionCode = 10000101
-        versionName = "1.0.0-alpha.1"
+        // Follows from versionName by the rule in ADR 0021. CI checks it.
+        versionCode = 10000900
+        versionName = "1.0.0"
     }
 }
 

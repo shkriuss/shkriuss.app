@@ -11,8 +11,17 @@ Pages:
   out of scope for version 1.0. Written in step 2.1. Steps 2.2 to 2.5
   built the app from it.
 
-Not written yet, both in step 2.6: the release checklist of 1.0.0, and
-the user guide, `docs/user/water.md`, in [user/](../../user/README.md).
+- [Release checklist 1.0.0](release-checklist-1.0.0.md): every check on
+  the phones before and after the release of 1.0.0, with the steps
+  written out. Written in step 2.6.
+
+For users:
+
+- The user guide: [water.md](../../user/water.md), with the known
+  problems of 1.0.0. Written in step 2.6.
+- What Water stores, and what leaves the phone:
+  [data-inventory.md](../../security/data-inventory.md#water-appshkriusswater)
+  and, in plain words, [privacy.md](../../user/privacy.md).
 
 Code:
 

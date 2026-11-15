@@ -7,7 +7,7 @@ example `app.shkriuss.catalog`.
 | App | What it is | Status |
 |---|---|---|
 | Catalog | A gallery of the shared design components and screens, for development. Most people do not need it. | Released: 0.3.0 |
-| Water | Log the water you drink, see how close you are to your daily goal, and get reminders during the hours you choose. The pilot app. | Planned |
+| Water | Log the water you drink, see how close you are to your daily goal, and get reminders during the hours you choose. The pilot app. | In development |
 | Reminders | | Planned |
 | Tasks | | Planned |
 | Notes | | Planned |
@@ -26,6 +26,9 @@ What the status means:
 
 - **Planned**: not built yet.
 - **In development**: being built. There is no release to install yet.
+- **Pre-release**: there is a pre-release on GitHub, for testing. The
+  status names its version. Obtainium shows it only with **Include
+  prereleases** on ([Pre-releases](install.md#pre-releases)).
 - **Released**: there is a release on GitHub. The status names the newest
   version. [Install it with Obtainium](install.md).
 
