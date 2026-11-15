@@ -68,6 +68,21 @@ The plan accepts these, with these limits:
 A file that is not signed with the suite key fails the fingerprint check and
 cannot update an installed app.
 
+## Other AI tools
+
+The owner also uses AI tools of other vendors, such as Codex and Gemini,
+on this repository.
+
+1. They review and audit only. They read and report. Only Claude builds
+   here.
+2. They read [AGENTS.md](../../AGENTS.md), not CLAUDE.md. It points
+   them to CLAUDE.md and says what to report. AGENTS.md is owner-only.
+3. Their GitHub apps are installed on this repository only, never on
+   signing-ceremony.
+4. They get no secrets.
+5. A finding of theirs is checked against the code before anything
+   changes.
+
 ## Where Claude works
 
 - GitHub Actions is the authoritative build.

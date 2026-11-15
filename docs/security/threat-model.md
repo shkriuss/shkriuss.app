@@ -596,6 +596,11 @@ What does not:
 The account is `shkriuss-bot`. It has worked since Phase 0
 ([working-with-claude.md](../development/working-with-claude.md#claude)).
 
+Review tools of other vendors can be connected to this repository only,
+and `main`, the tags and the `release` environment stay closed to them,
+as to the machine account
+([working-with-claude.md](../development/working-with-claude.md#other-ai-tools)).
+
 #### The Cloudflare account
 
 The owner's Cloudflare account serves the hub site. A user's own sync

@@ -2,9 +2,10 @@
 
 A workflow that tells the owner when a pull request changes a path that only
 the owner may change. Those paths are listed in
-[CODEOWNERS](../../.github/CODEOWNERS): the workflows, `CLAUDE.md`, the
-Claude rules, dependency verification, the Gradle wrapper, the repository
-list, the build checks for hard rules 2, 3 and 4, the record rules checks,
+[CODEOWNERS](../../.github/CODEOWNERS): the workflows, `CLAUDE.md`,
+`AGENTS.md`, the Claude rules, dependency verification, the Gradle
+wrapper, the repository list, the build checks for hard rules 2, 3 and 4,
+the record rules checks,
 the runner of the emulator tests with its plugin and its suite check,
 signing files and the signing certificate fingerprint.
 
