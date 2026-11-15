@@ -10,6 +10,8 @@ Folders:
 
 - [water/](water/README.md): Water, the pilot app, with its
   specification.
+- [reminders/](reminders/README.md): Reminders, the second app, with
+  its specification.
 
 What else belongs here:
 
