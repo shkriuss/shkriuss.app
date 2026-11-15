@@ -459,8 +459,10 @@ The steps use Water, the first app with reminders (Phase 2, step 4),
 and the words of its screens. Water skips a reminder whose time passed
 more than a minute ago, for example while the phone was off. It never
 shows one late ([spec.md](../apps/water/spec.md#missed-reminders)).
-Step 10 of part 1 of the [release checklist](release-checklist.md) will
-point here.
+Step 10 of part 1 of the [release checklist](release-checklist.md)
+points here. Water's
+[checklist for 1.0.0](../apps/water/release-checklist-1.0.0.md) copies
+these steps, and those of the app lock and of backup and restore below.
 
 Before you start: use the preview build of a pull request
 ([test-a-pull-request.md](test-a-pull-request.md)). Do the steps

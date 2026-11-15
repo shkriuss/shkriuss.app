@@ -826,43 +826,181 @@ Model: `opus`. Effort: `high`. Mode: **Plan** first, because it decides
 points 4, 9 and 10 with me. The rest is routine.
 
 ```text
-Prepare Water 1.0.0 for release. Do not start the release workflow.
+Read CLAUDE.md, docs/apps/water/spec.md, docs/development/release.md
+and docs/development/release-checklist.md. Prepare Water's first
+release. Do not start the release workflow and do not create a tag.
+I am the owner. Change no behaviour of the app in this pull request,
+only its version. If you find a bug, stop and tell me.
 
-First decide with me, before any file changes. They answer points 4, 8, 9
-and 10 under "Found while writing this page" in
-docs/security/threat-model.md:
-- How dependencies are checked for known vulnerabilities (point 4). First
-  try what GitHub offers by itself, for example the dependency graph and
-  Dependabot alerts, and tell me what each shows for the Gradle project
-  and what I must turn on in the repository settings, step by step, for a
-  phone. A tool outside GitHub needs its own ADR (hard rule 5). Write the
-  decision where the threat model says Open.
-- My GitHub and Cloudflare accounts, and the domain (points 9 and 10). I
-  check them myself. Ask me what to record. Write only the rule, for
-  example "the owner's accounts have a second factor", in
-  docs/security/. Never write details of my accounts or domain, no
-  names and no settings values.
+VERSION
 
-- User guide in `docs/user/water.md`, written for a phone screen.
-- `docs/security/permissions.md` and the data inventory are complete.
-- `docs/development/third-party.md` lists everything that ships in the
-  app, and the app shows those notices.
-- `CHANGELOG.md` for the app.
-- The reminder steps of `docs/development/release-checklist.md` (part 1,
-  step 10), which are Open until now, as exact steps.
-- `docs/apps/water/release-checklist-1.0.0.md`: a copy of
-  `docs/development/release-checklist.md`, filled in for Water 1.0.0.
-- A privacy page (point 8): `docs/user/privacy.md` in the user guide and a
-  page on the hub site. Plain English. What each app stores, that data
-  apps have no network permission, what the Sync app and its server
-  can see, and that there is no tracking. It must match the data
-  inventory and docs/security/permissions.md. Update the threat model
-  (PRIVACY-3) and the hub site's page list.
-- Add Water to the hub site and to the release workflow's list of apps:
-  the `app` options and the "Check the inputs" step of every job (I am the
-  owner and I ask for exactly that change).
-- List every known problem honestly.
+The first release is 1.0.0: versionName 1.0.0 and versionCode 10000900
+in android/app/water/build.gradle.kts (ADR 0021). Its checklist is
+docs/apps/water/release-checklist-1.0.0.md. Settings shows the
+version: if a committed screenshot shows it, record that screenshot
+again. No other screenshot may change.
+
+A. DECIDE WITH ME FIRST, BEFORE ANY FILE CHANGES
+
+They answer points 4, 9 and 10 under "Found while writing this page" in
+docs/security/threat-model.md.
+
+1. How dependencies are checked for known vulnerabilities (point 4).
+   First try what GitHub offers by itself, for example the dependency
+   graph and Dependabot alerts. Tell me what each shows for the Gradle
+   project, and what I must turn on in the repository settings, step by
+   step, for a phone. A tool outside GitHub needs its own ADR (hard
+   rule 5). If it needs a workflow file or an action, show me the exact
+   file first: .github/ is owner-only. Write the decision where the
+   threat model says Open.
+2. My GitHub and Cloudflare accounts, and the domain (points 9 and 10).
+   I check them myself. Ask me what to record. Write only the rule, for
+   example "the owner's accounts have a second factor", in
+   docs/security/. Never write details of my accounts or domain, no
+   names and no settings values.
+
+B. FIX WHAT AN AUDIT OF MAIN AT a93496b FOUND
+
+1. docs/security/permissions.md has "### Water (app.shkriuss.water)"
+   twice. Step 2.5 pasted a block into the middle. Delete lines 93 to
+   142 as they are at a93496b: from the second "Other components that
+   libraries add, none of them a permission:" (the list about Catalog's
+   manifest) to the end of the table whose last row says
+   HIDE_OVERLAY_WINDOWS is "Removed in Water's manifest until step
+   2.5". Keep the list after it, which starts with "The three receivers
+   of core/notify". Afterwards there is one Water section, with five
+   permissions, and Catalog's text stands only under Catalog.
+2. docs/security/threat-model.md is out of date in three places: "What
+   exists today: Catalog and the core modules", "Catalog, the only app
+   today, turns both off", and "The first app with it will be Water".
+   Water exists, turns both off, and has the app lock.
+3. docs/user/apps.md says Water is "Planned". Set it to "In
+   development". Add the status "Pre-release" to the meanings on that
+   page: there is a pre-release on GitHub, for testing, and Obtainium
+   shows it only with "Include prereleases" on.
+4. docs/security/fingerprints.md is owner-only. I am the owner and I
+   ask you to add the row "Water | app.shkriuss.water" to the table
+   "Apps signed with this key". Change nothing else on that page.
+
+C. DOCS FOR THE RELEASE
+
+1. The user guide docs/user/water.md, written for a phone screen. Add
+   it to docs/user/README.md and to docs/apps/water/README.md.
+2. The data inventory does not exist yet. Write
+   docs/security/data-inventory.md: what each app stores and where, for
+   Catalog and Water, and what leaves the phone and how. Check it
+   against the code, not against other pages. Update
+   docs/security/README.md, and the threat model where it waits for
+   this page (MASWE-0073, and point 4 under "Open in other pages").
+3. docs/security/permissions.md is complete for Water.
+4. docs/development/third-party.md: do its "How to check again" for
+   the release build. The page and the Licences screen list everything
+   that ships in the app.
+5. android/app/water/CHANGELOG.md: the section for this version, in
+   the form of Catalog's changelog.
+6. A privacy page (point 8): docs/user/privacy.md in the user guide,
+   and a page on the hub site. Plain English. What each app stores,
+   that data apps have no network permission, what the Sync app and
+   its server will be able to see (decided, not built yet), and that
+   there is no tracking. It must match the data inventory and
+   docs/security/permissions.md. Update the threat model (PRIVACY-3 and
+   point 8), site/site.json and docs/development/site.md.
+7. List every known problem honestly, in docs/user/water.md and in the
+   pull request.
+8. Spec Open 8 is decided: no accessibility checks on an emulator for
+   Water 1.0. The TalkBack pass on the phone stands in. Record it in
+   the spec as my decision.
+
+D. THE RELEASE CHECKLIST
+
+The phone steps for reminders, for the app lock and for backup and
+restore are already written, in docs/development/emulator-tests.md
+("Steps for the three devices: ..."). The release checklist does not
+ask for them yet.
+
+1. docs/development/release-checklist.md, the general one: write part
+   1, step 10 (reminders), which is Open until now. Add a step for an
+   app with the app lock, a step for an app that makes backups, and a
+   TalkBack pass over every screen. These may point to the sections of
+   emulator-tests.md.
+2. Water's checklist: a copy of the general one, filled in for this
+   version. Write every step I do on a phone out in full, with Water's
+   words. Do not point to another page for a step: copy the steps of
+   the three sections of emulator-tests.md into it. It must hold:
+   - reminders: on time with the screen off, after a restart before
+     and after the first unlock, in a second user profile, in Private
+     Space, and after "Force stop";
+   - the app lock: when it locks, the recent apps, the hidden form of
+     a reminder, and that its buttons are gone;
+   - backup and restore: a backup made on one device is restored on a
+     second device after the same test words are entered there, and
+     the drinks, the goal and the settings are there;
+   - the TalkBack pass: every screen, sheet and dialog; how "ml" and
+     "fl oz" are read on the buttons of the notification (spec Open
+     5); and where the focus goes after a sheet or a dialog closes;
+   - in part 5, for Obtainium: if the version is a pre-release, turn
+     on "Include prereleases" for Water.
+   Test words only, never my real recovery words, in every step with a
+   preview build.
+3. Threat model open point 5, notifications.md open question 4 and
+   "Not yet checked on a phone" in docs/user/reminders.md stay Open in
+   this pull request. Name Water's checklist there as the place where
+   they are checked. A later session corrects them with what I report.
+
+E. THE RELEASE WORKFLOW AND THE HUB SITE
+
+1. .github/workflows/release.yml: I am the owner and I ask you to add
+   water to the list of apps: the "app" options, and the step "Check
+   the inputs" of every job (build, rebuild, sign, draft), in its case
+   line and in its error text. Nothing else in that file. Update
+   docs/development/release.md where it names the apps.
+2. In this pull request the hub site gets the privacy page only.
+   Nothing on the site or in the README may say that Water can be
+   installed before I publish it.
+3. At the end of Water's checklist, write the exact prompt that I
+   paste into a session after I publish. It asks for: Water's status
+   on docs/user/apps.md; the status in README.md; the pages water.md,
+   recovery-key.md, app-lock.md, backup.md and reminders.md on the hub
+   site (site/site.json), without their sentence "No released app has
+   ... yet"; and the results of the phone checks in the pages of D3.
+
+F. FINISH
+
+1. In docs/development/PROMPTS.md, replace the prompt of step 2.6 with
+   this text, and change "Phase 2 gate (you)" to match VERSION.
+2. ./gradlew check and the screenshot verification pass, as CI runs
+   them. The site tests and the site build pass.
+3. The pull request description says what CLAUDE.md asks: what changed
+   and why, how to check it on a phone, which docs changed, and risks,
+   open questions and anything you were unsure about. List every
+   owner-only file you changed, with the sentence of this prompt that
+   asked for it.
 ```
+
+This text replaced the first version of the prompt on 2026-11-15. The
+first version also asked to add Water to the hub site at once. This one
+adds only the privacy page, and the rest after publishing.
+
+Decided with the owner on 2026-11-15, in the planning of the step:
+
+- **Point 4.** A workflow of the project,
+  [`dependency-graph.yml`](../../.github/workflows/dependency-graph.yml),
+  sends each app's release runtime class path to GitHub's dependency
+  graph, with dependency verification on. The owner turns on the
+  dependency graph and Dependabot alerts. Automatic dependency
+  submission, security updates and version updates stay off
+  ([ci.md](ci.md#dependency-graph),
+  [threat-model.md](../security/threat-model.md#code)).
+- **Points 9 and 10.** Eight rules for the owner's accounts and the
+  domain, and no details
+  ([threat-model.md](../security/threat-model.md#the-rules-for-the-owners-accounts-and-the-domain)).
+- **B4 moved.** The row for Water in `fingerprints.md` waits until after
+  publishing, because the hub's verify page lists every row. The prompt
+  at the end of Water's checklist asks for it.
+- **The spec.** Two of its tables were corrected, and open item 9 added:
+  whether reminders are marked "local only", because a watch app with
+  notification access can receive them
+  ([spec.md](../apps/water/spec.md#open)).
 
 ### 2.7 Restore and rotation rehearsal
 
@@ -952,8 +1090,14 @@ results in the session that followed
 
 ### Phase 2 gate (you)
 
-Work through the release checklist on the Pixel 9 Pro, check the layout on the
-other two devices, use the app daily for two weeks, then run the release.
+Release Water 1.0.0: versionName `1.0.0`, versionCode `10000900`
+([ADR 0021](../adr/0021-version-names-and-version-codes.md)). Work through
+its checklist,
+[release-checklist-1.0.0.md](../apps/water/release-checklist-1.0.0.md):
+parts 1 to 3 on the Pixel 9 Pro and the other two devices, with the
+preview. Use the app daily for two weeks. Then do parts 4 and 5: run the
+release of `water` `1.0.0`, publish it, and paste the prompt at the end
+of the checklist into a session.
 
 Also at this gate: decide again whether "Emulator (Android 17)" becomes a
 required check ([ci.md](ci.md#the-emulator-jobs)). The rehearsal of step

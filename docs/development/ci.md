@@ -1,11 +1,12 @@
 # Continuous integration
 
 The GitHub Actions workflows that check every pull request, the one that
-makes releases, and the one that deploys the hub site. GitHub Actions is
+makes releases, the one that deploys the hub site, and the one that sends
+the apps' libraries to GitHub's dependency graph. GitHub Actions is
 the authoritative build (section 13 of the [plan](../plan/PLAN.md),
 [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)). Set up in
-Phase 0, step 4. Release was added in Phase 0, step 6, and Site in Phase 0,
-step 7.
+Phase 0, step 4. Release was added in Phase 0, step 6, Site in Phase 0,
+step 7, and Dependency graph in Phase 2, step 2.6.
 
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
@@ -14,6 +15,7 @@ step 7.
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
 | Site | [`site.yml`](../../.github/workflows/site.yml) | Pull requests that change the site, every push to `main`, and by hand | Builds the hub site from `docs/` and `site/` and checks it. On `main` only, deploys it to the Cloudflare Worker `shkriuss-hub`, which serves static files only, and checks the live site and its security headers. See [site.md](site.md). |
+| Dependency graph | [`dependency-graph.yml`](../../.github/workflows/dependency-graph.yml) | Every push to `main` that changes `android/`, and by hand. Never on pull requests | Lists the release runtime class path of every app, with dependency verification on, and sends it to GitHub's dependency graph, so that Dependabot alerts can name a library with a known vulnerability. See [Dependency graph](#dependency-graph). |
 
 How to install a preview on a phone is in
 [test-a-pull-request.md](test-a-pull-request.md). What the emulator tests
@@ -32,13 +34,16 @@ The full list is in `.claude/rules/workflows.md`. In short:
 2. Only GitHub's own actions are used. Everything else is a short shell
    step.
 3. The token is read-only (`permissions: contents: read`). A job that needs
-   more says why in a comment. Four jobs do. "Comment" in PR preview has
+   more says why in a comment. Five jobs do. "Comment" in PR preview has
    `pull-requests: write` and nothing else. "Flag owner-only paths" in
    Protected paths has `pull-requests: write`, and `contents: read` only to
    read CODEOWNERS through the API. In Release, "Build" adds `actions: read`
    to read `ci.yml`'s run for the commit, and "Draft release" has
    `contents: write`, `id-token: write` and `attestations: write` to make
-   the attestation and the draft. It checks out nothing.
+   the attestation and the draft. It checks out nothing. In Dependency
+   graph, "Submit" has `contents: write`, only to send the list to the
+   dependency graph. It checks out nothing and runs no code of the
+   build.
 4. No secrets, except in two steps. In Release, one step of the job "Sign"
    gets the three secrets of the `release` environment. In Site, one step
    of the job "Deploy" gets `CLOUDFLARE_API_TOKEN` of the `cloudflare`
@@ -46,9 +51,10 @@ The full list is in `.claude/rules/workflows.md`. In short:
    in Protected paths, which never checks out, builds or runs anything from
    the pull request.
 5. Every job has a timeout and a concurrency group. A new push to a pull
-   request cancels the older run. Protected paths, Release and Site's job
-   "Deploy" are the exceptions: their runs wait for each other, so a run
-   never stops half-way through writing.
+   request cancels the older run. Protected paths, Release, Site's job
+   "Deploy" and Dependency graph's job "Submit" are the exceptions: their
+   runs wait for each other, so a run never stops half-way through
+   writing.
 6. Values from the event, from files and from earlier steps reach a shell
    only through `env`. File names are matched against fixed patterns and
    never run.
@@ -69,6 +75,13 @@ Site has two more files outside its workflow file:
 - The deploy tool's pin, its install script and the Worker's
   configuration, in `.github/site-deploy/`. They are owner-only, like the
   workflow.
+
+Dependency graph has one, for the same reason as the site generator:
+
+- The snapshot script, `tools/dependency-graph/snapshot.py`, with its
+  tests. It is not owner-only. It runs only in the job "List", which has
+  no secrets and a read-only token. It reads Gradle's reports and writes
+  one file. The job "Submit" checks that file before it sends it.
 
 ## CI
 
@@ -347,6 +360,83 @@ in [site.md](site.md). Why it works this way is in
 [ADR 0022](../adr/0022-hub-site-generator.md) and
 [ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md).
 
+## Dependency graph
+
+Added in step 2.6, by the owner's decision on threat model point 4
+([threat-model.md](../security/threat-model.md#code), CODE-3). GitHub
+cannot read Gradle files by itself, so this workflow tells it which
+libraries each app has. Dependabot alerts then name a library with a
+known vulnerability.
+
+It runs on every push to `main` that changes `android/`, the snapshot
+script or the workflow, and by hand on `main`. Never on pull requests.
+Two jobs:
+
+| Job | Token | What it does |
+|---|---|---|
+| List | `contents: read` | Runs the tests of the snapshot script. Runs `./gradlew :app:<app>:dependencies --configuration releaseRuntimeClasspath` for every app in `android/app/`, with dependency verification on and no caches. Turns the reports into one snapshot with `tools/dependency-graph/snapshot.py`, and uploads it with its SHA-256. |
+| Submit | `contents: write`, only to send | Checks out nothing and runs no code of the build. Checks the snapshot's SHA-256 and form, then sends it to GitHub's dependency submission API with `gh`. Its summary shows GitHub's answer and links to the alerts. |
+
+What the snapshot holds: every library on each app's release runtime
+class path, with what it needs, as Gradle resolved it. That is what ships
+in the app, and a few more that R8 removes
+([third-party.md](third-party.md#on-the-class-path-not-in-the-apk)).
+
+What it does not hold, so no alert comes for it:
+
+- the build tools, such as the Android Gradle Plugin and the Kotlin
+  compiler, the test libraries, and the Gradle wrapper;
+- the actions of the workflows. GitHub reads them itself, but gives no
+  alert for an action pinned to a commit, and every action here is.
+
+GitHub reads the lockfile of the site's deploy tool, Wrangler
+(`.github/site-deploy/package-lock.json`), by itself, so its alerts come
+without this workflow.
+
+Not used, and why:
+
+- GitHub's **Automatic dependency submission**. For Gradle it runs
+  `actions/gradle-build-tools-actions`, which builds the project with
+  dependency verification turned off
+  (`-Dorg.gradle.dependency.verification=off`) and with a plugin that it
+  downloads from the Gradle Plugin Portal. This project uses neither.
+- Dependabot security updates and version updates. Their pull requests
+  change versions without `verification-metadata.xml`, so CI fails them.
+  Updates come from prompt R5 ([PROMPTS.md](PROMPTS.md)).
+
+### Turn it on (owner, once, after the merge)
+
+These are repository settings, so only you can change them. The names
+are the ones GitHub's documentation used on 2026-11-15. They can differ a
+little.
+
+1. Open `github.com/shkriuss/shkriuss.app/settings` in the browser.
+2. In the menu, under **Security and quality**, tap **Advanced
+   Security**.
+3. Under **Dependency graph**, tap **Enable**. Leave **Automatic
+   dependency submission** at **Disabled**.
+4. Under **Dependabot**, enable **Dependabot alerts**. Leave
+   **Dependabot security updates**, **Grouped security updates** and
+   version updates off.
+5. Open `github.com/shkriuss/shkriuss.app/actions/workflows/dependency-graph.yml`.
+   Tap **Run workflow**, leave the branch at `main`, and tap **Run
+   workflow**. Pull the page down to reload it, and open the new run.
+6. Wait until both jobs are green. The summary of "Submit" says
+   "GitHub answered:" and then "SUCCESS" or "ACCEPTED".
+7. Open `github.com/shkriuss/shkriuss.app/security/dependabot`. It lists
+   the open alerts, or says there are none.
+
+If "Submit" fails because the dependency graph is off, do step 3, then
+step 5 again.
+
+### Before every release
+
+Part 4 of the [release checklist](release-checklist.md#part-4-release)
+asks that the newest run of this workflow is green, and that no alert is
+open. If one is, tell Claude in a session which library it names. Claude
+checks whether the library ships in the app, and updates it as prompt R5
+does.
+
 ## The download cache
 
 Gradle downloads about 950 MB: the Gradle distribution, the Android Gradle
@@ -372,16 +462,17 @@ Plugin, every library and Robolectric's Android image.
 All are GitHub's own. No other action is used, so nothing needs to be
 allowed in the repository settings. Protected paths uses no action at all.
 Release uses the same commits of `checkout`, `upload-artifact` and
-`download-artifact`, plus `attest`. Site uses the same commits of
-`checkout`, `upload-artifact` and `download-artifact`, and no other action.
+`download-artifact`, plus `attest`. Site and Dependency graph use the same
+commits of `checkout`, `upload-artifact` and `download-artifact`, and no
+other action.
 Its deploy tool, Wrangler, is not an action: it is an npm package, pinned
 with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
 
 | Action | Version | Commit | Used for |
 |---|---|---|---|
 | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` | Getting the code |
-| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the emulator logs, the artifact numbers for the comment. In Release, the files passed between jobs. In Site, the built site |
-| `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job. In Release, the files from earlier jobs. In Site, the built site, in "Deploy" |
+| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the emulator logs, the artifact numbers for the comment. In Release, the files passed between jobs. In Site, the built site. In Dependency graph, the snapshot |
+| `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job. In Release, the files from earlier jobs. In Site, the built site, in "Deploy". In Dependency graph, the snapshot, in "Submit" |
 | `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache. Not used in Release |
 | `actions/attest` | v4.2.2 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Release only: the build provenance attestation of the signed APK |
 
@@ -393,8 +484,11 @@ written with the GitHub CLI, `gh`, which GitHub's runners come with. Prompt R5 i
 
 Not used, and why:
 
-- `gradle/actions` (wrapper validation, Gradle setup and caching): not
-  GitHub's own. A shell step and `actions/cache` do the same.
+- `gradle/actions` (wrapper validation, Gradle setup and caching, and
+  dependency submission): not GitHub's own. A shell step and
+  `actions/cache` do the same. For dependency submission, Gradle's own
+  `dependencies` task and a short script do it, with dependency
+  verification on ([Dependency graph](#dependency-graph)).
 - `actions/setup-java`: GitHub's own, but not needed. The runners already
   have JDK 21.
 - `actions/attest-build-provenance`: GitHub's own, but since version 4 it
@@ -430,6 +524,10 @@ Not used, and why:
    contributor's run needs the owner's approval. Protected paths gets a
    token that can write the label and the comment, also for forks. That is
    why it never runs anything from the pull request.
+6. Dependency graph has no pull request trigger, and its job "List"
+   stops unless the branch is `main`. A pull request that changes the
+   workflow or the snapshot script runs nothing. The change runs only
+   after the owner merges it.
 
 ## Required checks
 

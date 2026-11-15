@@ -73,6 +73,22 @@ quick amount, such as **Drank 150 ml**, which logs that drink, and
 5. While the app lock hides the text of notifications, a reminder has no
    buttons. Open the app to answer it.
 
+## Who else sees a reminder
+
+1. On the lock screen, Android shows a reminder's text only if your
+   phone's setting allows it.
+2. A reminder's text and buttons reach another app only if you gave that
+   app notification access. Such an app can pass them on to a watch, for
+   example a watch's companion app.
+3. Water does not mark its reminders "local only". That mark would not
+   hide them from apps with notification access. It only asks apps that
+   pass notifications to a watch not to pass them on. Whether Water
+   marks them, or offers a setting, is decided after its first release.
+4. With the app lock on, a reminder shows only its kind and "The app
+   lock hides this notification. Open the app to see it.", without
+   amounts and without buttons. Unless you turn on **Show the text in
+   notifications** ([The app lock](app-lock.md#notifications)).
+
 ## When a reminder cannot be shown
 
 Rarely, an app cannot read or show a reminder at its time. Then you see
@@ -184,6 +200,9 @@ Open: the three cases above (after a restart, in Private Space, in
 another user profile) follow from how Android and the code work. They
 are tested on a GrapheneOS phone before the first app with reminders is
 released. This page is corrected if a phone shows something else.
+Where they are tested: part 1, step 10 of Water's
+[release checklist for 1.0.0](../apps/water/release-checklist-1.0.0.md#part-1-grapheneos-on-the-pixel-9-pro).
+A later session records the results here.
 
 Checked on a GrapheneOS phone on 2026-11-13: the name and the place of
 the setting **Send notifications to current user**.

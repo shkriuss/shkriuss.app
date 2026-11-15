@@ -15,6 +15,10 @@ Pages:
 - [Permissions](permissions.md): every permission each app declares, and
   why, and the permissions and receivers that `core/notify` adds to an
   app with reminders.
+- [Data inventory](data-inventory.md): what each app stores, where, what
+  is in a backup, and what leaves the phone and how. Checked against the
+  code. The same in plain words for users is
+  [privacy.md](../user/privacy.md).
 - [Protected-paths flag](protected-paths.md): how a pull request that
   changes an owner-only path is flagged, what that protects against and
   what it does not.
@@ -24,7 +28,6 @@ Pages:
 
 What else belongs here:
 
-- The data inventory: what data each app stores, and where.
 - How to report a problem: see [SECURITY.md](../../SECURITY.md).
 
 How the build checks every downloaded file is in

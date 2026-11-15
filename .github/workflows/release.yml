@@ -25,6 +25,7 @@ on:
         # them together.
         options:
           - catalog
+          - water
       version:
         description: Version, for example 1.0.0 or 1.0.0-rc.1. The same as versionName in the app's build.gradle.kts.
         type: string
@@ -80,8 +81,8 @@ jobs:
             exit 1
           fi
           case "$APP" in
-            catalog) ;;
-            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+            catalog|water) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog, water."; exit 1 ;;
           esac
           # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
           # -alpha.N, -beta.N or -rc.N. The same pattern as in
@@ -354,8 +355,8 @@ jobs:
             exit 1
           fi
           case "$APP" in
-            catalog) ;;
-            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+            catalog|water) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog, water."; exit 1 ;;
           esac
           # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
           # -alpha.N, -beta.N or -rc.N. The same pattern as in
@@ -525,8 +526,8 @@ jobs:
             exit 1
           fi
           case "$APP" in
-            catalog) ;;
-            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+            catalog|water) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog, water."; exit 1 ;;
           esac
           # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
           # -alpha.N, -beta.N or -rc.N. The same pattern as in
@@ -762,8 +763,8 @@ jobs:
             exit 1
           fi
           case "$APP" in
-            catalog) ;;
-            *) echo "::error::Unknown app. Apps that can be released: catalog."; exit 1 ;;
+            catalog|water) ;;
+            *) echo "::error::Unknown app. Apps that can be released: catalog, water."; exit 1 ;;
           esac
           # The version forms of ADR 0021: 1.2.3, or 1.2.3 followed by
           # -alpha.N, -beta.N or -rc.N. The same pattern as in

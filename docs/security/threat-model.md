@@ -10,15 +10,17 @@ does not. It ends with the OWASP MASVS controls and every open question.
   [docs/adr](../adr/README.md).
 - This page adds no decision of its own. It says what other pages
   decided, and where. The owner's decisions on this page are under
-  [Decided on pull request 30](#decided-on-pull-request-30) and
-  [Decided on pull request 35](#decided-on-pull-request-35). Where
+  [Decided on pull request 30](#decided-on-pull-request-30),
+  [Decided on pull request 35](#decided-on-pull-request-35) and
+  [Decided in step 2.6](#decided-in-step-26). Where
   nothing is decided, it says **Open**. Every open point is listed at
   the [end](#open-questions).
-- What exists today: Catalog and the core modules
-  ([modules.md](../architecture/modules.md)). No data app is released.
-  There is no Sync app and no sync server yet. Where this page speaks of
-  sync, of the handover between apps, or of a data app, it describes
-  what is decided for them, not what is built.
+- What exists today: Catalog, Water and the core modules
+  ([modules.md](../architecture/modules.md)). Water is the first data
+  app. There is no Sync app and no sync server yet. Where this page
+  speaks of sync or of the handover between apps, it describes what is
+  decided for them, not what is built. What each app stores is in the
+  [data inventory](data-inventory.md).
 
 ## At a glance
 
@@ -28,8 +30,8 @@ does not. It ends with the OWASP MASVS controls and every open question.
 | [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
 | [A network attacker](#a-network-attacker) | Data apps have no network permission. Everything synced is sealed. | Traffic analysis (out of scope). The Sync app's network settings are Open. |
 | [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing and the key ID. Replay and withholding wait for Phase 5. |
-| [Malicious dependencies or CI actions](#malicious-dependencies-or-ci-actions) | Dependency verification, pinned GitHub actions, secrets in one step, reproducible builds | Trust on first use. A harmful release signed by its real publisher. No scan for known vulnerabilities. |
-| [Takeover of GitHub, Cloudflare or the domain](#takeover-of-github-cloudflare-or-the-domain) | The owner's approval, narrow tokens, the fingerprint in more than one place | A takeover of the owner's GitHub account can sign a release with the suite key. |
+| [Malicious dependencies or CI actions](#malicious-dependencies-or-ci-actions) | Dependency verification, pinned GitHub actions, secrets in one step, reproducible builds, Dependabot alerts for the libraries that ship | Trust on first use. A harmful release signed by its real publisher. Known vulnerabilities in the build tools and test libraries. |
+| [Takeover of GitHub, Cloudflare or the domain](#takeover-of-github-cloudflare-or-the-domain) | The owner's approval, a second factor on the owner's accounts, narrow tokens, the registrar lock and DNSSEC, the fingerprint in more than one place | A takeover of the owner's GitHub account can sign a release with the suite key. |
 | [Unsafe changes by an AI agent](#unsafe-changes-by-an-ai-agent) | Write access only, the owner's review, owner-only build checks | For most code, the owner's review is the only gate. |
 
 [Out of scope](#out-of-scope): a compromised operating system, an
@@ -191,8 +193,8 @@ What stops it:
 5. A kept recovery key always needs the system prompt, with the app lock
    on or off.
 6. Android's own backup and device transfer are off. crypto-design.md
-   asks this of every app ("Where keys are stored", point 1). Catalog,
-   the only app today, turns both off.
+   asks this of every app ("Where keys are stored", point 1). Catalog
+   and Water turn both off.
 
 What does not:
 
@@ -265,7 +267,17 @@ What does not:
    A harmful service can falsely claim to be an accessibility tool, and
    then reads the security screens too.
 2. An app that the user gives notification access reads the text of
-   every notification, unless the app lock hides it.
+   every notification, unless the app lock hides it. It also gets the
+   buttons of a reminder. Such an app can pass them on to a watch, for
+   example a watch's companion app. A reminder's text and buttons reach
+   another app only this way. With the app lock on, a reminder shows its
+   hidden form, without amounts and without buttons, unless "Show the
+   text in notifications" is on. Marking a reminder "local only" would
+   not change what an app with notification access gets. It only asks
+   apps that pass notifications to a watch not to pass that one. Water
+   does not mark its reminders so. Whether it should, or offers a
+   setting, is Open
+   ([spec.md](../apps/water/spec.md#open), item 9).
 3. An app that the user lets record the screen captures every screen
    except the word screens, unless the user turns on "Hide in recent apps
    and block screenshots"
@@ -295,7 +307,8 @@ What stops it:
 1. Data apps have no network permission
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). The
    APK rules check fails the build of an app that asks for a permission
-   it is not allowed, and today no app is allowed any
+   it is not allowed. Today only Water is allowed any: five, none of
+   them a network permission
    ([permissions.md](permissions.md#rules)). So a data app sends nothing.
 2. Only the Sync app will talk to the network. It will move only sealed
    records and encrypted files, which it cannot open
@@ -408,6 +421,14 @@ What stops it:
 8. The verification files, the wrapper, the workflows and the build
    checks are owner-only paths
    ([CODEOWNERS](../../.github/CODEOWNERS)).
+9. Known vulnerabilities in the libraries that ship. On every push to
+   `main` that changes `android/`, the workflow Dependency graph lists
+   each app's release runtime class path, with dependency verification
+   on, and sends the list to GitHub's dependency graph. Dependabot
+   alerts then name a library with a known vulnerability. The job that
+   runs Gradle has a read-only token. The job that sends the list has
+   the write token, checks out nothing and runs no code of the build
+   ([ci.md](../development/ci.md#dependency-graph)).
 
 What does not:
 
@@ -427,11 +448,50 @@ What does not:
    ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 6. The Sign job installs the build tools with `sdkmanager`, pinned by
    version only, and runs their `apksigner` with the key.
-7. Nothing scans the dependencies for known vulnerabilities. Updates come
-   from a monthly prompt (R5 in
-   [PROMPTS.md](../development/PROMPTS.md)). Open (plan section 17).
+7. Dependabot alerts cover only the libraries on each app's release
+   runtime class path, which the workflow Dependency graph sends to
+   GitHub ([ci.md](../development/ci.md#dependency-graph)). They do not
+   cover the build tools, such as the Android Gradle Plugin and the
+   Kotlin compiler, the test libraries or the Gradle wrapper. Actions
+   pinned to a commit get no alerts. An alert comes only for an advisory
+   that GitHub has reviewed. Updates come from a monthly prompt (R5 in
+   [PROMPTS.md](../development/PROMPTS.md)).
 
 ### Takeover of GitHub, Cloudflare or the domain
+
+#### The rules for the owner's accounts and the domain
+
+The owner decided these rules in step 2.6, checked on 2026-11-15 that
+they hold, and keeps them. They are rules only. No name, address or
+setting of the accounts or the domain is written in this repository.
+
+The owner's GitHub and Cloudflare accounts:
+
+1. Signing in to either account needs a second factor.
+2. The email account that can reset either of them needs a second
+   factor too.
+3. The recovery codes of both accounts are kept offline, outside the
+   accounts and their email.
+4. No GitHub token outlives its task. The token of the signing ceremony
+   is deleted right after each run
+   ([release.md](../development/release.md#restore-the-signing-key)).
+   Cloudflare is reached only with the narrow deploy token
+   ([site.md](../development/site.md#3-the-token)), never with the
+   account's Global API Key.
+
+The domain:
+
+1. The registrar lock is on. The domain cannot move to another
+   registrar until the lock is taken off.
+2. DNSSEC is on. The domain's DNS answers are signed.
+3. CAA records name the only certificate authorities that may issue
+   certificates for the domain.
+4. The registrar account needs a second factor, and the domain renews by
+   itself.
+
+What the rules do not do: a second factor does not help once someone
+uses a session that is already signed in, for example on the owner's
+unlocked phone.
 
 #### The owner's GitHub account
 
@@ -471,8 +531,10 @@ What a takeover can do:
 
 What limits it, and no more than this:
 
-1. Nothing stops the takeover itself. How the owner's account is
-   protected, for example by a second factor, is not documented. Open.
+1. A takeover is made harder by the rules
+   [above](#the-rules-for-the-owners-accounts-and-the-domain): a second
+   factor on the account and on its email, recovery codes offline, and no
+   token that outlives its task. Nothing else stops it.
 2. Releases that are already published are immutable. Their files and
    tags cannot be changed
    ([release.md](../development/release.md#2-immutable-releases)). A
@@ -550,13 +612,15 @@ What stops it:
    GitHub ([install.md](../user/install.md)).
 4. The fingerprint is also on GitHub. A changed site would not agree
    with it ([verify.md](../user/verify.md#check-in-more-than-one-place)).
+5. The account needs a second factor, and is reached only with the
+   narrow deploy token
+   ([the rules](#the-rules-for-the-owners-accounts-and-the-domain)).
 
 What does not:
 
 1. A takeover of the whole account can change the site and the domain's
    settings.
 2. A user who checks only the site would trust a wrong fingerprint.
-3. How the account is protected is not documented. Open.
 
 #### The domain
 
@@ -568,12 +632,14 @@ What stops it:
    ([site.md](../development/site.md#security-headers)).
 2. Obtainium and the releases use `github.com`, not the domain.
 3. The fingerprint is also on GitHub.
+4. The registrar lock, DNSSEC and CAA records are on, and the registrar
+   account needs a second factor
+   ([the rules](#the-rules-for-the-owners-accounts-and-the-domain)).
 
 What does not:
 
 1. Whoever controls the domain can point it at a site of their own, with
    a wrong fingerprint.
-2. Open: the registrar lock, DNSSEC and CAA records are not documented.
 
 ### Unsafe changes by an AI agent
 
@@ -705,7 +771,7 @@ promise nothing more.
 ## The app lock
 
 The app lock is optional, set per app, and off until the user turns it
-on. The first app with it will be Water
+on. Water is the first app with it
 ([app-lock.md](../user/app-lock.md)). The design is in
 [crypto-design.md](crypto-design.md#the-app-lock) and
 [security-screens.md](../architecture/security-screens.md#the-app-lock).
@@ -1216,10 +1282,27 @@ Status: **Not met.**
 vulnerabilities.**
 Status: **Partly met.**
 
-- MASWE-0044, known vulnerabilities: not met. No scan for known
-  vulnerabilities runs (MASTG-TEST-0272 and 0274). Plan section 17 lists
-  code scanning as still to set up. Open. Step 2.6 decides how, before
-  Water's first release.
+- MASWE-0044, known vulnerabilities: partly met (MASTG-TEST-0272 and
+  0274). Decided by the owner in step 2.6, on 2026-11-15:
+  - The workflow Dependency graph sends each app's release runtime class
+    path to GitHub's dependency graph, built with dependency verification
+    on. Dependabot alerts name a library with a known vulnerability
+    ([ci.md](../development/ci.md#dependency-graph)).
+  - Dependabot security updates and version updates stay off. Their pull
+    requests could not update `verification-metadata.xml`. Updates come
+    from prompt R5.
+  - GitHub's automatic dependency submission stays off. For Gradle it
+    builds the project with dependency verification turned off
+    (`-Dorg.gradle.dependency.verification=off`), and with a plugin that
+    it downloads from the Gradle Plugin Portal, which this project does
+    not use. Read in the source of `actions/gradle-build-tools-actions`,
+    which runs it, on 2026-11-15.
+  - Gaps: the build tools, the test libraries and the Gradle wrapper are
+    not in the list, and actions pinned to a commit get no alerts. Wrangler's
+    lockfile is read by GitHub itself. Before every release, the release
+    checklist asks that no alert is open
+    ([release-checklist.md](../development/release-checklist.md#part-4-release)).
+  - Code scanning of our own code stays Open (open question 22).
 - MASWE-0045, the compiler's security features: does not apply. The apps
   have no native code (hard rule 2). Grammar's Rust code is the later
   exception, under its own
@@ -1284,7 +1367,7 @@ Status: **Partly met.**
   - Open: the screen that asks for the notification permission
     ([notifications.md](../architecture/notifications.md#open), open
     question 1).
-- MASWE-0073, declared data: not written yet. See PRIVACY-3.
+- MASWE-0073, declared data: met for what is built. See PRIVACY-3.
 
 **MASVS-PRIVACY-2: The app prevents identification of the user.**
 Status: **Partly met.**
@@ -1312,12 +1395,15 @@ Status: **Partly met.**
 usage.**
 Status: **Partly met.**
 
-- MASWE-0072, a privacy policy: not met. There is no privacy policy
-  page. The privacy claims are in the [README](../../README.md) and on
-  the hub's home page. Open. Step 2.6 writes the page.
-- MASWE-0073, declared data: not written yet. The data inventory, what
-  each app stores and where, is planned ([README.md](README.md)). It is
-  due with Water (step 2.6).
+- MASWE-0072, a privacy policy: met. The privacy page,
+  [privacy.md](../user/privacy.md), is in the user guide and on the hub
+  site, at `/privacy/`. Written in step 2.6. It says what each app
+  stores, that data apps have no network permission, what the Sync app
+  and its server will see, and that nothing tracks the user.
+- MASWE-0073, declared data: met for what is built. The
+  [data inventory](data-inventory.md) lists what Catalog and Water store,
+  where, and what leaves the phone and how. Written in step 2.6, from the
+  code. Each later app adds its part before its first release.
 - MASWE-0074, tracking domains: met. Data apps connect nowhere. The hub
   site loads nothing from other sites
   ([site.md](../development/site.md)).
@@ -1391,6 +1477,17 @@ Each is built into the page above.
 | The deviations for overlays and accessibility services: no accessibility marking on Android 13; the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted. Confirmed by the owner on 2026-11-13 ([PLATFORM-3](#platform)). |
 | The TalkBack check, and the accessibility marking | Passed on 2026-11-13, on the Pixel 9 Pro with the Catalog preview. The marking stays. [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md) is accepted. |
 
+## Decided in step 2.6
+
+The owner's decisions of 2026-11-15, in the planning of step 2.6, the
+preparation of Water 1.0.0. Each is built into the page above.
+
+| Question | Decision |
+|---|---|
+| Point 4: how dependencies are checked for known vulnerabilities | A workflow of the project, Dependency graph, with dependency verification on. The job that runs Gradle has no write token; the job that sends the list runs no code of the build. Only on pushes to `main` and by hand, never on pull requests, and with no new action. The owner turns on the dependency graph and Dependabot alerts. Automatic dependency submission, Dependabot security updates and version updates stay off ([CODE-3](#code)). The release checklist asks that no alert is open. |
+| Points 9 and 10: the owner's accounts and the domain | Eight rules, and no details ([The rules](#the-rules-for-the-owners-accounts-and-the-domain)). |
+| Reminders that reach a watch | A known problem, decided after the release of Water 1.0.0 ([Other apps on the phone](#other-apps-on-the-phone), "What does not", point 2). |
+
 ## Open questions
 
 Everything this page marks Open. None is decided here.
@@ -1413,12 +1510,14 @@ Phase 2, Water:
    question 2). What keeps a long backup running while the screen is off
    stays open for the first app that stores large files (question 3).
    Water stores no files.
-4. The data inventory: what data each app stores, and where. Step 2.6
-   ([README.md](README.md)).
+4. Done in step 2.6: the data inventory, what data each app stores, and
+   where ([data-inventory.md](data-inventory.md)).
 5. The checks of reminders on a GrapheneOS phone: after a restart, in a
    second profile and in Private Space
    ([notifications.md](../architecture/notifications.md#open),
-   question 4).
+   question 4). Still Open. They are checked in part 1 of Water's
+   [release checklist for 1.0.0](../apps/water/release-checklist-1.0.0.md#part-1-grapheneos-on-the-pixel-9-pro),
+   before its release. A later session records the results here.
 6. Done in step 2.5: the check that every app that uses `core/security`
    requests `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`, in the APK rules
    check
@@ -1535,6 +1634,13 @@ Open until its step is done.
 4. Nothing scans the dependencies for known vulnerabilities (CODE-3).
    **Step 2.6** decides how, before Water's first release. It first
    tries what GitHub offers by itself.
+   **Decided and built in step 2.6**, on 2026-11-15: the workflow
+   Dependency graph, with dependency verification on, and Dependabot
+   alerts. GitHub's automatic dependency submission stays off, because
+   it builds with dependency verification turned off and with a plugin
+   from the Gradle Plugin Portal ([CODE-3](#code)). The owner turns on
+   the dependency graph and Dependabot alerts after the merge
+   ([ci.md](../development/ci.md#dependency-graph)).
 5. There is no way to make users update (CODE-2).
    **Decided now: no forced update.** Data apps have no network, and
    updates come through Obtainium. An accepted deviation. **Step 5.1**
@@ -1558,15 +1664,21 @@ Open until its step is done.
    - Step 2.5 added the check that each app requests the permission.
 8. There is no privacy policy page (PRIVACY-3).
    **Step 2.6**: a privacy page in the user guide and on the hub site.
+   **Done in step 2.6**: [privacy.md](../user/privacy.md), also at
+   `/privacy/` on the hub site.
 9. How the owner's GitHub and Cloudflare accounts are protected, for
    example by a second factor. It is not documented.
    The owner checks their accounts themselves. **Step 2.6** asks the
    owner what to record. Only the rule goes into the repository, no
    details of the accounts.
+   **Done in step 2.6**, on 2026-11-15: the owner checked their accounts
+   and chose four rules
+   ([The rules for the owner's accounts and the domain](#the-rules-for-the-owners-accounts-and-the-domain)).
 10. The domain's registrar lock, DNSSEC and CAA records. They are not
     documented.
     As point 9: the owner checks the domain themselves, and step 2.6
     asks what to record.
+    **Done in step 2.6**, on 2026-11-15: four rules, in the same section.
 11. What to do if the signing key is stolen.
     **Step 2.7**: the restore and rotation rehearsal with a throwaway
     key (ADR 0013, point 8), and the decision record for a rotation and

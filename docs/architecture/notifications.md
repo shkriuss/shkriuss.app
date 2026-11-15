@@ -415,6 +415,10 @@ three devices.
 4. The checks on a GrapheneOS device: after a reboot, in a secondary
    profile and in Private Space
    ([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices-reminders)).
+   Still open. Part 1, step 10 of Water's
+   [release checklist for 1.0.0](../apps/water/release-checklist-1.0.0.md#part-1-grapheneos-on-the-pixel-9-pro)
+   checks them, before Water's release. A later session records the
+   results here.
 5. What a notification shows while the app lock is on. Decided in
    Phase 1, step 7, session B
    ([While the app lock is on](#while-the-app-lock-is-on)).

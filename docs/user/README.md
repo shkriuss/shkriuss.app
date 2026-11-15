@@ -1,8 +1,15 @@
 # User guides
 
 Guides for people who use the apps. Written for a phone screen first. The
-hub website shows the first three pages
+hub website shows the first three pages and [Privacy](privacy.md)
 ([site.md](../development/site.md)).
+
+One guide per app:
+
+- [Water](water.md): log the water you drink, see how close you are to
+  your daily goal, and get reminders. Everything on Today, History and
+  Settings, the five permissions, and the known problems of 1.0.0. Water
+  is not released yet. The page is not on the hub website until it is.
 
 Pages:
 
@@ -11,6 +18,9 @@ Pages:
   updates.
 - [Verify with AppVerifier](verify.md): how to check that an app is
   genuine, against the signing fingerprint.
+- [Privacy](privacy.md): what each app stores, what leaves the phone,
+  what the Sync app and its server will see, and that nothing tracks
+  you. On the hub website at `/privacy/`.
 - [Your recovery key](recovery-key.md): what the 24 words are, when an
   app asks for them, how to create them, enter them and see them again,
   the security screen, and
@@ -34,5 +44,5 @@ Pages:
 
 What else belongs here:
 
-- One guide per app. The first one comes with the Water app.
+- A guide for each later app, before its first release.
 - How to set up sync.

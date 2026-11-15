@@ -7,6 +7,9 @@ and its notice.
   ([PROMPTS.md](PROMPTS.md)), with what `core/crypto` brings. Completed
   for Water on 2026-11-14 in Phase 2, step 2.5, with everything that
   ships in Water's release APK, and the screen that shows it in the app.
+  Checked again on 2026-11-15 in step 2.6, in the release APK of Water
+  `1.0.0` ([How to check again](#how-to-check-again)). Nothing had
+  changed.
 - The project's own licences are in
   [ADR 0018](../adr/0018-licences.md).
 
@@ -24,7 +27,8 @@ and its notice.
 
 Seven parts. Checked on 2026-11-14 in the release APK of Water
 `1.0.0-alpha.1`, built in the cloud environment
-([How the list was made](#how-the-list-was-made)).
+([How the list was made](#how-the-list-was-made)), and again on
+2026-11-15 in the release APK of Water `1.0.0`.
 
 | Part in the app's list | Version | Licence | What it is in Water |
 |---|---|---|---|
@@ -197,7 +201,7 @@ not a library.
   licence text go with every copy. Both are in `LICENSE.txt`, in the same
   folder as the list. It is the source's own `LICENSE` file, unchanged.
   Both files are packed into the app together. Water's Licences screen
-  shows the same file.
+  shows a copy of it, `water_licence_bip39.txt`, byte for byte the same.
 
 ## Tink for Java
 
@@ -343,6 +347,24 @@ After a dependency change, and before a release:
    [What ships in Water](#what-ships-in-water) covers.
 3. Change this page, `Licences` in `android/feature/water` and the files
    in `res/raw` together. `LicencesTest` then needs the new count.
+
+### Checked for Water 1.0.0
+
+On 2026-11-15, in step 2.6, with dependency verification on:
+
+1. `./gradlew :app:water:dependencies --configuration
+   releaseRuntimeClasspath` lists the same 110 modules as before.
+2. In `./gradlew :app:water:assembleRelease`, the APK of version `1.0.0`
+   has one dex file. It holds classes of the seven parts, with Protocol
+   Buffers under `com.google.crypto.tink.shaded.protobuf`. It holds no
+   class of the seven libraries of
+   [On the class path, not in the APK](#on-the-class-path-not-in-the-apk),
+   none of Google Play services and no `WebView`. It has no native
+   library.
+3. Its 54 files `META-INF/*.version` name the versions of
+   [AndroidX libraries](#androidx-libraries), Compose 1.12.1, Material 3
+   1.4.0 and kotlinx.coroutines 1.9.0.
+4. The three licence texts are in it, by their SHA-256.
 
 ## Open
 
