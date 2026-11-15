@@ -991,9 +991,11 @@ Decided with the owner on 2026-11-15, in the planning of the step:
   submission, security updates and version updates stay off
   ([ci.md](ci.md#dependency-graph),
   [threat-model.md](../security/threat-model.md#code)).
-- **Points 9 and 10.** Eight rules for the owner's accounts and the
-  domain, and no details
+- **Points 9 and 10.** Seven rules for the owner's accounts and the
+  domain, three of them for the domain, and no details
   ([threat-model.md](../security/threat-model.md#the-rules-for-the-owners-accounts-and-the-domain)).
+  The domain has no CAA record, so CAA records stay Open (owner's
+  correction on pull request 45).
 - **B4 moved.** The row for Water in `fingerprints.md` waits until after
   publishing, because the hub's verify page lists every row. The prompt
   at the end of Water's checklist asks for it.
@@ -1091,13 +1093,21 @@ results in the session that followed
 ### Phase 2 gate (you)
 
 Release Water 1.0.0: versionName `1.0.0`, versionCode `10000900`
-([ADR 0021](../adr/0021-version-names-and-version-codes.md)). Work through
-its checklist,
+([ADR 0021](../adr/0021-version-names-and-version-codes.md)), with its
+checklist,
 [release-checklist-1.0.0.md](../apps/water/release-checklist-1.0.0.md):
-parts 1 to 3 on the Pixel 9 Pro and the other two devices, with the
-preview. Use the app daily for two weeks. Then do parts 4 and 5: run the
-release of `water` `1.0.0`, publish it, and paste the prompt at the end
-of the checklist into a session.
+
+1. Do parts 1 to 3 on the Pixel 9 Pro and the other two devices, with
+   the preview of the pull request that prepares 1.0.0.
+2. When they have passed, merge that pull request.
+3. Use the preview that you checked every day for two weeks. They come
+   after the merge and before the release run.
+4. Then do the rest of part 4 and part 5: run the release of `water`
+   `1.0.0`, publish it, and paste the prompt at the end of the
+   checklist into a session.
+
+From part 1 until the release run, nothing that changes Water,
+`android/core` or the build is merged.
 
 Also at this gate: decide again whether "Emulator (Android 17)" becomes a
 required check ([ci.md](ci.md#the-emulator-jobs)). The rehearsal of step

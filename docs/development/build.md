@@ -1747,6 +1747,20 @@ exported to developer tools. Catalog still has it, until its next change
 
 ## Open
 
-Nothing open. The last item, attaching the R8 mapping file to every
-release, was done in Phase 0, step 6. See
-[The mapping file](#the-mapping-file).
+Done: attaching the R8 mapping file to every release, in Phase 0,
+step 6 ([The mapping file](#the-mapping-file)).
+
+Open, found in step 2.6 on 2026-11-15. No step decides them yet:
+
+1. **No APK rule checks `directBootAware`.** Nothing fails the build of
+   an app whose merged manifest has a part with `directBootAware`, or
+   the application with `defaultToDeviceProtectedStorage`. Such a part
+   would run before the first unlock, outside the storage that the
+   screen lock protects. Only `ManifestTest` in `core/notify` checks
+   it, and only for that module's own receivers
+   ([permissions.md](../security/permissions.md#receivers)).
+2. **`./gradlew check` alone does not run the APK rules check.** The
+   task `check<Variant>ApkRules` is not part of `check`
+   ([Which check runs where](#which-check-runs-where)). CI runs it by
+   name, and it runs before every `assemble` task. A `check` run on its
+   own passes without it.

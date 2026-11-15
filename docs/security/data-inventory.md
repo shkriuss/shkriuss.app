@@ -124,15 +124,15 @@ Android also keeps some things for Water, outside Water's folders:
 ### Not checked in the code
 
 Android and the libraries keep a few files of their own in Water's
-private storage. This page did not check them in the code. None holds
-user data:
+private storage. This page did not check them in the code:
 
 - Android's SQLite keeps the database's write-ahead files, `water.db-wal`
-  and `water.db-shm`, next to it. They hold the same rows as the
-  database.
+  and `water.db-shm`, next to it. They are part of the database: they
+  can hold rows of its tables, your drinks too, until SQLite writes
+  them into `water.db`.
 - The profile installer of AndroidX keeps small files about the app's
-  start-up profile.
-- Android keeps the app's compiled code.
+  start-up profile. They hold no user data.
+- Android keeps the app's compiled code. It holds no user data.
 
 ### How to delete it
 

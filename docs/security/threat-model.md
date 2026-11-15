@@ -484,10 +484,11 @@ The domain:
 1. The registrar lock is on. The domain cannot move to another
    registrar until the lock is taken off.
 2. DNSSEC is on. The domain's DNS answers are signed.
-3. CAA records name the only certificate authorities that may issue
-   certificates for the domain.
-4. The registrar account needs a second factor, and the domain renews by
+3. The registrar account needs a second factor, and the domain renews by
    itself.
+
+Open for the domain: CAA records. None is set, so any certificate
+authority may issue a certificate for the domain.
 
 What the rules do not do: a second factor does not help once someone
 uses a session that is already signed in, for example on the owner's
@@ -632,14 +633,16 @@ What stops it:
    ([site.md](../development/site.md#security-headers)).
 2. Obtainium and the releases use `github.com`, not the domain.
 3. The fingerprint is also on GitHub.
-4. The registrar lock, DNSSEC and CAA records are on, and the registrar
-   account needs a second factor
+4. The registrar lock and DNSSEC are on, and the registrar account
+   needs a second factor
    ([the rules](#the-rules-for-the-owners-accounts-and-the-domain)).
 
 What does not:
 
 1. Whoever controls the domain can point it at a site of their own, with
    a wrong fingerprint.
+2. No CAA record is set. Any certificate authority may issue a
+   certificate for the domain. Open.
 
 ### Unsafe changes by an AI agent
 
@@ -1485,7 +1488,7 @@ preparation of Water 1.0.0. Each is built into the page above.
 | Question | Decision |
 |---|---|
 | Point 4: how dependencies are checked for known vulnerabilities | A workflow of the project, Dependency graph, with dependency verification on. The job that runs Gradle has no write token; the job that sends the list runs no code of the build. Only on pushes to `main` and by hand, never on pull requests, and with no new action. The owner turns on the dependency graph and Dependabot alerts. Automatic dependency submission, Dependabot security updates and version updates stay off ([CODE-3](#code)). The release checklist asks that no alert is open. |
-| Points 9 and 10: the owner's accounts and the domain | Eight rules, and no details ([The rules](#the-rules-for-the-owners-accounts-and-the-domain)). |
+| Points 9 and 10: the owner's accounts and the domain | Seven rules, three of them for the domain, and no details ([The rules](#the-rules-for-the-owners-accounts-and-the-domain)). The domain has no CAA record: that stays Open. |
 | Reminders that reach a watch | A known problem, decided after the release of Water 1.0.0 ([Other apps on the phone](#other-apps-on-the-phone), "What does not", point 2). |
 
 ## Open questions
@@ -1678,7 +1681,9 @@ Open until its step is done.
     documented.
     As point 9: the owner checks the domain themselves, and step 2.6
     asks what to record.
-    **Done in step 2.6**, on 2026-11-15: four rules, in the same section.
+    **Done in step 2.6**, on 2026-11-15: three rules, in the same
+    section: the registrar lock, DNSSEC and the registrar account. CAA
+    records stay Open: none is set.
 11. What to do if the signing key is stolen.
     **Step 2.7**: the restore and rotation rehearsal with a throwaway
     key (ADR 0013, point 8), and the decision record for a rotation and

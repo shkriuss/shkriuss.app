@@ -982,7 +982,7 @@ recovery key. Three things do:
      that you write on paper. They are the way back in if the app lock
      cannot be opened."
 2. Buttons:
-   - **Create a recovery key**: opens "Create your recovery key"
+   - **Create a recovery key**: opens "Create a recovery key"
      (`SecurityScreens.createIntent`).
    - **I already have one**: opens "Enter your recovery key"
      (`SecurityScreens.enterIntent`). For example, words you made in

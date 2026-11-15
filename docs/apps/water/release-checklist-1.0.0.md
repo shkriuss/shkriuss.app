@@ -32,11 +32,14 @@ value.
    let it make a new one, and write those 24 test words on paper. Never
    type your real recovery words into a preview build. A preview makes
    the same keys as the real app from the same words.
-3. The Phase 2 gate asks you to use Water daily for two weeks before the
-   release ([PROMPTS.md](../../development/PROMPTS.md#phase-2-gate-you)).
-   Use Water preview for that, between part 3 and part 4.
-4. Merge nothing else that changes Water between part 1 and the release.
-   Then the release is built from the code you checked.
+3. You merge the pull request when parts 1 to 3 have passed. The two
+   weeks of daily use that the Phase 2 gate asks for
+   ([PROMPTS.md](../../development/PROMPTS.md#phase-2-gate-you)) come
+   after the merge and before the release run, with the Water preview
+   that you checked (part 4, step 2).
+4. From part 1 until the release run, merge nothing else that changes
+   Water, `android/core` or the build. Then the release is built from
+   the code you checked.
 5. Do the reminder steps between 00:30 and 23:00.
 6. Write down everything that does not match a step, with the exact
    words the phone showed.
@@ -115,7 +118,7 @@ The screens of the recovery key and the app lock (Settings, under
 Security):
 
 23. The security screen: tap **Recovery key**.
-24. **Create your recovery key**, with the 24 words and the four words to
+24. **Create a recovery key**, with the 24 words and the four words to
     confirm.
 25. **Enter your recovery key**.
 26. Showing the words again, from the security screen.
@@ -509,9 +512,9 @@ Use test words in every step, never your real recovery words.
       "Enter your recovery key first". Tap **Enter the words**, and enter
       the 24 test words of step 1. Check: the picker opens by itself.
       Restore the file of step 2, or its copy on the USB stick, on the
-      same day. Check: Today shows the three drinks and the goal of 2,500 ml, and
-      **Settings** shows **Every** 2 hours and **Remind me to drink** on,
-      as on the first device.
+      same day. Check: Today shows the three drinks and the goal of
+      2,500 ml, and **Settings** shows **Every** 2 hours and **Remind me
+      to drink** on, as on the first device.
    8. Still on the second device: check that the reminder line on
       **Today** says "Reminders are on, but Water may not show
       notifications yet." and offers **Allow**. Tap **Allow**, then
@@ -520,19 +523,25 @@ Use test words in every step, never your real recovery words.
    9. Turn the app lock on, with **When it leaves the screen**. Make a
       backup. Check: after the picker, the lock screen comes first, and
       after the prompt the backup is written and checked.
-5. [ ] Uninstall Water preview on all three devices when you are done:
-   long-press its icon, tap **App info**, then **Uninstall**. Also in
-   the secondary user and in Private Space.
+5. [ ] Keep Water preview on the phone you use every day, for the two
+   weeks of part 4, step 2. Uninstall it everywhere else: long-press its
+   icon, tap **App info**, then **Uninstall**. Also in the secondary
+   user and in Private Space.
 
 ## Part 4: Release
 
-1. [ ] Merge the pull request. Merge nothing else that changes Water, a
-   module it is built from (`android/feature/water` and `android/core`)
-   or the build (`android/build-logic`, `android/gradle`) before step 5.
-2. [ ] CI is green on the newest commit of `main`. Open the **Actions**
+1. [ ] Merge the pull request, once parts 1 to 3 have passed. From now
+   until step 6, merge nothing else that changes Water, a module it is
+   built from (`android/feature/water` and `android/core`) or the build
+   (`android/build-logic`, `android/gradle`).
+2. [ ] Use Water preview, the one you checked in parts 1 to 3, every day
+   for two weeks (the Phase 2 gate). Write down anything that goes
+   wrong, with the exact words the phone showed, and tell Claude in a
+   session before step 6.
+3. [ ] CI is green on the newest commit of `main`. Open the **Actions**
    tab and tap **CI**. The top run on `main` has a green tick. Right
    after the merge, wait for it.
-3. [ ] The first time only: turn on the dependency graph and Dependabot
+4. [ ] The first time only: turn on the dependency graph and Dependabot
    alerts.
    1. Open `github.com/shkriuss/shkriuss.app/settings`.
    2. In the menu, under **Security and quality**, tap **Advanced
@@ -546,7 +555,7 @@ Use test words in every step, never your real recovery words.
       `github.com/shkriuss/shkriuss.app/actions/workflows/dependency-graph.yml`.
       Tap **Run workflow**, leave the branch at `main`, and tap **Run
       workflow**.
-4. [ ] No known vulnerability is open.
+5. [ ] No known vulnerability is open.
    1. Open
       `github.com/shkriuss/shkriuss.app/actions/workflows/dependency-graph.yml`.
       The newest run on `main` is green: both **List** and **Submit**.
@@ -556,7 +565,7 @@ Use test words in every step, never your real recovery words.
       alert is open.
    3. If an alert is open, stop. Tell Claude in a session which library
       it names. Claude checks whether it ships in Water.
-5. [ ] Run the release workflow.
+6. [ ] Run the release workflow.
    1. Open `github.com/shkriuss/shkriuss.app/actions/workflows/release.yml`.
    2. Tap **Run workflow**. Leave the branch at `main`.
    3. Pick the app `water`. Type the version `1.0.0`.
@@ -566,7 +575,7 @@ Use test words in every step, never your real recovery words.
    6. **Sign** then shows "Waiting". Tap **Review deployments**, tick
       `release` and tap **Approve and deploy**.
    7. Wait for **Sign** and **Draft release** to finish.
-6. [ ] Check the draft `water-v1.0.0`.
+7. [ ] Check the draft `water-v1.0.0`.
    1. Open `github.com/shkriuss/shkriuss.app/releases`, and find the
       draft named `water-v1.0.0`.
    2. The notes link to the run you just started, and it is green.
@@ -578,9 +587,9 @@ Use test words in every step, never your real recovery words.
    4. It has three files: `water-v1.0.0.apk`,
       `water-v1.0.0-mapping.txt` and `SHA256SUMS`.
    5. It does not say "Pre-release".
-7. [ ] Publish the draft. Tap the pencil next to it. Do not change the
+8. [ ] Publish the draft. Tap the pencil next to it. Do not change the
    tag or the target. Tap **Publish release**.
-8. [ ] Open `github.com/shkriuss/shkriuss.app/tags`. The tag
+9. [ ] Open `github.com/shkriuss/shkriuss.app/tags`. The tag
    `water-v1.0.0` is there, on the commit from the notes.
 
 ## Part 5: After publishing
@@ -609,7 +618,9 @@ Use test words in every step, never your real recovery words.
    1.0.0.
 4. [ ] Open Water. It opens on **Today**, with no setup. **Settings**
    shows **Version** 1.0.0 under About.
-5. [ ] Tell Claude in a session that Water 1.0.0 is published, with
+5. [ ] Uninstall Water preview on the phone where you used it for the
+   two weeks: long-press its icon, tap **App info**, then **Uninstall**.
+6. [ ] Tell Claude in a session that Water 1.0.0 is published, with
    your results. Paste the prompt below, with your results in place of
    `<results>`.
 
