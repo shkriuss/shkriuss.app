@@ -24,7 +24,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Screenshots of the components that open in a window of their own, open,
- * in the eight standard configurations: the dialog, the bottom sheet, the
+ * in the four standard configurations: the dialog, the bottom sheet, the
  * menu, the date picker and the time picker, and the snackbar above its
  * floating action button. Each is opened from "Try it" on its Catalog
  * page, the way a user opens it. The image is the whole screen, with the

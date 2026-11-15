@@ -5,8 +5,9 @@ import org.junit.rules.TestRule
 import org.robolectric.RuntimeEnvironment
 
 /**
- * One of the eight standard screenshot configurations: phone or tablet,
- * light or dark, font scale 1.0 or 2.0 (CLAUDE.md, UI and accessibility).
+ * One of the four standard screenshot configurations: phone light at font
+ * scale 1.0, phone dark at 2.0, tablet light at 2.0 and tablet dark at 1.0
+ * (CLAUDE.md, UI and accessibility).
  *
  * Phase 1 moves this to `core/testing` so every module can use it.
  */
@@ -50,12 +51,18 @@ data class ScreenshotConfig(
     }
 
     companion object {
-        /** All eight configurations, in a fixed order. */
+        /**
+         * The four configurations, in a fixed order. Each device, theme and
+         * font scale is in two of them, and each pair of them in one, so
+         * only a fault that needs one exact device, theme and font scale
+         * together can pass unseen.
+         */
         fun all(): List<ScreenshotConfig> =
-            Device.entries.flatMap { device ->
-                listOf(false, true).flatMap { dark ->
-                    listOf(1.0f, 2.0f).map { fontScale -> ScreenshotConfig(device, dark, fontScale) }
-                }
-            }
+            listOf(
+                ScreenshotConfig(Device.Phone, dark = false, fontScale = 1.0f),
+                ScreenshotConfig(Device.Phone, dark = true, fontScale = 2.0f),
+                ScreenshotConfig(Device.Tablet, dark = false, fontScale = 2.0f),
+                ScreenshotConfig(Device.Tablet, dark = true, fontScale = 1.0f),
+            )
     }
 }

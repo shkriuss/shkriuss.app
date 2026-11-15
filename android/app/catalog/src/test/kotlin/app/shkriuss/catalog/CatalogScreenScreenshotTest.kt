@@ -13,7 +13,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Screenshots of the Catalog start screen and of every page, token pages,
- * component pages and shared screens, in the eight standard
+ * component pages and shared screens, in the four standard
  * configurations. The reference images are in
  * `src/test/screenshots/`. A page taller than the window gets one image
  * per window, to its end ([captureWholeScreen]).

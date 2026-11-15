@@ -153,7 +153,9 @@
 - A Material 3 update that adds a colour role stops the build until the
   role is mapped to a token.
 - The Catalog app shows the colour, type, shape and spacing tokens, one
-  page each, with screenshots in the eight standard configurations.
+  page each, with screenshots in the four standard configurations: phone
+  light at font scale 1.0, phone dark at 2.0, tablet light at 2.0 and
+  tablet dark at 1.0.
 - How to use the tokens is in
   [design-system.md](../development/design-system.md).
 - Changing a colour value changes this decision, so it needs the owner and
