@@ -697,8 +697,9 @@ What does not:
    anyone reviews it, without secrets
    ([ci.md](../development/ci.md#what-a-pull-request-can-do-in-these-workflows)).
 5. The emulator job for Android 17 is not a required check, while its
-   image crashes Android's system process. The owner decides again at
-   the Phase 2 gate
+   image crashes Android's system process. Whether it becomes required
+   is an open point with no date: the owner decides it when asking for
+   it
    ([ci.md](../development/ci.md#the-emulator-jobs),
    [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 
@@ -713,9 +714,11 @@ reason below is the plain technical one.
    protect itself from the system it runs on. The handover between apps
    relies on this too
    ([crypto-design.md](crypto-design.md#setting-up-a-second-app-on-the-same-phone)).
-   GrapheneOS lowers the chance. Whether an app works with GrapheneOS's
-   hardening on is checked by hand when the owner chooses, not at every
-   release ([release.md](../development/release.md#before-and-after-a-release)).
+   GrapheneOS lowers the chance. The owner runs every release on
+   GrapheneOS with its exploit protection left on, and never turns on
+   its compatibility mode for an app of the suite. A fault that shows
+   only with the hardening on is a bug, fixed before the next release
+   ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)).
 2. **An unlocked phone in an attacker's hands.** To Android, whoever
    holds the unlocked phone is its user. It cannot tell them apart. See
    [How the optional app lock fits](#how-the-optional-app-lock-fits).
@@ -1450,14 +1453,11 @@ further reason. All four controls are **Not applied, by decision**.
 | MASVS-RESILIENCE-3: The app implements anti-static analysis mechanisms. | No obfuscation (MASWE-0059 to 0062). The build never renames classes, because "the code is public, so renaming hides nothing" ([build.md](../development/build.md#the-decision)). The APK rules check depends on it. |
 | MASVS-RESILIENCE-4: The app implements anti-dynamic analysis techniques. | No debugger or tool detection (MASWE-0063 to 0065). |
 
-This is not the GrapheneOS checklist. That checklist makes sure that
-an app works with GrapheneOS's hardening turned on: the hardened memory
-allocator, memory tagging, secure app spawning and restricted dynamic
-code loading
-([ADR 0002](../adr/0002-grapheneos-first-minimum-android-13.md), point
-4, and [ADR 0025](../adr/0025-secure-app-spawning-in-grapheneos-checklist.md)).
-It protects the app through the platform. It is not a resilience
-control.
+This is not GrapheneOS's hardening. The owner runs every release with
+it on: the hardened memory allocator, memory tagging, secure app
+spawning and restricted dynamic code loading
+([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)). It protects the app through the platform. It
+is not a resilience control.
 
 ## Decided on pull request 30
 
@@ -1468,7 +1468,7 @@ page above.
 |---|---|
 | The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted. Confirmed by the owner on 2026-11-13 ([Status words](#status-words)). |
 | The points under [Found while writing this page](#found-while-writing-this-page) | Decided at the Phase 1 gate, on 2026-11-13: a step for each, written next to the point. The points stay Open until their step is done, except point 5, which is an accepted deviation. |
-| Required checks | The emulator jobs for Android 13, 14 and 15 become required. The job for Android 17 does not, for now. The owner decides again at the Phase 2 gate ([ci.md](../development/ci.md#the-emulator-jobs)). |
+| Required checks | The emulator jobs for Android 13, 14 and 15 become required. The job for Android 17 stays not required. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
 | The seventh deviation | No forced update (MASVS-CODE-2). Accepted by the owner on 2026-11-13. Step 5.1 decides again for the Sync app. |
 | The name of Claude's machine account | `shkriuss-bot`. It has worked since Phase 0. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
 
@@ -1601,8 +1601,8 @@ Other:
     passed
     ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)). ADR 0037
     and ADR 0038 are accepted.
-20. Whether the emulator job for Android 17 becomes required (decided
-    again at the Phase 2 gate), and the unpinned images
+20. Whether the emulator job for Android 17 becomes required (no date:
+    the owner decides it when asking for it), and the unpinned images
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
 21. The path of any signing configuration inside the Gradle project
     ([CODEOWNERS](../../.github/CODEOWNERS)).

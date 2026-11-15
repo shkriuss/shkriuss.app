@@ -1,12 +1,12 @@
 # 0025 Secure app spawning in the GrapheneOS checklist
 
-- Status: Accepted
+- Status: Superseded by [0039](0039-no-manual-checklist-for-a-release.md)
 - Date: 2026-11-12
 - Source: the owner's decision on
   [pull request 19](https://github.com/shkriuss/shkriuss.app/pull/19),
-  after Catalog 0.2.0, the first release with the
-  [release checklist](../development/release.md#before-and-after-a-release). It extends
-  point 4 of [0002](0002-grapheneos-first-minimum-android-13.md).
+  after Catalog 0.2.0, the first release with the release checklist,
+  which [0039](0039-no-manual-checklist-for-a-release.md) removed. It
+  extends point 4 of [0002](0002-grapheneos-first-minimum-android-13.md).
 
 ## Context
 
@@ -38,9 +38,11 @@
 
 ## Consequences
 
-- The [release checklist](../development/release.md#before-and-after-a-release) checks it
-  in part 1, step 2, with the hardened memory allocator and memory
-  tagging. The step numbers stay the same.
+- The release checklist checked it in part 1, step 2, with the hardened
+  memory allocator and memory tagging.
+  [0039](0039-no-manual-checklist-for-a-release.md) removed that
+  checklist. Secure app spawning is one of the exploit protections that
+  the owner leaves on when running every release.
 - 0002 says that this record extends its point 4.
 - A release whose app works only with secure app spawning turned off
   does not pass the checklist.

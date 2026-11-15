@@ -55,7 +55,9 @@ rotation works, and what to do if the key is stolen. 0037 supersedes
 point 7 of 0013. The owner decided the place of the rehearsal, where the
 lineage is kept and the answer to a stolen key in that session, on
 2026-11-14. Claude proposed the rest. The owner accepted both on
-2026-11-14, after parts A and B of the rehearsal passed.
+2026-11-14, after parts A and B of the rehearsal passed. Record 0039 says
+that no release waits for a manual checklist. It supersedes point 4 of
+0002, all of 0025, and the sentence of 0011 on the GrapheneOS checklist.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -63,7 +65,7 @@ How a record may be edited or replaced is in point 7 of
 | No. | Decision | Status |
 |---|---|---|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
-| 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025 |
+| 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025, then superseded by 0039 |
 | 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031; Navigation 3 not used by Water (step 2.3) |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027; point 4 superseded by 0036 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
@@ -72,7 +74,7 @@ How a record may be edited or replaced is in point 7 of
 | 0008 | [Backup file format](0008-backup-file-format.md) | Accepted; detail in backup-format.md |
 | 0009 | [Sync protocol and server](0009-sync-protocol-and-server.md) | Accepted |
 | 0010 | [Exact alarms and reminder storage](0010-exact-alarms-and-reminder-storage.md) | Accepted |
-| 0011 | [No native code, Grammar exception](0011-no-native-code-grammar-exception.md) | Accepted |
+| 0011 | [No native code, Grammar exception](0011-no-native-code-grammar-exception.md) | Accepted; its sentence on the GrapheneOS checklist superseded by 0039 |
 | 0012 | [No DI framework](0012-no-di-framework.md) | Accepted |
 | 0013 | [Signing key custody and rotation](0013-signing-key-custody-and-rotation.md) | Accepted; point 7 superseded by 0037 |
 | 0014 | [Release flow and reproducible builds](0014-release-flow-and-reproducible-builds.md) | Accepted |
@@ -86,7 +88,7 @@ How a record may be edited or replaced is in point 7 of
 | 0022 | [Hub site generator](0022-hub-site-generator.md) | Accepted |
 | 0023 | [Hub site hosting and deploy](0023-hub-site-hosting-and-deploy.md) | Accepted |
 | 0024 | [Own adaptive layouts, no Material 3 adaptive libraries](0024-own-adaptive-layouts.md) | Accepted |
-| 0025 | [Secure app spawning in the GrapheneOS checklist](0025-secure-app-spawning-in-grapheneos-checklist.md) | Accepted |
+| 0025 | [Secure app spawning in the GrapheneOS checklist](0025-secure-app-spawning-in-grapheneos-checklist.md) | Superseded by 0039 |
 | 0026 | [Room's build tools and committed schemas](0026-room-build-tools.md) | Accepted |
 | 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |
 | 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted |
@@ -100,3 +102,4 @@ How a record may be edited or replaced is in point 7 of
 | 0036 | [An app's settings are records](0036-app-settings-as-records.md) | Accepted |
 | 0037 | [Signing key rotation](0037-signing-key-rotation.md) | Accepted |
 | 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Accepted |
+| 0039 | [No manual checklist for a release](0039-no-manual-checklist-for-a-release.md) | Accepted |

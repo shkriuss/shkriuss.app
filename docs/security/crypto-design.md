@@ -1559,9 +1559,10 @@ pull request 22. The app-lock screen and the user guide say it plainly.
    hardware keys wrap only keysets, and why `core/crypto` uses them one
    at a time.
 8. The owner's three test devices all have StrongBox. An emulator has
-   none. On each of the three devices, Water's security screen shows
-   StrongBox for every key. No release step checks it again
-   ([release.md](../development/release.md#before-and-after-a-release)).
+   none, so no automatic test takes the StrongBox path. No release waits
+   for a check of it on a device
+   ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)).
+   The security screen shows the level of each key (point 4).
 
 ## Key rotation
 

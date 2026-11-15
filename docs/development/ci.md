@@ -582,8 +582,8 @@ left the question open:
   [30](https://github.com/shkriuss/shkriuss.app/pull/30)). The job keeps
   running on every pull request and every push to `main`. A red result
   is information, not a block.
-- The owner decides again at the Phase 2 gate whether "Emulator (Android
-  17)" becomes required.
+- Whether "Emulator (Android 17)" becomes required is an open point
+  with no date. The owner decides it when asking for it.
 
 A pull request that renames one of the emulator jobs, or changes the
 list of Android versions, must say so in its description. Otherwise
