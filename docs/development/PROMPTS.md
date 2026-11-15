@@ -1,1121 +1,139 @@
 # Prompts for building shkriuss.app with Claude Code
 
-Ready-to-paste prompts for every phase of `PLAN.md`. Everything here works
-from a phone browser at claude.ai/code or the Code tab of the Claude app.
+Ready-to-paste prompts. Everything here works from a phone browser at
+claude.ai/code or the Code tab of the Claude app.
 
 ## How to use this file
 
 1. Start a new session. Pick the repository `shkriuss.app` and the cloud
    environment `android`.
-2. Set the mode in the mode menu. Use **Accept edits** unless the prompt says
-   **Plan**.
-3. Send `/model <name>` and then `/effort <level>` as two short messages. Each
-   prompt lists both. Skip this when it says "default".
+2. Set the mode in the mode menu: **Accept edits**, or **Plan** where
+   the prompt says so.
+3. Send `/model <name>` and then `/effort <level>` as two short messages,
+   as the prompt says. Skip this when it says "default".
 4. Paste the prompt. Replace anything in `<angle brackets>`.
-5. When Claude is done: read its summary, open **Changes**, and comment on any
-   line you want changed.
-6. Select **Create PR**. Turn on **Auto-fix** in the pull request's menu if
-   you want Claude to repair failing checks by itself.
-7. In GitHub: wait for the checks, install the preview APK, look at the
-   screenshots ([test-a-pull-request.md](test-a-pull-request.md)). Then
-   approve and merge, or write what to change.
+5. Claude opens a pull request. Merge it when CI is green. Looking at
+   its preview on a phone is your choice
+   ([test-a-pull-request.md](test-a-pull-request.md)).
 
-Rules of thumb:
-
-- One prompt, one session, one pull request.
-- Start a new session for the next prompt. Everything Claude needs is in the
-  repository, not in the old chat.
-- If a session gets long or confused, stop it and start a new one with the
-  same prompt plus what is already done.
-- Never paste a password, token or recovery key into a session.
+One prompt, one session, one pull request. Start a new session for the
+next prompt: everything Claude needs is in the repository. Never paste a
+password, token or recovery key into a session.
 
 ## Which model and effort
 
 | Kind of work | Model | Effort | Mode |
 |---|---|---|---|
 | Typos, wording, changelog, small doc edits | `haiku` | `low` | Accept edits |
-| Docs, strings, small UI fixes, dependency updates | `sonnet` | `medium` | Accept edits |
-| Normal feature work that follows an existing pattern | default | `medium` | Accept edits |
+| Docs, strings, small UI fixes, dependency updates, a release | `sonnet` | `medium` | Accept edits |
+| Building an app that follows an existing pattern | default | `medium` | Accept edits |
 | New module, database migration, notifications, CI workflows, bug fixes | `opus` | `high` | Accept edits |
+| A specification, the audit before a release | `opus` | `high` | Plan |
 | Cryptography, backup format, sync protocol, release workflow | `opus` | `xhigh` | Plan first |
-| Independent review of a finished pull request | `opus` | `high` | Plan |
 | A problem that survived two attempts, or the hardest designs | `fable` | `high` | Plan first |
 
-Notes:
-
-- "default" is what Claude Code picks for your plan. On Pro and Max that is
-  Opus at medium effort.
-- `fable` may be billed to usage credits on some plans. Check before using it.
-- Higher effort uses your plan's limits faster. `max` is rarely worth it.
-- `opusplan` plans with Opus and writes with Sonnet. It is a good saver for
-  large but routine features.
+"default" is what Claude Code picks for your plan. Higher effort uses
+your plan's limits faster. `fable` may be billed to usage credits on some
+plans.
 
 ---
 
-## Session 0: smoke test
+## Every app
 
-Run this once, before Phase 0. Model: default. Effort: default.
+The four steps of "How an app is built" in
+[CLAUDE.md](../../CLAUDE.md#how-an-app-is-built), one prompt each.
 
-```text
-This is an environment check. Do not change project files except in step 6.
-
-1. Run `check-tools` and report the Java and Gradle versions.
-2. Report `echo $ANDROID_HOME` and list `$ANDROID_HOME/platforms` and
-   `$ANDROID_HOME/build-tools`. If the SDK is missing, show
-   `/var/log/android-sdk-setup.log`, run `install-android-sdk`, and report
-   what happened.
-3. In a temporary folder outside the repository, create the smallest possible
-   Android app: latest stable Android Gradle Plugin, a Gradle wrapper for the
-   version it needs, compile SDK 37, min SDK 33, one Kotlin activity and one
-   Robolectric test. Run `./gradlew assembleDebug testDebugUnitTest`.
-   Report success or the exact error, how long it took, and every host that
-   was blocked or answered 429.
-4. Report whether `/dev/kvm` exists (needed for an emulator).
-5. Tell me which GitHub account your commits and pull requests come from.
-6. Create the branch `claude/smoke-test`. Add one file `smoke-test.txt` with
-   today's date. Push it and open a draft pull request titled
-   "Smoke test (do not merge)". Give me the link.
-7. Read CLAUDE.md and PLAN.md. List anything that is unclear, contradictory
-   or impossible in this environment. Do not fix anything. Just list it.
-```
-
-Then check in GitHub:
-
-1. The pull request author is the machine account, not you.
-2. The merge button is blocked until you approve.
-3. Close the pull request and delete the branch.
-
----
-
-## Phase 0: Foundations
-
-### 0.1 Repository skeleton
-
-Model: default. Effort: `medium`.
-
-```text
-Read CLAUDE.md and PLAN.md first. This is Phase 0, step 1: the repository
-skeleton. No Gradle files and no workflows yet.
-
-Create:
-- `.gitignore`, `.gitattributes` (LF line endings, images as binary) and
-  `.editorconfig`.
-- `README.md`: what the project is, status "early development", links to docs.
-- `SECURITY.md`: report privately with GitHub's "Report a vulnerability".
-  No email address unless I give one.
-- `CONTRIBUTING.md`: short, points to `docs/development/`.
-- `.github/CODEOWNERS`: owner-only paths are `.github/`, `CLAUDE.md`,
-  `.claude/`, `android/gradle/verification-metadata.xml`,
-  `android/gradle/wrapper/` and any signing config. The owner is @shkriuss.
-- `.github/pull_request_template.md` with the four points from CLAUDE.md.
-- Move `PLAN.md` to `docs/plan/PLAN.md` and `PROMPTS.md` to
-  `docs/development/PROMPTS.md`. I am the owner and I ask you to add one line
-  to CLAUDE.md that says where the plan is.
-- The `docs/` folders from PLAN.md section 12, each with a short index page
-  that says what belongs there.
-- `docs/development/working-with-claude.md` and
-  `docs/development/cloud-environment.md` from PLAN.md sections 13 and 15.
-  Leave a marked place for the setup script; I will paste it in a review.
-- `.claude/rules/` with short path-scoped rule files for `android/`,
-  `backend/`, `docs/` and `.github/workflows/`.
-
-Keep the root LICENSE as it is. Do not invent decisions. Where PLAN.md leaves
-something open, write "Open" and list it in the pull request.
-```
-
-### 0.2 Decision records
-
-Model: `sonnet`. Effort: `medium`.
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md. Write `docs/adr/template.md` and the
-ADRs listed in PLAN.md section 18, one file each, numbered 0001 to 0018.
-
-Each ADR has: status, date, context, decision, options rejected and why,
-consequences. Use plain English and short sentences. Take the content from
-PLAN.md. Do not add new decisions. If the plan does not say why something was
-rejected, write "Reason not recorded" and list it in the pull request so I
-can fill it in.
-```
-
-### 0.3 Gradle project and empty Catalog app
-
-Model: `opus`. Effort: `high`.
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md. This is Phase 0, step 3: the Gradle
-project with one empty app. I am the owner and I ask you to create the files
-under `android/gradle/`, including the wrapper and verification metadata.
-
-- `android/` with the Gradle wrapper (pinned version and
-  `distributionSha256Sum`), `settings.gradle.kts` (repositories: google and
-  mavenCentral only, project repositories forbidden), the version catalog and
-  `gradle.properties`.
-- `android/build-logic/` convention plugins: application, library, Compose,
-  unit tests, screenshot tests. All module build config lives there.
-  Warnings are errors.
-- Modules `core/design` (a theme stub) and `app/catalog` (application ID
-  `app.shkriuss.catalog`, one screen that says "Catalog").
-- Min SDK 33, target and compile SDK 37. A preview build type with the
-  application ID suffix `.preview`, as in PLAN.md section 13.
-- No permissions at all. No dependency outside PLAN.md section 3.
-- Dependency verification with sha256 and PGP. Commit the keyring and turn
-  key servers off.
-- The settings needed for byte-identical APKs across two clean builds. Say in
-  the docs what you set and why.
-- One unit test and Roborazzi screenshot tests for the Catalog screen: phone
-  and tablet, light and dark, font scale 1.0 and 2.0.
-- Settle the "to confirm" items in PLAN.md section 17 that this step touches.
-  Record each answer in the right doc or ADR.
-- Write `docs/development/build.md`. I am the owner and I ask you to correct
-  the Commands section of CLAUDE.md if a command differs.
-
-Before you push, run `./gradlew check verifyRoborazziDebug
-:app:catalog:assembleDebug` and build twice to compare the APK hashes. If a
-download is blocked or answers 429, stop and tell me. Do not add repositories.
-```
-
-### 0.4 Continuous integration and preview builds
-
-Model: `opus`. Effort: `high`.
-
-```text
-Read CLAUDE.md, docs/plan/PLAN.md section 13 and `.claude/rules/`. I am the
-owner and I ask you to add these workflow files.
-
-- `.github/workflows/ci.yml`, on pull requests and on pushes to main:
-  Gradle wrapper validation, `./gradlew check`, screenshot verification.
-- `.github/workflows/pr-preview.yml`, on pull requests: build the preview APK
-  of every app the pull request touches, sign it with a throwaway key made in
-  the job, upload the APK and the screenshot images, and write a job summary
-  that says in plain words where to tap to get them.
-- An emulator job for instrumented tests on API 33 and the newest image.
-  Add it only if an instrumented test exists. Otherwise write down the plan
-  for Phase 1 and stop.
-
-Rules for every workflow:
-- Actions pinned to a full commit SHA with the version in a comment.
-- `permissions: contents: read` at the top. More only per job, with a comment
-  that says why.
-- No secrets. No `pull_request_target`. A timeout and a concurrency group on
-  every job. Inputs go through `env`, never straight into a shell line.
-- Only GitHub's own actions are allowed in this repository today. If you need
-  another one, list it in the pull request with the reason and the SHA, and I
-  will allow it in the settings. Prefer a short shell step.
-
-Find the simplest way to get a preview APK from a pull request onto a phone
-using only a browser. Write it as numbered steps in
-`docs/development/test-a-pull-request.md`.
-```
-
-### 0.5 Protected-paths flag
-
-Model: `opus`. Effort: `high`.
-
-```text
-I am the owner and I ask you to add `.github/workflows/protected-paths.yml`.
-
-Purpose: when a pull request touches an owner-only path from CODEOWNERS, add
-the label `protected-paths` and one comment that lists those files, so I
-notice on my phone. It never blocks a merge.
-
-Requirements:
-- It runs on `pull_request_target`, so the workflow file always comes from
-  main. It must never check out, build or run code from the pull request.
-- It reads the list of changed files through the GitHub API only.
-- Permissions: `pull-requests: write` and nothing else.
-- Treat file names as untrusted text. Never put them into a shell line.
-- Update the comment in place when the pull request changes.
-
-Explain in `docs/security/` what this flag protects against and what it does
-not.
-```
-
-### 0.6 Release workflow
-
-Model: `opus`. Effort: `xhigh`. Mode: **Plan** first, then Accept edits.
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md sections 13 and 15. I am the owner and I
-ask for exactly this change: create `.github/workflows/release.yml`.
-
-Show me the design first. Do not write files until I agree.
-
-The flow:
-1. I start it by hand on main with two inputs: app name and version. Check
-   both strictly (a fixed list of app names, a semantic version). Pass inputs
-   through `env`.
-2. Job "build": no secrets, no caches. Builds the unsigned release APK.
-3. Job "rebuild": a second clean build. Compare the two files byte for byte.
-   Fail if they differ.
-4. Job "sign": uses the `release` environment, so it waits for my approval.
-   Sign with `apksigner` only. Write the keystore to a temporary file with
-   private permissions and delete it in a trap. Never print a secret. Verify
-   the result and compare the certificate SHA-256 with
-   `docs/security/fingerprints.md`. Ask me for the fingerprint; it is public.
-5. Add a build provenance attestation for the signed APK.
-6. Create a draft release named `<app>-v<version>` with the APK and its
-   SHA-256. Do not create a tag. I publish the draft myself.
-
-Also:
-- The secrets are named in PLAN.md section 13. Use only those.
-- List every action that is not GitHub's own. Prefer none.
-- Write `docs/development/release.md`: how I run a release from a phone, step
-  by step, and a rehearsal with the Catalog app.
-- Write ADRs 0013 and 0014 in full if they are still short.
-- Tell me which parts you could not test here.
-```
-
-### 0.7 Hub website placeholder
-
-Model: `sonnet`. Effort: `medium`.
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md. I am the owner and I ask you to add
-`.github/workflows/site.yml`.
-
-- `site/`: a static site built from `docs/` and `site/`. Pages: home, list of
-  apps with status, how to install with Obtainium, how to verify with
-  AppVerifier and the signing fingerprint, link to the source.
-- No JavaScript, no external fonts, no analytics, no cookies. Strict security
-  headers. Light and dark by system setting, same palette as PLAN.md
-  section 9.
-- A generator that is one pinned, checksum-verified download, or a tiny
-  script in the repository. Say which you chose and why in an ADR.
-- The workflow builds on pull requests without deploying. On main it deploys
-  to Cloudflare using the `cloudflare` environment and its
-  `CLOUDFLARE_API_TOKEN`. Pin the deploy tool to an exact version.
-- Tell me which values that are not secret (for example the account ID) you
-  need and where I should store them.
-```
-
-### Phase 0 gate (you, on the phone)
-
-Done on 2026-11-11 with Catalog 0.1.0.
-
-1. Run the release workflow for Catalog. Approve the signing step.
-2. Publish the draft release.
-3. Add the repository to Obtainium and install Catalog.
-4. Check the certificate with AppVerifier against the hub page.
-5. Open any pull request and confirm you get a preview APK and screenshots.
-
----
-
-## Phase 1: Core
-
-### 1.1 Design tokens and theme
-
-Model: default. Effort: `medium`.
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md section 9. Build the base of
-`core/design`:
-
-- Colour, type, shape and spacing tokens exactly as in the plan. Light theme
-  and true-black dark theme. No dynamic colour.
-- `ShkTheme` and the six text styles. System font only.
-- A unit test that computes the contrast of every text and background pair
-  and fails under 4.5:1, and every outline pair under 3:1.
-- Catalog pages for colours, type, shape and spacing.
-- Screenshot tests: phone and tablet, light and dark, font scale 1.0 and 2.0.
-- `docs/development/design-system.md` and ADR 0017.
-```
-
-### 1.2 Components
-
-Model: default. Effort: `medium`. Run it once per batch.
-
-```text
-Read CLAUDE.md and docs/development/design-system.md. Add this batch of
-`Shk*` components to `core/design`: <batch>.
-
-For every component: a short KDoc that says when to use it, a Catalog page
-with all states, a TalkBack label where it is interactive, a touch target of
-at least 48dp, no clipped text at font scale 2.0, and screenshot tests in the
-eight standard configurations. Only `core/design` may import Material 3.
-```
-
-Batches:
-
-1. Buttons (filled, tonal, text, icon), floating action button, chips.
-2. Text field, checkbox, switch, radio button, slider.
-3. Card, list item, divider, section header, empty, loading and error states.
-4. Top bar, navigation bar and rail that switch by window size, adaptive
-   list-and-detail scaffold.
-5. Dialog, bottom sheet, snackbar, menu, date picker, time picker.
-
-### 1.3 Data base module
-
-Model: `opus`. Effort: `high`.
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md sections 3, 5 and 7. Build `core/data`:
-
-- Room on the system SQLite driver. No bundled SQLite.
-- The record conventions: `id`, `createdAt`, `updatedAt`, `deletedAt`.
-  Helpers so that every write sets `updatedAt` and deletes only mark.
-- Clock and ID sources passed in through constructors, so tests control them.
-- A "changed since" query pattern that sync can use later. Do not design
-  sync here.
-- Schema export and a migration test harness in `core/testing`, with one
-  example migration and its test.
-- `docs/architecture/data.md`.
-
-I am the owner and I ask you to add the include lines for the new
-modules to android/settings.gradle.kts, and nothing else in that file.
-```
-
-### 1.4 Cryptography
-
-Model: `opus` (or `fable`). Effort: `xhigh`. Mode: **Plan** first. Three
-sessions, one pull request each.
-
-Session A, design only:
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md sections 6 and 10. Write
-`docs/security/crypto-design.md` and complete ADRs 0006 and 0007. No code.
-
-Cover: the key hierarchy from recovery key and device key down to record,
-file and backup keys; the exact Tink primitives and parameters; nonce and key
-ID handling; what is bound as associated data; the versioned byte layout of
-every encrypted blob; key rotation; what happens when StrongBox is missing;
-how the recovery key is shown and re-entered; test vectors.
-
-Use only standard constructions that Tink provides. Do not invent any. End
-with a list of every assumption and every open question for me.
-```
-
-Session B, after you approve the design:
-
-```text
-Read CLAUDE.md and docs/security/crypto-design.md. Implement `core/crypto`
-exactly as designed. If the design is wrong or unclear, stop and tell me
-instead of changing it.
-
-Tests: items 1 to 8 of "What the tests must cover" in crypto-design.md:
-known-answer vectors, round trips, tampering, truncation, wrong key,
-wrong version, empty and very large inputs. No key material in logs, errors
-or `toString`. No `javax.crypto` or Tink calls outside this module; add a
-lint or test that enforces it.
-
-Item 9 of that list, the emulator tests of the hardware keys, is not part
-of this session. It is session C. Add no emulator job and no instrumented
-test here.
-
-Also not part of this session: the handover between apps (step 3.0), and
-the recovery key screens and the QR code (step 1.7).
-
-Create `docs/development/third-party.md` as crypto-design.md says: the
-word list, and Tink and the four libraries it brings, each with its source,
-its licence and its notice. Put the MIT licence text next to the word list.
-
-I am the owner and I ask you to add Tink 1.24.0 and the four libraries it
-brings to android/gradle/verification-metadata.xml and the keyring, and
-nothing else in those files.
-
-I am the owner and I ask you to add the include lines for the new
-modules to android/settings.gradle.kts, and nothing else in that file.
-
-I am the owner and I ask you to add one rule to the APK rules check, in
-`CheckApkRulesTask.kt`, and nothing else in that file: the build fails if
-an APK holds a class under `com.google.android.gms`. R8 can rename classes
-in a release APK, so say how the rule still finds them. If the rule needs
-another owner-only file, stop and tell me.
-```
-
-Session C, after session B is merged: the hardware key tests on an
-emulator. Model: `opus`. Effort: `high`.
-
-```text
-Read CLAUDE.md, docs/security/crypto-design.md and
-docs/development/emulator-tests.md. This is item 9 of "What the tests must
-cover" in crypto-design.md: the tests of the four hardware keys on an
-emulator.
-
-I am the owner and I ask you to add the emulator job to
-`.github/workflows/ci.yml`.
-
-- The job as planned in emulator-tests.md: AOSP images only, no
-  third-party action. Android 13, 14, 15 and the newest image.
-- Instrumented tests in `core/crypto`: each kind of hardware key is made
-  and used. After the screen lock is set, changed, removed and set again,
-  each key is there or gone as the table "When things change" in
-  crypto-design.md says. Test the system prompt too, if a test on an
-  emulator can answer it.
-- List what an emulator cannot check, such as StrongBox and a real
-  fingerprint. Write those as numbered steps for my three devices.
-- New test libraries need a decision record, a version catalog entry and
-  verification metadata. If you need an owner-only file other than ci.yml,
-  list it and stop before you change it.
-- If Android does not behave as crypto-design.md says, stop and tell me.
-  Do not change the design.
-- Update emulator-tests.md, ci.md and the assumptions in crypto-design.md
-  with what the tests showed.
-```
-
-### 1.5 Backup
-
-Model: `opus`. Effort: `xhigh`. Mode: **Plan** first.
-
-```text
-Read CLAUDE.md, docs/plan/PLAN.md section 5 and
-docs/security/crypto-design.md. Design and build `core/backup`.
-
-First write ADR 0008 and `docs/architecture/backup-format.md` and show me.
-Then implement: a versioned header, streaming authenticated encryption,
-export and import only through the system file picker, and an interface that
-each app implements to list and restore its records and files.
-
-Tests: round trip, a file cut short, one changed byte, wrong recovery key, a
-file from a newer format version, a very large file without loading it into
-memory. Write the user guide page "Back up and restore".
-
-I am the owner and I ask you to add the include lines for the new
-modules to android/settings.gradle.kts, and nothing else in that file.
-```
-
-### 1.6 Notifications
-
-Model: `opus`. Effort: `high`.
-
-```text
-Read CLAUDE.md and docs/plan/PLAN.md section 8. Build `core/notify`:
-
-- Exact alarms with AlarmManager behind a small interface.
-- Notification channels, the notification permission request, and a clear
-  state when the user says no.
-- Alarms registered again after reboot, app update, and time or time-zone
-  change.
-- Tests with a fake clock for all of the above.
-- `docs/architecture/notifications.md` and a user page that explains what
-  happens after a reboot before the first unlock, in Private Space, and in a
-  secondary profile.
-- Update `docs/security/permissions.md` for every permission and receiver.
-
-I am the owner and I ask you to add the include lines for the new
-modules to android/settings.gradle.kts, and nothing else in that file.
-```
-
-### 1.7 Recovery key screens and app lock
-
-Model: `opus`. Effort: `high`. Two sessions, one pull request each.
-
-Session A, the recovery key screens. Mode: **Plan** first.
-
-```text
-Read CLAUDE.md and docs/security/crypto-design.md, sections "The recovery
-key", "The system prompt" and "StrongBox and other hardware". Build the
-recovery key screens as a shared piece that every app uses.
-
-First decide with me, before any code:
-- The QR code: whether to build it now, what it holds, what draws it and
-  what scans it. crypto-design.md has a proposal and the open points.
-- The permission `USE_BIOMETRIC` for the system prompt: its decision
-  record, and which owner-only files must change for it.
-- Whether AndroidX Biometric is still needed anywhere (ADR 0003).
-- Open questions 11 and 12 of crypto-design.md: how a user starts over
-  after a setup that stopped half way, and what happens to a keyset file
-  that is damaged while its hardware key lives.
-
-Then build:
-- Create a recovery key: show the 24 words, ask for four of them, then
-  store the keys.
-- Enter the words, with the word list and the checksum. No paste.
-- Show the words again in a keeper app, after the system prompt.
-- The security screen: which keys exist and their hardware level, whether
-  the phone has a screen lock, and whether this app keeps the recovery key.
-- Every one of these screens blocks screenshots and the recent-apps
-  preview.
-- Catalog page, screenshot tests, user guide page.
-- Add the StrongBox check to docs/development/release-checklist.md, as
-  crypto-design.md says.
-
-I am the owner and I ask you to add the include lines for the new
-modules to android/settings.gradle.kts, and nothing else in that file.
-```
-
-Session B, the app lock:
-
-```text
-Read CLAUDE.md and docs/security/crypto-design.md. Add the optional app lock
-as a shared piece that every app can turn on:
-
-- Unlock with the system biometric or device credential prompt.
-- Turning it on follows "The app lock" in crypto-design.md: a recovery key
-  first, four of the words again, and a plain warning about a removed
-  screen lock and lost words. The user guide says the same.
-- Lock after a time the user picks, and when the app leaves the screen if the
-  user wants.
-- File keys require user authentication as designed. Database rows are behind
-  an access gate only; say so honestly in the user guide.
-- An option to hide the app in the recent-apps view and block screenshots.
-- Decide with me what a notification shows while the app lock is on. It is
-  an open question in docs/architecture/notifications.md. Record the
-  decision there.
-- When the words repair a `file-key` that was damaged under the Lock key,
-  `core/crypto` turns the app lock off. Show the user that the app lock
-  was turned off, and how to turn it on again.
-- Catalog page, screenshot tests, user guide page.
-
-I am the owner and I ask you to add the include lines for the new
-modules to android/settings.gradle.kts, and nothing else in that file.
-```
-
-### 1.8 Threat model
-
-Model: `opus`. Effort: `high`. Mode: **Plan** first. It can run at any time
-after step 1.4, session A.
-
-```text
-Read CLAUDE.md, docs/plan/PLAN.md section 10 and
-docs/security/crypto-design.md. Write `docs/security/threat-model.md`. No
-code.
-
-Cover: what is protected; every attacker of section 10, what stops each one
-and what does not; what is out of scope and why; what the app lock protects
-and what it does not; what the sync server and the network can still learn;
-the OWASP MASVS 2.1.0 controls of profile L2 and the privacy controls, each
-with where it is met or why it does not apply; the resilience profile as
-skipped on purpose.
-
-Do not add decisions. Where something is not decided, write "Open". Update
-docs/security/README.md, and the table "What the design protects" in
-crypto-design.md if the two differ. End with every open question.
-```
-
-### 1.9 Build checks from the threat model
-
-Model: `opus`. Effort: `high`. Mode: **Plan** first. Run it after step 1.8
-and before step 2.2. It answers points 1, 2 and 3 under "Found while
-writing this page" in
-[threat-model.md](../security/threat-model.md#found-while-writing-this-page).
-
-```text
-Read CLAUDE.md, docs/security/threat-model.md (the points 1, 2 and 3
-under "Found while writing this page") and the build checks that exist:
-CheckApkRulesTask.kt, CheckRoomSchemasTask.kt and CheckDaoRulesTask.kt
-in android/build-logic, with docs/development/build.md. Build these
-checks. They run in the CI job "Check", which is a required check, so a
-pull request cannot pass without them. The APK rules are not part of
-`./gradlew check`: CI runs them as `:app:<name>:checkReleaseApkRules`
-for every app. Say in docs/development/ci.md and build.md which check
-runs where. If a check needs a change to `ci.yml`, stop and ask me.
-
-1. Every app's merged manifest turns Android's own backup and device
-   transfer off. Fail with the app's name and the attribute that is
-   wrong. Decide with me, before any code, what exactly the check reads
-   (the backup attribute, the data extraction rules, or both).
-2. No APK uses a WebView or loads code at runtime (hard rule 1, ADR
-   0019): no WebView class, no DexClassLoader or other class loader
-   that reads code from a file or the network. Run it on the release
-   APK, like the other APK rules. If a library that ships in an app
-   today trips it, stop. Do not allow it, do not exclude it. Tell me
-   which library, which app and which class, and wait.
-3. One check for all modules that main code does not log, in every
-   module. The test `theModuleNeverLogsOrPrints` in core/crypto
-   forbids ten forms today: `android.util.Log`, `Log.`, `println`,
-   `print(`, `printStackTrace`, `System.out`, `System.err`,
-   `java.util.logging`, `Logger` and `Timber`. The new check forbids at
-   least all of these, in the main source sets of every module. That
-   test is replaced by the new check, never weakened. The other test of
-   that class, which shows that no key, word or plaintext is shown or
-   logged, stays as it is. Say how the check treats test code and
-   Catalog. Hard rule 10 is the reason: user content must never reach a
-   log.
-
-Each check gets a test that shows it fails on a sample that breaks the
-rule, and passes on one that does not. Update docs/development/build.md,
-docs/security/threat-model.md (points 1, 2 and 3, and the lines of
-STORAGE-2, PLATFORM-2 and CODE-4 that say Open) and the commands in
-CLAUDE.md only if they change. A weaker rule is never the way to a green
-build.
-
-I am the owner and I ask you to change these owner-only files for these
-checks, and for nothing else: CheckApkRulesTask.kt, the convention
-plugins that connect the checks to the build
-(AndroidApplicationConventionPlugin.kt, and AndroidCommon.kt if the
-logging check needs it), and .github/CODEOWNERS, to list every new check
-file as owner-only. Change only the lines these checks need in each.
-Do not change ci.yml or any other file under .github/ except CODEOWNERS.
-If a check needs one of them, stop and ask me.
-```
-
-### 1.10 Overlays and accessibility data on the security screens
-
-Model: `opus`. Effort: `high`. Mode: **Plan** first. Run it after step 1.9
-and before step 2.5. It answers point 7 under "Found while writing this
-page" in
-[threat-model.md](../security/threat-model.md#found-while-writing-this-page).
-
-```text
-Read CLAUDE.md, docs/security/crypto-design.md,
-docs/architecture/security-screens.md and docs/security/threat-model.md
-(MASVS-PLATFORM-3 and CODE-1, and point 7 under "Found while writing
-this page"). The recovery key screens and the app lock already block
-screenshots. They do not yet protect against another app that draws over
-them, and they do not tell accessibility services that their content is
-sensitive.
-
-First decide with me, before any code:
-- What Android 13 to 17 offers against overlays and against tapjacking
-  on the security screens, and what each option costs.
-- What Android offers to mark a view as sensitive for accessibility
-  services, on which Android versions, and what happens to TalkBack, which
-  we must keep working.
-- Which screens: the words, the entry of the words, the app lock screen
-  and the lock screen. The words most of all.
-- Whether any option needs a permission. A new permission needs its ADR,
-  its entry in docs/security/permissions.md, and the owner's leave for
-  the allow list of the APK rules check. Ask me before you plan one.
-
-Then build what we agreed, in core/security, with tests and screenshot
-tests where the screens change, the user guide, and the Catalog
-changelog. TalkBack must still read every label. Update
-docs/architecture/security-screens.md and the threat model (point 7,
-PLATFORM-3 and CODE-1). If we decide to do nothing for a case, write it
-as an accepted deviation with the reason.
-```
-
-### Phase 1 gate (you)
-
-Complete on 2026-11-13, with Catalog 0.2.0 and 0.3.0. The owner said so
-on [pull request 33](https://github.com/shkriuss/shkriuss.app/pull/33):
-the look at the shared screens is done, the decisions below are
-recorded, and the three emulator checks are in the ruleset.
-
-The owner made these decisions on 2026-11-13.
-
-The design part was done on 2026-11-12 with Catalog 0.2.0, on the Pixel
-9 Pro, the Pixel Tablet and the Pixel 6a. It covers the tokens and
-components of steps 1.1 and 1.2. The teal accent and the six text styles
-stay as they are ([ADR 0017](../adr/0017-design-system-tokens.md)). The
-rest of the gate waited for steps 1.3 to 1.7.
-
-The look at Catalog on the three devices, for the shared screens of steps
-1.3 to 1.7, is done with Catalog 0.3.0. The owner decided on 2026-11-13
-to make it one pass with the release: parts 1 and 2 of the
-[Catalog 0.3.0 release checklist](../apps/catalog/release-checklist-0.3.0.md),
-on the preview of the pull request that prepares it
-([pull request 32](https://github.com/shkriuss/shkriuss.app/pull/32)),
-before the merge. After publishing, nothing is looked at again except
-part 5 of that checklist.
-
-Done on 2026-11-13, before the merge of pull request 32. The owner found
-no faults and nothing to dislike, so nothing was fixed in 0.3.0 and no
-change waits for the next version
-([Result](../apps/catalog/release-checklist-0.3.0.md#result)). The steps
-were:
-
-1. Install the Catalog preview of that pull request on the Pixel 9 Pro,
-   Pixel Tablet and Pixel 6a.
-2. Do parts 1 and 2 of the checklist. They sample the pages and states:
-   light and dark, the default and the largest font size, and TalkBack
-   on the Pixel 9 Pro. The checklist says what is opened where, and
-   why.
-3. Write what you dislike as a comment on that pull request. A change
-   waits for the next Catalog version: use prompt R3 after 0.3.0 is
-   published. A fault that breaks a rule of CLAUDE.md or makes a state
-   unusable is fixed in 0.3.0 instead
-   ([What happens to what you find](../apps/catalog/release-checklist-0.3.0.md#what-happens-to-what-you-find)).
-
-Decided on 2026-11-13:
-
-4. The emulator jobs. "Emulator (Android 13)", "(Android 14)" and
-   "(Android 15)" become required checks. "Emulator (Android 17)" does
-   not, while its image crashes Android's system process. The owner
-   turned the three on in the ruleset on 2026-11-13
-   ([ci.md](ci.md#the-emulator-jobs)), and decides again at the Phase 2
-   gate.
-5. A step for each point under "Found while writing this page" in
-   [threat-model.md](../security/threat-model.md#found-while-writing-this-page):
-
-   | Points | Step |
-   |---|---|
-   | 1, 2, 3 | New step 1.9, before step 2.2 |
-   | 4, 8, 9, 10 | Step 2.6 |
-   | 5 | Decided now: no forced update. Step 5.1 decides again for the Sync app. |
-   | 6, 12 | Step 5.1 |
-   | 7 | New step 1.10, before step 2.5 |
-   | 11 | New step 2.7, any time from now, and done before the first data app is released |
-
----
-
-## Phase 2: Water (pilot app)
-
-### 2.1 Specification
+### 1. Specification
 
 Model: `opus`. Effort: `high`. Mode: **Plan**.
 
 ```text
-Read CLAUDE.md and docs/plan/PLAN.md. Write the specification for the Water
-app in `docs/apps/water/spec.md`. No code.
+Read CLAUDE.md and docs/plan/PLAN.md. Write the specification of <app>
+in docs/apps/<app>/spec.md, with a README.md for the folder, and add the
+folder to docs/apps/README.md. No code.
 
 Ask me up to five questions first if the answer changes the design.
 
-Cover: what the app is for in two sentences; every screen described in words
-for phone and tablet; the data model; units; reminder behaviour (quiet hours,
-snooze, missed reminders); settings; backup contents; permissions; TalkBack
-notes; what is out of scope for version 1.0. Keep version 1.0 small.
+Aim at 300 lines. Cover: what the app does, in two sentences; each
+screen, in words, for phone and tablet; the data; limits and defaults;
+units; reminders, if any; settings; permissions; TalkBack; and what is
+left out of the first version. Keep the first version small. For the
+backup, follow docs/architecture/backup-format.md: name the record
+types, say what each holds, and give the app's data version. End with
+what is open.
 
-For the backup contents, follow docs/architecture/backup-format.md: name the
-record types, say what the content of each one holds, and give the app's
-data version for a backup.
+<the lines for this app, from "Notes for each app" below>
 ```
 
-### 2.2 to 2.5 Build it
+### 2. Build
 
-Model: default. Effort: `medium` (`high` for 2.4). One session each.
+Model: default. Effort: `medium` (`high` for reminders, backup and the
+app lock). One session for each part.
 
 ```text
-Read CLAUDE.md and docs/apps/water/spec.md. Build step <n> of the Water app:
-<step>. Follow the spec. If the spec is wrong or silent, stop and ask.
-Include tests, screenshot tests for new or changed screens, docs and the
-changelog.
+Read CLAUDE.md and docs/apps/<app>/spec.md. Build <part> of <app>.
+Follow the spec. If it is wrong or silent, stop and ask me. Include
+tests, screenshot tests for new or changed screens, the docs the change
+makes wrong, and the changelog under "Unreleased".
 ```
 
-Steps:
+The parts, in as few pull requests as stay easy to read:
 
-- 2.2 Data and logic: tables, repository, view models, unit tests, exported
-  schema. Create `feature/water` and `app/water`. Before the first screen of
-  step 2.3, add the check that every screen of an app is behind the app
-  lock (docs/architecture/security-screens.md, "Open"): a test that starts
-  every activity of the app's merged manifest, except those of
-  core/security, with the app lock on and locked, and fails unless the
-  lock screen shows and the screen's content does not. Decide where the
-  shared helper lives; every later app copies the test. I am the owner and
-  I ask you to add the include lines for the new modules to
-  android/settings.gradle.kts, and nothing else in that file.
-- 2.3 Screens: all screens from the spec with the `Shk*` components.
-- 2.4 Reminders: through `core/notify`, with the permission flow. Follow
-  docs/architecture/notifications.md: the app class is a `NotifyHost`
-  and calls `Notify.start()`, the app names its alarms in an
-  `AlarmSource`, shows the notification in an `AlarmHandler`, and calls
-  `Notify.sync()` after every change. The reminder screen shows what
-  `Notify.state` says. Water gets three permissions from `core/notify`.
-  List them under Water in docs/security/permissions.md. Write the
-  reminder steps of docs/development/emulator-tests.md with the app's
-  real button names. Decide with me what the user sees when the app's
-  alarm handler fails: today the reminder is marked as fired and is lost
-  without a word. It is an open question in
-  docs/architecture/notifications.md. Record the decision there. I am
-  the owner and I ask you to add a per-app allow list of permissions to
-  the APK rules check, `CheckApkRulesTask.kt`, with the three
-  permissions of core/notify for Water, and nothing else in that file.
-- 2.5 Backup, restore, app lock and settings. Take the removals of the
-  two permissions and of the six core/security screens out of Water's
-  manifest. The settings get a screen
-  that shows the notices of all third-party material in the app. Complete
-  `docs/development/third-party.md` with everything that ships in the app.
-  For backup and restore, use `core/backup`: the screens call
-  `Backups.export`, `Backups.check` and `Backups.restore`, and the app
-  calls `Backups.start()` when it starts. Decide with me when a backup is
-  checked. I am the owner and I ask you to make three changes to the APK
-  rules check, `CheckApkRulesTask.kt`, and nothing else in that file:
-  add `android.permission.USE_BIOMETRIC` for Water to the allow list;
-  add `android.permission.HIDE_OVERLAY_WINDOWS` for Water to the allow
-  list; and add a rule that fails the build of an app whose merged
-  manifest declares a screen of core/security unless it requests both
-  permissions (ADR 0033). I also ask you to add the test of that rule to
-  the test files of build-logic, and, if the test is in a new file, one
-  line for that file in .github/CODEOWNERS. Nothing else in those files.
+- **Data and logic**: tables, repository, view models, unit tests and
+  the exported schema. Create `feature/<app>` and `app/<app>`, and copy
+  Water's test that every screen is behind the app lock. Add: "I am the
+  owner and I ask you to add the include lines for the new modules to
+  android/settings.gradle.kts, and nothing else in that file."
+- **Screens**: every screen of the spec, with the `Shk*` components.
+- **Reminders**, if the app has them: through `core/notify`, as
+  docs/architecture/notifications.md says.
+- **Backup, restore, the recovery key and the app lock**: through
+  `core/backup` and `core/security`, as Water does. The settings get
+  **Licences**, and docs/development/third-party.md lists everything
+  that ships in the app.
 
-### 2.6 Release preparation
+Every permission of the app is in docs/security/permissions.md and in
+the app's allow list of the APK rules check. For the allow list, add:
+"I am the owner and I ask you to add <app> to the allow list of
+permissions in the APK rules check, CheckApkRulesTask.kt, with
+<the permissions>, and nothing else in that file."
 
-Model: `opus`. Effort: `high`. Mode: **Plan** first, because it decides
-points 4, 9 and 10 with me. The rest is routine.
+### 3. Audit
 
-```text
-Read CLAUDE.md, docs/apps/water/spec.md, docs/development/release.md
-and docs/development/release-checklist.md. Prepare Water's first
-release. Do not start the release workflow and do not create a tag.
-I am the owner. Change no behaviour of the app in this pull request,
-only its version. If you find a bug, stop and tell me.
+Prompt [R2](#r2-independent-review), in a new session, once the app is
+built.
 
-VERSION
+### 4. Release
 
-The first release is 1.0.0: versionName 1.0.0 and versionCode 10000900
-in android/app/water/build.gradle.kts (ADR 0021). Its checklist is
-docs/apps/water/release-checklist-1.0.0.md. Settings shows the
-version: if a committed screenshot shows it, record that screenshot
-again. No other screenshot may change.
+Prompt [R6](#r6-prepare-a-release). Then follow
+[Before and after a release](release.md#before-and-after-a-release).
 
-A. DECIDE WITH ME FIRST, BEFORE ANY FILE CHANGES
+### Notes for each app
 
-They answer points 4, 9 and 10 under "Found while writing this page" in
-docs/security/threat-model.md.
+Add the lines for the app to the specification prompt:
 
-1. How dependencies are checked for known vulnerabilities (point 4).
-   First try what GitHub offers by itself, for example the dependency
-   graph and Dependabot alerts. Tell me what each shows for the Gradle
-   project, and what I must turn on in the repository settings, step by
-   step, for a phone. A tool outside GitHub needs its own ADR (hard
-   rule 5). If it needs a workflow file or an action, show me the exact
-   file first: .github/ is owner-only. Write the decision where the
-   threat model says Open.
-2. My GitHub and Cloudflare accounts, and the domain (points 9 and 10).
-   I check them myself. Ask me what to record. Write only the rule, for
-   example "the owner's accounts have a second factor", in
-   docs/security/. Never write details of my accounts or domain, no
-   names and no settings values.
-
-B. FIX WHAT AN AUDIT OF MAIN AT a93496b FOUND
-
-1. docs/security/permissions.md has "### Water (app.shkriuss.water)"
-   twice. Step 2.5 pasted a block into the middle. Delete lines 93 to
-   142 as they are at a93496b: from the second "Other components that
-   libraries add, none of them a permission:" (the list about Catalog's
-   manifest) to the end of the table whose last row says
-   HIDE_OVERLAY_WINDOWS is "Removed in Water's manifest until step
-   2.5". Keep the list after it, which starts with "The three receivers
-   of core/notify". Afterwards there is one Water section, with five
-   permissions, and Catalog's text stands only under Catalog.
-2. docs/security/threat-model.md is out of date in three places: "What
-   exists today: Catalog and the core modules", "Catalog, the only app
-   today, turns both off", and "The first app with it will be Water".
-   Water exists, turns both off, and has the app lock.
-3. docs/user/apps.md says Water is "Planned". Set it to "In
-   development". Add the status "Pre-release" to the meanings on that
-   page: there is a pre-release on GitHub, for testing, and Obtainium
-   shows it only with "Include prereleases" on.
-4. docs/security/fingerprints.md is owner-only. I am the owner and I
-   ask you to add the row "Water | app.shkriuss.water" to the table
-   "Apps signed with this key". Change nothing else on that page.
-
-C. DOCS FOR THE RELEASE
-
-1. The user guide docs/user/water.md, written for a phone screen. Add
-   it to docs/user/README.md and to docs/apps/water/README.md.
-2. The data inventory does not exist yet. Write
-   docs/security/data-inventory.md: what each app stores and where, for
-   Catalog and Water, and what leaves the phone and how. Check it
-   against the code, not against other pages. Update
-   docs/security/README.md, and the threat model where it waits for
-   this page (MASWE-0073, and point 4 under "Open in other pages").
-3. docs/security/permissions.md is complete for Water.
-4. docs/development/third-party.md: do its "How to check again" for
-   the release build. The page and the Licences screen list everything
-   that ships in the app.
-5. android/app/water/CHANGELOG.md: the section for this version, in
-   the form of Catalog's changelog.
-6. A privacy page (point 8): docs/user/privacy.md in the user guide,
-   and a page on the hub site. Plain English. What each app stores,
-   that data apps have no network permission, what the Sync app and
-   its server will be able to see (decided, not built yet), and that
-   there is no tracking. It must match the data inventory and
-   docs/security/permissions.md. Update the threat model (PRIVACY-3 and
-   point 8), site/site.json and docs/development/site.md.
-7. List every known problem honestly, in docs/user/water.md and in the
-   pull request.
-8. Spec Open 8 is decided: no accessibility checks on an emulator for
-   Water 1.0. The TalkBack pass on the phone stands in. Record it in
-   the spec as my decision.
-
-D. THE RELEASE CHECKLIST
-
-The phone steps for reminders, for the app lock and for backup and
-restore are already written, in docs/development/emulator-tests.md
-("Steps for the three devices: ..."). The release checklist does not
-ask for them yet.
-
-1. docs/development/release-checklist.md, the general one: write part
-   1, step 10 (reminders), which is Open until now. Add a step for an
-   app with the app lock, a step for an app that makes backups, and a
-   TalkBack pass over every screen. These may point to the sections of
-   emulator-tests.md.
-2. Water's checklist: a copy of the general one, filled in for this
-   version. Write every step I do on a phone out in full, with Water's
-   words. Do not point to another page for a step: copy the steps of
-   the three sections of emulator-tests.md into it. It must hold:
-   - reminders: on time with the screen off, after a restart before
-     and after the first unlock, in a second user profile, in Private
-     Space, and after "Force stop";
-   - the app lock: when it locks, the recent apps, the hidden form of
-     a reminder, and that its buttons are gone;
-   - backup and restore: a backup made on one device is restored on a
-     second device after the same test words are entered there, and
-     the drinks, the goal and the settings are there;
-   - the TalkBack pass: every screen, sheet and dialog; how "ml" and
-     "fl oz" are read on the buttons of the notification (spec Open
-     5); and where the focus goes after a sheet or a dialog closes;
-   - in part 5, for Obtainium: if the version is a pre-release, turn
-     on "Include prereleases" for Water.
-   Test words only, never my real recovery words, in every step with a
-   preview build.
-3. Threat model open point 5, notifications.md open question 4 and
-   "Not yet checked on a phone" in docs/user/reminders.md stay Open in
-   this pull request. Name Water's checklist there as the place where
-   they are checked. A later session corrects them with what I report.
-
-E. THE RELEASE WORKFLOW AND THE HUB SITE
-
-1. .github/workflows/release.yml: I am the owner and I ask you to add
-   water to the list of apps: the "app" options, and the step "Check
-   the inputs" of every job (build, rebuild, sign, draft), in its case
-   line and in its error text. Nothing else in that file. Update
-   docs/development/release.md where it names the apps.
-2. In this pull request the hub site gets the privacy page only.
-   Nothing on the site or in the README may say that Water can be
-   installed before I publish it.
-3. At the end of Water's checklist, write the exact prompt that I
-   paste into a session after I publish. It asks for: Water's status
-   on docs/user/apps.md; the status in README.md; the pages water.md,
-   recovery-key.md, app-lock.md, backup.md and reminders.md on the hub
-   site (site/site.json), without their sentence "No released app has
-   ... yet"; and the results of the phone checks in the pages of D3.
-
-F. FINISH
-
-1. In docs/development/PROMPTS.md, replace the prompt of step 2.6 with
-   this text, and change "Phase 2 gate (you)" to match VERSION.
-2. ./gradlew check and the screenshot verification pass, as CI runs
-   them. The site tests and the site build pass.
-3. The pull request description says what CLAUDE.md asks: what changed
-   and why, how to check it on a phone, which docs changed, and risks,
-   open questions and anything you were unsure about. List every
-   owner-only file you changed, with the sentence of this prompt that
-   asked for it.
-```
-
-This text replaced the first version of the prompt on 2026-11-15. The
-first version also asked to add Water to the hub site at once. This one
-adds only the privacy page, and the rest after publishing.
-
-Decided with the owner on 2026-11-15, in the planning of the step:
-
-- **Point 4.** A workflow of the project,
-  [`dependency-graph.yml`](../../.github/workflows/dependency-graph.yml),
-  sends each app's release runtime class path to GitHub's dependency
-  graph, with dependency verification on. The owner turns on the
-  dependency graph and Dependabot alerts. Automatic dependency
-  submission, security updates and version updates stay off
-  ([ci.md](ci.md#dependency-graph),
-  [threat-model.md](../security/threat-model.md#code)).
-- **Points 9 and 10.** Seven rules for the owner's accounts and the
-  domain, three of them for the domain, and no details
-  ([threat-model.md](../security/threat-model.md#the-rules-for-the-owners-accounts-and-the-domain)).
-  The domain has no CAA record, so CAA records stay Open (owner's
-  correction on pull request 45).
-- **B4 moved.** The row for Water in `fingerprints.md` waits until after
-  publishing, because the hub's verify page lists every row. The prompt
-  at the end of Water's checklist asks for it.
-- **The spec.** Two of its tables were corrected, and open item 9 added:
-  whether reminders are marked "local only", because a watch app with
-  notification access can receive them
-  ([spec.md](../apps/water/spec.md#open)).
-
-### 2.7 Restore and rotation rehearsal
-
-Model: `opus`. Effort: `xhigh`. Mode: **Plan** first. It can run at any
-time from now, and it must be done before the first data app (Water) is
-released. Catalog 0.1.0, 0.2.0 and 0.3.0 were released before it. It
-answers point 11 under "Found while writing this page" in
-[threat-model.md](../security/threat-model.md#found-while-writing-this-page).
-
-```text
-Read CLAUDE.md, ADR 0013, docs/development/release.md and
-docs/security/threat-model.md (point 11 and open question 19). Plan the
-rehearsal of ADR 0013, point 8: restoring the signing key from its
-backup, and rotating it, both with a throwaway key and never the real
-one. Write steps I can do on a phone. Do not change signing config,
-release workflows or fingerprints.md, and never print or ask for a
-secret.
-
-First decide with me, before any file changes:
-- Where the rehearsal runs, so that the real `release` environment and
-  its secrets are never touched.
-- How a rotation works with APK signature scheme v3.1, and how that fits
-  ADR 0013, point 14, which says the release job signs with scheme v3
-  only. If they disagree, say so and propose the change as an ADR.
-- What I must do, in order, after a rotation: the fingerprint file, the
-  hub page, Obtainium and AppVerifier, and what users must do.
-
-Then write:
-- The rehearsal steps in docs/development/ and what to look for at each
-  step, with a place to record the date and the result.
-- The decision record for a rotation (ADR) and for a stolen key: how I
-  tell, what I do in the first hour, what I tell users, what happens to
-  releases already signed. Plain English, short steps.
-- Update ADR 0013, the threat model (point 11 and open question 18) and
-  docs/development/release.md.
-
-If the rehearsal needs a change to an owner-only file, stop and tell me
-which and why. Do not make the change.
-```
-
-The prompt first said "open question 18". The list was renumbered in step
-2.1, and it is now 19.
-
-Written on 2026-11-14: the rehearsal in
-[signing-key-rehearsal.md](signing-key-rehearsal.md),
-[ADR 0037](../adr/0037-signing-key-rotation.md) (rotation) and
-[ADR 0038](../adr/0038-a-stolen-signing-key.md) (a stolen key). Then do
-the rehearsal on your phone, and hand Claude the results:
-
-```text
-Read CLAUDE.md and docs/development/signing-key-rehearsal.md. These are
-my results of the signing key rehearsal, part by part, with the exact
-words that Obtainium, Android and AppVerifier showed: <results>.
-
-Record them in the results table of that page, and fix any step that did
-not match. Update docs/user/verify.md and docs/user/install.md with what
-users see after a key rotation, using the words I wrote down. If every
-part passed, close point 11 and open question 19 in
-docs/security/threat-model.md and point 8 of ADR 0013, and mark ADR 0037
-and ADR 0038 accepted if they are still Proposed. Never ask for or print
-a secret.
-```
-
-Done on 2026-11-14. The owner did the rehearsal on the Pixel 9 Pro, with
-Obtainium 1.7.4, and every part, 0 to E, passed. Claude recorded the
-results in the session that followed
-([Results](signing-key-rehearsal.md#results)):
-
-- The steps now match the real ceremony: the actions `create` and
-  `restore` with `YES`, and the two repository secrets
-  `BACKUP_PASSPHRASE` and `CEREMONY_TOKEN`, which are deleted right after
-  each run. No passphrase is typed into the ceremony.
-- [ADR 0037](../adr/0037-signing-key-rotation.md) and
-  [ADR 0038](../adr/0038-a-stolen-signing-key.md) are accepted.
-- Point 8 of [ADR 0013](../adr/0013-signing-key-custody-and-rotation.md),
-  and point 11 and open question 19 of the
-  [threat model](../security/threat-model.md#open-questions), are closed.
-- [install.md](../user/install.md#when-the-signing-key-changes) and
-  [verify.md](../user/verify.md#after-a-new-signing-key) say what users
-  see and compare after a new signing key, and what to do when Obtainium
-  is rate limited.
-- [release.md](release.md#restore-the-signing-key) has the full steps of
-  a restore.
-- Still Open: a `rotate` action in signing-ceremony, which must also
-  make and back up the new key, and the other points under
-  [Open points](signing-key-rehearsal.md#open-points).
-
-### Phase 2 gate (you)
-
-Release Water 1.0.0: versionName `1.0.0`, versionCode `10000900`
-([ADR 0021](../adr/0021-version-names-and-version-codes.md)), with its
-checklist,
-[release-checklist-1.0.0.md](../apps/water/release-checklist-1.0.0.md):
-
-1. Do parts 1 to 3 on the Pixel 9 Pro and the other two devices, with
-   the preview of the pull request that prepares 1.0.0.
-2. When they have passed, merge that pull request.
-3. Use the preview that you checked every day for two weeks. They come
-   after the merge and before the release run.
-4. Then do the rest of part 4 and part 5: run the release of `water`
-   `1.0.0`, publish it, and paste the prompt at the end of the
-   checklist into a session.
-
-From part 1 until the release run, nothing that changes Water,
-`android/core` or the build is merged.
-
-Also at this gate: decide again whether "Emulator (Android 17)" becomes a
-required check ([ci.md](ci.md#the-emulator-jobs)). The rehearsal of step
-2.7 was done on 2026-11-14, so it does not hold up the release of Water.
+- **Reminders**: one-time and repeating reminders, snooze, time-zone changes,
+  what happens to reminders missed while the phone was off.
+- **Tasks**: lists, due dates, repeating tasks, optional reminder per task.
+- **Notes**: plain text with simple formatting, attachments as encrypted
+  files through the system picker, search.
+- **Budget** and **Trades**: money as whole minor units, never floating
+  point. Currencies. No network price data.
+- **Meals**, **Repairs**, **Shelf**: photos as encrypted files, no camera
+  permission (use the system camera or picker).
+- **Calendar**: Georgian public holidays and Georgian Orthodox feasts
+  computed on the device. Tests against published dates for 2020 to 2040.
+  No network calendar accounts in version 1.0.
+- **Drive** and **Photos**: streaming encryption for large files, encrypted
+  thumbnails, import and export only through the system pickers, no storage
+  permission. Model `opus`, effort `high`, and a storage design doc first.
+- **Grammar**: read ADR 0011 first. Plan mode, `opus` at `xhigh` or `fable`.
+  The Rust build, its supply chain and memory tagging tests need their own
+  design doc and my approval before any code.
 
 ---
 
-## Before Phase 3: the handover between apps
+## The handover between apps
 
 ### 3.0 Handover
 
@@ -1152,33 +170,7 @@ modules to android/settings.gradle.kts, and nothing else in that file.
 
 ---
 
-## Phases 3, 4, 6, 7, 8 and 9: every further app
-
-Use the Water prompts 2.1 to 2.6 with the app's name. Add these lines to the
-specification prompt:
-
-- **Reminders**: one-time and repeating reminders, snooze, time-zone changes,
-  what happens to reminders missed while the phone was off.
-- **Tasks**: lists, due dates, repeating tasks, optional reminder per task.
-- **Notes**: plain text with simple formatting, attachments as encrypted
-  files through the system picker, search.
-- **Budget** and **Trades**: money as whole minor units, never floating
-  point. Currencies. No network price data.
-- **Meals**, **Repairs**, **Shelf**: photos as encrypted files, no camera
-  permission (use the system camera or picker).
-- **Calendar**: Georgian public holidays and Georgian Orthodox feasts
-  computed on the device. Tests against published dates for 2020 to 2040.
-  No network calendar accounts in version 1.0.
-- **Drive** and **Photos**: streaming encryption for large files, encrypted
-  thumbnails, import and export only through the system pickers, no storage
-  permission. Model `opus`, effort `high`, and a storage design doc first.
-- **Grammar**: read ADR 0011 first. Plan mode, `opus` at `xhigh` or `fable`.
-  The Rust build, its supply chain and memory tagging tests need their own
-  design doc and my approval before any code.
-
----
-
-## Phase 5: Sync
+## Sync
 
 ### 5.1 Protocol design
 
@@ -1258,25 +250,40 @@ say so. Push the fix to the same branch.
 
 ### R2 Independent review
 
-New session. Model: `opus`. Effort: `high` (`xhigh` for crypto, sync, backup
-and workflows). Mode: **Plan**.
+The audit of an app before its release. New session. Model: `opus`.
+Effort: `high` (`xhigh` for crypto, sync, backup and workflows). Mode:
+**Plan**.
 
 ```text
-Review pull request #<number> as a strict reviewer who did not write it.
-Do not change any files.
+Read CLAUDE.md. Audit <app> on main before its release, as a strict
+reviewer who did not write it.
 
 Check, in this order:
-1. The hard rules in CLAUDE.md. Quote the rule for anything that breaks one.
-2. Security against docs/security/threat-model.md: secrets, permissions,
-   exported components, input handling, logging of user content.
-3. Correctness and the tests: what is not tested that should be?
-4. Accessibility and the eight screenshot configurations.
-5. Docs and changelog.
+1. The hard rules in CLAUDE.md. Quote the rule for anything that breaks
+   one.
+2. Security and privacy against docs/security/threat-model.md: secrets,
+   permissions and exported parts, input handling, logging of user
+   content, what the app stores and what leaves the phone. Check
+   docs/security/permissions.md and docs/security/data-inventory.md
+   against the merged manifest and the code.
+3. docs/apps/<app>/spec.md against the code and its tests: what the
+   spec says that the code does not do, and what is not tested that
+   should be.
+4. Accessibility, and the screenshot tests of every screen.
+5. The docs against the code: the user guide, docs/user/privacy.md,
+   docs/development/third-party.md and the Licences screen, and the
+   changelog.
 
-Give me a list ordered by severity. For each finding: file and line, what
-could go wrong for a real user, and the smallest fix. Then one line:
-"merge", "merge after fixes" or "do not merge".
+Show me the findings first, ordered by severity. For each: file and
+line, what could go wrong for a real user, and the smallest fix. Then
+fix them in one pull request. Stop and ask me before a fix that changes
+the spec or needs an owner-only file. List what stays open in the pull
+request and under the known problems of the user guide.
 ```
+
+For a sync pull request ([5.6](#56-independent-security-review)): write
+"pull request #<number>" in place of "<app> on main", change no files,
+and end with one line: "merge", "merge after fixes" or "do not merge".
 
 ### R3 Change something you saw on the phone
 
@@ -1329,12 +336,38 @@ lint passes (ADR 0030, point 10).
 Model: `sonnet`. Effort: `medium`.
 
 ```text
-Prepare <app> <version>. Bump versionName, and set versionCode by the rule
-in docs/adr/0021-version-names-and-version-codes.md. Finish the changelog
-from the merged pull requests since the last release, update the user guide, and copy
-docs/development/release-checklist.md to
-docs/apps/<app>/release-checklist-<version>.md, filled in for this version.
-Do not start the release workflow and do not create a tag.
+Read CLAUDE.md and "Before and after a release" in
+docs/development/release.md. Prepare <app> <version> in one pull
+request. Do not start a workflow and do not create a tag. Change no
+behaviour of the app.
+
+1. In android/app/<app>/build.gradle.kts, set versionName to <version>,
+   and versionCode by the rule in
+   docs/adr/0021-version-names-and-version-codes.md. If a committed
+   screenshot shows the version, record it again. No other screenshot
+   may change.
+2. In android/app/<app>/CHANGELOG.md, put what is under "## Unreleased"
+   under the heading "## <version> (<today's date>)", with "Released as
+   `<app>-v<version>`." under it. An empty "## Unreleased" stays above
+   it.
+3. Set the app's status in docs/user/apps.md to "Released: <version>",
+   or "Pre-release: <version>" for a version with a hyphen. Update the
+   status in README.md.
+4. The user guide matches this version.
+
+For the app's first release, also:
+
+5. I am the owner and I ask you to add <app> to the list of apps in
+   .github/workflows/release.yml: the "app" options, and the step
+   "Check the inputs" of every job, in its case line and in its error
+   text. Nothing else in that file. Update docs/development/release.md
+   where it names the apps.
+6. I am the owner and I ask you to add the row
+   "| <Name> | `app.shkriuss.<app>` |" to the table "Apps signed with
+   this key" in docs/security/fingerprints.md. Change nothing else on
+   that page.
+7. Add the app's guide pages to site/site.json. Update
+   docs/development/site.md and docs/user/README.md.
 ```
 
 ### R7 Explain a pull request

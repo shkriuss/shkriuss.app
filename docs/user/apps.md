@@ -7,7 +7,7 @@ example `app.shkriuss.catalog`.
 | App | What it is | Status |
 |---|---|---|
 | Catalog | A gallery of the shared design components and screens, for development. Most people do not need it. | Released: 0.3.0 |
-| Water | Log the water you drink, see how close you are to your daily goal, and get reminders during the hours you choose. The pilot app. | In development |
+| [Water](water.md) | Log the water you drink, see how close you are to your daily goal, and get reminders during the hours you choose. The pilot app. | Released: 1.0.0 |
 | Reminders | | Planned |
 | Tasks | | Planned |
 | Notes | | Planned |

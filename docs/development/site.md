@@ -25,8 +25,17 @@ fingerprint, and a link to the source. Set up in Phase 0, step 7.
 | `/apps/` | [`docs/user/apps.md`](../user/apps.md) |
 | `/install/` | [`docs/user/install.md`](../user/install.md) |
 | `/verify/` | [`docs/user/verify.md`](../user/verify.md), plus the fingerprint and package names from [`fingerprints.md`](../security/fingerprints.md) |
-| `/privacy/` | [`docs/user/privacy.md`](../user/privacy.md). Added in step 2.6. |
+| `/privacy/` | [`docs/user/privacy.md`](../user/privacy.md) |
+| `/water/` | [`docs/user/water.md`](../user/water.md) |
+| `/recovery-key/` | [`docs/user/recovery-key.md`](../user/recovery-key.md) |
+| `/app-lock/` | [`docs/user/app-lock.md`](../user/app-lock.md) |
+| `/backup/` | [`docs/user/backup.md`](../user/backup.md) |
+| `/reminders/` | [`docs/user/reminders.md`](../user/reminders.md) |
 | Any other address | [`site/404.md`](../../site/404.md) |
+
+The menu shows Apps, Install, Verify, Privacy and Water. The pages of
+the recovery key, the app lock, backups and reminders are not in the
+menu: Water's page and the other guides link to them.
 
 Every page has a link to the source code on GitHub. A link in a page to
 another page of the site stays on the site. A link to any other file of
@@ -310,7 +319,9 @@ heading.
 1. Write or change the page in `docs/`, for a page that also belongs on
    GitHub, or in `site/`, for a page only the site needs.
 2. To add a page, add it to `site/site.json`: its `path`, which ends in
-   `/index.html`, its `source`, and `nav`, the label in the menu.
+   `/index.html`, its `source`, and `nav`, the label in the menu. Leave
+   out `nav` for a page that other pages link to but the menu does not
+   show.
 3. Link to other pages by their relative path, as everywhere in `docs/`.
 4. Open a pull request. The job **Build** builds and checks the site.
 

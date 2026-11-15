@@ -13,16 +13,13 @@ Pages:
 - [Test a pull request on a phone](test-a-pull-request.md): how to install
   a pull request's preview APK and look at its screenshots, with only a
   browser.
-- [Release](release.md): how to run a release from a phone, check and
-  publish the draft, and the rehearsal with Catalog.
-- [Release checklist](release-checklist.md): what you check for every
-  release, with the GrapheneOS checklist. Claude copies it for each
-  version.
-- [Signing key rehearsal](signing-key-rehearsal.md): how to rehearse
-  restoring and rotating the signing key with throwaway keys, in a
-  throwaway repository, and how to check the real backup and its two
-  copies. With the two workflows to paste, in
-  [signing-key-rehearsal/](signing-key-rehearsal/).
+- [Release](release.md): what comes before and after a release, how to
+  run a release from a phone, check and publish the draft, and the
+  rehearsal with Catalog.
+- [Signing key rehearsal](signing-key-rehearsal.md): what the rehearsal
+  of restoring and rotating the signing key with throwaway keys showed,
+  and how to check the real backup and its two copies. With the
+  workflow to paste, in [signing-key-rehearsal/](signing-key-rehearsal/).
 - [Hub site](site.md): how the website is built from the docs, checked
   and deployed to Cloudflare, its security headers, and how to set up
   Cloudflare from a phone.
@@ -31,8 +28,7 @@ Pages:
   components and when to use each, and their tests.
 - [Emulator tests](emulator-tests.md): the instrumented tests that run
   on emulators in CI, how a module gets them, the tests of the hardware
-  keys and what they showed, and the steps for the three devices for
-  what an emulator cannot check.
+  keys and what they showed, and what an emulator cannot check.
 - [Third-party material](third-party.md): what others made and the apps
   contain, with the source, the licence and the notice of each:
   everything that ships in Water, which its Licences screen shows, and
@@ -41,7 +37,8 @@ Pages:
   change gets from a session to `main`.
 - [Cloud environment](cloud-environment.md): the Claude Code cloud
   environment `android`.
-- [Prompts](PROMPTS.md): ready-to-paste prompts for every phase.
+- [Prompts](PROMPTS.md): ready-to-paste prompts: the four for every app,
+  the handover, sync, and the recurring ones.
 
 What else belongs here, as each part is built:
 

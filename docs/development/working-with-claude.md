@@ -79,16 +79,21 @@ cannot update an installed app.
 
 ## How a change reaches `main`
 
+An app is built in four steps: a specification, the app, one audit and
+the release ("How an app is built" in
+[CLAUDE.md](../../CLAUDE.md#how-an-app-is-built)). The automatic checks
+are the safety net.
+
 1. The owner starts a session and pastes a prompt from
    [PROMPTS.md](PROMPTS.md). That file explains the session steps.
 2. Claude works on a branch named `claude/<short-topic>`. It never pushes to
    `main`, never force-pushes and never creates tags.
-3. Claude opens a pull request. The description answers the four questions
-   in the pull request template.
+3. Claude opens a pull request. The description answers the three
+   questions in the pull request template.
 4. GitHub Actions runs the checks ([ci.md](ci.md)).
-5. The owner reviews the change, checks it on a phone
-   ([test-a-pull-request.md](test-a-pull-request.md)), and then approves
-   and merges it, or writes what to change.
+5. The owner merges when CI is green, or writes what to change. Looking
+   at the preview on a phone is the owner's choice, never a step
+   ([test-a-pull-request.md](test-a-pull-request.md)).
 
 ## How a release happens
 

@@ -4,11 +4,10 @@ Some apps of the suite remind you at a time you set: Water, Reminders,
 Tasks and Calendar. This page says when a reminder shows, and when it
 cannot.
 
-No released app has reminders yet. The first one will be Water, whose
-reminders were built in Phase 2, step 4. This page says what is already
-fixed. It was written on 2026-11-13, with the code that sets the alarms,
-and updated on 2026-11-14 with Water's buttons. How to use Water itself
-comes with its user guide.
+Water is the first app with reminders. This page was written on
+2026-11-13, with the code that sets the alarms, and updated on
+2026-11-14 with Water's buttons. How to use Water's reminders is in
+[its guide](water.md#reminders).
 
 ## The short version
 
@@ -194,15 +193,24 @@ question to you.
 The full list, with the reasons, is in
 [permissions.md](../security/permissions.md).
 
-## Not yet checked on a phone
+## What Water does in these cases
 
-Open: the three cases above (after a restart, in Private Space, in
-another user profile) follow from how Android and the code work. They
-are tested on a GrapheneOS phone before the first app with reminders is
-released. This page is corrected if a phone shows something else.
-Where they are tested: part 1, step 10 of Water's
-[release checklist for 1.0.0](../apps/water/release-checklist-1.0.0.md#part-1-grapheneos-on-the-pixel-9-pro).
-A later session records the results here.
+Water skips a reminder whose time passed more than a minute ago. It
+never shows one late. On GrapheneOS:
 
-Checked on a GrapheneOS phone on 2026-11-13: the name and the place of
-the setting **Send notifications to current user**.
+1. **After a restart**, a reminder comes at its minute once you have
+   unlocked the phone, also if you have not opened Water. Before the
+   first unlock, nothing shows and nothing makes a sound. When you
+   unlock later, a reminder that was due is skipped, and the next one
+   comes at its time.
+2. **In another user profile**, a reminder comes while the profile runs
+   in the background. You see it when you switch to that profile. With
+   **Send notifications to current user** on, it also shows in the
+   profile you are using. After **End session**, nothing comes; when you
+   switch back and unlock, Water names the next reminder.
+3. **In Private Space**, nothing shows while it is locked. When you
+   unlock it, no missed reminder appears, and Water names the next one.
+4. **After Force stop**, nothing comes. When you open Water, no missed
+   reminder appears, and Water names the next one.
+5. **After a change of time zone**, the next reminder moves to the new
+   local time.

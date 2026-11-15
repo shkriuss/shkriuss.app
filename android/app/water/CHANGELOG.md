@@ -7,7 +7,9 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
-### 1.0.0
+## 1.0.0 (2026-11-15)
+
+Released as `water-v1.0.0`.
 
 The first release of Water. From pull requests
 [36](https://github.com/shkriuss/shkriuss.app/pull/36) (the

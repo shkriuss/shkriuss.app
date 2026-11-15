@@ -81,6 +81,31 @@ list.
 SHA-256 that you provided. The workflow refuses to release anything signed
 with another certificate.
 
+## Before and after a release
+
+1. The app was audited since its last release (prompt R2 in
+   [PROMPTS.md](PROMPTS.md#r2-independent-review)). What the audit found
+   is fixed, or listed as open.
+2. One pull request sets the version and the version code, writes the
+   changelog heading, and sets the app's status on
+   [apps.md](../user/apps.md) (prompt R6 in
+   [PROMPTS.md](PROMPTS.md#r6-prepare-a-release)). You merge it and run
+   the release at once.
+3. CI is green on the newest commit of `main`.
+4. The newest run of Dependency graph on `main` is green, and no
+   Dependabot alert is open ([ci.md](ci.md#dependency-graph)).
+5. Run the release, check the draft and publish it
+   ([Run a release](#run-a-release),
+   [Check and publish the draft](#check-and-publish-the-draft)).
+6. Update the app with Obtainium on your phone and open it. Settings
+   shows the new version.
+
+For an app's first release, also: its name in the release workflow's
+list of apps and its row in [fingerprints.md](../security/fingerprints.md)
+(both owner-only, so the release prompt carries your sentences for
+them), its guide pages in `site/site.json`, and one check with
+AppVerifier after the install ([Verify with AppVerifier](../user/verify.md)).
+
 ## Run a release
 
 Only you, the repository owner, can start or re-run a release. A run that
@@ -100,10 +125,8 @@ Before you start:
 2. CI is green on the newest commit of `main`. Open the **Actions** tab and
    tap **CI**. The top run on `main` must have a green tick. Right after a
    merge, wait for it.
-3. Parts 1 to 3 of the version's release checklist are done. Claude
-   copies the [release checklist](release-checklist.md) to
-   `docs/apps/<app>/release-checklist-<version>.md` in the same pull
-   request as the version. Parts 4 and 5 follow these steps.
+3. The rest of [Before and after a release](#before-and-after-a-release),
+   steps 1 to 4, is done.
 
 Then:
 
@@ -181,8 +204,8 @@ Why it works this way:
 [ADR 0013](../adr/0013-signing-key-custody-and-rotation.md) (custody),
 [ADR 0037](../adr/0037-signing-key-rotation.md) (rotation) and
 [ADR 0038](../adr/0038-a-stolen-signing-key.md) (a stolen key). How to
-rehearse restoring and rotating it with throwaway keys, and how to check
-the real backup and its two copies, is in
+check the real backup and its two copies, and what the rehearsal with
+throwaway keys showed, is in
 [signing-key-rehearsal.md](signing-key-rehearsal.md).
 
 ### Restore the signing key
@@ -266,8 +289,8 @@ Check CEREMONY_TOKEN, then run restore.":
    step 5.
 3. Run `restore` again. Then clean up as in steps 14 and 15.
 
-To check that the backup opens without touching `release`, use part D of
-[signing-key-rehearsal.md](signing-key-rehearsal.md#part-d-check-the-real-backup).
+To check that the backup opens without touching `release`, use
+[Check the real backup](signing-key-rehearsal.md#check-the-real-backup).
 
 ### Rotate the signing key
 
@@ -290,7 +313,8 @@ Prepare. Users see nothing yet.
    4. Keep the old key's backup.
 
    Then make the two copies of the new backup, and check all three
-   (parts D and E of [signing-key-rehearsal.md](signing-key-rehearsal.md)).
+   ([Check the real backup](signing-key-rehearsal.md#check-the-real-backup)
+   and [Check the two copies](signing-key-rehearsal.md#check-the-two-copies)).
 2. Ask Claude in a session for the rotation pull request. Ask for exactly
    these changes to owner-only files:
    - `release.yml`: sign with the lineage, and check it (ADR 0037, points

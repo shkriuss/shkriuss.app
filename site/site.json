@@ -7,6 +7,11 @@
     { "path": "install/index.html", "source": "docs/user/install.md", "nav": "Install" },
     { "path": "verify/index.html", "source": "docs/user/verify.md", "nav": "Verify" },
     { "path": "privacy/index.html", "source": "docs/user/privacy.md", "nav": "Privacy" },
+    { "path": "water/index.html", "source": "docs/user/water.md", "nav": "Water" },
+    { "path": "recovery-key/index.html", "source": "docs/user/recovery-key.md" },
+    { "path": "app-lock/index.html", "source": "docs/user/app-lock.md" },
+    { "path": "backup/index.html", "source": "docs/user/backup.md" },
+    { "path": "reminders/index.html", "source": "docs/user/reminders.md" },
     { "path": "404.html", "source": "site/404.md" }
   ],
   "links": [

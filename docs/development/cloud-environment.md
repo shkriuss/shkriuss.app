@@ -67,9 +67,25 @@ The official guide is at
 
 ## Check the environment
 
-Steps 1 to 4 of Session 0 in [PROMPTS.md](PROMPTS.md) check the tools, the
-Android SDK, a test build and KVM. Use them after a change to the setup
-script.
+After a change to the setup script, paste this into a new session. It
+checks the tools, the Android SDK, a test build and KVM.
+
+```text
+This is an environment check. Do not change project files.
+
+1. Run `check-tools` and report the Java and Gradle versions.
+2. Report `echo $ANDROID_HOME` and list `$ANDROID_HOME/platforms` and
+   `$ANDROID_HOME/build-tools`. If the SDK is missing, show
+   `/var/log/android-sdk-setup.log`, run `install-android-sdk`, and report
+   what happened.
+3. In a temporary folder outside the repository, create the smallest possible
+   Android app: latest stable Android Gradle Plugin, a Gradle wrapper for the
+   version it needs, compile SDK 37, min SDK 33, one Kotlin activity and one
+   Robolectric test. Run `./gradlew assembleDebug testDebugUnitTest`.
+   Report success or the exact error, how long it took, and every host that
+   was blocked or answered 429.
+4. Report whether `/dev/kvm` exists (needed for an emulator).
+```
 
 ## Setup script
 

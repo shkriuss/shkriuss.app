@@ -68,8 +68,7 @@ In Catalog, Tink and Protocol Buffers are not in the APK either: Catalog
 never calls them. Checked in Catalog's release build on 2026-11-13, and
 in the published `catalog-v0.3.0.apk`. From version 0.3.0, Catalog's
 sample recovery words come from the word list, so the word list and its
-`LICENSE.txt` are in Catalog's APK
-([its checklist](../apps/catalog/release-checklist-0.3.0.md#result)).
+`LICENSE.txt` are in Catalog's APK.
 Catalog has no Licences screen. That is [open](#open).
 
 ## The licence texts in the app

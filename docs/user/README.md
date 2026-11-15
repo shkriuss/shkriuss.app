@@ -1,15 +1,15 @@
 # User guides
 
 Guides for people who use the apps. Written for a phone screen first. The
-hub website shows the first three pages and [Privacy](privacy.md)
+hub website shows every page listed here
 ([site.md](../development/site.md)).
 
 One guide per app:
 
 - [Water](water.md): log the water you drink, see how close you are to
   your daily goal, and get reminders. Everything on Today, History and
-  Settings, the five permissions, and the known problems of 1.0.0. Water
-  is not released yet. The page is not on the hub website until it is.
+  Settings, the five permissions, and the known problems of 1.0.0. On the
+  hub website at `/water/`.
 
 Pages:
 
@@ -24,23 +24,18 @@ Pages:
 - [Your recovery key](recovery-key.md): what the 24 words are, when an
   app asks for them, how to create them, enter them and see them again,
   the security screen, and
-  what to do when setting up stopped or a key file is damaged. No
-  released app has these screens yet. The page is not on the hub website
-  until one has.
+  what to do when setting up stopped or a key file is damaged. On the
+  hub website at `/recovery-key/`.
 - [The app lock](app-lock.md): what the app lock protects and what it
   does not, how to turn it on, when the app locks, notifications,
-  screenshots, and what happens when the screen lock is removed. No
-  released app has it yet. The page is not on the hub website until one
-  has.
+  screenshots, and what happens when the screen lock is removed. On the
+  hub website at `/app-lock/`.
 - [Back up and restore](backup.md): what a backup file is, how to make
-  one and how to restore it. No released app can make a backup yet. The
-  page is not on the hub website until one can.
-
+  one and how to restore it. On the hub website at `/backup/`.
 - [Reminders and notifications](reminders.md): when a reminder shows,
   how to allow notifications, and what happens after a restart of the
   phone before the first unlock, in Private Space and in another user
-  profile. No released app has reminders yet. The page is not on the
-  hub website until one has.
+  profile. On the hub website at `/reminders/`.
 
 What else belongs here:
 

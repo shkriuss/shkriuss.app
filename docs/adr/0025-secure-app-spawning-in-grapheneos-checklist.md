@@ -5,7 +5,7 @@
 - Source: the owner's decision on
   [pull request 19](https://github.com/shkriuss/shkriuss.app/pull/19),
   after Catalog 0.2.0, the first release with the
-  [release checklist](../development/release-checklist.md). It extends
+  [release checklist](../development/release.md#before-and-after-a-release). It extends
   point 4 of [0002](0002-grapheneos-first-minimum-android-13.md).
 
 ## Context
@@ -38,12 +38,11 @@
 
 ## Consequences
 
-- The [release checklist](../development/release-checklist.md) checks it
+- The [release checklist](../development/release.md#before-and-after-a-release) checks it
   in part 1, step 2, with the hardened memory allocator and memory
   tagging. The step numbers stay the same.
 - 0002 says that this record extends its point 4.
 - A release whose app works only with secure app spawning turned off
   does not pass the checklist.
 - Catalog 0.2.0 was released before this record. The owner's screenshot
-  after the release shows it on for Catalog
-  ([release checklist 0.2.0](../apps/catalog/release-checklist-0.2.0.md)).
+  after the release shows it on for Catalog.

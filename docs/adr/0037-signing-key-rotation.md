@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-14
 - Source: Phase 2, step 2.7 of
-  [PROMPTS.md](../development/PROMPTS.md#27-restore-and-rotation-rehearsal),
+  [PROMPTS.md](../development/PROMPTS.md),
   with the owner's decisions in that session on 2026-11-14. It supersedes
   point 7 of [0013](0013-signing-key-custody-and-rotation.md). The owner
   accepted the record on 2026-11-14, after parts A and B of the
@@ -61,8 +61,7 @@
     block every other certificate.
 - The rehearsal checked these readings on a phone on 2026-11-14, with
   Obtainium 1.7.4
-  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#results),
-  part B):
+  ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)):
   - apksigner 36.0.0 reported the rotated APK as scheme v3 only, no v3.1,
     one signer, the new key. Its lineage held the old key, with installed
     data on and the other four rights off, then the new key.
@@ -174,8 +173,8 @@
 
   It also needs a change to `tools/site`, so that the hub lists previous
   certificates, and to the docs.
-- The rehearsal of a rotation is in
-  [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
+- What the rehearsal of a rotation showed is in
+  [signing-key-rehearsal.md](../development/signing-key-rehearsal.md#what-the-rehearsal-showed).
 - [0002](0002-grapheneos-first-minimum-android-13.md) says that rotation
   uses scheme v3.1. With this record it is scheme v3 with a lineage,
   which every supported device reads too.
@@ -192,8 +191,8 @@
     also make the new key and back it up, and keep the old key's backup
     (point 9).
   - In one job, it decrypts the old backup, makes the new key, and runs
-    the commands of the step "Rotate and sign" in
-    [`rehearsal.yml`](../development/signing-key-rehearsal/rehearsal.yml).
+    the two commands of a rotation in
+    [What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed).
   - Claude cannot see that repository, so the owner adds it.
 - Open: whether the ceremony's token needs only the permission
   Environments. Its notes ask for Environments and Secrets, and the

@@ -861,7 +861,7 @@ of about a minute, and it is kept.
 
 No test in this step runs on an emulator, and none opens the picker
 itself. The picker is checked by hand with the first app, Water
-([emulator-tests.md](../development/emulator-tests.md#steps-for-the-three-devices-backup-and-restore)).
+([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
 
 ## Decided by the owner
 
