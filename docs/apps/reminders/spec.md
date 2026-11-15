@@ -87,7 +87,8 @@ Each part below is as Water's spec says, with the change named.
 
 1. Top bar: "Past", with **Delete all** while the list is not empty.
 2. One row per past reminder, newest first: the title, and "Mon 16 Nov,
-   14:00". A tap opens the form.
+   14:00". The year shows when it is not this year. A tap opens the
+   form.
 3. With none: "No past reminders. A one-time reminder moves here after
    it shows."
 4. **Delete all** asks "Delete all past reminders?", "This deletes 12
@@ -116,7 +117,8 @@ form beside it, or "Choose a reminder."
 A new reminder is Once, today, at the next full hour (at 23:10,
 tomorrow at 00:00). Choosing Every week selects the day of the date.
 
-1. The title has 1 to 200 characters, without spaces at either end:
+1. The title has 1 to 200 characters, counted as Unicode code points,
+   without spaces at either end:
    "Enter a title." or "A title has at most 200 characters."
 2. For Once, the date and time must be later than the current minute.
    The picker refuses an earlier time with "That time has passed.", and
@@ -124,7 +126,9 @@ tomorrow at 00:00). Choosing Every week selects the day of the date.
    title alone keeps a past time.
 3. For Every week, at least one day: "Choose at least one day."
 4. At most 500 reminders that are not deleted: "Reminders keeps 500
-   reminders. Delete one to add another."
+   reminders. Delete one to add another." The form checks it when it
+   adds one. A restore can bring more; the form then adds none until
+   the count is under 500.
 5. A wrong field shows its words under it, and Save does nothing. Save
    with no change writes nothing. Otherwise a snackbar: "Reminder set
    for Wed 18 Nov, 18:30."
@@ -137,7 +141,7 @@ tomorrow at 00:00). Choosing Every week selects the day of the date.
 
 | Column | SQL type | What it holds | Limits |
 |---|---|---|---|
-| `title` | `TEXT NOT NULL` | The title | 1 to 200 characters, one line, no space at either end |
+| `title` | `TEXT NOT NULL` | The title | 1 to 200 code points, one line, no space at either end |
 | `day` | `INTEGER NOT NULL` | Once: the date. A repeat: the date it starts from. Days since 1970-01-01. | Any day |
 | `minuteOfDay` | `INTEGER NOT NULL` | The time, in minutes after midnight | 0 to 1439 |
 | `repeat` | `INTEGER NOT NULL` | 0 once, 1 every day, 2 every week, 3 every month, 4 every year | 0 to 4 |
@@ -178,10 +182,12 @@ happens twice, when the clock goes back, is the first.
    tomorrow.
 2. A reminder with no mark on this phone gets the current minute when
    Reminders first sees it: after a restore, after **Undo**.
-3. **The mark counts only up to now.** If it is later than the current
-   minute, because the clock was set back or the phone moved to a zone
-   further west, the reminder counts from now. A time that showed can
-   show again, as `core/notify` does for an alarm it marked as fired
+3. **The mark never stays later than now.** When the `AlarmSource` or
+   the handler finds it later than the current minute, because the
+   clock was set back or the phone moved to a zone further west, it
+   writes the current minute in its place, and the reminder counts from
+   now. A time that showed can show again, as `core/notify` does for an
+   alarm it marked as fired
    ([notifications.md](../../architecture/notifications.md#how-alarms-are-kept-right)).
 
 ### The rule
@@ -204,13 +210,16 @@ asks. Reminders needs no grace minute like
 
 When the alarm for time T reaches the handler:
 
-1. It keeps what the phone-only file held for the reminder. Then it
-   writes: the mark is the later of the mark and T as a local minute,
+1. It keeps what the phone-only file held for the reminder, with the
+   mark no later than now ([The mark](#the-mark), point 3). Then it
+   writes: the mark is the later of that mark and T as a local minute,
    no snooze, and `showing` is T. This needs T alone, so a failure
    after it never names T again.
-2. It reads the reminder. If the rule, with the file as it was before
-   step 1, does not give T, it shows nothing: the reminder was deleted
-   or changed in that moment, or a later occurrence is due.
+2. It reads the reminder. If the rule, with the file as it was kept in
+   step 1, does not give T, it writes back what it kept, or removes the
+   entries of a deleted reminder, and shows nothing. That is the case
+   when the reminder was deleted or changed in that moment, or a later
+   occurrence is due.
 3. Otherwise it shows [the notification](#the-notification). Doing it
    twice gives the same result: the second time, the mark is already at
    T.
@@ -265,7 +274,9 @@ As [Water does](../water/spec.md#how-water-uses-corenotify), except:
    of [the rule](#the-rule), and writes the mark of a reminder it sees
    first.
 3. `notify.sync()` follows every write: a save, a delete, an Undo,
-   Delete all, a button, a restore.
+   Delete all, a button, a restore. The handler, a press, and the work
+   on the phone-only file after each write take turns on one lock, as
+   in Water.
 4. **`core/notify` lacks nothing this page needs.** A late reminder is
    an alarm in the past. Each reminder has its own notification, by its
    key. The rule for a clock set back is the one it already has.
@@ -341,7 +352,7 @@ with their full content. The content is 12 + n bytes, big-endian:
 | 1 | 1 | `weekdays`, `00`, or `01` to `7f` for every week |
 | 2 | 4 | `day`, int32, days since 1970-01-01 |
 | 6 | 4 | `minuteOfDay`, int32, 0 to 1439 |
-| 10 | 2 | n, the title's length in bytes, unsigned, 1 to 600 |
+| 10 | 2 | n, the title's length in bytes, unsigned, 1 to 800: at most 4 bytes for each of 200 code points |
 | 12 | n | The title, in UTF-8 |
 
 "Call the bank", once, 2026-11-16 at 14:00, and "Gym", every Mon, Wed
@@ -407,7 +418,8 @@ checklists belong to Tasks. And five answers:
 Choices this page made without a decision by the owner on that point.
 
 1. Three destinations: Upcoming, Past, Settings.
-2. Titles of 1 to 200 characters. At most 500 reminders.
+2. Titles of 1 to 200 code points. At most 500 reminders made in the
+   form; a restore can bring more.
 3. The channel starts at Urgent. Water's starts at Default.
 4. Late means more than one minute after the moment.
 5. A reminder counts from the minute it is saved.
