@@ -28,9 +28,9 @@ dependencies {
     // Notify. The module adds three permissions and three receivers, none
     // exported (docs/security/permissions.md).
     implementation(project(":core:notify"))
-    // The app lock: SecurityHost, AppLockWatcher and AppLockGate. Until
-    // step 2.5 the manifest removes the module's two permissions and its
-    // six screens (docs/security/permissions.md).
+    // The recovery key and the app lock: SecurityHost, AppLockWatcher and
+    // AppLockGate. The module adds two permissions and six screens, none
+    // exported (docs/security/permissions.md).
     implementation(project(":core:security"))
     implementation(libs.activity.compose)
 

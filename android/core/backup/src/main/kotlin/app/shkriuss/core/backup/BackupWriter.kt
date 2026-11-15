@@ -1,5 +1,6 @@
 package app.shkriuss.core.backup
 
+import app.shkriuss.core.data.isDeleted
 import java.io.DataOutputStream
 import java.io.InputStream
 import kotlin.coroutines.coroutineContext
@@ -26,6 +27,11 @@ internal class BackupWriter(private val out: DataOutputStream) : BackupSink {
     var filesLeftOut = 0L
         private set
 
+    private val counts = RecordCounts()
+
+    /** For each type name, how many of the records written are not deleted. Never written into the backup. */
+    val notDeleted: Map<String, Long> get() = counts.notDeleted()
+
     /** Writes the first entry. */
     fun manifest(dataVersion: Int, madeAt: Long) {
         require(dataVersion >= 1) { "A data version is 1 or higher" }
@@ -38,6 +44,7 @@ internal class BackupWriter(private val out: DataOutputStream) : BackupSink {
         check(files == 0L) { "Every record is listed before the first file" }
         RecordEntry.write(out, record)
         records++
+        counts.count(record)
     }
 
     override suspend fun file(id: String, length: Long, content: InputStream) {
@@ -75,4 +82,21 @@ internal class BackupWriter(private val out: DataOutputStream) : BackupSink {
         }
         check(content.read() < 0) { "A file is longer than the length given for it" }
     }
+}
+
+/**
+ * Counts, for each type name, the records that are not deleted, while a
+ * backup is written or read. The deleted flag and the type name are in the
+ * container, so the content of a record is never looked at.
+ */
+internal class RecordCounts {
+    private val byType = sortedMapOf<String, Long>()
+
+    /** Counts [record], unless it is deleted. */
+    fun count(record: BackupRecord) {
+        if (!record.fields.isDeleted) byType.merge(record.type, 1L, Long::plus)
+    }
+
+    /** The counts so far. A type whose records are all deleted is not in it. */
+    fun notDeleted(): Map<String, Long> = byType.toMap()
 }

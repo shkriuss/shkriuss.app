@@ -10,6 +10,9 @@ Built in Phase 1, step 7: the recovery key screens in session A, the
 app lock in session B ([The app lock](#the-app-lock)). Step 1.10 added
 the protection against other apps
 ([Overlays and accessibility services](#overlays-and-accessibility-services)).
+Phase 2, step 2.5 added the dialog for the moment the key is first
+needed ([The recovery key when first needed](#the-recovery-key-when-first-needed)),
+with Water, the first app that uses the module.
 
 ## What an app does
 
@@ -26,11 +29,19 @@ the protection against other apps
      start.
    - `enterIntent`: enter the words of a recovery key the user has.
    - `appLockIntent`: the app lock screen, from the app's settings.
-3. It gets the permissions `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`
+3. Where a button starts a backup, a restore or the app lock, it calls
+   `RecoveryKeyFirstNeed`, so that the recovery key comes when it is
+   first needed
+   ([The recovery key when first needed](#the-recovery-key-when-first-needed)).
+4. It gets the permissions `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`
    and the six screens through the module's manifest
    ([permissions.md](../security/permissions.md#apps-that-use-coresecurity),
    [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md),
    [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+
+The APK rules check fails the build of an app whose merged manifest has
+one of the six screens without both permissions
+([build.md](../development/build.md#apk-rules-check)).
 
 ## The screens
 
@@ -57,6 +68,68 @@ Why activities and not screens inside the app's own window:
   Navigation 3 either
   ([ADR 0003](../adr/0003-kotlin-compose-material-3-navigation-3.md),
   point 2).
+
+## The recovery key when first needed
+
+An app opens on its main screen with no setup. The recovery key comes
+when a backup, a restore or the app lock is first asked for
+([ADR 0035](../adr/0035-recovery-key-when-first-needed.md)). The dialog,
+its words and the "go on after" are built once, in `FirstNeed.kt`, so
+every app shows the same. Built in step 2.5.
+
+What an app does:
+
+1. The screen with the buttons keeps one
+   `rememberRecoveryKeyFirstNeedState()` and draws
+   `RecoveryKeyFirstNeed(state, onReady)` once, inside `AppLockGate`.
+2. A button calls `state.start(need)`. `RecoveryKeyNeed` says which of
+   the three it is for: `BACKUP`, `RESTORE` or `APP_LOCK`.
+3. `onReady(need)` is the app's next step: the file picker, or the app
+   lock screen.
+
+What it does:
+
+1. It reads the app's keys, on a background thread.
+2. The app has its keys from a recovery key: `onReady` runs at once. No
+   dialog shows.
+3. It has none: one dialog shows.
+
+   | Form | Title | Buttons |
+   |---|---|---|
+   | A backup, or the app lock | "Set up your recovery key first", with one sentence on why, which differs for the two | **Create a recovery key**, **I already have one**, **Not now** |
+   | A restore | "Enter your recovery key first" | **Enter the words**, **Cancel**. There is no "create": a new key cannot open an old backup. |
+   | A setup that stopped, whatever was started | "Finish your recovery key" | **Open the security screen**, **Not now** |
+
+4. A button opens `CreateRecoveryKeyActivity`, `EnterRecoveryKeyActivity`
+   or `SecurityActivity`.
+5. When that screen closes, however it was closed, the keys are read
+   again. The screens give back no result: only the keys say whether
+   they are there.
+   - The app now has its keys: `onReady` runs, so the app goes on with
+     what the user started, without another tap.
+   - It has not: nothing else happens. The user is back on the app's
+     screen.
+6. "Not now", "Cancel", Back and a tap outside the dialog end it.
+
+More:
+
+- What the user started, and where it stands, is in the screen's saved
+  state. So it holds through a turn of the phone and through a long
+  setup, also when Android stops the app in between. No key and no word
+  is ever in it.
+- A start while another one is not done is ignored.
+- If the keys cannot be read now, nothing happens. The security screen
+  says what is wrong.
+- The dialog is a window of its own. It takes the shield of the screen
+  it opens over, if that has one (`shieldedLike`). An app's own screen
+  has none.
+- The dialog can never show while the app lock is on: the app lock needs
+  the recovery key. It is still drawn inside the gate, as every dialog
+  is, and `FirstNeedBehindTheAppLockTest` checks that it goes when the
+  app locks.
+- The three buttons of the first form use the third button of
+  `ShkDialog`, added to `core/design` in the same step
+  ([design-system.md](../development/design-system.md#added-in-step-25)).
 
 ## What protects the words
 
@@ -135,8 +208,9 @@ How it is built, in `WindowShield.kt`:
    `hideOtherAppsWindows` does nothing instead, and the screen keeps the
    rest. Two checks make sure the permission is there:
    - `ManifestTest` checks the module's manifest;
-   - the APK rules check is to check each app from step 2.5
-     ([Open](#open)).
+   - the APK rules check fails the build of an app that has a screen of
+     this module and does not request both permissions. Built in step
+     2.5 ([build.md](../development/build.md#apk-rules-check)).
 
 What the user sees:
 
@@ -210,8 +284,10 @@ user guide says so honestly ([app-lock.md](../user/app-lock.md)).
    `onTextHidden = { notify.hideShownText() }` to the watcher. An app
    without notifications passes `onTextHidden = {}`. Neither has a
    default, so no app can forget them.
-4. Its settings open `SecurityScreens.appLockIntent`. The security
-   screen has a button for it too.
+4. Its settings open `SecurityScreens.appLockIntent`, through
+   `RecoveryKeyFirstNeed` with `RecoveryKeyNeed.APP_LOCK`
+   ([The recovery key when first needed](#the-recovery-key-when-first-needed)).
+   The security screen has a button for it too.
 5. It draws every sheet and dialog from inside the gate, so that they go
    with the rest of the screen when the app locks.
 6. Its unit tests have one test that starts every screen of the app
@@ -234,6 +310,7 @@ class WaterApp : Application(), SecurityHost, NotifyHost {
     override fun onCreate() {
         super.onCreate()
         appLock.start()
+        water.start() // Empties what a restore left behind, and finishes a pending move of the file keys.
         notify.start()
     }
 }
@@ -490,6 +567,10 @@ file says that.
 - Catalog shows each state of the app lock screens on the page "App
   lock screens": the lock screen, the app lock screen, its dialogs drawn
   in place, the notices, and turning it on.
+- Catalog lists the four forms of the first-need dialog on the page
+  "Recovery key when first needed". Each opens on a screen of its own,
+  drawn in place (`RecoveryKeyFirstNeedSample`). The dialog shows no
+  recovery words, so the page has no switch to protect it.
 - Catalog's manifest removes `USE_BIOMETRIC`, `HIDE_OVERLAY_WINDOWS` and
   the six screens. It holds no keys and has no app lock.
 - The switch **Protect this page, as in an app** on both pages calls
@@ -555,10 +636,27 @@ file says that.
   app with no screen to check. `AppLockCheckWithoutALockedAppTest`: the
   check refuses an app that does not start locked. `MergedManifestTest`
   of `core/testing`: how the check reads a merged manifest.
+- `FirstNeedFormTest`: which form shows for each need, with keys, with
+  none and after a setup that stopped. `FirstNeedTest`: with keys the
+  app goes on at once and no dialog shows; each form with its words and
+  buttons; the screen each button opens; the app goes on when that
+  screen closes and the keys are there; nothing happens when it closes
+  without them; "Not now", "Cancel" and Back; a turn of the phone keeps
+  the dialog and keeps what was started while a screen is open.
+  `FirstNeedBehindTheAppLockTest`: the dialog inside a gate goes when
+  the app locks.
+- `AppLockGateTest` and `AppLockActivitiesTest` wait for the state they
+  read. The lock screen and the app lock screen work on a background
+  thread, and Compose's `waitForIdle` does not wait for it. Before step
+  2.5 a slow thread made such a test fail now and then
+  ([build.md](../development/build.md#tests-that-wait-for-a-background-thread)).
 - Water's `EveryScreenIsBehindTheAppLockTest`: every screen of Water's
-  merged manifest, locked
+  merged manifest, locked, and every sheet and dialog of Water, with
+  those of backup and restore and the Licences screen
   ([Every screen is behind the gate](#every-screen-is-behind-the-gate)). `FlowViewModelsTest` also covers the note that a repair or
   the words after a reset turned the app lock off.
+- Catalog's `FirstNeedScreenshotTest`: the four forms of the first-need
+  dialog in the eight configurations.
 - Catalog's `AppLockScreensScreenshotTest`: every state of the app lock
   screens in the eight configurations.
 - Catalog's `CatalogScreenTest`: the switch on both pages protects the
@@ -581,15 +679,20 @@ with Catalog passed on 2026-11-13
   [specification](../apps/water/spec.md#settings-screen): "Recovery key"
   and "App lock" in the Security section of Settings, and the dialog of
   [ADR 0035](../adr/0035-recovery-key-when-first-needed.md) when the key
-  is first needed. Built in step 2.5.
+  is first needed. Built in step 2.5. Not open any more.
 - "The recovery key is kept in Water" for an app that is not a keeper.
   It needs the handover between apps (step 3.0).
 - How an app shows files that were given up (open question 13 of
   crypto-design.md).
 - The check that every app that uses these screens requests
-  `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Step 2.5 adds it to the APK
-  rules check, which is owner-only, with Water's allow list
+  `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Built in step 2.5, in the
+  APK rules check, with Water's allow list
   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
-  point 5). Until then no app uses these screens. Catalog removes both
-  the screens and the permissions, and so does Water until step 2.5
+  point 5). Not open any more. Water is the first app with these
+  screens. Catalog removes both the screens and the permissions
   ([permissions.md](../security/permissions.md#water-appshkriusswater)).
+- The lock screen and the app lock screen take their background thread
+  from `Dispatchers.IO` themselves. They could take it from
+  `AppLockWatcher`, which tests already replace, so that a test would
+  not have to wait for it. That changes which thread unlocks in a real
+  app, so it is the owner's call. Step 2.5 fixed the tests only.

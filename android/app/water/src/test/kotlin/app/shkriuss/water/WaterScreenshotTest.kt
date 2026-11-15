@@ -1,5 +1,7 @@
 package app.shkriuss.water
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasContentDescription
@@ -11,10 +13,13 @@ import app.shkriuss.feature.water.R
 import app.shkriuss.feature.water.SettingsRules
 import app.shkriuss.feature.water.WaterReminders
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
+import app.shkriuss.core.security.R as SecurityR
+import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.feature.water.WaterUnit
 import app.shkriuss.core.design.R as DesignR
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
+import java.util.concurrent.CountDownLatch
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -49,8 +54,13 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
 
     private var scenario: ActivityScenario<WaterActivity>? = null
 
+    /** Holds a backup that is being written, so that its progress dialog stays for the screenshot. */
+    private val held = CountDownLatch(1)
+
     @After
     fun closeTheScreen() {
+        held.countDown()
+        TestDocuments.onOpen = {}
         scenario?.close()
     }
 
@@ -187,7 +197,7 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
     fun settings() {
         start()
         compose.tap(R.string.water_settings)
-        compose.waitForText(words(R.string.water_version))
+        compose.waitForSettings()
         compose.captureWholeScreen("Settings", config)
     }
 
@@ -288,7 +298,7 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         notificationsAllowed(false)
         start()
         compose.tap(R.string.water_settings)
-        compose.waitForText(words(R.string.water_version))
+        compose.waitForSettings()
         compose.tap(R.string.water_remind_me)
         compose.waitForText(words(R.string.water_question_text))
         captureWindows("NotificationQuestion")
@@ -334,6 +344,118 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         captureWindows("UntilRefused")
     }
 
+    // Backup, Security and Licences (step 2.5).
+
+    @Test
+    @Config(application = NewWaterApp::class)
+    fun settingsWithNoRecoveryKey() {
+        openSettings()
+        compose.captureWholeScreen("SettingsNoRecoveryKey", config)
+    }
+
+    @Test
+    @Config(application = StoppedSetupWaterApp::class)
+    fun settingsAfterASetupThatStopped() {
+        openSettings()
+        compose.captureWholeScreen("SettingsSetupNotFinished", config)
+    }
+
+    @Test
+    @Config(application = NewWaterApp::class)
+    fun theDialogWhenTheRecoveryKeyIsFirstNeededForABackup() {
+        openSettings()
+        compose.tap(R.string.water_make_backup)
+        compose.waitForText(words(SecurityR.string.sec_first_need_set_up_title))
+        captureWindows("FirstNeedBackup")
+    }
+
+    @Test
+    fun theProgressDialogWhileABackupIsWritten() {
+        pickerDocuments()
+        // The storage does not answer, so "Writing the backup" stays on screen.
+        TestDocuments.onOpen = { held.await() }
+        openSettings()
+        pick(R.string.water_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.water_backup_writing))
+        captureWindows("BackupWriting")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsWrittenAndChecked() {
+        pickerDocuments()
+        seedAWeek()
+        openSettings()
+        pick(R.string.water_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.water_backup_written_title))
+        captureWindows("BackupWritten")
+    }
+
+    @Test
+    fun theQuestionBeforeARestore() {
+        pickerDocuments()
+        seedAWeek()
+        val backup = writeABackup()
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.water_restore_question_title))
+        captureWindows("RestoreQuestion")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsRestored() {
+        pickerDocuments()
+        seedAWeek()
+        val backup = writeABackup()
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.tap(R.string.water_restore)
+        compose.waitForText(words(R.string.water_restored_title))
+        captureWindows("BackupRestored")
+    }
+
+    @Test
+    fun theAnswerForAFileThatIsNoBackup() {
+        pickerDocuments()
+        TestDocuments.file("photo.jpg").writeText("not a backup")
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri("photo.jpg"))
+        compose.waitForText(words(R.string.water_refused_not_a_backup_title))
+        captureWindows("RestoreNotABackup")
+    }
+
+    @Test
+    fun licences() {
+        openSettings()
+        compose.tap(R.string.water_licences)
+        compose.waitForText(words(R.string.water_licences_intro))
+        compose.captureWholeScreen("Licences", config)
+    }
+
+    /** The shortest licence, so that the whole notice fits in a few images. */
+    @Test
+    fun theNoticeOfOnePartOfLicences() {
+        openSettings()
+        compose.tap(R.string.water_licences)
+        compose.tap("BIP-39 English word list")
+        compose.waitForText("Copyright (c) 2013-2016 Pavol Rusnak", substring = true)
+        compose.captureWholeScreen("LicenceNotice", config)
+    }
+
+    /** Starts Water and opens Settings, with all of its sections. */
+    private fun openSettings() {
+        start()
+        compose.tap(R.string.water_settings)
+        compose.waitForSettings()
+    }
+
+    /** Taps the row [row] of Settings and picks [document] in the file picker that Water opens with [action]. */
+    private fun pick(row: Int, action: String, document: Uri) {
+        compose.tap(row)
+        val shown = checkNotNull(scenario)
+        compose.waitForOpened(shown) { it.action == action }
+        compose.theOpenedScreenCloses(shown, picked = document)
+    }
+
     /** Whether Android lets Water show notifications. */
     private fun notificationsAllowed(allowed: Boolean) = NotifyTestDevice(RuntimeEnvironment.getApplication()).allowNotifications(allowed)
 
@@ -349,7 +471,7 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
     private fun openSetting(name: Int) {
         start()
         compose.tap(R.string.water_settings)
-        compose.waitForText(words(R.string.water_version))
+        compose.waitForSettings()
         compose.tap(name)
         compose.waitForIdle()
     }

@@ -200,4 +200,23 @@
     <string name="sec_turn_on_done_text">This app now asks for your fingerprint, or your phone\'s PIN, pattern or password, before it shows anything. Keep your paper with the 24 words safe.</string>
     <string name="sec_turn_on_not_allowed">The app lock cannot be turned on now. Open the app lock screen again to see why.</string>
     <string name="sec_turn_on_damaged">A key file of this app is damaged. Repair it on the security screen first.</string>
+
+    <!--
+        The dialog for the moment the recovery key is first needed (ADR 0035):
+        a backup, a restore or the app lock, in an app that has no recovery
+        key yet. The words are those of docs/apps/water/spec.md, "What you
+        see at that moment", the same in every app.
+    -->
+    <string name="sec_first_need_set_up_title">Set up your recovery key first</string>
+    <string name="sec_first_need_backup_text">A backup is locked with your recovery key: 24 words that you write on paper. Only these words open your backups, on this phone or on a new one. If you lose them, nobody can open your backups.</string>
+    <string name="sec_first_need_app_lock_text">The app lock needs your recovery key: 24 words that you write on paper. They are the way back in if the app lock cannot be opened.</string>
+    <string name="sec_first_need_create">Create a recovery key</string>
+    <string name="sec_first_need_have_one">I already have one</string>
+    <string name="sec_first_need_not_now">Not now</string>
+    <string name="sec_first_need_enter_title">Enter your recovery key first</string>
+    <string name="sec_first_need_restore_text">A backup opens only with the 24 words of the recovery key it was made with.</string>
+    <string name="sec_first_need_enter">Enter the words</string>
+    <string name="sec_first_need_finish_title">Finish your recovery key</string>
+    <string name="sec_first_need_finish_text">Setting up your recovery key did not finish.</string>
+    <string name="sec_first_need_open_security">Open the security screen</string>
 </resources>

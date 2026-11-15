@@ -161,6 +161,11 @@ class CatalogScreenScreenshotTest(private val config: ScreenshotConfig) {
         captureWholePage(CatalogPage.AppLockScreens, "AppLockScreensPage")
     }
 
+    @Test
+    fun recoveryKeyFirstNeedPage() {
+        captureWholePage(CatalogPage.RecoveryKeyFirstNeed, "RecoveryKeyFirstNeedPage")
+    }
+
     private fun captureWholePage(page: CatalogPage, name: String) {
         compose.onNode(hasText(compose.activity.getString(page.title))).performScrollTo().performClick()
         compose.captureWholeScreen(name, config)

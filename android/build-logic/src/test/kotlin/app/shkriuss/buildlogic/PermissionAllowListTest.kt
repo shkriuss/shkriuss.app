@@ -15,7 +15,8 @@ import org.w3c.dom.Document
  * naming the permission, for every other permission: one that is not on
  * the list, one of another app's list, and one declared rather than
  * requested. The owner asked for the per-app allow list in step 2.4, with
- * the three permissions of core/notify for Water.
+ * the three permissions of core/notify for Water, and in step 2.5 for the
+ * two of core/security.
  */
 class PermissionAllowListTest {
     /** Water's allow list. Written out here, so a longer list in the check fails a test. */
@@ -23,6 +24,8 @@ class PermissionAllowListTest {
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.USE_EXACT_ALARM",
         "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.HIDE_OVERLAY_WINDOWS",
     )
 
     /** A merged manifest with one element per entry of [tags]: the tag and its `android:name`. */
@@ -55,7 +58,7 @@ class PermissionAllowListTest {
     }
 
     @Test
-    fun watersThreePermissionsPass() {
+    fun watersFivePermissionsPass() {
         assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "water"))
     }
 
@@ -75,8 +78,8 @@ class PermissionAllowListTest {
     fun anyOtherPermissionFailsInWater() {
         listOf(
             "android.permission.SCHEDULE_EXACT_ALARM",
-            "android.permission.USE_BIOMETRIC",
-            "android.permission.HIDE_OVERLAY_WINDOWS",
+            "android.permission.USE_FINGERPRINT",
+            "android.permission.SYSTEM_ALERT_WINDOW",
             "app.shkriuss.water.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
         ).forEach { name ->
             assertOneProblem("<uses-permission> $name", CheckApkRulesTask.permissionProblems(requests(name), "water"))

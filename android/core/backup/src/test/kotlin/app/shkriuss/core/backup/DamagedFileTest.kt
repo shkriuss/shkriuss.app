@@ -109,7 +109,7 @@ class DamagedFileTest {
     @Test
     fun theWholeFileIsStillGoodAfterAllOfThis() {
         // The file itself was never changed: every test above worked on a copy.
-        assertEquals(RestoreResult.Restored(BackupSummary(1, device.clock.nowMillis, records = 2, files = 1)), device.restore(small))
+        assertEquals(RestoreResult.Restored(BackupSummary(1, device.clock.nowMillis, records = 2, files = 1, notDeleted = mapOf("note" to 1L, "file" to 1L))), device.restore(small))
     }
 
     private companion object {

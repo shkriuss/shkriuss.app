@@ -4,17 +4,23 @@ The app lock makes an app ask for your fingerprint, or your phone's PIN,
 pattern or password, before it shows anything. Each app has its own app
 lock. It is off until you turn it on.
 
-No released app has it yet. The first one will be Water. This page says
-what is already fixed. It was written on 2026-11-13, with the screens.
+Water is the first app that has it. It is not released yet. This page
+was written on 2026-11-13, with the screens, and updated on 2026-11-14,
+when Water got them.
 
-To see the screens before then: from version 0.3.0, the
-[Catalog app](apps.md) shows every state of them with sample data. Open
-**App lock screens** under **Shared screens**. Catalog has no app lock:
-nothing there locks, unlocks or shows the system prompt.
+Where it is, in Water: open **Settings**. Under **Security**, tap **App
+lock**. The row says **On** or **Off**. Later apps have the same row in
+their settings. The security screen has a button **App lock** too.
 
-Open: the name of the button that opens the app lock screen in an app,
-and where it is. It is set when the first app gets it. The security
-screen has a button **App lock** too.
+The app lock needs your recovery key. If the app has none yet, it says
+"Set up your recovery key first" when you tap **App lock**. Tap **Create
+a recovery key**, or **I already have one**. When that is done, the app
+lock screen opens by itself ([Recovery key](recovery-key.md)).
+
+To see the screens without an app that has them: from version 0.3.0,
+the [Catalog app](apps.md) shows every state of them with sample data.
+Open **App lock screens** under **Shared screens**. Catalog has no app
+lock: nothing there locks, unlocks or shows the system prompt.
 
 ## What it protects, and what it does not
 
@@ -136,7 +142,9 @@ recovery key do
 
 While the app lock is on, a notification shows only its kind, for
 example **Drink reminders**, and the text "The app lock hides this
-notification. Open the app to see it."
+notification. Open the app to see it." It has no buttons then: a
+reminder of Water shows no **Drank** and no **Later**. A tap opens the
+app, behind its lock screen.
 
 1. To show the text again, turn on **Show the text in notifications** on
    the app lock screen.

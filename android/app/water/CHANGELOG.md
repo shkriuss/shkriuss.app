@@ -9,6 +9,57 @@ get reminders during the hours you choose. Its specification is
 
 Not released yet. Version 1.0.0 is prepared in step 2.6.
 
+Step 2.5, backup, restore, the app lock and Licences:
+
+- **Settings** has the section **Backup**, with **Make a backup** and
+  **Restore a backup**. A backup is one file that you put where you
+  choose, with Android's file picker. Water suggests a name, such as
+  `water-2026-11-13.shkbackup`
+  ([Back up and restore](../../../docs/user/backup.md)).
+- **Water checks every backup by itself.** Right after it has written
+  the file, it reads the file again and checks it to its last byte. Then
+  it says "Backup written" and how many drinks the backup holds. If the
+  file cannot be used, or could not be read again, Water says so.
+- **Restore a backup** checks the whole file first, then asks "Restore
+  this backup?", with when the backup was made and how many drinks it
+  holds. **Cancel** changes nothing. For every record, the newest edit
+  stays: a restore cannot undo a deletion or an edit you made after the
+  backup.
+- When Water does not take a file, it says why: not a backup, made by a
+  newer version, a backup of another app, another recovery key, no keys,
+  or damaged. Nothing in Water has changed then.
+- After a restore, the reminders follow the restored data at once: the
+  alarm moves, and a reminder that no longer fits is removed.
+- **Settings** has the section **Security**, with **Recovery key**
+  ("Not set up", "Setup not finished" or "Set up") and **App lock**
+  ("Off" or "On"). They open the security screen and the app lock
+  screen ([Your recovery key](../../../docs/user/recovery-key.md),
+  [The app lock](../../../docs/user/app-lock.md)).
+- Water still opens with no setup. The recovery key comes when it is
+  first needed: **Make a backup** and **App lock** say "Set up your
+  recovery key first", and **Restore a backup** says "Enter your
+  recovery key first". When the key is set up, Water goes on by itself
+  with what you tapped.
+- With the app lock on, Water asks for your fingerprint, or the phone's
+  PIN, pattern or password, before it shows anything. A reminder then
+  shows only "Drink reminders" and "The app lock hides this
+  notification. Open the app to see it.", with no buttons.
+- **Settings**, under About, has **Licences**: every third-party part
+  that ships in Water, with its notice and the full text of its licence
+  ([third-party.md](../../../docs/development/third-party.md)).
+- Permissions: two more, `USE_BIOMETRIC`, for Android's system prompt,
+  and `HIDE_OVERLAY_WINDOWS`, which hides other apps' windows while a
+  screen of the recovery key or the lock screen shows. Android grants
+  both at install. With the three of reminders, Water has five, and no
+  other. The APK rules check now also fails a build that has the screens
+  of the recovery key without both
+  ([permissions.md](../../../docs/security/permissions.md#water-appshkriusswater)).
+  The six screens of the recovery key and the app lock are not
+  exported. Water's own screen is still the only part another app can
+  open.
+- Water still has no network permission and no storage permission. It
+  reaches only the one file you pick.
+
 Step 2.4, reminders:
 
 - **Settings** has the switch **Remind me to drink**. Reminders come
@@ -26,7 +77,7 @@ Step 2.4, reminders:
   reminds you again in 15 minutes. On the lock screen, a button asks you
   to unlock first. A tap opens Today. At midnight the reminder goes away.
 - While the app lock hides the text of notifications, a reminder has no
-  buttons. (The app lock itself comes in step 2.5.)
+  buttons. (The app lock itself came in step 2.5.)
 - A missed reminder, for example while the phone was off, is skipped. A
   reminder whose time came while Android started Water, or in the same
   seconds as a change, still comes, up to a minute late.
@@ -68,7 +119,7 @@ Step 2.3, the screens:
   version.
 - Not there yet: the switch "Remind me to drink" and the line about
   notifications, which came with the reminders in step 2.4; Backup,
-  Security and Licences, which come in step 2.5. Until step 2.4 no
+  Security and Licences, which came in step 2.5. Until step 2.4 no
   reminder came, whatever the reminder hours said.
 - TalkBack reads amounts with the unit in words, such as "250
   millilitres", reads the summary as one item, and reads each drink and

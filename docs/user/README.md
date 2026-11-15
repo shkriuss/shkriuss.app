@@ -11,8 +11,9 @@ Pages:
   updates.
 - [Verify with AppVerifier](verify.md): how to check that an app is
   genuine, against the signing fingerprint.
-- [Your recovery key](recovery-key.md): what the 24 words are, how to
-  create them, enter them and see them again, the security screen, and
+- [Your recovery key](recovery-key.md): what the 24 words are, when an
+  app asks for them, how to create them, enter them and see them again,
+  the security screen, and
   what to do when setting up stopped or a key file is damaged. No
   released app has these screens yet. The page is not on the hub website
   until one has.

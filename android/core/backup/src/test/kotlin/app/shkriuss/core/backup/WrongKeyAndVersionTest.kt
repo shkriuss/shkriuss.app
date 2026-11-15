@@ -160,7 +160,7 @@ class WrongKeyAndVersionTest {
 
         val result = newer.restore(file)
 
-        assertEquals(RestoreResult.Restored(BackupSummary(3, older.clock.nowMillis, records = 1, files = 0)), result)
+        assertEquals(RestoreResult.Restored(BackupSummary(3, older.clock.nowMillis, records = 1, files = 0, notDeleted = mapOf("note" to 1L))), result)
         assertEquals(3, newer.app.restoredDataVersion)
         assertEquals(older.app.snapshot(), newer.app.snapshot())
     }

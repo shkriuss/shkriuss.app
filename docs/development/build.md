@@ -303,7 +303,7 @@ second build must write the same mapping file, or the release stops. See
   `core/testing` also has `MergedManifestTest`, for how the app lock
   check reads a merged manifest
   ([Shared test helpers](#shared-test-helpers)).
-- `core/crypto` has 23 test classes with 190 tests. They are the items 1
+- `core/crypto` has 23 test classes with 189 tests. They are the items 1
   to 8 and 10 to 13 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
@@ -360,7 +360,7 @@ second build must write the same mapping file, or the release stops. See
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
-- `core/backup` has 10 test classes with 71 tests. They are the items of
+- `core/backup` has 10 test classes with 72 tests. They are the items of
   "What the tests must cover" in
   [backup-format.md](../architecture/backup-format.md#what-the-tests-must-cover).
   - They use real keys: `SoftwareKeysApp` from the
@@ -393,7 +393,11 @@ second build must write the same mapping file, or the release stops. See
     failed backup is deleted, that only `content:` URIs are taken, and
     the two intents of the system file picker.
   - No test opens the picker itself. That is checked by hand with the
-    first app.
+    first app, Water
+    ([emulator-tests.md](emulator-tests.md#steps-for-the-three-devices-backup-and-restore)).
+  - From step 2.5, `RoundTripTest` also checks the counts of records
+    that are not deleted, per type name: the same when a backup is
+    written and when it is checked.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
@@ -428,7 +432,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has 13 test classes with 101 tests
+- `core/security` has 17 test classes with 118 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -461,14 +465,27 @@ second build must write the same mapping file, or the release stops. See
     library has no merged manifest of an app, so each test names the
     activities it would hold. `AppLockCheckWithoutALockedAppTest` uses
     an app class whose app lock is off.
-- `feature/water` has eleven test classes with 165 tests: the units, the
+  - `FirstNeedTest.kt`, from step 2.5, holds three classes for the
+    dialog that shows when the recovery key is first needed.
+    `FirstNeedFormTest` is plain code. `FirstNeedTest` draws the dialog
+    on a sample screen in an app with no recovery key, with a setup that
+    stopped, and with a key, reads which screen each button starts from
+    Robolectric, and stores a key before it lets that screen close.
+    `FirstNeedBehindTheAppLockTest` draws it inside a gate and locks the
+    app.
+  - `AppLockGateTest` and `AppLockActivitiesTest` wait for the state
+    they read
+    ([Tests that wait for a background thread](#tests-that-wait-for-a-background-thread)).
+- `feature/water` has 13 test classes with 205 tests: the units, the
   goal of a day, the settings in use and the next reminder as plain code
   (`UnitsTest`, `RulesTest`, `NextReminderTest`), the schema
   (`WaterDatabaseTest`), the repository, the backup content and the
   ViewModels on a database in memory (`WaterRepositoryTest`,
   `WaterBackupContentTest`, `ViewModelsTest`), how numbers are shown
-  (`WaterFormatTest`), and, from step 2.4, the reminders
-  (`WaterRemindersTest`, `ReminderBookTest`, `RemindersViewModelTest`).
+  (`WaterFormatTest`), from step 2.4 the reminders
+  (`WaterRemindersTest`, `ReminderBookTest`, `RemindersViewModelTest`),
+  and from step 2.5 backup and restore and the licences
+  (`BackupViewModelTest`, `LicencesTest`).
   - The tests of the reminders build a real `Notify` on Robolectric's
     Android, as the app class does, with a worker that runs each piece at
     once (`RemindersSetup`), and call the handler and the buttons as
@@ -478,9 +495,24 @@ second build must write the same mapping file, or the release stops. See
     `Dispatchers.Unconfined`, and each test waits up to five seconds for
     the state it expects. No coroutine test library is needed.
   - `WaterBackupContentTest` also writes a whole backup through `Backups`
-    of `core/backup`, to a document behind a small content provider of
-    the test, and restores it on a second app with the same recovery key.
-- `app/water` has `EveryScreenIsBehindTheAppLockTest`, which also locks
+    of `core/backup`, to a document behind `TestDocuments` of
+    `core/testing`, and restores it on a second app with the same
+    recovery key.
+  - From step 2.5: `BackupViewModelTest` runs a backup and a restore
+    through `BackupViewModel`, with real keys from `SoftwareKeysApp` and
+    documents behind `TestDocuments`. It checks the rows of Settings
+    with no key, a setup that stopped and a key; the count of drinks,
+    without deleted drinks, goals and settings; a file that fails its
+    check and one that cannot be read again; each of the six answers and
+    the three failures; Cancel at the question; a restore on the same
+    phone, which cannot undo a deletion; a restore from another phone;
+    that the reminders follow; and that a pending move of the file keys
+    is finished only with keys. `WaterRemindersTest` has four tests of
+    `afterRestore`. `LicencesTest` checks that every part has a name, a
+    notice and a licence text, and that each licence text has the
+    SHA-256 that [third-party.md](third-party.md) records.
+- `app/water` has seven test classes with 371 tests, most of them
+  screenshots. It has `EveryScreenIsBehindTheAppLockTest`, which also locks
   the app over each sheet and dialog, `WaterManifestTest`, which names
   everything Water's merged manifest lets another app reach,
   `WaterRemindersTest`, the reminders from end to end through
@@ -488,7 +520,24 @@ second build must write the same mapping file, or the release stops. See
   the buttons' pending intents (step 2.4),
   `WaterScreensTest`, what the screens do and what TalkBack hears, and
   `WaterScreenshotTest`, the screenshots of every screen, sheet and
-  dialog.
+  dialog. From step 2.5:
+  - `WaterBackupScreensTest`: the rows of Backup and Security and what
+    each opens, the first-need dialog and "go on after", a backup and a
+    restore on the screen through `TestDocuments`, the answers, the
+    Licences screen, TalkBack labels and touch targets. It reads the
+    intent of the file picker from Robolectric and hands the result
+    back as the picker would.
+  - `WaterRemindersTest`: after a restore the alarm moves, and a
+    reminder that no longer fits is removed.
+  - `WaterRemindersWithTheAppLockTest`: with the app lock on, a reminder
+    shows in its hidden form, without buttons. Its app class has the app
+    lock on.
+  - `EveryScreenIsBehindTheAppLockTest`: also the dialogs of backup and
+    restore, the progress dialog, held open by the test, and the
+    Licences list and a notice.
+  - `WaterManifestTest`: five permissions, Water's screen and the six of
+    `core/security`, none of the six exported, and Water's screen still
+    the only exported part.
 
 ### Instrumented tests
 
@@ -570,7 +619,10 @@ The app lock check is three parts:
 2. `LockedAppForTests` is the app class of that test: real keys on the
    stand-in for the Keystore, with the app lock on and locked before any
    screen starts. `UnlockedAppForTests` is the same with the app lock
-   off, for screenshots.
+   off, for screenshots. Step 2.5 added two more, both with the app lock
+   off: `NewAppForTests` has no recovery key, as right after the app was
+   installed, and `StoppedSetupAppForTests` has a setup of the recovery
+   key that stopped half way.
 3. `MergedManifest` reads the activities of the app's merged manifest,
    as it goes into the APK. The unit-test convention plugin gives an
    app's unit tests the path of that file, in the system property
@@ -601,6 +653,36 @@ Why the helper lives in `core/testing`, decided in step 2.2:
 Every app has one test that calls the check: Water's
 `EveryScreenIsBehindTheAppLockTest`, which every later app copies, with
 its own locked app class.
+
+`TestDocuments`, from step 2.5, stands for the documents of the system
+file picker in unit tests. It is a content provider that keeps each
+document as a file in a folder of the test. A test sets it up with
+Robolectric, gets a `content:` URI for a name, and can make the next
+open fail, to try a storage app that refuses. The tests of
+`feature/water` and `app/water` write and read backups through it.
+
+### Tests that wait for a background thread
+
+Some screens work on a background thread: the lock screen and the app
+lock screen of `core/security` on `Dispatchers.IO`, and Room on a thread
+of its own. Compose's `waitForIdle` does not wait for such a thread. A
+test that reads a state right after it can run before the thread is
+done.
+
+1. In step 2.4, `AppLockGateTest` failed once in a run without the
+   Gradle daemon and passed afterwards. That was this: on a cold JVM the
+   background thread was slower than the test.
+2. It was shown in step 2.5: with a delay of 400 ms put into the lock
+   screen's background work, four of the seven tests of `AppLockGateTest`
+   failed with the same messages, and `AppLockActivitiesTest` failed
+   too. The delay was not committed.
+3. The fix is in the tests. Each waits, up to five seconds, for the
+   state it reads: the prompt is open, the lock screen is gone, the
+   settings show. With the delay still in, all passed. Without it, three
+   runs without the daemon passed.
+4. A new test of a screen does the same: it waits for what it expects
+   (`compose.waitUntil`), and does not only call `waitForIdle`. Water's
+   screen tests have `waitFor` for it.
 
 ### Screenshot tests
 
@@ -925,17 +1007,22 @@ The owner asked for them in step 1.9.
 | `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. |
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. |
-| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (step 2.4, owner's request). Water's three permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
+| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (step 2.4, owner's request; five permissions since step 2.5). Water's five permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
+| `SecurityScreensRuleTest` | Rule 10 of the APK rules check (step 2.5, owner's request). The six screens with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the six screens alone needs both, and so does a new screen of the module. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
 How the tests were checked: on 2026-11-13, the checks were weakened on
 purpose, all at once: `allowBackup` true let through, `WebView` allowed,
 `Runtime.exec` taken off the list, and `dumpStack` taken off the list.
-Seven tests failed. With the checks restored, all passed.
+Seven tests failed. With the checks restored, all passed. On 2026-11-14
+rule 10 was weakened the same way: it asked for one of the two
+permissions only. Six tests of `SecurityScreensRuleTest` failed. With the
+rule restored, all passed.
 
 The older checks (Room schemas, DAO rules, the instrumented test suite,
 the graphics path, and APK rules 1 to 5) were tested by hand, as their
 sections say. They have no unit tests yet, except the allow list of rule
-2, which has `PermissionAllowListTest` since step 2.4.
+2, which has `PermissionAllowListTest` since step 2.4. Rule 10 has
+`SecurityScreensRuleTest` from the start.
 
 ## Lint
 
@@ -1156,8 +1243,10 @@ and fails the build if:
 1. it contains a native library (hard rule 2),
 2. its manifest declares any permission, or requests one that is not on
    the app's allow list (hard rule 4). The list is per app, by module
-   name, the same for every build type. Since step 2.4 Water's list holds
-   the three permissions of `core/notify`; every other app's is empty.
+   name, the same for every build type. Water's list holds five: the
+   three permissions of `core/notify` since step 2.4, and the two of
+   `core/security`, `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`, since
+   step 2.5. Every other app's list is empty.
    Only the owner changes it ([permissions.md](../security/permissions.md)).
    The report of a build that passes names the allowed permissions,
 3. its manifest still starts the emoji font loader (hard rule 3, see below),
@@ -1175,7 +1264,10 @@ and fails the build if:
 8. in an APK that ships, its code names a class loader that reads code,
 9. in an APK that ships, its code calls `System.load`, `Runtime.load`,
    `Runtime.exec` or `ProcessBuilder.start`
-   ([The WebView and code loading rules](#the-webview-and-code-loading-rules)).
+   ([The WebView and code loading rules](#the-webview-and-code-loading-rules)),
+10. its manifest has a screen of `core/security` and does not request
+    both `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`
+    ([The security screens rule](#the-security-screens-rule)).
 
 An APK that ships is one of every build type but `debug`: `release` and
 `preview` today. The failure message names the app and its application
@@ -1183,6 +1275,35 @@ ID, then each problem.
 
 The report is written to `build/reports/apk-rules/`. A library can add any
 of these without anyone noticing. The check makes sure someone does.
+
+### The security screens rule
+
+The owner asked for rule 10 in step 2.5
+([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
+point 5).
+
+1. A screen of `core/security` is an `<activity>` of the merged manifest
+   whose name starts with `app.shkriuss.core.security.`. A new screen of
+   the module counts by itself.
+2. An app with such a screen must request both permissions with
+   `<uses-permission>`. A permission that is declared, or requested
+   through `<uses-permission-sdk-23>`, does not count. Rule 2 fails those
+   anyway.
+3. One problem is reported for each missing permission. It names the
+   first screen, says how many more there are, and names ADR 0033.
+4. An app with no such screen needs neither permission. Catalog's
+   manifest removes the six screens and both permissions, and passes.
+
+Why: without `HIDE_OVERLAY_WINDOWS` a screen still starts, but hides no
+other app's window. Without `USE_BIOMETRIC` the system prompt cannot
+open. An app's manifest can remove a permission that a library brings,
+and nothing else would notice.
+
+How it was checked, on 2026-11-14: one removal of a permission was put
+back into Water's manifest. `:app:water:checkDebugApkRules` failed and
+named the permission and ADR 0033. The removal was taken out again, and
+the check passed. Its tests are in
+[Tests of the build checks](#tests-of-the-build-checks).
 
 ### The Play services class rule
 
@@ -1608,8 +1729,8 @@ two:
    their own emoji font.
 
 Every new app must remove the same two. The APK rules check fails until it
-does. Water removes them too, and until step 2.5 also the two permissions
-and the six screens of `core/security`
+does. Water removes them too. Until step 2.5 it also removed the two
+permissions and the six screens of `core/security`. Now it has them
 ([permissions.md](../security/permissions.md#water-appshkriusswater)).
 Water also removes the receiver of `androidx.profileinstaller`, which is
 exported to developer tools. Catalog still has it, until its next change

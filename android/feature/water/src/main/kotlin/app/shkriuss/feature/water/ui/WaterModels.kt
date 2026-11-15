@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.shkriuss.feature.water.BackupViewModel
 import app.shkriuss.feature.water.DayViewModel
 import app.shkriuss.feature.water.HistoryViewModel
 import app.shkriuss.feature.water.RemindersViewModel
@@ -11,7 +12,7 @@ import app.shkriuss.feature.water.SettingsViewModel
 import app.shkriuss.feature.water.WaterServices
 
 /**
- * The five ViewModels of Water's screens, made once for the activity
+ * The six ViewModels of Water's screens, made once for the activity
  * [owner] and kept while the phone is turned. Water has no navigation
  * library (ADR 0003, point 2): the three destinations and the open day
  * are these ViewModels and the screen's saved state.
@@ -24,6 +25,7 @@ class WaterModels(owner: ViewModelStoreOwner, services: WaterServices) {
             initializer { HistoryViewModel(services.repository, services.time) }
             initializer { SettingsViewModel(services.repository, services.time) }
             initializer { RemindersViewModel(services.repository, services.reminders, services.time) }
+            initializer { BackupViewModel(services.backups) }
         },
     )
 
@@ -50,16 +52,22 @@ class WaterModels(owner: ViewModelStoreOwner, services: WaterServices) {
     /** The reminder line of Today and Settings, and the question for notifications. */
     val reminders: RemindersViewModel = provider[RemindersViewModel::class.java]
 
+    /** Backup and restore, and the rows "Recovery key" and "App lock" of Settings. */
+    val backup: BackupViewModel = provider[BackupViewModel::class.java]
+
     /**
      * Today and History move to the new day after midnight, and the
      * reminder line reads the state of notifications again: the user can
-     * change it in Android's settings at any moment. The activity calls it
+     * change it in Android's settings at any moment. Settings reads the
+     * keys again: on the way back from a screen of `core/security` the
+     * recovery key or the app lock may have changed. The activity calls it
      * each time it comes to the front.
      */
     fun checkTheDay() {
         today.checkTheDay()
         history.checkTheDay()
         reminders.refresh()
+        backup.refresh()
     }
 
     private companion object {

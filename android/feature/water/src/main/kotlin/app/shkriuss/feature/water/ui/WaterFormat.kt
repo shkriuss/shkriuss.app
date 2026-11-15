@@ -11,6 +11,7 @@ import app.shkriuss.feature.water.R
 import app.shkriuss.feature.water.WaterUnit
 import java.text.NumberFormat
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -35,6 +36,7 @@ class WaterFormat(
     private val shortDate = DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "EEEdMMM"), locale)
     private val spokenDate = DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "EEEEdMMMM"), locale)
     private val fullDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(locale)
+    private val longDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)
 
     /** [number] in the phone's format: "1,250". */
     fun number(number: Int): String = numbers.format(number.toLong())
@@ -123,6 +125,13 @@ class WaterFormat(
     /** The title of an open day: "Today", or the full date, such as "Thursday, 12 November 2026". */
     fun dayTitle(day: LocalDate, isToday: Boolean): String =
         if (isToday) resources.getString(R.string.water_today) else fullDate.format(day)
+
+    /** A date with its time, as the question before a restore says when a backup was made: "13 November 2026, 14:05". */
+    fun dateTime(at: LocalDateTime): String =
+        resources.getString(R.string.water_date_time, longDate.format(at), clock.format(at.toLocalTime()))
+
+    /** How many drinks a backup holds, in the phone's number format, for the plurals of the backup dialogs: "1,250". */
+    fun count(count: Long): String = numbers.format(count)
 
     /** The value of the setting "Every": "1 hour". */
     fun interval(minutes: Int): String = resources.getString(

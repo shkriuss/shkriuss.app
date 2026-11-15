@@ -53,6 +53,13 @@ enum class WaterChange {
 
     /** A setting changed. */
     SETTINGS,
+
+    /**
+     * A backup was restored. Its records come in past the repository, so
+     * any of the above may have changed. A restored drink was not logged
+     * now, so it does not answer a reminder by itself.
+     */
+    RESTORED,
 }
 
 /**

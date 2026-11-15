@@ -2,7 +2,6 @@ package app.shkriuss.water
 
 import android.app.Application
 import android.content.Intent
-import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.ShkCrypto
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.data.IdSource
@@ -21,11 +20,12 @@ import app.shkriuss.feature.water.data.WaterDatabase
  * app, and hands them to the screens and the receivers, which Android
  * creates itself (docs/architecture/security-screens.md, "What an app
  * does", and docs/architecture/notifications.md, "What an app does").
- *
- * Step 2.5 adds `Backups`.
+ * [WaterServices] builds the app's `Backups` with the backup keys of
+ * [crypto], and [onCreate] starts it (docs/architecture/backup-format.md,
+ * "Staging").
  */
 class WaterApp : Application(), SecurityHost, WaterHost, NotifyHost {
-    override val crypto: ShkCrypto by lazy { ShkCrypto.create(this, AppName.of(APP_NAME)).also { it.start() } }
+    override val crypto: ShkCrypto by lazy { ShkCrypto.create(this, WaterServices.APP_NAME).also { it.start() } }
 
     override val appLock: AppLockWatcher by lazy {
         // When the app lock starts to hide the text, the reminder already shown is posted again without it.
@@ -33,7 +33,7 @@ class WaterApp : Application(), SecurityHost, WaterHost, NotifyHost {
     }
 
     override val water: WaterServices by lazy {
-        WaterServices(this, WaterDatabase.open(this), Clock.System, IdSource.RandomUuid, openToday(), notify = { notify })
+        WaterServices(this, WaterDatabase.open(this), Clock.System, IdSource.RandomUuid, openToday(), notify = { notify }, crypto = crypto)
     }
 
     override val notify: Notify by lazy {
@@ -52,6 +52,9 @@ class WaterApp : Application(), SecurityHost, WaterHost, NotifyHost {
         super.onCreate()
         // Before any screen starts, so that every screen's gate knows it (AppLockGate).
         appLock.start()
+        // Backups.start(): empties what a restore left behind when the app stopped in the middle of it. Then, off the
+        // main thread, a pending move of the file keys is finished (docs/apps/water/spec.md, "Files").
+        water.start()
         // Tells Android the channel and registers the alarm again: Android may have dropped it.
         notify.start()
     }
@@ -63,9 +66,4 @@ class WaterApp : Application(), SecurityHost, WaterHost, NotifyHost {
      */
     private fun openToday(): Intent =
         Intent(this, WaterActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-
-    private companion object {
-        /** The name of the app in keys and backups (docs/apps/water/spec.md). */
-        const val APP_NAME = "water"
-    }
 }

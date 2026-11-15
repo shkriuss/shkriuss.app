@@ -1,5 +1,6 @@
 package app.shkriuss.feature.water
 
+import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.notify.Alarm
 import app.shkriuss.core.notify.ButtonPress
 import app.shkriuss.core.notify.ChannelImportance
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -503,5 +505,70 @@ class WaterRemindersTest {
 
         assertEquals(at(9, 0), runBlocking { reminders.next() })
         assertTrue(water.reminders.state() == NotifyState.Ready)
+    }
+
+    // After a restore (spec, "After a restore").
+
+    /**
+     * Writes as a restore does: past the repository of the app, so that the
+     * reminders are not told of each write, and then tells them once that
+     * a backup was restored.
+     */
+    private fun restored(write: suspend WaterRepository.() -> Unit) = runBlocking {
+        WaterRepository(water.database, clock, IdSource.RandomUuid).write()
+        reminders.afterRestore()
+    }
+
+    @Test
+    fun afterARestoreThatTurnsRemindersOffTheReminderGoesAndNoAlarmWaits() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        assertNotNull(water.reminder())
+        assertEquals(listOf(water.millisOf(at(10, 0))), water.waiting())
+
+        clock.setTo(at(9, 10))
+        restored { changeSettings { it.copy(remindersOn = false) } }
+
+        assertNull("a reminder that no longer fits is removed", water.reminder())
+        assertEquals(emptyList<Long>(), water.waiting())
+    }
+
+    @Test
+    fun afterARestoreThatMeetsTheGoalTheReminderGoesAndTheAlarmMovesToTomorrow() {
+        remindersOn()
+        alarmComes(at(9, 0))
+
+        clock.setTo(at(9, 10))
+        restored { addDrink(THE_DAY, 8 * 60 + 30, 2_000) }
+
+        assertNull(water.reminder())
+        assertEquals(listOf(water.millisOf(THE_DAY.plusDays(1).atTime(9, 0))), water.waiting())
+    }
+
+    @Test
+    fun afterARestoreTheAlarmMovesToTheTimeOfTheRestoredSettingsAndAReminderThatStillFitsStays() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        assertEquals(listOf(water.millisOf(at(10, 0))), water.waiting())
+
+        clock.setTo(at(9, 10))
+        // A restored drink was not logged now: it does not answer the reminder by itself.
+        restored {
+            changeSettings { it.copy(intervalMinutes = 30) }
+            addDrink(THE_DAY, 7 * 60, 100)
+        }
+
+        assertNotNull("the goal is not met and reminders are on", water.reminder())
+        assertEquals("every 30 minutes now, counted from the reminder at 09:00", listOf(water.millisOf(at(9, 30))), water.waiting())
+    }
+
+    @Test
+    fun afterARestoreThatTurnsRemindersOnTheAlarmIsSet() {
+        assertEquals(emptyList<Long>(), water.waiting())
+
+        clock.setTo(at(9, 10))
+        restored { changeSettings { it.copy(remindersOn = true) } }
+
+        assertEquals(listOf(water.millisOf(at(10, 0))), water.waiting())
     }
 }

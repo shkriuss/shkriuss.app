@@ -36,17 +36,29 @@ import java.util.concurrent.Executor
  * and locked, as after Android stopped the app; on and open, as after the
  * system prompt; or off, so that every screen shows its content.
  *
- * An app's test extends [LockedAppForTests], [AppLockOnForTests] or
- * [UnlockedAppForTests] and
+ * [keys] says which keys the app has at the start. The default is a
+ * recovery key. An app that opens with no setup (ADR 0035) also tests its
+ * screens with none ([NewAppForTests]) and after a setup that stopped
+ * ([StoppedSetupAppForTests]). The app lock is then off: it needs the
+ * recovery key.
+ *
+ * An app's test extends [LockedAppForTests], [AppLockOnForTests],
+ * [UnlockedAppForTests], [NewAppForTests] or [StoppedSetupAppForTests] and
  * adds what the app's screens need from the app class, such as the app's
  * own host interface. Its tests add the test fixtures of `core/crypto`,
  * which this class needs at run time.
  */
-abstract class HostAppForTests(private val appName: AppName, private val start: AppLockAtStart) : Application(), SecurityHost {
-    private val keys: SoftwareKeysApp by lazy { SoftwareKeysApp(File(filesDir, "shk-keys"), appName) }
+abstract class HostAppForTests(
+    private val appName: AppName,
+    private val start: AppLockAtStart,
+    private val keys: KeysAtStart = KeysAtStart.RECOVERY_KEY,
+) : Application(), SecurityHost {
+    private val keyFolder: File get() = File(filesDir, "shk-keys")
+
+    private val software: SoftwareKeysApp by lazy { SoftwareKeysApp(keyFolder, appName) }
 
     final override val crypto: ShkCrypto
-        get() = keys.crypto
+        get() = software.crypto
 
     // Every read of the keys runs at once on the main thread, so the gate is
     // OPEN or LOCKED before the first screen is created.
@@ -56,13 +68,20 @@ abstract class HostAppForTests(private val appName: AppName, private val start: 
 
     override fun onCreate() {
         super.onCreate()
-        val recoveryKey = crypto.setup.createRecoveryKey()
-        crypto.setup.storeDerivedKeys(recoveryKey)
-        if (start != AppLockAtStart.OFF) {
-            val proof = checkNotNull(crypto.setup.checkAllWords(recoveryKey)) { "The words of the new key were refused" }
-            crypto.appLock.beginTurnOn(proof).finish()
-            // Without the file keys in memory the app starts locked.
-            if (start == AppLockAtStart.LOCKED) crypto.appLock.lock()
+        check(keys == KeysAtStart.RECOVERY_KEY || start == AppLockAtStart.OFF) { "The app lock needs the recovery key" }
+        if (keys != KeysAtStart.NONE) {
+            val recoveryKey = crypto.setup.createRecoveryKey()
+            crypto.setup.storeDerivedKeys(recoveryKey)
+            if (keys == KeysAtStart.STOPPED_SETUP) {
+                // As a setup that stopped just before its last keyset, `record`: the others are stored.
+                check(File(keyFolder, "record").delete()) { "The record keyset was not stored" }
+                check(crypto.status().setupIsUnfinished) { "The setup does not count as stopped" }
+            } else if (start != AppLockAtStart.OFF) {
+                val proof = checkNotNull(crypto.setup.checkAllWords(recoveryKey)) { "The words of the new key were refused" }
+                crypto.appLock.beginTurnOn(proof).finish()
+                // Without the file keys in memory the app starts locked.
+                if (start == AppLockAtStart.LOCKED) crypto.appLock.lock()
+            }
         }
         appLock.start()
     }
@@ -84,6 +103,18 @@ enum class AppLockAtStart {
     OFF,
 }
 
+/** Which keys a [HostAppForTests] has when the first screen starts. */
+enum class KeysAtStart {
+    /** The keys of a recovery key: the setup is done. */
+    RECOVERY_KEY,
+
+    /** No recovery key yet, as right after the app was installed. */
+    NONE,
+
+    /** A setup of the recovery key that stopped half way: some of its keysets are stored, the last one is not. */
+    STOPPED_SETUP,
+}
+
 /** The app class of the check that every screen of an app is behind the app lock ([AppLockCheck]): locked from the start. */
 abstract class LockedAppForTests(appName: AppName) : HostAppForTests(appName, AppLockAtStart.LOCKED)
 
@@ -97,6 +128,17 @@ abstract class AppLockOnForTests(appName: AppName) : HostAppForTests(appName, Ap
 
 /** An app class whose app lock is off, for screenshots and tests of the screens' content. */
 abstract class UnlockedAppForTests(appName: AppName) : HostAppForTests(appName, AppLockAtStart.OFF)
+
+/**
+ * An app class with no recovery key yet, as right after the app was
+ * installed, for the screens an app shows before the recovery key is first
+ * needed (ADR 0035). A test gives it keys as the create flow does:
+ * `crypto.setup.storeDerivedKeys(crypto.setup.createRecoveryKey())`.
+ */
+abstract class NewAppForTests(appName: AppName) : HostAppForTests(appName, AppLockAtStart.OFF, KeysAtStart.NONE)
+
+/** An app class whose setup of the recovery key stopped half way, for the screens that say "Setup not finished". */
+abstract class StoppedSetupAppForTests(appName: AppName) : HostAppForTests(appName, AppLockAtStart.OFF, KeysAtStart.STOPPED_SETUP)
 
 /**
  * The check that every screen of an app is behind the app lock

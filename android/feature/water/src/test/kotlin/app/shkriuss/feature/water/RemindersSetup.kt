@@ -3,12 +3,14 @@ package app.shkriuss.feature.water
 import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
+import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.notify.Notify
 import app.shkriuss.core.notify.NotifyHost
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.notify.fixtures.ShownNotification
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
+import java.io.File
 import java.time.LocalDateTime
 import java.util.concurrent.Executor
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +33,9 @@ internal class RemindersSetup(val clock: TestClock) {
 
     /** One source of ids for every start of the app, so that a new start never makes an id that exists. */
     private val ids = TestIdSource()
+
+    /** The app's keys, on the stand-in for the Keystore. The app has no recovery key until a test gives it one. */
+    val keys = SoftwareKeysApp(File(app.filesDir, "shk-keys"), WaterServices.APP_NAME)
 
     /** What the app lock answers about the text of notifications. */
     var hidesText = false
@@ -71,7 +76,7 @@ internal class RemindersSetup(val clock: TestClock) {
     }
 
     private fun newServices() =
-        WaterServices(app, database, clock, ids, open, notify = { app.notify }, zone = { UTC }, work = Dispatchers.Unconfined)
+        WaterServices(app, database, clock, ids, open, notify = { app.notify }, crypto = keys.crypto, zone = { UTC }, work = Dispatchers.Unconfined)
 
     /** The moment of [time] in UTC. */
     fun millisOf(time: LocalDateTime): Long = this.time.millisOf(time)

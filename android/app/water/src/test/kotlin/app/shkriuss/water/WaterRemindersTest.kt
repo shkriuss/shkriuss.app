@@ -9,6 +9,8 @@ import app.shkriuss.feature.water.WaterSettings
 import app.shkriuss.core.notify.R as NotifyR
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.notify.fixtures.ShownNotification
+import app.shkriuss.core.testing.TestDocuments
+import app.shkriuss.feature.water.BackupStep
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
@@ -32,6 +34,9 @@ import org.robolectric.annotation.Config
  * The cases of the grace of one minute (the owner's decision in step
  * 2.4): Android starts Water for the alarm, a change in the seconds
  * before it comes, and an alarm that comes more than a minute late.
+ *
+ * After a restore (step 2.5): the alarm moves to the time the restored
+ * data gives, and a reminder that no longer fits is removed.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = RemindersWaterApp::class)
@@ -73,6 +78,56 @@ class WaterRemindersTest {
     private fun press(index: Int) = device.press(WaterReminders.KEY, index)
 
     private fun drinksToday(): List<Drink> = runBlocking { app.test.services.repository.drinksOf(THE_DAY).first() }
+
+    /** Restores the backup of [writeABackup] as the screen does: the file is checked, then taken, and the reminders follow. */
+    private fun restoreTheBackup() = runBlocking {
+        val backups = app.test.services.backups
+        val document = TestDocuments.uri(BACKUP_NAME)
+        check(backups.look(document) is BackupStep.Question) { "The backup of the test does not pass its check" }
+        assertEquals(BackupStep.Restored, backups.restore(document))
+    }
+
+    @Test
+    fun afterARestoreOnAPhoneWithNoDataTheAlarmIsSetForTheRestoredSettings() {
+        pickerDocuments()
+        remindersOn()
+        runBlocking { app.test.services.repository.addDrink(THE_DAY, 8 * 60, 300) }
+        writeABackup()
+
+        // A second phone with the same recovery words and no data: no reminders, so no alarm.
+        setClock(at(8, 20))
+        app.startOnAPhoneWithNoData()
+        assertEquals(emptyList<Long>(), waiting())
+
+        restoreTheBackup()
+
+        assertEquals("reminders are on again, every hour, counted from the drink at 08:00", listOf(millis(at(9, 0))), waiting())
+        assertEquals(listOf(300), drinksToday().map { it.amountMl })
+    }
+
+    @Test
+    fun afterARestoreAReminderThatNoLongerFitsIsRemovedAndTheAlarmMoves() {
+        pickerDocuments()
+        // The first phone met today's goal, and made a backup.
+        runBlocking { app.test.services.repository.addDrink(THE_DAY, 8 * 60, 2_000) }
+        writeABackup()
+
+        // The second phone has no drink yet, and shows a reminder at 09:00.
+        setClock(at(8, 20))
+        app.startOnAPhoneWithNoData()
+        remindersOn()
+        assertEquals(listOf(millis(at(9, 0))), waiting())
+        setClock(at(9, 0))
+        androidFiresTheAlarm()
+        assertEquals("0 of 2,000 ml today", checkNotNull(reminder()).text)
+        assertEquals(listOf(millis(at(10, 0))), waiting())
+
+        setClock(at(9, 10))
+        restoreTheBackup()
+
+        assertNull("the goal is met by the restored drink, so the reminder is removed", reminder())
+        assertEquals("no more reminder today", listOf(millis(THE_DAY.plusDays(1).atTime(9, 0))), waiting())
+    }
 
     @Test
     fun whenAndroidStartsWaterForTheAlarmTheReminderShows() {

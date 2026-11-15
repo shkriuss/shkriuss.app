@@ -30,9 +30,9 @@ class RoundTripTest {
 
         val (result, file) = first.write()
 
-        assertEquals(ExportResult.Written(records = 0, files = 0, filesLeftOut = 0), result)
+        assertEquals(ExportResult.Written(records = 0, files = 0, filesLeftOut = 0, notDeleted = emptyMap()), result)
         assertEquals("the smallest backup of backup-format.md", 108, file.size)
-        val summary = BackupSummary(dataVersion = 1, madeAt = TestClock.START_MILLIS, records = 0, files = 0)
+        val summary = BackupSummary(dataVersion = 1, madeAt = TestClock.START_MILLIS, records = 0, files = 0, notDeleted = emptyMap())
         assertEquals(RestoreResult.Restored(summary), second.restore(file))
         assertEquals(1, second.app.restores)
         assertEquals(emptyMap<String, String>(), second.app.snapshot())
@@ -51,10 +51,31 @@ class RoundTripTest {
 
         val (result, file) = first.write()
 
-        assertEquals(ExportResult.Written(records = 5, files = 0, filesLeftOut = 0), result)
+        assertEquals(ExportResult.Written(records = 5, files = 0, filesLeftOut = 0, notDeleted = mapOf("note" to 1L, "tag" to 1L, "a".repeat(64) to 1L, "bytes_0" to 1L)), result)
         assertTrue(second.restore(file) is RestoreResult.Restored)
         assertEquals(first.app.snapshot(), second.app.snapshot())
         assertEquals(5, second.app.records.size)
+    }
+
+    @Test
+    fun theCountsPerTypeLeaveOutDeletedRecordsAndAreTheSameForACheck() {
+        val (first, second) = twoDevices()
+        val deleted = TestClock.START_MILLIS + 9_000
+        first.app.add(
+            record(1, type = "drink"),
+            record(2, type = "drink"),
+            record(3, type = "drink", updatedAt = deleted, deletedAt = deleted),
+            record(4, type = "goal"),
+            record(5, type = "settings", updatedAt = deleted, deletedAt = deleted),
+        )
+
+        val (result, file) = first.write()
+
+        val counts = mapOf("drink" to 2L, "goal" to 1L)
+        assertEquals(ExportResult.Written(records = 5, files = 0, filesLeftOut = 0, notDeleted = counts), result)
+        val summary = BackupSummary(dataVersion = 1, madeAt = TestClock.START_MILLIS, records = 5, files = 0, notDeleted = counts)
+        assertEquals("a type with only deleted records is not counted", CheckResult.Good(summary), second.check(file))
+        assertEquals(RestoreResult.Restored(summary), second.restore(file))
     }
 
     @Test
@@ -68,7 +89,7 @@ class RoundTripTest {
 
         val (result, file) = first.write()
 
-        assertEquals(ExportResult.Written(records = 3, files = 3, filesLeftOut = 0), result)
+        assertEquals(ExportResult.Written(records = 3, files = 3, filesLeftOut = 0, notDeleted = mapOf("file" to 3L)), result)
         val body = MANIFEST + first.app.records.values.sumOf { RECORD + it.type.length + it.content.size } +
             contents.values.sumOf { FILE + it.size } + END
         assertEquals("the file has the length backup-format.md gives", expectedFileSize(body.toLong()), file.size.toLong())
@@ -106,7 +127,7 @@ class RoundTripTest {
 
         val checked = second.check(file)
 
-        val summary = BackupSummary(dataVersion = 1, madeAt = TestClock.START_MILLIS + 60_000, records = 2, files = 1)
+        val summary = BackupSummary(dataVersion = 1, madeAt = TestClock.START_MILLIS + 60_000, records = 2, files = 1, notDeleted = mapOf("note" to 1L, "file" to 1L))
         assertEquals(CheckResult.Good(summary), checked)
         assertEquals("the check never calls the app", 0, second.app.restores)
         assertEquals(emptyMap<String, String>(), second.app.snapshot())

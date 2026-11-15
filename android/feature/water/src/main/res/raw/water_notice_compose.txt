@@ -1,0 +1,9 @@
+Jetpack Compose and Material 3 for Compose
+
+Copyright The Android Open Source Project
+
+Licensed under the Apache License, Version 2.0.
+
+Source: https://github.com/androidx/androidx
+
+In Water: Compose Animation, Foundation, Material ripple, Material 3, Runtime and UI.

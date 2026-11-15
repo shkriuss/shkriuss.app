@@ -78,8 +78,8 @@ class BackupsTest {
 
         val written = backups.export(picked)
 
-        assertEquals(ExportResult.Written(records = 2, files = 1, filesLeftOut = 0), written)
-        val summary = BackupSummary(dataVersion = 1, madeAt = clock.nowMillis, records = 2, files = 1)
+        assertEquals(ExportResult.Written(records = 2, files = 1, filesLeftOut = 0, notDeleted = mapOf("note" to 1L, "file" to 1L)), written)
+        val summary = BackupSummary(dataVersion = 1, madeAt = clock.nowMillis, records = 2, files = 1, notDeleted = mapOf("note" to 1L, "file" to 1L))
         assertEquals(CheckResult.Good(summary), backups.check(picked))
         assertEquals("the check never calls the app", 0, app.restores)
 

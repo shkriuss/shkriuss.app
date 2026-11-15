@@ -64,8 +64,8 @@ class LargeFileTest {
         val checked = pipe.input.use { runBlocking { engine.check(it) } }
         writer.join()
 
-        assertEquals(ExportResult.Written(records = 1, files = 1, filesLeftOut = 0), written?.getOrThrow())
-        val summary = BackupSummary(dataVersion = 1, madeAt = device.clock.nowMillis, records = 1, files = 1)
+        assertEquals(ExportResult.Written(records = 1, files = 1, filesLeftOut = 0, notDeleted = mapOf("file" to 1L)), written?.getOrThrow())
+        val summary = BackupSummary(dataVersion = 1, madeAt = device.clock.nowMillis, records = 1, files = 1, notDeleted = mapOf("file" to 1L))
         assertEquals(CheckResult.Good(summary), checked)
         val body = 13 + (39 + 4 + "content 1".length) + (25 + size) + 17
         assertEquals("every byte of the backup went through the pipe", expectedFileSize(body), pipe.bytesRead)
@@ -101,7 +101,7 @@ class LargeFileTest {
 
         val result = runBlocking { engineFor(device, appWithOneFile(size, watched)).write { document } }
 
-        assertEquals(ExportResult.Written(records = 1, files = 1, filesLeftOut = 0), result)
+        assertEquals(ExportResult.Written(records = 1, files = 1, filesLeftOut = 0, notDeleted = mapOf("file" to 1L)), result)
         assertEquals(size, taken)
         assertTrue("the file ran $largestLead bytes ahead of the document", largestLead in 1..LARGEST_LEAD)
     }
