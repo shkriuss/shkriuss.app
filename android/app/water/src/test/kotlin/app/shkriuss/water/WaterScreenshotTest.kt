@@ -32,11 +32,12 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Screenshots of every screen, sheet and dialog of Water
- * (docs/apps/water/spec.md, "Every screen", point 6), in the eight
- * standard configurations: phone and tablet, light and dark, font scale
- * 1.0 and 2.0. Each starts the real activity with the app lock off, on a
- * database written as the user would have, on Friday 13 November 2026 at
- * 14:05, with the 24-hour clock of the spec's examples.
+ * (docs/apps/water/spec.md, "Every screen", point 6), in the four
+ * standard configurations: phone light at font scale 1.0, phone dark at
+ * 2.0, tablet light at 2.0 and tablet dark at 1.0. Each starts the real
+ * activity with the app lock off, on a database written as the user
+ * would have, on Friday 13 November 2026 at 14:05, with the 24-hour clock
+ * of the spec's examples.
  *
  * A screen that scrolls is captured to its end, in parts. A sheet or a
  * dialog is captured with the screen dimmed behind it. On the tablet,

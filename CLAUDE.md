@@ -112,8 +112,9 @@ Emulator tests, signing and releases run only in GitHub Actions.
 - Every interactive element has a TalkBack label. Decorative images have none.
 - Screens must work at font scale 2.0 without clipped or overlapping text.
 - All user-visible text lives in string resources, with plurals where needed.
-- A new or changed screen needs screenshot tests: phone and tablet, light and
-  dark, font scale 1.0 and 2.0.
+- A new or changed screen needs screenshot tests in the four standard
+  configurations: phone light at font scale 1.0, phone dark at 2.0, tablet
+  light at 2.0, tablet dark at 1.0.
 
 ## Code style
 

@@ -507,8 +507,9 @@ shows its notice in full. Built in step 2.5, from
    wrap to more rows. No row has a fixed height.
 4. Every touch target is at least 48dp.
 5. Every text is a string resource. Amounts and counts use plurals.
-6. Screenshot tests for every screen and dialog: phone and tablet, light
-   and dark, font scale 1.0 and 2.0.
+6. Screenshot tests for every screen and dialog, in the four standard
+   configurations: phone light at font scale 1.0, phone dark at 2.0,
+   tablet light at 2.0 and tablet dark at 1.0.
 
 ## Data model
 

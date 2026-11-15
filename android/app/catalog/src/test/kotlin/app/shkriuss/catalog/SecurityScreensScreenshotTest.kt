@@ -13,7 +13,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Screenshots of every state of the recovery key screens of
- * `core/security`, from the Catalog page, in the eight standard
+ * `core/security`, from the Catalog page, in the four standard
  * configurations: `RecoveryKey<State>_<config>.png`. Each state is opened
  * the way the owner opens it, by tapping it on the page, and Back returns.
  */

@@ -603,8 +603,9 @@ file says that.
   `HIDE_OVERLAY_WINDOWS`, and its six screens are not exported.
 - `WordInputTest`: what a word field accepts and offers, and which
   letters start no word.
-- Catalog's `SecurityScreensScreenshotTest`: every state in the eight
-  configurations.
+- Catalog's `SecurityScreensScreenshotTest`: every state in the four
+  standard configurations: phone light at font scale 1.0, phone dark at
+  2.0, tablet light at 2.0 and tablet dark at 1.0.
 - `AppLockWatcherTest`: each timer choice, a turn of the phone, moving
   between the app's own screens, the screen turned off with the app on
   it, a screen-off broadcast in time and late, a watcher that finds no
@@ -656,9 +657,9 @@ file says that.
   ([Every screen is behind the gate](#every-screen-is-behind-the-gate)). `FlowViewModelsTest` also covers the note that a repair or
   the words after a reset turned the app lock off.
 - Catalog's `FirstNeedScreenshotTest`: the four forms of the first-need
-  dialog in the eight configurations.
+  dialog in the four standard configurations.
 - Catalog's `AppLockScreensScreenshotTest`: every state of the app lock
-  screens in the eight configurations.
+  screens in the four standard configurations.
 - Catalog's `CatalogScreenTest`: the switch on both pages protects the
   page and takes the protection away again.
 

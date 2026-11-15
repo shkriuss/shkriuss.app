@@ -25,6 +25,7 @@ These add to CLAUDE.md. They never replace it.
 - Native code only in `app/grammar`, under its ADR.
 - A database schema change bumps the version, adds a migration and its test,
   and commits the exported schema JSON.
-- A new or changed screen needs screenshot tests: phone and tablet, light and
-  dark, font scale 1.0 and 2.0.
+- A new or changed screen needs screenshot tests in the four standard
+  configurations: phone light at font scale 1.0, phone dark at 2.0, tablet
+  light at 2.0, tablet dark at 1.0.
 - Never log user content.

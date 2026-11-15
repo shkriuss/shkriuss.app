@@ -14,8 +14,7 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * Screenshots of the dialog for the moment the recovery key is first
  * needed (ADR 0035), in each of its four forms, as the page "Recovery key
- * when first needed" shows them: on a phone and a tablet, light and dark,
- * at font scale 1.0 and 2.0.
+ * when first needed" shows them, in the four standard configurations.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

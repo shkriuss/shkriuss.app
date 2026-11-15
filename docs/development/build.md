@@ -688,8 +688,11 @@ done.
 
 Roborazzi takes screenshots on the JVM, through Robolectric.
 
-1. Every screen is captured in eight configurations: phone and tablet,
-   light and dark, font scale 1.0 and 2.0. A screen taller than the
+1. Every screen is captured in four configurations: phone light at font
+   scale 1.0, phone dark at 2.0, tablet light at 2.0 and tablet dark at
+   1.0. Each device, theme and font scale is in two of them, and each
+   pair of them in one. Only a fault that needs one exact device, theme
+   and font scale together can pass unseen. A screen taller than the
    window is captured to its end, one window per image: `_part2`,
    `_part3` and so on
    ([design-system.md](design-system.md#screenshots)).

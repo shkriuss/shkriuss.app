@@ -1438,9 +1438,10 @@ as "Text, contrast 18.34 to 1".
 
 ### Screenshots
 
-Every Catalog page has screenshot tests in the eight standard
-configurations ([build.md](build.md#screenshot-tests)). A page taller than
-the window is captured to its end: the first image is
+Every Catalog page has screenshot tests in the four standard
+configurations: phone light at font scale 1.0, phone dark at 2.0, tablet
+light at 2.0 and tablet dark at 1.0 ([build.md](build.md#screenshot-tests)).
+A page taller than the window is captured to its end: the first image is
 `<Page>_<config>.png`, and each further window is
 `<Page>_<config>_part2.png`, `_part3.png` and so on. Each next image
 repeats the last 48 dp of the one before, so a line cut at an edge shows
@@ -1456,17 +1457,17 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
 
 `SecurityScreensScreenshotTest` opens each state of the recovery key
 screens from its page, the way the owner does, and captures it to its end
-in the eight standard configurations: `RecoveryKey<State>_<config>.png`.
+in the four standard configurations: `RecoveryKey<State>_<config>.png`.
 
 `FirstNeedScreenshotTest`, from step 2.5, opens each of the four forms
 from the page "Recovery key when first needed" and captures it in the
-eight standard configurations: `FirstNeedBackup`, `FirstNeedAppLock`,
+four standard configurations: `FirstNeedBackup`, `FirstNeedAppLock`,
 `FirstNeedRestore` and `FirstNeedFinish`. The page itself is
 `RecoveryKeyFirstNeedPage_<config>.png`.
 
 `OpenComponentsScreenshotTest` opens each component of batch 5 from "Try
 it", the way a user does, and captures the whole screen with its window,
-in the eight standard configurations: `DialogOpen`, `BottomSheetOpen`,
+in the four standard configurations: `DialogOpen`, `BottomSheetOpen`,
 `MenuOpen`, `DatePickerOpen` and `TimePickerOpen`, and `SnackbarShown`,
 the snackbar above its floating action button. They show where each
 window sits and that nothing in it is cut off at font scale 2.0. The
