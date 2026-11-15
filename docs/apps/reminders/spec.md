@@ -78,8 +78,9 @@ Each part below is as Water's spec says, with the change named.
 3. One row per upcoming reminder, soonest first. At the same moment, the
    one created first. The title, then when it shows next and its repeat:
    "Today, 09:00 · Every day", "Wed 18 Nov, 18:30 · Mon, Wed, Fri". The
-   year shows when it is not this year. With a snooze: "Snoozed until
-   09:12". Due and not shown yet: "Now". A tap opens the form.
+   year shows when it is not this year. When a snooze ends before the
+   next occurrence: "Snoozed until 09:12". Due and not shown yet: "Now".
+   A tap opens the form.
 4. With none: "No reminders yet. Tap Add a reminder to make one."
 5. A floating button, "Add a reminder", opens an empty form.
 
@@ -107,7 +108,7 @@ form beside it, or "Choose a reminder."
 2. **Repeat**: a `ShkRadioGroup`: Once, Every day, Every week, Every
    month, Every year.
 3. **Date**, for Once, Every month and Every year: "Mon 16 Nov 2026". A
-   tap opens `ShkDatePicker`, from today on.
+   tap opens `ShkDatePicker`, from today to 31 Dec 2100.
 4. **Days**, for Every week: seven `ShkFilterChip`s, "Mon" to "Sun",
    from the phone's first day of the week.
 5. **Time**: "09:00". A tap opens `ShkTimePicker`.
@@ -142,7 +143,7 @@ tomorrow at 00:00). Choosing Every week selects the day of the date.
 | Column | SQL type | What it holds | Limits |
 |---|---|---|---|
 | `title` | `TEXT NOT NULL` | The title | 1 to 200 code points, one line, no space at either end |
-| `day` | `INTEGER NOT NULL` | Once: the date. A repeat: the date it starts from. Days since 1970-01-01. | Any day |
+| `day` | `INTEGER NOT NULL` | Once: the date. A repeat: the date it starts from. Days since 1970-01-01. | 0 to 2932896 (1970-01-01 to 9999-12-31) |
 | `minuteOfDay` | `INTEGER NOT NULL` | The time, in minutes after midnight | 0 to 1439 |
 | `repeat` | `INTEGER NOT NULL` | 0 once, 1 every day, 2 every week, 3 every month, 4 every year | 0 to 4 |
 | `weekdays` | `INTEGER NOT NULL` | Every week: a bit per day, Monday 1, Tuesday 2, Wednesday 4, Thursday 8, Friday 16, Saturday 32, Sunday 64 | 1 to 127 for every week, else 0 |
@@ -169,6 +170,11 @@ reminder keeps its title, as every record keeps its content.
 5. **Every year**: each year from that of `day`, on its month and day.
    29 February falls on 28 February in a year without it.
 
+The latest due occurrence and the first pending one are worked out with
+date arithmetic from the mark and from now, never by stepping day by day
+from `day`. A restored reminder that starts in 1970 or in 9999 costs the
+same as one from today.
+
 The moment is the date and time in the phone's time zone of this
 moment, with `java.time`. So a reminder follows a new time zone and
 summer time by itself. A time that does not exist, when the clock jumps
@@ -183,11 +189,13 @@ happens twice, when the clock goes back, is the first.
 2. A reminder with no mark on this phone gets the current minute when
    Reminders first sees it: after a restore, after **Undo**.
 3. **The mark never stays later than now.** When the `AlarmSource` or
-   the handler finds it later than the current minute, because the
+   the handler finds the moment of the mark later than now, because the
    clock was set back or the phone moved to a zone further west, it
    writes the current minute in its place, and the reminder counts from
-   now. A time that showed can show again, as `core/notify` does for an
-   alarm it marked as fired
+   now. The moment of the mark is found as for an occurrence, so of a
+   time that happens twice it is the first: in the hour that happens
+   twice when the clocks go back, the mark stays. A time that showed can
+   show again, as `core/notify` does for an alarm it marked as fired
    ([notifications.md](../../architecture/notifications.md#how-alarms-are-kept-right)).
 
 ### The rule
@@ -199,7 +207,8 @@ Pending occurrences are those later than the mark.
    moment of the latest. It has passed, so it fires within seconds: the
    reminder shows late. The older ones are skipped.
 2. **Then a snooze.** Otherwise, if a snooze is set, the alarm is at its
-   end, also when that has passed.
+   end or at the first pending occurrence, whichever is earlier. Its end
+   counts also when it has passed.
 3. **Then the next.** Otherwise, at the first pending occurrence.
 4. A one-time reminder with neither has no alarm. It is past.
 
@@ -244,7 +253,7 @@ When the alarm for time T reaches the handler:
 | "Pills" saved on Sun 15 Nov at 09:30 | First on Mon 16 Nov at 09:00 |
 | "Gym" saved on Mon 16 Nov at 19:00 | Wed 18 Nov at 18:30 |
 | "Rent" | Sat 31 Oct, Mon 30 Nov, Thu 31 Dec, Sun 31 Jan, Sun 28 Feb 2027, Wed 31 Mar 2027 |
-| Every year from Tue 29 Feb 2028 | Wed 28 Feb 2029, Thu 28 Feb 2030, ..., Sun 29 Feb 2032 |
+| Every year from Tue 29 Feb 2028 | Tue 29 Feb 2028, Wed 28 Feb 2029, Thu 28 Feb 2030, ..., Sun 29 Feb 2032 |
 | **Snooze 10 min** at 09:02 | 09:12, and after another snooze 09:22 |
 | **Done** at 09:05, a swipe, or no answer | Tomorrow at 09:00, which replaces an old one on screen |
 | The alarm reaches the handler at 09:00:40 | On time. At 09:01:05 it says "Missed: 09:00". |
@@ -252,12 +261,14 @@ When the alarm for time T reaches the handler:
 | A restart on Mon at 13:00, the unlock at 15:10 | Nothing before the unlock. Then "Call the bank", "Missed: 14:00". |
 | **Force stop** on Mon at 08:00, opened at 12:00 | At 12:00: "Pills", "Missed: 09:00" |
 | Snoozed until 09:12, the phone off from 09:10 to 10:00 | After the unlock, the snoozed reminder |
+| Monday's "Pills" is still on screen on Tuesday. **Snooze 10 min** at 08:55. | Tue at 09:00, on time. The snooze ends. |
 | Private Space locked, or the profile stopped | As with the phone off, once it runs again |
 | Notifications not allowed | Alarms fire and marks move on. Android drops the notification. None shows later. |
 | Berlin, Sun 28 Mar 2027, every day at 02:30 | That day at 03:30. The next at 02:30. |
 | Berlin, Sun 31 Oct 2027, every day at 02:30 | Once, at the first 02:30 |
-| "Pills" showed on Mon at 09:00. By noon the phone is in Berlin. | Tue at 09:00, Berlin time |
-| The phone leaves Berlin on Mon at 07:00, in Tbilisi at 15:00 | At 15:00: "Pills", "Missed: 09:00" |
+| "Pills" showed on Mon at 09:00. At 13:00 the phone is in Berlin. | Tue at 09:00, Berlin time |
+| "Pills" showed on Mon at 09:00. At 11:00 the phone is in Berlin (08:00 there). | Again on Mon at 09:00, Berlin time |
+| The phone off from Mon 07:00 in Berlin, on in Tbilisi at 15:00 | At 15:00: "Pills", "Missed: 09:00" |
 | "Call the bank", made in Tbilisi, the phone in Berlin on Monday | Mon at 14:00, Berlin time |
 | After 09:00 showed, the clock is set back from 09:30 to 08:30 | Again at 09:00 |
 | On Mon at 10:00 the clock is set forward to 15:00 | At once: "Call the bank", "Missed: 14:00" |
@@ -287,13 +298,21 @@ As [Water does](../water/spec.md#how-water-uses-corenotify), except:
 2. **Text**: on time, the repeat, such as "Every day" or "Every Mon,
    Wed, Fri", and none for Once. Late: "Missed: 09:00", or "Missed: Mon
    16 Nov, 09:00" when not today. After a snooze: "Snoozed. It was due at
-   09:00."
+   09:00." Here 09:00 is the latest occurrence at or before the mark as
+   it was before the handler wrote. After a second snooze the mark is
+   the first snooze's end, 09:12, and that never shows.
 3. **Time**: the moment of its alarm.
 4. **One per reminder**, with the reminder's `id` as its key. Several
    can show at once. The next occurrence replaces the old one.
 5. **No end.** It stays until it is answered, swiped away or replaced,
    or its reminder gets a new time or is deleted.
-6. **A tap** opens Reminders on Upcoming, as Water opens Today.
+6. **A tap** opens Reminders, after the app lock, with the form of that
+   reminder open, on the list it is in. The tap carries the reminder's
+   `id`: it is the notification's key, and `core/notify` puts the key on
+   the tap as its identifier. No title travels. The notice of
+   `core/notify` when the handler fails carries the same identifier, and
+   a tap on it does the same. If that reminder is deleted by then, or no
+   reminder has that id, the tap opens Upcoming.
 
 **Done** (action `done`) removes the notification. **Snooze 10 min**
 (action `snooze`, value 10) sets a snooze until 10 minutes after the
@@ -336,6 +355,18 @@ words. Both apps then keep it
 ([crypto-design.md](../../security/crypto-design.md#keeper-apps-and-other-apps)).
 The handover of keys between apps comes later.
 
+The owner decided: wherever an app offers **Create a recovery key**
+while it has no key, one more sentence follows the text: "If another
+shkriuss app already has your recovery key, tap I already have one and
+enter the same words." That is the dialog "Set up your recovery key
+first", and the security screen. It is shared text of `core/security`,
+so every app shows it. Water's dialog,
+[Water's spec](../water/spec.md#what-you-see-at-that-moment),
+[security-screens.md](../../architecture/security-screens.md#the-recovery-key-when-first-needed)
+and the user guide [recovery-key.md](../../user/recovery-key.md) change
+in the same pull request as the code that builds this part. This page
+changes none of them.
+
 ## Backup contents
 
 Reminders follows [backup-format.md](../../architecture/backup-format.md).
@@ -350,7 +381,7 @@ with their full content. The content is 12 + n bytes, big-endian:
 |---|---|---|
 | 0 | 1 | `repeat`, `00` to `04` |
 | 1 | 1 | `weekdays`, `00`, or `01` to `7f` for every week |
-| 2 | 4 | `day`, int32, days since 1970-01-01 |
+| 2 | 4 | `day`, int32, days since 1970-01-01, 0 to 2932896 |
 | 6 | 4 | `minuteOfDay`, int32, 0 to 1439 |
 | 10 | 2 | n, the title's length in bytes, unsigned, 1 to 800: at most 4 bytes for each of 200 code points |
 | 12 | n | The title, in UTF-8 |
@@ -368,8 +399,9 @@ and Fri at 18:30 from 2026-11-16:
    `RecordWriter.takeFromBackup`.
 2. The restore rolls back, as Water's does, at another type name, a
    length other than 12 + n, a title that is not UTF-8 or breaks the
-   limits of [the table](#table-reminder), any value outside its limits,
-   days for a repeat other than every week, or a File entry.
+   limits of [the table](#table-reminder), a `day` outside 0 to
+   2932896, any other value outside its limits, days for a repeat other
+   than every week, or a File entry.
 3. After a restore, each reminder it took counts from that moment: its
    snooze ends and its notification goes. `notify.sync()` follows in the
    same step, as in [Water](../water/spec.md#after-a-restore).
@@ -430,7 +462,8 @@ Choices this page made without a decision by the owner on that point.
    table ([data.md](../../architecture/data.md#rules-for-daos), rule 5).
 8. A new reminder: Once, today, at the next full hour. Every day and
    Every week start on the day they are saved.
-9. A tap on a notification opens Upcoming. A notification has no end.
+9. A tap on a notification opens that reminder's form. A notification
+   has no end.
 10. **Delete all** in Past, with Undo.
 11. The form is a sheet under 840dp, a pane from 840dp.
 12. A new title alone leaves a notification and a snooze as they are.
@@ -439,10 +472,8 @@ Choices this page made without a decision by the owner on that point.
 
 ## Open
 
-1. **A second recovery key by mistake.** Until the handover, Reminders
-   cannot know that Water keeps a key, so **Create a recovery key**
-   makes backups that need other words. The handover decides whether
-   the dialog can warn
+1. **Knowing that another app keeps a key.** Whether the handover lets
+   the dialog know that another app of the suite keeps a key
    ([PROMPTS.md](../../development/PROMPTS.md#30-handover)).
 2. **"Local only" for a watch**, as
    [Water's open item 9](../water/spec.md#open).
