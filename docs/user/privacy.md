@@ -1,7 +1,7 @@
 # Privacy
 
 What the apps of the suite store, what leaves your phone, and what nobody
-else sees. In plain words. Written on 2026-11-15.
+else sees. In plain words.
 
 The same, file by file and checked against the code, is in the
 [data inventory](../security/data-inventory.md). Every permission of

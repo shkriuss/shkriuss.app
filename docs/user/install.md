@@ -7,9 +7,8 @@ an update is out.
 Not every app has a release yet. The [apps page](apps.md) shows which ones
 do.
 
-These steps were checked with the first release, Catalog 0.1.0, on
-2026-11-11. The names of buttons and settings can differ a little between
-versions of Obtainium.
+The names of buttons and settings can differ a little between versions
+of Obtainium.
 
 ## What you need
 
@@ -46,10 +45,6 @@ prereleases** for that app.
 
 Obtainium checks for new releases and tells you when one is out. Tap the
 app in Obtainium, then **Update**.
-
-These two steps were checked with the first update, Catalog 0.1.0 to
-0.2.0, on 2026-11-12. It worked on all three test devices: a Pixel 9 Pro,
-a Pixel Tablet and a Pixel 6a.
 
 Android installs an update only if it is signed with the same key as the
 app on your phone, or with a new key that the old key approved. The
@@ -95,10 +90,7 @@ it in the same way. Only the last downloaded hash shows whose new key it
 is. Once your app has our new key, Android refuses the old key alone, and
 a new key that a thief made from it.
 
-These steps were checked on 2026-11-14 in a rehearsal with throwaway
-keys, on a Pixel 9 Pro with Obtainium 1.7.4. A thief's file over an app
-that still has the old key was not tried. The warning above follows from
-how Android checks a new key.
+The texts of the dialog above are those of Obtainium 1.7.4.
 
 ## If Obtainium says "Too many requests"
 
@@ -109,6 +101,3 @@ phone's internet address. Nothing is wrong with the app.
 
 1. Wait a few minutes, then try again.
 2. Or switch between mobile data and Wi-Fi, then try again.
-
-This happened on mobile data on 2026-11-14. It worked a few minutes
-later.

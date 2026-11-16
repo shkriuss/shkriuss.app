@@ -4,8 +4,7 @@ The app lock makes an app ask for your fingerprint, or your phone's PIN,
 pattern or password, before it shows anything. Each app has its own app
 lock. It is off until you turn it on.
 
-Water is the first app that has it. This page was written on 2026-11-13, with the screens, and updated on 2026-11-14,
-when Water got them.
+Water is the first app that has it.
 
 Where it is, in Water: open **Settings**. Under **Security**, tap **App
 lock**. The row says **On** or **Off**. Later apps have the same row in
