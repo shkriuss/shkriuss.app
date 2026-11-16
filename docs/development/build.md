@@ -1112,7 +1112,7 @@ The decision is recorded in
   POM files. 16 are checked by a key trusted for that one file. One, the
   marker POM of the Kotlin Gradle plugin, has a checksum besides the key
   trusted for its group: CI runners get no signature file for it now and
-  then, and the checksum covers that case. The owner asked for it.
+  then, and the checksum covers that case.
 - The keyring holds 68 keys.
 - Gradle groups a trusted key by Maven group where it can. A new version in
   that group, signed by the same key, is then trusted without a new entry.
