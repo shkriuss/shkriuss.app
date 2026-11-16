@@ -162,7 +162,7 @@ class Notifications internal constructor(
     }
 
     /** True if the text must be hidden now. An answer that cannot be had counts as yes. */
-    private fun mustHide(): Boolean = try {
+    internal fun mustHide(): Boolean = try {
         hidesText()
     } catch (_: Exception) {
         true
@@ -187,9 +187,11 @@ class Notifications internal constructor(
 
     /**
      * One button: a broadcast to [ButtonReceiver] of this app, which no
-     * other app can send, after the phone's unlock. Its identifier keeps
-     * one press for each key and action. It carries the key, the action,
-     * the time and the value, and no text (ADR 0034, point 7).
+     * other app can make. Android's own notification list sends it after
+     * the phone's unlock. Its identifier keeps one pending intent for each
+     * key, action and time, so the button of an older notification keeps
+     * its own time and value. It carries the key, the action, the time
+     * and the value, and no text (ADR 0034, point 7).
      */
     private fun action(notification: ShkNotification, button: ShkNotificationButton): Notification.Action {
         val press = PendingIntent.getBroadcast(

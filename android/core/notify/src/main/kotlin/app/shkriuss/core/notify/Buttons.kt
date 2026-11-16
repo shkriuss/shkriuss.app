@@ -44,9 +44,10 @@ data class ButtonPress(
 )
 
 /**
- * What an app does when the user presses a button on one of its
- * notifications (ADR 0034). Android has already asked for the phone's
- * unlock: without it, the press never comes.
+ * What an app does when a button on one of its notifications is pressed
+ * (ADR 0034). Android's own notification list has asked for the phone's
+ * unlock first. An app with notification access can press a button
+ * without it. No press comes while the app lock hides the text.
  */
 fun interface ButtonHandler {
     /**
