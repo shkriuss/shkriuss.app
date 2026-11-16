@@ -1627,20 +1627,23 @@ Each point says what answers it. A point with no answer yet says what
 decides it, and stays Open until then. Other pages refer to these
 points by their numbers.
 
-1. That every app turns Android's own backup and device transfer off
-   (STORAGE-2).
+1. A build check that every app turns Android's own backup and device
+   transfer off (STORAGE-2).
    **Done**: rule 6 of the APK rules check
    ([build.md](../development/build.md#the-backup-rule)).
-2. That no app has a WebView or loads code at runtime (hard rule 1;
-   PLATFORM-2, CODE-4).
+2. A build check against a WebView and code loaded at runtime (hard
+   rule 1; PLATFORM-2, CODE-4).
    **Done**: rules 7 to 9 of the APK rules check, on the APKs that ship
    ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
-   No library that ships today trips them. In the debug APK, which never
-   ships, `androidx.core` names `WebView`; the owner decided that the
-   rules run on the APKs that ship only.
-3. That no module logs user content (STORAGE-2).
+   They do not see a class name put together at run time; review keeps
+   that. No library that ships today trips them. In the debug APK, which
+   never ships, `androidx.core` names `WebView`; the owner decided that
+   the rules run on the APKs that ship only.
+3. A build check against logging in every module, not only in
+   `core/crypto` (STORAGE-2).
    **Done**: the logging check, for the main code of every module
-   ([build.md](../development/build.md#logging-check)).
+   ([build.md](../development/build.md#logging-check)). It does not see
+   a call made through reflection; review keeps that.
 4. How the dependencies are checked for known vulnerabilities (CODE-3).
    **Done**: the workflow Dependency graph, with dependency verification
    on, and Dependabot alerts. GitHub's automatic dependency submission
