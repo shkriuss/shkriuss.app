@@ -478,25 +478,50 @@ class ViewModelsTest {
         theWaitEnds()
 
         assertEquals("the goal of the day that is today now", 1_500, model.state.await { it.goalMl != 3_000 }.goalMl)
-        assertTrue(model.setGoal("1800"))
+        assertTrue(model.setGoal("1800", model.state.value.goalMl))
         val goals = runBlocking { repository.goals().first { it.goalOf(THE_DAY.minusDays(1).asWaterDay()) == 1_800 } }
         assertEquals("the day before keeps its goal", 1_500, goals.goalOf(THE_DAY.minusDays(2).asWaterDay()))
+    }
+
+    @Test
+    fun aGoalDialogLeftOpenWhileTheDateChangesWritesNothingWhenItIsSavedUnchanged() {
+        runBlocking {
+            repository.setGoal(THE_DAY.minusDays(2), 1_500)
+            repository.setGoal(THE_DAY, 3_000)
+            repository.changeSettings { it.copy(unit = WaterUnit.US_FLUID_OUNCES) }
+        }
+        val model = settings()
+        // The dialog opens with today's goal, 3,000 ml, shown as 101 fl oz.
+        val opened = model.state.await { it.loaded && it.goalMl == 3_000 && it.settings.unit == WaterUnit.US_FLUID_OUNCES }.goalMl
+        val text = AmountInput.textOf(opened, WaterUnit.US_FLUID_OUNCES)
+        assertEquals("101", text)
+
+        // While it is open, the phone's date goes back one day. That day's goal is 1,500 ml.
+        clock.setTo(THE_DAY.minusDays(1).atTime(14, 5))
+        theWaitEnds()
+        model.state.await { it.goalMl == 1_500 }
+        val before = runBlocking { database.goals().all() }
+
+        assertTrue("Save, with nothing changed", model.setGoal(text, opened))
+
+        assertEquals("nothing is written", before, runBlocking { database.goals().all() })
+        assertEquals(1_500, model.state.value.goalMl)
     }
 
     @Test
     fun theGoalIsTypedInTheUnitShownAndRefusedOutsideItsLimits() {
         val model = settings()
         model.state.await { it.loaded }
-        assertFalse(model.setGoal("499"))
-        assertFalse(model.setGoal("10001"))
-        assertFalse(model.setGoal("two"))
-        assertTrue(model.setGoal("2500"))
+        assertFalse(model.setGoal("499", model.state.value.goalMl))
+        assertFalse(model.setGoal("10001", model.state.value.goalMl))
+        assertFalse(model.setGoal("two", model.state.value.goalMl))
+        assertTrue(model.setGoal("2500", model.state.value.goalMl))
         assertEquals(2_500, model.state.await { it.goalMl == 2_500 }.goalMl)
 
         model.setUnit(WaterUnit.US_FLUID_OUNCES)
         model.state.await { it.settings.unit == WaterUnit.US_FLUID_OUNCES }
-        assertFalse(model.setGoal("16"))
-        assertTrue(model.setGoal("68"))
+        assertFalse(model.setGoal("16", model.state.value.goalMl))
+        assertTrue(model.setGoal("68", model.state.value.goalMl))
         assertEquals(2_011, model.state.await { it.goalMl == 2_011 }.goalMl)
     }
 
@@ -516,19 +541,19 @@ class ViewModelsTest {
         val goalsBefore = runBlocking { database.goals().all() }
         val settingsBefore = runBlocking { database.settings().all() }
 
-        assertTrue(model.setGoal(goalText))
-        assertEquals(emptyList<Int>(), model.setQuickAmounts(cupTexts))
+        assertTrue(model.setGoal(goalText, shown.goalMl))
+        assertEquals(emptyList<Int>(), model.setQuickAmounts(cupTexts, shown.settings.quickAmountsMl))
 
         assertEquals("the goal is not written again", goalsBefore, runBlocking { database.goals().all() })
         assertEquals("nor the settings", settingsBefore, runBlocking { database.settings().all() })
         assertEquals(2_000, model.state.value.goalMl)
 
         // One quick amount is changed. The two others keep their millilitres.
-        assertEquals(emptyList<Int>(), model.setQuickAmounts(listOf("5", "10", "17")))
+        assertEquals(emptyList<Int>(), model.setQuickAmounts(listOf("5", "10", "17"), shown.settings.quickAmountsMl))
         assertEquals(listOf(150, 296, 500), model.state.await { it.settings.cup2Ml != 250 }.settings.quickAmountsMl)
 
         // A goal that is typed anew is taken as typed.
-        assertTrue(model.setGoal("70"))
+        assertTrue(model.setGoal("70", model.state.value.goalMl))
         assertEquals(2_070, model.state.await { it.goalMl != 2_000 }.goalMl)
     }
 
@@ -544,8 +569,8 @@ class ViewModelsTest {
     fun quickAmountsAreWrittenOnlyWhenAllThreeAreInsideTheLimits() {
         val model = settings()
         model.state.await { it.loaded }
-        assertEquals(listOf(1, 2), model.setQuickAmounts(listOf("200", "0", "3001")))
-        assertEquals(emptyList<Int>(), model.setQuickAmounts(listOf("200", "330", "750")))
+        assertEquals(listOf(1, 2), model.setQuickAmounts(listOf("200", "0", "3001"), model.state.value.settings.quickAmountsMl))
+        assertEquals(emptyList<Int>(), model.setQuickAmounts(listOf("200", "330", "750"), model.state.value.settings.quickAmountsMl))
         assertEquals(listOf(200, 330, 750), model.state.await { it.settings.cup1Ml == 200 }.settings.quickAmountsMl)
     }
 

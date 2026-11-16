@@ -54,14 +54,17 @@ class SettingsViewModel(
      * whole number from 500 to 10,000 ml (17 to 338 fl oz): then the field
      * says "Enter a goal from 500 to 10,000 ml." in the unit in use, and
      * nothing is written. The new goal counts from today. Past days keep
-     * theirs. A field that still shows the goal keeps it, and nothing is
-     * written ([amountOf]).
+     * theirs.
+     *
+     * [openedMl] is the goal the dialog opened with. A field that still
+     * shows it was not changed, and nothing is written ([amountOf]), also
+     * if today's goal is another one by now, because the date changed
+     * while the dialog was open.
      */
-    fun setGoal(text: String): Boolean {
+    fun setGoal(text: String, openedMl: Int): Boolean {
         val unit = settings.unit
-        val stored = state.value.goalMl
-        val amount = amountOf(text, stored, unit, unit.goalLimits) ?: return false
-        if (amount != stored) viewModelScope.launch(work) { repository.setGoal(today.date.value, amount) }
+        val amount = amountOf(text, openedMl, unit, unit.goalLimits) ?: return false
+        if (amount != openedMl) viewModelScope.launch(work) { repository.setGoal(today.date.value, amount) }
         return true
     }
 
@@ -72,14 +75,14 @@ class SettingsViewModel(
      * The quick amounts dialog: three [texts] in the unit shown, first to
      * third. Returns the places (0 to 2) of the fields that are not a whole
      * number from 1 to 3,000 ml (1 to 101 fl oz). Only if it is empty are
-     * the amounts written. A field that still shows its amount keeps it
+     * the amounts written. [openedMl] are the three amounts the dialog
+     * opened with. A field that still shows its amount keeps it
      * ([amountOf]).
      */
-    fun setQuickAmounts(texts: List<String>): List<Int> {
-        require(texts.size == 3) { "Three quick amounts" }
+    fun setQuickAmounts(texts: List<String>, openedMl: List<Int>): List<Int> {
+        require(texts.size == 3 && openedMl.size == 3) { "Three quick amounts" }
         val unit = settings.unit
-        val stored = settings.quickAmountsMl
-        val amounts = texts.mapIndexed { place, text -> amountOf(text, stored[place], unit, unit.drinkLimits) }
+        val amounts = texts.mapIndexed { place, text -> amountOf(text, openedMl[place], unit, unit.drinkLimits) }
         val wrong = amounts.indices.filter { amounts[it] == null }
         if (wrong.isEmpty()) {
             change { it.copy(cup1Ml = amounts[0]!!, cup2Ml = amounts[1]!!, cup3Ml = amounts[2]!!) }
@@ -121,13 +124,13 @@ class SettingsViewModel(
 
     /**
      * The amount in millilitres that a field of a dialog holds, or null if
-     * it is refused. A field that still shows [storedMl], as the dialog
-     * opened it, keeps it, as the drink sheet does. In fluid ounces the
-     * text is rounded: 2,000 ml shows as 68 fl oz, and 68 fl oz read anew
-     * would be 2,011 ml.
+     * it is refused. A field that still shows [openedMl], the stored amount
+     * the dialog opened with, keeps it, as the drink sheet does. In fluid
+     * ounces the text is rounded: 2,000 ml shows as 68 fl oz, and 68 fl oz
+     * read anew would be 2,011 ml.
      */
-    private fun amountOf(text: String, storedMl: Int, unit: WaterUnit, limits: IntRange): Int? =
-        if (text.trim() == AmountInput.textOf(storedMl, unit)) storedMl else AmountInput.millilitres(text, unit, limits)
+    private fun amountOf(text: String, openedMl: Int, unit: WaterUnit, limits: IntRange): Int? =
+        if (text.trim() == AmountInput.textOf(openedMl, unit)) openedMl else AmountInput.millilitres(text, unit, limits)
 
     /**
      * Writes [change] of the settings in use. The hours are checked again
