@@ -26,7 +26,7 @@ sealed interface ReminderLine {
     /** "Goal reached. No more reminders today." */
     data object GoalReached : ReminderLine
 
-    /** "No more reminders today.", also when no reminder fits between From and Until on any day (owner's decision in step 2.4). */
+    /** "No more reminders today.", also when no reminder fits between From and Until on any day (owner's decision). */
     data object NoneLeftToday : ReminderLine
 
     /** Android has not asked yet. The line offers **Allow**, which starts the question. */
@@ -50,7 +50,7 @@ data class RemindersScreen(
 /**
  * The ViewModel of the reminder line and of the question for
  * notifications, shared by Today and Settings, so both show the same line
- * (the owner's decision in step 2.4) and the question is asked once.
+ * (the owner's decision) and the question is asked once.
  *
  * A line about notifications comes before a line about the next reminder:
  * while reminders are silent, "Next reminder at 14:30" would hide it. The

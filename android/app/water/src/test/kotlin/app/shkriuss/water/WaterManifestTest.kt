@@ -11,12 +11,11 @@ import org.w3c.dom.Element
 
 /**
  * What Water's merged manifest holds (docs/security/permissions.md,
- * "Water"): five permissions and no other, the three of core/notify and,
- * since step 2.5, the two of core/security; the three receivers of
+ * "Water"): five permissions and no other, the three of core/notify and
+ * the two of core/security; the three receivers of
  * core/notify; Water's one screen and the six screens of core/security;
  * and nothing that another app can reach but Water's own screen. The
- * receiver of the profile installer is removed (owner's decision on pull
- * request 40).
+ * receiver of the profile installer is removed (owner's decision).
  *
  * The APK rules check fails an APK with any permission that is not on
  * Water's allow list too. This test also checks that the screen is the

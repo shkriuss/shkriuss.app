@@ -119,7 +119,7 @@ class AndroidUnitTestConventionPlugin : Plugin<Project> {
         /**
          * Robolectric 4.17 on JDK 21 reads file descriptor internals. Without
          * this flag every test fails with "Failed to interact with raw
-         * FileDescriptor internals". Checked in Phase 0, step 3.
+         * FileDescriptor internals".
          */
         val ROBOLECTRIC_JVM_FLAGS = listOf(
             "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",

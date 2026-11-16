@@ -111,7 +111,7 @@ fun DialogsPage(modifier: Modifier = Modifier) {
                         )
                     }
                 },
-                // Added in step 2.5: a third button, for two answers and a way out.
+                // A third button, for two answers and a way out.
                 ComponentState(R.string.state_three_actions) {
                     ShkDialogInPlace(
                         title = stringResource(R.string.sample_move_note_question),
@@ -121,7 +121,7 @@ fun DialogsPage(modifier: Modifier = Modifier) {
                         otherAction = ShkDialogAction(text = stringResource(R.string.sample_copy_it), onClick = {}),
                     )
                 },
-                // Added in step 2.5: the dialog for work the user waits for.
+                // The dialog for work the user waits for.
                 ComponentState(R.string.state_progress_dialog) {
                     ShkProgressDialogInPlace(text = stringResource(R.string.sample_writing_backup))
                 },

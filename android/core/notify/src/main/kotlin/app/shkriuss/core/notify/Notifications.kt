@@ -140,7 +140,7 @@ class Notifications internal constructor(
      * not be shown. Open the app to see it.", with no buttons and nothing
      * of the app's own. Its key is the alarm's id, so the app's next
      * notification for that alarm replaces it. A tap opens the app's start
-     * screen. The owner decided this in step 2.4
+     * screen. This is the owner's decision
      * (docs/architecture/notifications.md, "How alarms are kept right").
      */
     internal fun showFailure(channel: NotifyChannel, alarm: Alarm) {

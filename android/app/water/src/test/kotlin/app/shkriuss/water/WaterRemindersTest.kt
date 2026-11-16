@@ -31,11 +31,11 @@ import org.robolectric.annotation.Config
  * buttons send their pending intents to the button receiver. Every hour
  * from 08:00 until 22:00, on Friday 13 November 2026, in UTC.
  *
- * The cases of the grace of one minute (the owner's decision in step
- * 2.4): Android starts Water for the alarm, a change in the seconds
- * before it comes, and an alarm that comes more than a minute late.
+ * The cases of the grace of one minute (the owner's decision): Android
+ * starts Water for the alarm, a change in the seconds before it comes, and
+ * an alarm that comes more than a minute late.
  *
- * After a restore (step 2.5): the alarm moves to the time the restored
+ * After a restore: the alarm moves to the time the restored
  * data gives, and a reminder that no longer fits is removed.
  */
 @RunWith(RobolectricTestRunner::class)

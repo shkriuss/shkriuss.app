@@ -95,7 +95,7 @@ class RemindersViewModelTest {
 
     @Test
     fun whenNoReminderFitsOnAnyDayTheLineSaysNoMoreToday() {
-        // Every 3 hours, from 08:00 until 10:00 (the owner's decision in step 2.4).
+        // Every 3 hours, from 08:00 until 10:00 (the owner's decision).
         remindersOn { it.copy(intervalMinutes = 180, untilMinute = 10 * 60) }
 
         model().line(ReminderLine.NoneLeftToday)

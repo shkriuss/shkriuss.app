@@ -21,7 +21,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Checks how large the checkbox, the radio button and the switch are drawn
- * at font scale 1.0 and 2.0 (owner decision on pull request 14):
+ * at font scale 1.0 and 2.0 (owner decision):
  *
  * - the checkbox and the radio button grow with the font size by the rule
  *   for an icon next to text, as a 20dp icon grows,

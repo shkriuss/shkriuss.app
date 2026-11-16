@@ -42,7 +42,7 @@ import org.robolectric.annotation.GraphicsMode
  * - Content taller than the window scrolls, so the last row can be
  *   reached at font scale 2.0.
  * - When a row sets it not visible, it slides down before it goes, as for
- *   a swipe (owner decision on pull request 17). Shown again on the way
+ *   a swipe (owner decision). Shown again on the way
  *   down, it comes back up.
  *
  * The screen is the screenshot phone. Graphics run natively, so text is

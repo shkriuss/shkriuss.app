@@ -51,7 +51,7 @@ import org.robolectric.annotation.GraphicsMode
  * wait for that thread. So this test waits for what it reads next: the
  * prompt ([waitForThePrompt]), and the screen back after it
  * ([waitForTheLockScreenToGo]). Without the waits, a slow start of that
- * thread failed the test (found in step 2.5).
+ * thread fails the test now and then.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestHostApp::class)

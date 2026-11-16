@@ -36,8 +36,8 @@ import org.robolectric.annotation.GraphicsMode
  *   fails unless each shows the lock screen and nothing of its own.
  * - With the app lock on and the app open, it opens each sheet and dialog
  *   of Water, turns the screen off so that the app locks, and fails unless
- *   only the lock screen shows, in every window. Since step 2.5 these are
- *   also the dialogs of a backup and a restore, and Licences with an open
+ *   only the lock screen shows, in every window. These are also the
+ *   dialogs of a backup and a restore, and Licences with an open
  *   notice, which Settings shows in its own place.
  *
  * One dialog is not here: the one for the moment the recovery key is first

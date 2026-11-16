@@ -231,7 +231,7 @@ private fun SelectionText(text: String, enabled: Boolean, modifier: Modifier) {
 /**
  * The size Material 3 draws the box of a checkbox and the ring of a radio
  * button at, at the default font size. They grow from it like an icon of
- * this size next to text (owner decision on pull request 14).
+ * this size next to text (owner decision).
  */
 private val SelectionControlSize = 20.dp
 

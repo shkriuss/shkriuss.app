@@ -47,12 +47,11 @@ import java.time.LocalTime
  * items under section headers, each with its value under its name. A tap
  * opens a dialog, and a change takes effect at once.
  *
- * Step 2.3 shows Drinking, the hours of Reminders and the version under
- * About. Step 2.4 adds the switch "Remind me to drink" and, while
- * reminders are on, the same reminder line as Today, under the hours (the
- * owner's decision in step 2.4). Step 2.5 adds Backup and Security
- * ([BackupAndSecuritySections]), whose rows start [firstNeed], and
- * Licences under About, which [onLicences] opens.
+ * It shows Drinking; Reminders, with the switch "Remind me to drink", the
+ * hours and, while reminders are on, the same reminder line as Today under
+ * the hours (the owner's decision); Backup and Security
+ * ([BackupAndSecuritySections]), whose rows start [firstNeed]; and About,
+ * with the version and Licences, which [onLicences] opens.
  */
 @Composable
 internal fun SettingsContent(

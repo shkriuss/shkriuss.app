@@ -9,7 +9,8 @@ import org.robolectric.RuntimeEnvironment
  * scale 1.0, phone dark at 2.0, tablet light at 2.0 and tablet dark at 1.0
  * (CLAUDE.md, UI and accessibility).
  *
- * Phase 1 moves this to `core/testing` so every module can use it.
+ * Water's tests have a copy. Moving it to `core/testing` is open
+ * (docs/development/design-system.md, "Open").
  */
 data class ScreenshotConfig(
     val device: Device,

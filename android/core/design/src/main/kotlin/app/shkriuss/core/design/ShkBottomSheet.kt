@@ -61,7 +61,7 @@ import kotlinx.coroutines.launch
  * slides down when it turns false, however it was closed: a tap on one
  * of its rows that sets [visible] to false, a swipe down, a tap on the
  * dimmed screen above it, Back, or something else the screen's state
- * says (owner decision on pull request 17). A swipe, a tap above it and
+ * says (owner decision). A swipe, a tap above it and
  * Back call [onDismissRequest]; set [visible] to false there.
  *
  * [title] is optional. TalkBack reads it as a heading. [content] goes

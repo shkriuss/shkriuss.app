@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.dp
  * title and the body politely when it appears. Leave it off when the
  * state is simply what a screen shows when it opens, such as "No notes
  * yet": the user has asked for nothing, so there is nothing to announce
- * (owner decision on pull request 15).
+ * (owner decision).
  *
  * It fills the width it is given and centres its content. Give it the
  * whole height of the screen or list, for example with `weight(1f)`, to
@@ -147,8 +147,7 @@ fun ShkErrorState(
 /**
  * The button of an empty or an error state: the words on it and what a
  * tap does. They come as one value, so a state can never show a button
- * that does nothing, or an action without its words (owner decision on
- * pull request 15).
+ * that does nothing, or an action without its words (owner decision).
  */
 class ShkStateAction(
     /** The words on the button, such as "New note" or "Try again". */

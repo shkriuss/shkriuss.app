@@ -23,7 +23,7 @@ dependencies {
     // same either way.
     implementation(project(":core:design"))
     implementation(project(":feature:water"))
-    // Reminders (step 2.4): the app class is a NotifyHost and builds the one
+    // Reminders: the app class is a NotifyHost and builds the one
     // Notify. The module adds three permissions and three receivers, none
     // exported (docs/security/permissions.md).
     implementation(project(":core:notify"))

@@ -211,7 +211,7 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         compose.captureWholeScreen("SettingsNoReminderFits", config)
     }
 
-    // Reminders (step 2.4): the reminder line of Today in each of its six states, Settings with reminders on, and the question.
+    // Reminders: the reminder line of Today in each of its six states, Settings with reminders on, and the question.
 
     @Test
     fun todayWithTheNextReminder() {
@@ -345,7 +345,7 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         captureWindows("UntilRefused")
     }
 
-    // Backup, Security and Licences (step 2.5).
+    // Backup, Security and Licences.
 
     @Test
     @Config(application = NewWaterApp::class)

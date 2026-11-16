@@ -102,7 +102,7 @@ class RulesTest {
         val deleted = settings(3, updatedAt = 30, deletedAt = 30, cup1Ml = 300)
         assertEquals(newer, SettingsRules.inUse(listOf(newer, older, deleted)))
         assertEquals(200, SettingsRules.settingsOf(SettingsRules.inUse(listOf(older, deleted, newer))).cup1Ml)
-        // A tie, which only a restore or sync can bring: the larger ID, until step 5.1 decides.
+        // A tie, which only a restore or sync can bring: the larger ID, until the sync design decides.
         assertEquals(newer, SettingsRules.inUse(listOf(newer, settings(1, updatedAt = 20, cup1Ml = 100))))
     }
 

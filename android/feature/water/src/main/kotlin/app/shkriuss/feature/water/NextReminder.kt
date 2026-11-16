@@ -45,7 +45,7 @@ data class ReminderFacts(
  * 3. **A snooze comes first, while Later is the latest.** A snooze holds
  *    only while the press of Later is still the latest of the four. A
  *    drink timed at or after the press ends it. A drink entered with an
- *    earlier time does not (the owner's decision in step 2.2).
+ *    earlier time does not (the owner's decision).
  * 4. **Only inside the reminder hours, and only until the goal is met.**
  *    Otherwise the next one is tomorrow at "From" + 1 interval.
  * 5. Reminders off: no alarm.
@@ -57,8 +57,7 @@ data class ReminderFacts(
  *    gives it, it is still the next reminder. Without this, a sync in
  *    those seconds would move the alarm on and the reminder would be lost:
  *    when Android starts Water's process for the alarm, the start of the
- *    app runs a sync before the alarm comes (the owner's decision in step
- *    2.4).
+ *    app runs a sync before the alarm comes (the owner's decision).
  *
  * Times count in whole minutes. A press of Later at 12:22:40 counts as
  * 12:22, and its snooze is at 12:37.
