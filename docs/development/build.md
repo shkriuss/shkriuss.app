@@ -222,10 +222,11 @@ Reasons:
 
 The rules are in `android/build-logic/r8/app-rules.pro`.
 
-The file has two more rules: classes of Google Play services, and
-classes of the test fixtures of `core/crypto`, are kept as they are.
-They exist only so that the APK rules check can find such a class in a
-`release` or `preview` APK. No app holds one, so the rules match nothing
+The file has three more rules: classes of Google Play services, and
+classes of the test fixtures of `core/crypto` and of `core/notify`, are
+kept as they are. They exist only so that the APK rules check can find
+such a class in a `release` or `preview` APK. No app holds one, so the
+rules match nothing
 ([The Play services class rule](#the-play-services-class-rule),
 [The test fixtures rule](#the-test-fixtures-rule)). The file is
 owner-only.
