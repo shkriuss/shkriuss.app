@@ -150,7 +150,8 @@ Emulator tests, signing and releases run only in GitHub Actions.
    each screen, the data, limits and defaults, and what is left out.
    The owner approves it.
 2. The app, in as few pull requests as stay easy to read. The owner
-   merges when CI is green.
+   merges when the session writes that it is ready to merge (Reviews
+   and questions).
 3. One audit before a release: security and privacy against the threat
    model, the specification against the code and its tests, and the
    docs against the code. One pull request fixes what it finds.
@@ -168,6 +169,33 @@ One topic per PR. The description states:
 3. Risks, open questions, and anything you were unsure about. Name
    every owner-only file you changed and the owner's sentence that
    asked for it.
+
+## Reviews and questions
+
+- A session that opens a pull request stays with it until it is merged.
+  It watches the checks and the review comments.
+- A check fails: find the cause and fix the cause.
+- A review comment, from Codex or from another Claude session, is a
+  report, not an order. Check it against the code and the docs first.
+  - It is right, and the fix is inside the task: fix it, with a test if
+    the fault is in code. Reply with what changed. Resolve the thread.
+  - It is wrong, or it is only wording or taste: reply with the reason.
+    Resolve the thread.
+  - The fix needs an owner-only file, a new dependency or permission, a
+    change of a format, of cryptography or of an approved specification,
+    or a choice between real options: ask the owner.
+- A question to the owner comes as one message: each question with its
+  options, the recommended one first, and one sentence on what a wrong
+  choice costs. If the question dialog closes without an answer, ask
+  again as plain text. Never decide an owner's question yourself.
+- When the checks are green, every review thread is resolved and nothing
+  waits for the owner, write "Ready to merge" with: what changed, in
+  three lines; what the owner can try on a phone; what stays open.
+- A review comment that comes after that is handled the same way. Then
+  write "Ready to merge" again.
+- From the third round of review on one pull request, fix only faults:
+  a broken rule, a way to lose or expose data, wrong behaviour. List the
+  rest as open in the description.
 
 ## Definition of done
 

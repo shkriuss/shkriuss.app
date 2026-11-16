@@ -45,3 +45,6 @@ Always report:
 
 Do not report style, naming, formatting or missing comments. Do not
 propose new dependencies or larger rewrites.
+
+Report a fault once. Do not raise again a finding that was answered in
+a resolved thread, unless the code it is about has changed since.

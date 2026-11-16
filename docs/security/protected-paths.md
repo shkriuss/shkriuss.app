@@ -7,7 +7,8 @@ the owner may change. Those paths are listed in
 wrapper, the repository list, the build checks for hard rules 2, 3 and 4,
 the record rules checks,
 the runner of the emulator tests with its plugin and its suite check,
-signing files and the signing certificate fingerprint.
+signing files, the signing certificate fingerprint and the prompts in
+`docs/development/PROMPTS.md`.
 
 The flag is a notice. It never blocks a merge. The gate is the owner's
 review ([working-with-claude.md](../development/working-with-claude.md)).
@@ -81,8 +82,8 @@ required check.
 3. **It only knows the paths in CODEOWNERS.** A harmful change anywhere
    else is not flagged: app and library code, other build files such as a
    module's `build.gradle.kts` or `android/gradle/libs.versions.toml`,
-   `tools/`, `backend/`, `site/` and `docs/`. A new dependency also changes
-   `verification-metadata.xml`, which is flagged.
+   `tools/`, `backend/`, `site/` and the rest of `docs/`. A new
+   dependency also changes `verification-metadata.xml`, which is flagged.
 4. **It does not stop what runs before you look.** CI and PR preview run
    the pull request's own copy of their workflow files. A pull request that
    changes one of them runs its changed version at once. Those runs have a

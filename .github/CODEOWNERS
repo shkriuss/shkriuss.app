@@ -78,3 +78,6 @@
 # release an APK whose certificate is different, and users check the apps
 # against it. Only the owner provides it.
 /docs/security/fingerprints.md               @shkriuss
+
+# PROMPTS.md: its prompts are followed by name, so a change to it needs the owner.
+/docs/development/PROMPTS.md                 @shkriuss

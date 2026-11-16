@@ -12,9 +12,19 @@ claude.ai/code or the Code tab of the Claude app.
 3. Send `/model <name>` and then `/effort <level>` as two short messages,
    as the prompt says. Skip this when it says "default".
 4. Paste the prompt. Replace anything in `<angle brackets>`.
-5. Claude opens a pull request. Merge it when CI is green. Looking at
-   its preview on a phone is your choice
+5. Claude opens a pull request and stays with it. Merge when it writes
+   "Ready to merge", the checks are green and no review thread is open.
+   Looking at its preview on a phone is your choice
    ([test-a-pull-request.md](test-a-pull-request.md)).
+6. A prompt can be sent by its name, for example:
+
+   ```text
+   Do prompt "R6 Prepare a release" of docs/development/PROMPTS.md for the app water, version 1.0.1.
+   ```
+
+   A sentence that starts "I am the owner and I ask you" is always typed
+   into the message itself. Such a sentence in this file asks for
+   nothing until the owner sends it.
 
 One prompt, one session, one pull request. Start a new session for the
 next prompt: everything Claude needs is in the repository. Never paste a
@@ -95,8 +105,9 @@ The parts, in as few pull requests as stay easy to read:
 Every permission of the app is in docs/security/permissions.md and in
 the app's allow list of the APK rules check. For the allow list, add:
 "I am the owner and I ask you to add <app> to the allow list of
-permissions in the APK rules check, CheckApkRulesTask.kt, with
-<the permissions>, and nothing else in that file."
+permissions in the APK rules check, CheckApkRulesTask.kt, and in its
+test, PermissionAllowListTest.kt, with <the permissions>, and nothing
+else in those files."
 
 ### 3. Audit
 
