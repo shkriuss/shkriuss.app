@@ -14,9 +14,9 @@ fingerprint, and a link to the source.
 - The site has no JavaScript, no cookies, no analytics and no fonts from
   other sites. Light and dark follow the phone's setting, with the palette
   of [ADR 0017](../adr/0017-design-system-tokens.md).
-- On a phone 320 px wide no page scrolls sideways. Every menu link is at
-  least 48 px high. The lowest text contrast is 6.61:1 in light and
-  7.68:1 in dark.
+- The pages follow the apps' rules for a phone: no page scrolls
+  sideways on a phone 320 px wide, every menu link is at least 48 px
+  high, and text contrast is at least 4.5:1 in light and dark.
 
 ## Pages
 

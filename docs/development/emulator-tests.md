@@ -115,9 +115,8 @@ How the tests reach what an app cannot:
 
 ### What the tests showed
 
-The tests run on AOSP emulators with Android 13, 14, 15 and 17. Each run
-has 68 tests. A test that does not apply to a version is skipped: five
-on Android 13 and 14, one from Android 15.
+The tests run on AOSP emulators with Android 13, 14, 15 and 17. A test
+that does not apply to a version is skipped.
 
 Android behaves as
 [crypto-design.md](../security/crypto-design.md) says, on every version.
@@ -187,7 +186,8 @@ the Keystore.
    - So the emulator may be locked only before the first prompt.
      `ScreenLock.lockPhone` checks this, and the suite runs
      `UnlockedKeyTest` before the prompt tests.
-   - No test is left out or weakened for it. All 68 run on Android 17.
+   - No test is left out or weakened for it. All of them run on
+     Android 17.
    - It is a fault of the emulator image, revision 6 of
      `system-images;android-37.0;default;x86_64`, with emulator 37.2.13.
      A later revision may fix it. The tests can stay as they are.
@@ -231,9 +231,9 @@ How the tests reach what an app cannot:
 
 ### What the notify tests showed
 
-The tests run on AOSP emulators with Android 13, 14, 15 and 17. Each
-run has 10 tests, and all of them pass on every version. On Android 17
-they get to their end only because the job waits for Android
+The tests run on AOSP emulators with Android 13, 14, 15 and 17. All of
+them pass on every version. On Android 17 they get to their end only
+because the job waits for Android
 ([below](#android-17-the-job-waits-for-android)).
 
 Android behaves the same on every version.
@@ -285,8 +285,8 @@ What the log says with the wait:
 
 | Android | What the log says | The tests of `core/notify` |
 |---|---|---|
-| 13, 14, 15 | "Waited 10 seconds before the next test APK. Android did not start again." | All 10 pass. |
-| 17 | A warning: "Android 17 started again after the tests of `app.shkriuss.core.crypto.test` ... The job waited 20 seconds until it answered." | All 10 pass. |
+| 13, 14, 15 | "Waited 10 seconds before the next test APK. Android did not start again." | All pass. |
+| 17 | A warning: "Android 17 started again after the tests of `app.shkriuss.core.crypto.test` ... The job waited 20 seconds until it answered." | All pass. |
 
 - On Android 17, Android answers again within the first 10 seconds
   after the crash. The other 10 seconds are the pause the job adds
