@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.offset
 /**
  * The layout of every row that is one touch target: a list item, and a
  * checkbox, switch or radio button with its text. It exists so they all
- * follow one rule (owner decision on pull request 15):
+ * follow one rule (owner decision):
  *
  * - The row's content starts and ends at the edges of the space it is
  *   given, where the page title and all other text start, so the text of

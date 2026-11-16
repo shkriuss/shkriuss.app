@@ -20,8 +20,8 @@ enum class CatalogGroup(
 
 /**
  * The pages of the design gallery, in the order the start screen lists
- * them. Phase 1, step 2 added pages for each batch of components; the
- * screens that every app shares come after them.
+ * them. The pages of the components come first; the screens that every
+ * app shares come after them.
  */
 enum class CatalogPage(
     /** The page's name, on the start screen and as the page's title. */

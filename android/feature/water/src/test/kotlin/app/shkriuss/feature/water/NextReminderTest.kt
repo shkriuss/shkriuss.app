@@ -170,7 +170,7 @@ class NextReminderTest {
         }
     }
 
-    // A reminder that is due and has not reached the handler yet (point 7, the owner's decision in step 2.4).
+    // A reminder that is due and has not reached the handler yet (point 7, the owner's decision).
 
     @Test
     fun aReminderThatIsDueAndNotHandledYetStaysTheNextOneForOneMinute() {

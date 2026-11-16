@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.sp
 /**
  * The size of an icon that sits next to text, such as the plus in an
  * "Add" button. It exists so the icon keeps its proportion to the text
- * when the user makes text larger (owner decision on pull request 13).
+ * when the user makes text larger (owner decision).
  *
  * At the default font size it is [size]. At a larger font size it grows
  * the way text of that size grows: an 18dp icon grows like 18sp text,

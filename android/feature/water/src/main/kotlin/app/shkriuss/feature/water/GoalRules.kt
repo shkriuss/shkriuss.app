@@ -13,8 +13,9 @@ import app.shkriuss.feature.water.data.GoalEntity
  *
  * Two goals with the same `fromDay` and the same `updatedAt` can only come
  * from a restore or, later, from sync. Then the larger `id` counts, so that
- * every screen and every reminder agree, until step 5.1 decides ties (the
- * spec's "Open", item 7; owner's decision on pull request 40).
+ * every screen and every reminder agree, until the sync design decides
+ * ties (the
+ * spec's "Open", item 7; owner's decision).
  */
 object GoalRules {
     /** The goal with no goal record. */
@@ -38,7 +39,7 @@ object GoalRules {
      *    updated.
      * 2. Otherwise a new goal is created with `fromDay` today.
      * 3. If the goal of today is already [amountMl], nothing is written
- *    (spec, point 4; owner's decision on pull request 40).
+ *    (spec, point 4; owner's decision).
      */
     fun change(today: Int, amountMl: Int, goals: List<GoalEntity>): GoalChange {
         val current = counting(today, goals)

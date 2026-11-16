@@ -22,7 +22,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Checks where rows put their content, at font scale 1.0 and 2.0 (owner
- * decision on pull request 15):
+ * decision):
  *
  * - the text of a list item, a section header and a switch row starts at
  *   the edge of the space it is given, where the page title and all other

@@ -16,9 +16,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Checks the mark of a selected [ShkListItem] (owner decision on pull
- * request 16): it must show with more than a change of colour. Besides the
- * fill, it has a bar in the accent colour along the start edge of the
+ * Checks the mark of a selected [ShkListItem] (owner decision): it must
+ * show with more than a change of colour. Besides the fill, it has a bar
+ * in the accent colour along the start edge of the
  * highlight, 4dp wide, inside the 8dp before the text, clear of the
  * rounded corners. In right-to-left languages the bar is on the right.
  *

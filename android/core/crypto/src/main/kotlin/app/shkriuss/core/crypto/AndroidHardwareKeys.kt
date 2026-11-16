@@ -27,8 +27,8 @@ import javax.crypto.spec.GCMParameterSpec
  * - asking whether one key exists (`KeyStore.getKey`). Tink's `hasKey`
  *   also answers "no" when the Keystore only failed for a moment.
  *
- * No Keystore exists where unit tests run. This class is first proven by
- * the emulator tests (step 1.4, session C). It is kept thin for that
+ * No Keystore exists where unit tests run. This class meets a real
+ * Keystore only in the emulator tests. It is kept thin for that
  * reason: every rule about hardware keys is in [KeyVault], which the unit
  * tests cover.
  */

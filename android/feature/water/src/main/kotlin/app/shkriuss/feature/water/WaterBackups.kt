@@ -115,7 +115,7 @@ sealed interface BackupStep {
  * keys. `BackupViewModel` turns what it gives into dialogs.
  *
  * - A backup is checked right after it is written: the file is read again
- *   to its last byte (the owner's decision in step 2.5).
+ *   to its last byte (the owner's decision).
  * - After a restore, the reminders follow the restored data.
  * - A pending move of the file keys is finished here, in [keys], because
  *   Water stores no files (spec, "Files").

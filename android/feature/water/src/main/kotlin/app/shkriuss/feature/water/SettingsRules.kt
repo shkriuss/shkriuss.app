@@ -54,7 +54,7 @@ object SettingsRules {
     /**
      * The settings record in use: not deleted, with the latest `updatedAt`.
      * Of two with the same `updatedAt`, which only a restore or sync can
-     * bring, the larger `id` counts until step 5.1 decides ties (spec,
+     * bring, the larger `id` counts until the sync design decides ties (spec,
      * "The settings in use"). Null if there is none: then the defaults
      * count.
      */

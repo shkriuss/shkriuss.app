@@ -255,7 +255,7 @@ class WaterRemindersTest {
         assertEquals(listOf(water.millisOf(at(10, 0))), water.waiting())
     }
 
-    // The grace of one minute (the owner's decision in step 2.4).
+    // The grace of one minute (the owner's decision).
 
     @Test
     fun whenTheAppStartsInTheMinuteOfTheAlarmTheAlarmStays() {

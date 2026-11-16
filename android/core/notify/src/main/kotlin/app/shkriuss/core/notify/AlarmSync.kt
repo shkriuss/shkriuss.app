@@ -67,7 +67,7 @@ internal class AlarmSync(
      *
      * If the handler fails, [failed] shows the user a notice in place of
      * the reminder, and the alarms are registered again all the same, so
-     * the next reminder still comes (the owner's decision in step 2.4).
+     * the next reminder still comes (the owner's decision).
      */
     fun fired(id: AlarmId) {
         val state = registry.read()

@@ -15,7 +15,7 @@ import kotlinx.coroutines.plus
  * What the sections "Drinking" and "Reminders" of Settings show
  * (docs/apps/water/spec.md, "Settings screen"). The reminder line under
  * the hours is [RemindersViewModel]'s, shared with Today. The sections
- * "Backup" and "Security" are [BackupViewModel]'s (step 2.5).
+ * "Backup" and "Security" are [BackupViewModel]'s.
  */
 data class SettingsScreen(
     /** False until the first read of the database is in. */

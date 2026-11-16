@@ -29,7 +29,7 @@ import java.nio.ByteBuffer
  * read. Then the transaction rolls back and nothing changes.
  *
  * `WaterBackups` uses it with `Backups` of `core/backup`, and lets the
- * reminders follow the restored data after a restore (step 2.5).
+ * reminders follow the restored data after a restore.
  */
 class WaterBackupContent(private val database: WaterDatabase, clock: Clock, ids: IdSource) : BackupContent {
     // takeFromBackup keeps the record fields it is given; the clock and the ID source are never used for it.

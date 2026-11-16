@@ -43,8 +43,8 @@ internal class AlarmManagerScheduler(private val context: Context) : AlarmSchedu
     // module's manifest declares USE_EXACT_ALARM, which Android accepts
     // from version 13 and which ADR 0010 chose. ManifestTest checks that
     // the permission is declared, and AlarmsOnAndroidTest that Android
-    // allows and fires the alarm. The owner decided this in pull request
-    // 26 (ADR 0030). After an update of the Android Gradle Plugin, try
+    // allows and fires the alarm. This is the owner's decision (ADR
+    // 0030). After an update of the Android Gradle Plugin, try
     // without it and remove it if lint passes.
     @SuppressLint("MissingPermission")
     override fun set(alarm: Alarm) {
