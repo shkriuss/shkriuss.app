@@ -291,7 +291,7 @@ What does not:
    ([app-lock.md](../user/app-lock.md#recent-apps-and-screenshots)).
 4. A preview build makes the same keys as its app from the same words.
    The owner accepted this. Testers must never type real words into a
-   preview ([crypto-design.md](crypto-design.md#decided-on-pull-request-22)).
+   preview ([crypto-design.md](crypto-design.md#the-owners-decisions)).
 5. The signature-protected interfaces trust every app signed with the
    suite key. Whoever has that key can build an app that passes them
    ([The owner's GitHub account](#the-owners-github-account)).

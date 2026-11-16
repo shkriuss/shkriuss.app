@@ -4,37 +4,17 @@ Every key the apps use, where it lives, what it protects, and the exact
 bytes of everything the apps encrypt. All cryptography in the suite
 follows this page.
 
-- Status: built. The design was written on 2026-11-12 in Phase 1, step
-  4, session A ([PROMPTS.md](../development/PROMPTS.md)). The owner
-  decided most of its open questions on
-  [pull request 22](https://github.com/shkriuss/shkriuss.app/pull/22).
-  Session B built the code and its unit tests from this page on the same
-  day. The owner decided three more points then, and the page was made
-  exact where it was silent
-  ([Decided in session B](#decided-in-session-b)).
-- Session C tested the hardware keys on emulators with the real Android
-  Keystore, on the same day
+- Status: built, with unit tests. Emulator tests check the hardware
+  keys with the real Android Keystore
   ([emulator-tests.md](../development/emulator-tests.md#what-the-tests-showed)).
   What an emulator cannot show is listed in
   [emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check).
-- Step 1.7, session A, on 2026-11-13: starting over after a setup that
-  stopped, repairing a damaged keyset file, and giving up file keys that
-  no words can bring back, with fixes to the code of session B
-  ([Decided in step 1.7, session A](#decided-in-step-17-session-a)).
-  The code came first, in its own pull request. The recovery key screens
-  followed in a second one, in `android/core/security`
-  ([security-screens.md](../architecture/security-screens.md)).
-- Step 1.7, session B, on 2026-11-13: the app lock screens, in
+- The recovery key screens and the app lock screens are in
   `android/core/security`
-  ([security-screens.md](../architecture/security-screens.md#the-app-lock)).
-  The owner decided how the words are checked in an app that does not
-  keep the recovery key, what notifications show, and when the app
-  locks. "Keys in memory", point 5, was corrected to what Android
-  really does with an app that waits in the background
-  ([Decided in step 1.7, session B](#decided-in-step-17-session-b)).
-- Not built yet: the handover between apps (step 3.0), sealing file
-  keys again in the database (the first app that stores files), and a
-  new recovery key (Phase 5).
+  ([security-screens.md](../architecture/security-screens.md)).
+- Not built yet: the handover between apps, sealing file keys again in
+  the database (the first app that stores files), and a new recovery key
+  (the sync design).
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -51,11 +31,8 @@ follows this page.
   and a decision record ("Changing formats" in
   [CLAUDE.md](../../CLAUDE.md)).
 
-The page ends with every [assumption](#assumptions), the owner's
-[decisions on pull request 22](#decided-on-pull-request-22),
-[in session B](#decided-in-session-b),
-[in step 1.7, session A](#decided-in-step-17-session-a) and
-[in step 1.7, session B](#decided-in-step-17-session-b), and every
+The page ends with every [assumption](#assumptions), the
+[owner's decisions](#the-owners-decisions), and every
 [open question](#open-questions) that is left.
 
 ## At a glance
@@ -118,7 +95,7 @@ is the part of it that the keys on this page answer.
 | Against | What protects the data |
 |---|---|
 | A lost or stolen phone | Android's file-based encryption. Keys are wrapped by hardware keys that never leave the phone, where the phone has key hardware ([StrongBox and other hardware](#strongbox-and-other-hardware)). With the app lock on, file keys also need the system prompt. The prompt also takes the phone's PIN, pattern or password, so all of it is as strong as the screen lock. |
-| Other apps on the phone | The app sandbox. Each app has its own hardware keys and its own derived keys. Android's own backup is off. Today a key reaches another app of the suite only when the user types the words there. The handover between apps is planned: a signature-protected screen, after a system prompt (step 3.0, not built). |
+| Other apps on the phone | The app sandbox. Each app has its own hardware keys and its own derived keys. Android's own backup is off. Today a key reaches another app of the suite only when the user types the words there. The handover between apps is planned: a signature-protected screen, after a system prompt (not built). |
 | A network attacker, a curious or hostile sync server | They see only sealed records and encrypted files, with the key ID in the clear. A changed, cut or swapped blob does not open. What else they learn is in [threat-model.md](threat-model.md#what-the-sync-server-and-the-network-can-still-learn). |
 | A malicious library inside one app | It can reach that app's data and derived keys. It can read the recovery key while it is in that app's memory: while it is created, entered or shown. With it, it could make the keys of every app. It cannot read the kept copy without a system prompt. It cannot connect to the network itself: a data app has no network permission. |
 | Someone who gets a backup file | The stream under the `backup` key. The file shows its app, the key ID, the format version and its size ([backup-format.md](../architecture/backup-format.md#what-a-changed-or-cut-file-does)). |
@@ -136,8 +113,7 @@ Not protected, by decision or by nature:
   bytes.
 - Replay and withholding. A server can hand out an old sealed record
   again, or hold one back. Both are valid blobs. The sync design must
-  handle this ([ADR 0009](../adr/0009-sync-protocol-and-server.md),
-  Phase 5).
+  handle this ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
 - Database rows at rest, beyond Android's file-based encryption
   ([ADR 0004](../adr/0004-room-on-system-sqlite-no-sqlcipher.md)).
 
@@ -145,8 +121,8 @@ Not protected, by decision or by nature:
 
 1. The only cryptography library is Tink for Java: the Maven artifact
    `com.google.crypto.tink:tink-android`, version 1.24.0, released on
-   2026-10-16. Session B added it to the version catalog and to the
-   dependency verification file
+   2026-10-16. It is in the version catalog and in the dependency
+   verification file
    ([build.md](../development/build.md#where-trust-comes-from)).
 2. Why `tink-android` and not `tink`: the plain `tink` artifact depends
    on an HTTP client and on `conscrypt-openjdk-uber`, which holds native
@@ -187,11 +163,10 @@ exist. Two checks make sure it stays so:
 2. The APK rules check
    ([build.md](../development/build.md#the-play-services-class-rule))
    fails if an APK holds a class under `com.google.android.gms`. The
-   check is an owner-only file. The owner asked for this rule in
-   session B. It reads the class names in the APK's dex files. That works
-   because the build never renames classes, and because an R8 rule keeps
-   every class of that package as it is, so that R8 cannot fold one into
-   another class (the owner's decision on pull request 25).
+   check is an owner-only file. It reads the class names in the APK's
+   dex files. That works because the build never renames classes, and
+   because an R8 rule keeps every class of that package as it is, so
+   that R8 cannot fold one into another class (the owner's decision).
 
 ### Where Android does the work, not Tink
 
@@ -228,13 +203,13 @@ key that needs the prompt:
 4. One cipher serves one prompt. If the prompt is cancelled or fails,
    the cipher is thrown away. The next try starts at step 1.
 
-A unit test with a software key cannot find a mistake here. Session C
-tested it on emulators, through the real prompt
+A unit test with a software key cannot find a mistake here. The
+emulator tests check it, through the real prompt
 ([assumption 24](#assumptions)).
 
 #### Asking which keys exist
 
-The owner decided this in session B. Tink's `hasKey` is not used. In the
+The owner decided this. Tink's `hasKey` is not used. In the
 source of Android 13 and 14 it also answers "no" when the Keystore only
 failed for a moment. A living key would then count as gone, and its
 keyset file could be written over.
@@ -254,7 +229,7 @@ keyset file could be written over.
    written.
 5. Rule 8 deletes only keys that the list shows. So a list that failed
    deletes nothing.
-6. Session C tested on emulators what the real Keystore answers for a
+6. The emulator tests check what the real Keystore answers for a
    key that exists and for one that does not
    ([assumptions 28 and 29](#assumptions)). A test cannot make the real
    Keystore fail, so what it answers then is still only read from
@@ -269,7 +244,7 @@ in the table.
 
 The system prompt is Android's own `BiometricPrompt`
 (`android.hardware.biometrics`), not the AndroidX Biometric library. The
-owner decided this on pull request 22.
+owner decided this.
 
 1. Android's own prompt does everything the design needs on Android 13
    and later: a `CryptoObject` that holds a cipher, and a prompt that
@@ -290,7 +265,7 @@ owner decided this on pull request 22.
    [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md) records
    it, and [permissions.md](permissions.md) lists it. `core/security`,
    which shows the prompt, declares it. The APK rules check allows it per
-   app, from Water on (steps 2.4 and 2.5).
+   app, Water included.
 6. Only `core/security` shows the prompt. When the screen goes away, it
    cancels the prompt and the step; the user taps again for a new one.
 
@@ -391,8 +366,8 @@ destroying it.
    - A tag that the Keystore refuses is neither: the blob is "damaged or
      changed".
 2. A keyset file that cannot be opened is never deleted or written over,
-   unless rule 1 says its hardware key is gone. Step 1.7, session A gave
-   this rule three exceptions. Each one writes over or removes a file
+   unless rule 1 says its hardware key is gone. This rule has three
+   exceptions. Each one writes over or removes a file
    whose hardware key lives. Each one is safe for the reason given:
    - **Repair.** A damaged `record`, `backup` or `file-key` is written
      over with the keyset the recovery words derive. Only if another
@@ -450,8 +425,7 @@ destroying it.
   phone in a pocket. The record keyset opens only records. Their content
   is in the database anyway, which the app does not encrypt. So this key
   gives the record keyset the same protection the rows already have.
-  This amends point 3 of ADR 0006 for this key. The owner decided it on
-  2026-11-12.
+  This amends point 3 of ADR 0006 for this key, by the owner's decision.
 - **Unlocked key.** Everything else that needs no prompt is usable only
   while the phone is unlocked, as ADR 0006 says.
 - **Lock key.** With the app lock on, file keys need the prompt.
@@ -647,8 +621,7 @@ When the app gets its recovery-key-derived keys:
    can be undone and the file must then open. It changes only the wrapped
    file key and the change number, and leaves `updatedAt` as it is. Each
    app says which of its tables hold wrapped file keys. All of this is
-   built with the first app that stores files, not in session B. The
-   owner agreed to this on pull request 22.
+   built with the first app that stores files, as the owner agreed.
 
 ### Where keys are stored
 
@@ -868,7 +841,7 @@ associated data = the blob's own bytes before the ciphertext part
 
 - Keyset: `backup`. Associated data: header + the whole backup header.
 - The backup header, the place of this stream in the file, and what is
-  inside the stream belong to step 1.5 and
+  inside the stream belong to
   [ADR 0008](../adr/0008-backup-file-format.md). They are in
   [backup-format.md](../architecture/backup-format.md). This page asks
   five things of that format:
@@ -974,7 +947,9 @@ How a reader gets to its answer:
 
 ## The app lock
 
-The app lock is optional and is set per app. Its screens are step 1.7.
+The app lock is optional and is set per app. Its screens are in
+`android/core/security`
+([security-screens.md](../architecture/security-screens.md#the-app-lock)).
 This section fixes what it means for keys.
 
 ### What the prompt guards
@@ -1003,7 +978,7 @@ with no files. So the prompt always unlocks a real hardware key.
      key are the proof: they must be the current recovery key of the
      stored `record`. It asks for no four words on top. The key is not
      kept by this check. Keeping stays the user's own choice on the
-     security screen. The owner decided this in step 1.7, session B.
+     security screen. The owner decided this.
    - `core/crypto` enforces the check: turning on needs a `WordsProof`,
      which only `checkFourWords` and `checkAllWords` make. Both store
      nothing and drop no key from memory. A proof names the key ID of the
@@ -1013,8 +988,8 @@ with no files. So the prompt always unlocks a real hardware key.
      words leaves memory when the screen stops, as on the screen that
      shows the words. A turn of the phone does not count. The prompt asks
      again on the way back.
-   - Whether a keeper can do the check for another app is decided in the
-     handover step (3.0).
+   - Whether a keeper can do the check for another app is decided with
+     the handover between apps.
 3. Why rule 1: the Lock key is removed when the screen lock is removed.
    The `file-key` keyset is then gone from the phone. Because it derives
    from the recovery key, the words bring it back. A random keyset could
@@ -1022,7 +997,7 @@ with no files. So the prompt always unlocks a real hardware key.
 4. The screen that turns the app lock on says plainly: if the screen lock
    is removed and the recovery words are lost, the files of this app on
    this phone can never be opened again. The user guide says the same.
-   The owner accepted this case on pull request 22.
+   The owner accepted this case.
 5. The app lock is on exactly when the `file-key` keyset file names a
    Lock key. Nothing else stores that state. So a stop in the middle of
    turning it on or off leaves it clearly on or clearly off.
@@ -1055,11 +1030,11 @@ Turn on:
 So turning the lock on shows two prompts in a keeper app, and one in an
 app that does not keep the key.
 
-The order is the owner's decision in session B. The page first made the
-Lock key and wrapped `file-key`, and only then replaced the old key. A
-stop right after that left the old key in place for good, because nothing
-recorded that the last step was still due. In this order a stop at any
-point is harmless:
+The order is the owner's decision. Making the Lock key and wrapping
+`file-key` first, and replacing the old key only then, would not be
+safe: a stop right after that would leave the old key in place for
+good, because nothing records that the last step is still due. In this
+order a stop at any point is harmless:
 
 - Before step 5 the app lock is off and every keyset opens. A key that
   was made and that no file names yet is deleted at the next start
@@ -1149,7 +1124,7 @@ when the phone is lost. The paper copy is the backup.
      different recovery key". So after a stop, only the same words can
      finish a setup that already stored a derived keyset. Other words
      would leave keysets of two recovery keys, or lose the keys of files
-     that were added in between. The owner decided this in session B.
+     that were added in between. The owner decided this.
      A user who cannot give the same words can start over
      ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
    - A stored keyset that cannot be opened now stops the setup, and
@@ -1188,19 +1163,17 @@ gone. Starting again makes a new one.
    A test checks the list in the app against this value.
    - Source: the file `src/mnemonic/wordlist/english.txt` of Trezor's
      [python-mnemonic](https://github.com/trezor/python-mnemonic), the
-     reference implementation of BIP-39. Its hash is the value above,
-     checked on 2026-11-12.
+     reference implementation of BIP-39. Its hash is the value above.
    - Licence: MIT, "Copyright (c) 2013-2016 Pavol Rusnak". The MIT licence
      asks that this notice and the licence text go with every copy.
-   - Session B committed the list as
+   - The list is
      `android/core/crypto/src/main/resources/app/shkriuss/core/crypto/words/english.txt`,
      with the MIT licence text next to it as `LICENSE.txt`. Both are
-     packed into the app together. It also created the page
-     [third-party.md](../development/third-party.md), with the word list,
-     and with Tink and the four libraries it brings: each with its
-     source, its licence and its notice. Listing everything else that
-     ships in an app, and showing the notices inside the apps, comes in
-     Phase 2, before Water's first release.
+     packed into the app together.
+     [third-party.md](../development/third-party.md) lists the word
+     list, Tink and the four libraries it brings, and everything else
+     that ships in an app: each with its source, its licence and its
+     notice.
 2. Encoding: take the 32 bytes. Add one byte: the first byte of their
    SHA-256. Cut the 264 bits into 24 groups of 11 bits. Each group is the
    number of a word, 0 to 2047.
@@ -1213,7 +1186,7 @@ gone. Starting again makes a new one.
 
 ### The QR code
 
-Not built. The owner decided in step 1.7, session A: words only for now.
+Not built. The owner decided: words only for now.
 Nothing draws or scans a QR code.
 
 Why:
@@ -1225,7 +1198,7 @@ Why:
 3. The words already work. A QR code saves typing mainly when a new
    phone is set up from an old one, and that comes with sync.
 
-Decided again in Phase 5, when a new phone is set up through sync. The
+Decided again in the sync design, for a new phone set up through sync. The
 proposal stays written down for then: the text `SHKRIUSS-RK1`, one
 space, then the 24 words in upper case with one space between them.
 That text fits the QR alphanumeric mode and is at most 228 characters.
@@ -1235,7 +1208,7 @@ That text fits the QR alphanumeric mode and is at most 228 characters.
 1. The user types 24 words. The field offers words from the list. The
    first four letters of a word are enough to know it. When the typed
    letters start no word of the list, the field says so at once, under
-   it (the owner's review of pull request 28).
+   it (the owner's decision).
 2. The app trims spaces, makes the text lower case, and splits it at
    spaces. Any run of white space counts as one space. Lower case is made
    the same way in every app language. Only whole words count: the first
@@ -1332,10 +1305,10 @@ entered, on a phone with a screen lock. Several apps can be keepers.
 
 ### Setting up a second app on the same phone
 
-Decided by the owner on 2026-11-12: the second app gets its own derived
-keys and never the recovery key. This handover is not built in session B.
-It is a step of its own before Phase 3, with its own decision record
-(step 3.0 in [PROMPTS.md](../development/PROMPTS.md)). That step confirms
+Decided by the owner: the second app gets its own derived keys and
+never the recovery key. This handover is not built yet. It is a piece
+of work of its own, with its own decision record
+([PROMPTS.md](../development/PROMPTS.md#30-handover)), which confirms
 the points below.
 
 1. The new app opens a screen of a keeper app. That screen can be opened
@@ -1376,8 +1349,7 @@ in a handover with a real app.
 
 ### Starting over after a setup that stopped
 
-Decided by the owner on 2026-11-13, in step 1.7, session A (open
-question 11).
+Decided by the owner (open question 11).
 
 A setup stopped half way when some derived keysets are stored, but not
 `record`. The same words finish it ("Creating it", step 4). A user who
@@ -1422,8 +1394,7 @@ hardware key". It is safe:
 
 ### A damaged keyset file
 
-Decided by the owner on 2026-11-13, in step 1.7, session A (open
-question 12).
+Decided by the owner (open question 12).
 
 A keyset file is damaged when the Keystore refuses its tag, or when what
 it opens is not a keyset of the right kind. There are two ways out.
@@ -1446,7 +1417,7 @@ it opens is not a keyset of the right kind. There are two ways out.
    - `file-key` under a Lock key is stored again under a key that needs
      no prompt: the Unlocked key, or the Background key on Android 13
      and 14. The Lock key is deleted, and the app lock is off. The app
-     lock screens (step 1.7, session B) tell the user.
+     lock screens tell the user.
    - A kept recovery key is replaced when the user keeps the words again.
      The damaged file is copied aside first. Just before, the file is
      read again. If it changed since the step began, nothing happens.
@@ -1517,7 +1488,7 @@ What the user does:
 
 ### No phone setting destroys files
 
-The owner's rule, 2026-11-12. How the design keeps it:
+The owner's rule. How the design keeps it:
 
 1. With the app lock off, the `file-key` keyset is under a hardware key
    that no screen lock change and no fingerprint change removes. This
@@ -1533,8 +1504,8 @@ the words are lost. Then the files of that app on that phone can never be
 opened. Other devices and the server copy are not affected. The design
 lowers the chance: the app lock needs a recovery key, and turning it on
 asks for four of the words. It cannot remove the case, because a key that
-needs the prompt dies with the screen lock. The owner accepted this on
-pull request 22. The app-lock screen and the user guide say it plainly.
+needs the prompt dies with the screen lock. The owner accepted this. The
+app-lock screen and the user guide say it plainly.
 
 ## StrongBox and other hardware
 
@@ -1582,10 +1553,10 @@ There is no rotation by calendar. Keys change on these events.
 
 ### A new recovery key
 
-Session B builds no "new recovery key" flow. It builds what the flow
+There is no "new recovery key" flow yet. The code has what the flow
 will need: keysets that hold several keys, and blobs that name their key
 ID. The flow itself is part of the sync design
-([ADR 0009](../adr/0009-sync-protocol-and-server.md), Phase 5), because
+([ADR 0009](../adr/0009-sync-protocol-and-server.md)), because
 other devices, other apps and the server must follow.
 
 What is fixed now:
@@ -1831,11 +1802,9 @@ de01854b108f58a9ff8768fca193f7fce8d937f5dc0b2efa4402b2edb7
 
 ## What the tests must cover
 
-Items 1 to 8 are for session B, which built them
-([build.md](../development/build.md#unit-tests)). Item 9 is session C,
-which built it in its own pull request, with the emulator job in the CI
-workflow (step 1.4, session C in
-[PROMPTS.md](../development/PROMPTS.md)). The tests and what they showed
+Items 1 to 8 and 10 to 13 are unit tests
+([build.md](../development/build.md#unit-tests)). Item 9 runs on
+emulators, in the emulator job of CI. Those tests and what they showed
 are in
 [emulator-tests.md](../development/emulator-tests.md#the-tests-of-the-hardware-keys).
 
@@ -1863,28 +1832,27 @@ constructor, and the tests pass a software one with the same byte layout.
 8. The provider check, and a check that no module but `core/crypto`
    imports Tink, `javax.crypto`, `java.security.KeyStore` or
    `android.security.keystore`.
-9. Session C: emulator tests in GitHub Actions on Android 13, 14, 15 and
-   the newest. Each hardware key kind is made and used. After the screen
+9. Emulator tests in GitHub Actions on Android 13, 14, 15 and the
+   newest. Each hardware key kind is made and used. After the screen
    lock is changed, removed and set again, each key is there or gone as
-   the table in "When things change" says. What an emulator cannot do,
-   such as StrongBox and a real fingerprint, becomes a list of steps for
-   the owner's three devices. Built: the tests are in
-   `android/core/crypto/src/androidTest/`, and what they cannot check is
-   in [emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check).
-10. Step 1.7, session A: start over. Stopped before each change, then
+   the table in "When things change" says. The tests are in
+   `android/core/crypto/src/androidTest/`. What an emulator cannot
+   check, such as StrongBox and a real fingerprint, is in
+   [emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check).
+10. Start over. Stopped before each change, then
     started over with the same words and with other words; files added
     in between; Android 13 and 14, and the move to Android 15 between
     two tries. `file-key-old` only grows. A key ID that would stand for
     two keys is refused. In `StartOverTest`.
-11. Step 1.7, session A: a damaged keyset file. Repaired with proven
+11. A damaged keyset file. Repaired with proven
     words; refused without proof, with other words, and with a proof
     that holds more keys; a stop after the copy; a set-aside copy is
     never written over; damage that a prompt found; giving up, and what
     is never given up. In `RepairTest` and `KeysetFilesTest`.
-12. Step 1.7, session A: every keyset in memory is dropped after a write,
+12. Every keyset in memory is dropped after a write,
     so that a change that failed half way leaves nothing stale behind.
     In `StartOverTest`.
-13. Step 1.7, session B: the checks of the words before the app lock.
+13. The checks of the words before the app lock.
     Four words of the kept key, and all 24 words, give a proof that names
     the key ID of `record`; a wrong word, another recovery key, three or
     five positions and an app with no recovery key do not; the checks
@@ -1929,21 +1897,21 @@ owner. Each one is a place to object.
     in the reference of `KeyGenParameterSpec.Builder`. The binding of a
     prompt key to the device credential, and the deletion of an app's
     keys when its data is cleared, were also read in Android 16's source.
-    - Session C, on AOSP emulators with Android 13, 14, 15 and 17: confirmed for
-      the screen lock. A key that needs the prompt stays when the PIN is
+    - The emulator tests, on AOSP emulators with Android 13, 14, 15 and
+      17, confirmed it for the screen lock. A key that needs the prompt stays when the PIN is
       changed, and still works after it. It is deleted at once when the
       screen lock is removed, and does not come back when a lock is set
       again. A key that needs no prompt stays through all of it. From
       Android 15 the Unlocked key is made and used with no screen lock,
       stays when the lock is removed, and is refused while the emulator
       is locked.
-    - Still to confirm on the three devices: a fingerprint added or
-      removed, GrapheneOS, a second profile, Private Space, and app data
-      cleared
+    - Not confirmed, because an emulator cannot check them: a
+      fingerprint added or removed, GrapheneOS, a second profile,
+      Private Space, and app data cleared
       ([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
 12. A key that accepts fingerprint and device credential can be made with
-    no fingerprint enrolled. Read in Android 16's source. Session C
-    confirmed it on emulators with Android 13, 14, 15 and 17: they have no
+    no fingerprint enrolled. Read in Android 16's source. The emulator
+    tests confirmed it on emulators with Android 13, 14, 15 and 17: they have no
     fingerprint, and the Lock key and the Recovery guard were made. With
     no screen lock, making them fails, as the page says.
 13. `setInvalidatedByBiometricEnrollment(false)` is set although the
@@ -1970,16 +1938,16 @@ owner. Each one is a place to object.
 23. Android's own `BiometricPrompt` takes a cipher together with
     fingerprint or device credential on Android 13 and later, also when
     no fingerprint is enrolled. Read in the source of Android 13 and
-    Android 16. Session C confirmed it on emulators with Android
-    13, 14, 15 and 17: the prompt took the cipher of a Lock key and of a Recovery
+    Android 16. The emulator tests confirmed it on emulators with
+    Android 13, 14, 15 and 17: the prompt took the cipher of a Lock key and of a Recovery
     guard and was answered with the PIN, to encrypt and to decrypt. A
-    fingerprint as the answer, and a key in StrongBox, are still to
-    confirm on the three devices.
+    fingerprint as the answer, and a key in StrongBox, are not confirmed,
+    because an emulator cannot check them.
 24. For a key that needs the prompt, the cipher can be started before the
     prompt, and associated data must wait until after it. An encrypt
-    operation gives its IV when it is done. Read in Android's source by
-    the independent review. Session C confirmed it on emulators with
-    Android 13, 14, 15 and 17:
+    operation gives its IV when it is done. Read in Android's source. The
+    emulator tests confirmed it on emulators with Android 13, 14, 15 and
+    17:
     - In the page's order every step works, and the IV read after
       encrypting is 12 bytes.
     - Without the prompt, the last step fails and nothing is stored. One
@@ -1996,80 +1964,86 @@ owner. Each one is a place to object.
     to survive a power loss on the supported phones.
 28. `KeyStore.getKey` on the Android Keystore answers "no key" only for
     "not found", and throws for every other failure. Read in the source
-    of Android 13 and 14. Session C confirmed the first half on
+    of Android 13 and 14. The emulator tests confirmed the first half on
     emulators with Android 13, 14, 15 and 17: "no key" for an alias that was
     never made, that was deleted, and that Android deleted with the
     screen lock. The second half cannot be tested: a test cannot make
     the real Keystore fail.
 29. `KeyStore.aliases` comes back empty or short when the Keystore
     fails. Read in Android 14's source. The code never depends on the
-    list being complete. Session C confirmed on emulators that the list
+    list being complete. The emulator tests confirmed that the list
     shows each key from when it is made until it is gone. A list from a
     failing Keystore cannot be tested.
 30. `KeyPermanentlyInvalidatedException` reaches the app from the cipher.
     When a key is loaded, Android reports the same state as a key that
     cannot be recovered, which the code counts as "not usable now". Read
-    in Android's source. Session C could not confirm it: no test met
+    in Android's source. The emulator tests could not confirm it: no test met
     this state. On emulators with Android 13, 14, 15 and 17, a key that Android
     deleted with the screen lock is simply "not found", which the code
     counts as gone. Starting a cipher for it also answers "gone".
 31. A folder can be flushed to storage through a `FileChannel` opened on
-    it. That is how the code flushes `shk-keys/`. Session C confirmed on
+    it. That is how the code flushes `shk-keys/`. The emulator tests confirmed on
     emulators with Android 13, 14, 15 and 17 that the call works on Android's
     file system: every keyset file in the tests is replaced this way.
     That the file survives a loss of power (assumption 27) cannot be
     tested.
 32. Tink's code path for Android is the same construction as the one a
     JVM test runs. A JVM test never runs the Android path, because Tink
-    tells Android from a desktop by Java's vendor name. Session C ran
+    tells Android from a desktop by Java's vendor name. The emulator tests ran
     every vector of this page and the published ones on emulators with
     Android 13, 14, 15 and 17. All pass. Android's own provider is there, and no
     Play services provider.
 33. After a prompt that succeeded, the Keystore answers a blob whose tag
     is wrong with `AEADBadTagException`, and an operation the user did
     not allow with another exception. The app marks a file as damaged
-    only on the first. Not checked in Android's source or on a device in
-    step 1.7. A wrong mark is harmless: a repair needs the proven words,
+    only on the first. Not checked in Android's source or on a device. A
+    wrong mark is harmless: a repair needs the proven words,
     and stores the keyset those words derive.
 
-## Decided on pull request 22
+## The owner's decisions
 
-The owner's decisions of 2026-11-12 on the questions this page first
-left open. Each is built into the page above.
+The owner's decisions on this page. Each is built into the page above,
+or into [security-screens.md](../architecture/security-screens.md#the-app-lock)
+and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on).
 
 | Question | Decision |
 |---|---|
 | App lock on, screen lock removed, words lost | Accepted. The app-lock screen and the user guide say it plainly. |
-| When the handover between apps is built | A step of its own before Phase 3, with its decision record. |
-| Protecting the handover on its way | No extra encryption. The keeper also checks the caller's signing certificate itself. The handover step confirms both. |
+| When the handover between apps is built | A piece of work of its own, with its decision record ([PROMPTS.md](../development/PROMPTS.md#30-handover)). |
+| Protecting the handover on its way | No extra encryption. The keeper also checks the caller's signing certificate itself. The handover's decision record confirms both. |
 | Entering the words in a second app | It asks "keep it here too" only when another keeper is already on the phone. Otherwise it keeps the key without asking. |
 | The word list | `english.txt` from Trezor's python-mnemonic, MIT licence, the same SHA-256. Source and licence are recorded with the project's third-party material. |
-| The QR code | Words only for now. The QR code is decided when the recovery key screens are built. |
+| The QR code (open question 3) | Words only for now. Nothing draws or scans a QR code. Decided again in the sync design ([The QR code](#the-qr-code)). |
 | Pasting the words | Not offered. |
 | How many words to confirm | Four at setup, four when the app lock is turned on. |
 | A software-only Keystore | Allowed, with a clear notice. |
 | Preview builds share derived keys with their app | Accepted. The guide tells testers never to type real recovery words into a preview build ([test-a-pull-request.md](../development/test-a-pull-request.md#safety)). |
 | Tink's four companion libraries | Accepted as they come. |
-| The build check for Play services classes | In the APK rules check. The owner asks for it in session B. |
-| StrongBox cannot be tested in an emulator | A line in the release checklist of the first app that stores keys, checked on the three devices. |
-| The emulator tests | Not part of session B. They are the next step, in their own pull request. |
+| The build check for Play services classes | In the APK rules check. |
+| StrongBox cannot be tested in an emulator | No release waits for a manual check of it ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)). |
+| The emulator tests | In the emulator job of CI ([emulator-tests.md](../development/emulator-tests.md)). |
 | The system prompt | Android's own `BiometricPrompt`. No AndroidX Biometric in `core/crypto`. |
-| Where third-party material is listed | Session B creates `docs/development/third-party.md` with the word list, and with Tink and its four libraries, and puts the MIT text next to the list. Everything else that ships in an app, and the notices inside the apps, come in Phase 2 before Water's first release. |
+| Where third-party material is listed | In [third-party.md](../development/third-party.md): the word list, Tink and its four libraries, and everything else that ships in an app. The MIT text is next to the word list. |
 | Sealing file keys again in the database | Its own `RecordWriter` function, built with the first app that stores files. |
-
-## Decided in session B
-
-The owner's decisions of 2026-11-12 in step 1.4, session B, when the code
-was built. Each is built into the page above.
-
-| Question | Decision |
-|---|---|
-| How the code asks whether a hardware key exists, and how it lists keys | Two more direct calls: `KeyStore.getKey` for "exists" and `KeyStore.aliases` for the list. Tink's `hasKey` is not used. A list is never proof that a key is gone, a key is made only after its exact alias was asked for, and rule 8 deletes only keys the list shows. Session C tests it. |
-| A setup that stopped half way, then a different recovery key | The owner had no preference. The safe reading was taken: nothing is stored unless every derived keyset that is stored already fits the given recovery key. How a user who cannot give the same words starts over is an open question, and nothing is built for it yet. |
+| How the code asks whether a hardware key exists, and how it lists keys | Two more direct calls: `KeyStore.getKey` for "exists" and `KeyStore.aliases` for the list. Tink's `hasKey` is not used. A list is never proof that a key is gone, a key is made only after its exact alias was asked for, and rule 8 deletes only keys the list shows. The emulator tests check it. |
+| A setup that stopped half way, then a different recovery key | Nothing is stored unless every derived keyset that is stored already fits the given recovery key. A user who cannot give the same words can start over (open question 11, below). |
 | The order of steps when the app lock is turned on | Move first: the new key and the other keysets first, then the Lock key and the prompt, then `file-key`, and the old key is deleted last. |
+| How a user starts over after a setup that stopped half way (open question 11) | An explicit start over, offered only while the setup is unfinished. The old file keys join `file-key-old`, and the `backup` of the stopped setup is written over. It is an exception to rule 2, and the page says why it is safe ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)). |
+| A keyset file that is damaged while its hardware key lives (open question 12) | Repair with proven words: an exact match of another stored keyset. The damaged file is copied aside and kept, never deleted, and the keyset is stored again ([A damaged keyset file](#a-damaged-keyset-file)). |
+| A damaged keyset that no words can bring back | "Give up these files", offered only when `file-key-old`, or the `file-key` of an app without `record`, is damaged. A plain warning comes first: those files can then not be opened on any device. |
+| `file-key` damaged under the app lock | Repaired under a key that needs no prompt. The app lock is then off, and the app lock screens tell the user. |
+| The permission `USE_BIOMETRIC` (open question 4) | [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md): `core/security` declares it, Catalog removes it, and the APK rules check allows it per app. |
+| AndroidX Biometric (open question 5) | Used nowhere. The app lock uses Android's own prompt too. ADR 0003, point 4, says so. |
+| Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. Whether a keeper can check for another app stays open for the handover between apps. |
+| Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. It names the key ID of the `record` key it was checked against, and `beginTurnOn` refuses a proof for another key. |
+| A keeper app that cannot read its kept recovery key | It asks for all 24 words instead: the same check as an app that does not keep the key. |
+| The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words. A turn of the phone does not count. The prompt asks again on the way back. |
+| When the app locks | When it leaves the screen (the default), or after 1, 5 or 15 minutes or 1 hour away. Time away is counted with a clock the user cannot change. The app always locks when the screen turns off with the app on it, and after Android stopped it. |
+| What a waiting app learns of a screen that turned off | Nothing sure. The screen-off broadcast is held back on Android 14 and later, and a late one is ignored. "Keys in memory", point 5, says what happens; the user guide says it plainly. |
+| What a notification shows while the app lock is on | Only its channel's name and a fixed text, unless the user turns on "Show the text in notifications". Turning the app lock on posts the shown notifications again in that form. If the state cannot be read, the text is hidden. |
+| The app lock screen | It asks for the system prompt each time it opens while the app lock is on, before it shows anything. Closing the prompt closes the screen. |
 
-Where the page was silent, session B wrote down how the code reads it.
-The owner approved these readings with the plan of session B:
+Where the page was silent, the owner approved these readings of it:
 
 1. A reader checks the magic, then the kind, then the version. The
    answers for short input, for a version `00` and for refused content
@@ -2082,9 +2056,8 @@ The owner approved these readings with the plan of session B:
    one is replaced ([Where keys are stored](#where-keys-are-stored)).
 5. Rule 4 decides the number of a new hardware key. A number can come
    back.
-6. What "a keyset is made" means in rule 3. Rule 2 has no exception.
-   Step 1.7, session A gave rule 2 three exceptions
-   ([Decided in step 1.7, session A](#decided-in-step-17-session-a)).
+6. What "a keyset is made" means in rule 3. Rule 2 has three exceptions
+   ([Rules for making, replacing and losing a hardware key](#rules-for-making-replacing-and-losing-a-hardware-key)).
 7. `file-key-old` moves to the Unlocked key too, and the move waits
    while the phone is locked.
 8. The three states of the app lock.
@@ -2096,99 +2069,45 @@ The owner approved these readings with the plan of session B:
 12. The screen lock is asked from `KeyguardManager`. The provider check
     runs at every way into the module.
 
-## Decided in step 1.7, session A
-
-The owner's decisions of 2026-11-13, in step 1.7, session A. The code
-for open questions 11 and 12 came first, in its own pull request; the
-recovery key screens, with open questions 3, 4 and 5, came in the next.
-Each is built into the page above.
-
-| Question | Decision |
-|---|---|
-| How a user starts over after a setup that stopped half way (open question 11) | An explicit start over, offered only while the setup is unfinished. The old file keys join `file-key-old`, and the `backup` of the stopped setup is written over. It is an exception to rule 2, and the page says why it is safe ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)). |
-| A keyset file that is damaged while its hardware key lives (open question 12) | Repair with proven words: an exact match of another stored keyset. The damaged file is copied aside and kept, never deleted, and the keyset is stored again ([A damaged keyset file](#a-damaged-keyset-file)). |
-| A damaged keyset that no words can bring back | "Give up these files", offered only when `file-key-old`, or the `file-key` of an app without `record`, is damaged. A plain warning comes first: those files can then not be opened on any device. |
-| `file-key` damaged under the app lock | Repaired in this step, under a key that needs no prompt. The app lock is then off. The message to the user comes with the app lock screens in session B. |
-| The QR code (open question 3) | Words only for now. Nothing draws or scans a QR code. Decided again in Phase 5 ([The QR code](#the-qr-code)). |
-| The permission `USE_BIOMETRIC` (open question 4) | [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md): `core/security` declares it, Catalog removes it, and the APK rules check allows it per app from Water on (steps 2.4 and 2.5). No owner-only file changed in step 1.7. |
-| AndroidX Biometric (open question 5) | Used nowhere. The app lock uses Android's own prompt too. ADR 0003, point 4, says so. |
-
-The independent review of this step found five things in the code of
-session B. Each is fixed and tested:
-
-1. A keyset kept in memory was dropped only when a setup succeeded. After
-   a change that failed half way, file code went on with the old keyset.
-   Now every write of a keyset file drops them all.
-2. The move from the random `file-key` could be finished, and
-   `file-key-old` deleted, before the app had `record`. Now it cannot.
-3. Whether a row is sealed by the current key is told by the key ID
-   alone. A new recovery key could share its ID with the random
-   `file-key`. Now a new key avoids every stored ID, entered words with
-   an ID in use are refused, and a keyset with an ID twice does not
-   open.
-4. A damaged `file-key-old` stopped every file and every setup. Now it
-   counts as absent.
-5. Keeping a recovery key trusted its caller. Now the app keeps only the
-   current recovery key of its stored `record`.
-
-## Decided in step 1.7, session B
-
-The owner's decisions of 2026-11-13, in step 1.7, session B, with the
-app lock screens. Each is built into the page above, or into
-[security-screens.md](../architecture/security-screens.md#the-app-lock)
-and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on).
-
-| Question | Decision |
-|---|---|
-| Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. Whether a keeper can check for another app stays open for step 3.0. |
-| Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. It names the key ID of the `record` key it was checked against, and `beginTurnOn` refuses a proof for another key (the owner's review of pull request 29). |
-| A keeper app that cannot read its kept recovery key | It asks for all 24 words instead: the same check as an app that does not keep the key. Confirmed in the owner's review of pull request 29. |
-| The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words. A turn of the phone does not count. The prompt asks again on the way back (the owner's review of pull request 29). |
-| When the app locks | When it leaves the screen (the default), or after 1, 5 or 15 minutes or 1 hour away. Time away is counted with a clock the user cannot change. The app always locks when the screen turns off with the app on it, and after Android stopped it. |
-| What a waiting app learns of a screen that turned off | Nothing sure. The screen-off broadcast is held back on Android 14 and later, and a late one is ignored. "Keys in memory", point 5, says what happens; the user guide says it plainly. |
-| What a notification shows while the app lock is on | Only its channel's name and a fixed text, unless the user turns on "Show the text in notifications". Turning the app lock on posts the shown notifications again in that form. If the state cannot be read, the text is hidden. |
-| The app lock screen | It asks for the system prompt each time it opens while the app lock is on, before it shows anything. Closing the prompt closes the screen. |
-
 ## Open questions
 
-What is left, with the step that decides it.
+What is left, with what decides it.
 
 1. **Checking the paper copy in an app that is not a keeper**, before
-   the app lock is turned on. Decided in step 1.7, session B, for an app
-   that does not keep the key: it asks for all 24 words, and words that
-   give its own `record` key are the proof (rule 2 of "The app lock").
-   Still open for the handover step (3.0): whether a keeper can do the
-   check for another app.
+   the app lock is turned on. Decided for an app that does not keep the
+   key: it asks for all 24 words, and words that give its own `record`
+   key are the proof (rule 2 of "The app lock"). Still open for the
+   handover between apps: whether a keeper can do the check for another
+   app.
 2. **The handover interface**: its screen, its signature permission and
    its decision record. Also what happens when the asking app already
-   has keys, or has its app lock on. The handover step (3.0).
-3. **The QR code.** Decided in step 1.7, session A: words only for now,
-   decided again in Phase 5 ([The QR code](#the-qr-code)).
-4. **The permission `USE_BIOMETRIC`.** Decided in step 1.7, session A
+   has keys, or has its app lock on. The handover between apps.
+3. **The QR code.** Decided: words only for now, decided again in the
+   sync design ([The QR code](#the-qr-code)).
+4. **The permission `USE_BIOMETRIC`.** Decided
    ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)).
-5. **AndroidX Biometric.** Decided in step 1.7, session A: used nowhere
+5. **AndroidX Biometric.** Decided: used nowhere
    ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)).
 6. **A new recovery key.** The whole flow: how other devices, other apps
    and the server learn of it, when old keys are dropped, how old sealed
    records are sealed again, and how sealing file keys again fits "last
    writer wins". It must keep the rules under "A new recovery key".
-   Phase 5.
+   The sync design.
 7. **The sync signing key.** Proposal: ECDSA P-256 in the Keystore,
    because StrongBox must support it, with the settings of a Background
-   key so that sync works while the phone is locked. Phase 5.
-8. **The largest sealed record.** The server's limits decide. Phase 5.
+   key so that sync works while the phone is locked. The sync design.
+8. **The largest sealed record.** The server's limits decide. The sync
+   design.
 9. **File ciphertext that arrives while the app is locked** is stored
    unchecked until the file is opened. A hostile server could fill
    storage with bytes that never open. Should the file's record carry a
-   hash of the ciphertext? Phase 5.
-10. **The threat model page.** Written in step 1.8:
+   hash of the ciphertext? The sync design.
+10. **The threat model page.** Done:
     [threat-model.md](threat-model.md).
-11. **Starting over after a setup that stopped half way.** Decided in
-    step 1.7, session A
+11. **Starting over after a setup that stopped half way.** Decided
     ([Starting over after a setup that stopped](#starting-over-after-a-setup-that-stopped)).
 12. **A keyset file that is damaged while its hardware key lives.**
-    Decided in step 1.7, session A
-    ([A damaged keyset file](#a-damaged-keyset-file)).
+    Decided ([A damaged keyset file](#a-damaged-keyset-file)).
 13. **Files whose keys were given up.** Their records stay, and their
     files can never be opened again. How does an app show them: hide
     them, mark them, or offer to delete them? Decided with the first app
@@ -2197,4 +2116,4 @@ What is left, with the step that decides it.
     needs an exact match of another stored keyset. After a new recovery
     key, each keyset holds keys of two recovery keys, and the new words
     alone derive only one of them. So repair does not work then.
-    Phase 5, with the new recovery key.
+    The sync design, with the new recovery key.

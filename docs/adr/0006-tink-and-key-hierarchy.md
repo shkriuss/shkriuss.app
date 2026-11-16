@@ -187,7 +187,7 @@ proof that a key is gone. See
     repair of a damaged keyset file with proven words, and giving up
     file keys that no words can bring back. A damaged keyset file is
     always copied aside first, and never deleted
-    ([crypto-design.md](../security/crypto-design.md#decided-in-step-17-session-a)).
+    ([crypto-design.md](../security/crypto-design.md#the-owners-decisions)).
 - For a key that needs the prompt, associated data is given to the
   cipher only after the prompt succeeds. Tink's helper does it earlier,
   which is one more reason it cannot be used for these keys.
