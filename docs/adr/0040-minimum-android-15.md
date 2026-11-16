@@ -2,8 +2,10 @@
 
 - Status: Accepted
 - Date: 2026-11-16
-- Source: the owner's decision of 2026-11-16, and the owner's answers on
-  the pull request that made the change. It supersedes point 2 of
+- Source: the owner's decision of 2026-11-16, and the owner's answers to
+  three questions on it, for
+  [pull request 69](https://github.com/shkriuss/shkriuss.app/pull/69).
+  It supersedes point 2 of
   [0002](0002-grapheneos-first-minimum-android-13.md), the sentence of
   point 3 of [0006](0006-tink-and-key-hierarchy.md) on Android 13 and 14,
   and the required emulator checks named in the consequences of
