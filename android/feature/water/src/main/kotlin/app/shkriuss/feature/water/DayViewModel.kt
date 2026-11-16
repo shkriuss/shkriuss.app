@@ -122,7 +122,11 @@ class DayViewModel(
     private val fixedDay: LocalDate? = null,
     private val work: CoroutineContext = EmptyCoroutineContext,
 ) : ViewModel() {
-    private val day = MutableStateFlow(fixedDay ?: today.date.value)
+    /** The day the open Day shows. [show] moves it. */
+    private val openedDay = MutableStateFlow(fixedDay ?: today.date.value)
+
+    /** The day shown: the date itself for Today, so it moves in the same step as the date, and the opened day for a Day. */
+    private val day: StateFlow<LocalDate> = if (fixedDay == null) today.date else openedDay
     private val sheet = MutableStateFlow<DrinkSheet?>(null)
     private val snackbar = MutableStateFlow<DrinkSnackbar?>(null)
     private val screen = MutableStateFlow(notLoaded(day.value))
@@ -173,8 +177,6 @@ class DayViewModel(
                 synchronized(dayLock) { if (next.day == day.value) screen.value = next }
             }
         }
-        // Today moves to the new day when the date changes: at midnight, or after a change of the clock or the time zone.
-        if (fixedDay == null) viewModelScope.launch(work) { today.date.collect { day.value = it } }
     }
 
     /** Today's screen is today by what it is. An open Day is today while the date is its day. */
@@ -192,7 +194,7 @@ class DayViewModel(
             if (day.value == shown) return
             sheet.value = null
             snackbar.value = null
-            day.value = shown
+            openedDay.value = shown
             // Unless the new day already shows, it shows as not loaded from now on.
             if (screen.value.day != shown) screen.value = notLoaded(shown, screen.value)
         }
