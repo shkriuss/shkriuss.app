@@ -1,9 +1,8 @@
 # Emulator tests
 
 Tests that need a real Android run on an emulator in GitHub Actions. They
-are called instrumented tests. Set up in Phase 1, step 4, session C, with
-the tests of the hardware keys in `core/crypto`. Phase 1, step 6 added
-the tests of the alarms in `core/notify`.
+are called instrumented tests. Two modules have them: `core/crypto`, for
+the hardware keys, and `core/notify`, for alarms and notifications.
 
 Emulator tests run only in GitHub Actions. The cloud environment has no
 KVM, so it cannot run an emulator ([cloud-environment.md](cloud-environment.md)).
@@ -78,10 +77,13 @@ The same lines go to Android's log under the tag `InstrumentedTests`.
 
 ## The tests of the hardware keys
 
-Step 1.4, session B built `core/crypto` with unit tests on the JVM. No
-Android Keystore exists there, so those tests use a software stand-in for
-the hardware keys. The class that talks to the real Keystore,
-`AndroidHardwareKeys`, first ran in the tests below. They are item 9 of
+`core/crypto` has unit tests on the JVM. No Android Keystore exists
+there, so those tests use a software stand-in for the hardware keys. The
+class that talks to the real Keystore, `AndroidHardwareKeys`, meets a
+real Keystore only in the tests below. On the JVM, `ShkCryptoTest`
+checks what it does where no Keystore answers, and which Android
+versions allow which keys ([build.md](build.md#unit-tests)). The tests
+below are item 9 of
 "What the tests must cover" in
 [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover).
 
@@ -116,15 +118,11 @@ How the tests reach what an app cannot:
 
 ### What the tests showed
 
-First run on 2026-11-12, in
-[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24), on
-AOSP emulators with Android 13, 14, 15 and 17. Each run has 68 tests. A
-test that does not apply to a version is skipped: five on Android 13 and
-14, one from Android 15.
+The tests run on AOSP emulators with Android 13, 14, 15 and 17. A test
+that does not apply to a version is skipped.
 
-Android behaved as
+Android behaves as
 [crypto-design.md](../security/crypto-design.md) says, on every version.
-Nothing in the design had to change.
 
 | What | Result |
 |---|---|
@@ -156,15 +154,16 @@ Nothing in the design had to change.
 | The word list | Loads from inside the test APK, with the right hash. |
 | Keyset files | Written, flushed, renamed and the folder flushed, on Android's own file system. |
 
-Not met in any test: `KeyPermanentlyInvalidatedException`. After the
-screen lock was removed, the keys were simply not found.
+No test gets `KeyPermanentlyInvalidatedException`. After the screen
+lock is removed, the keys are simply not found.
 
 The emulators start in about half a minute, and the tests take about one
 minute. A whole job takes four to five minutes.
 
-### What the job and the tests had to learn
+#### What the job and the tests work around
 
-Four things did not work at first. None of them is about the Keystore.
+Four faults of the runner and the emulator images. None of them is about
+the Keystore.
 
 1. **Where the emulator's files are.** On GitHub's runner `avdmanager`
    and `emulator` look in different folders. The job names one folder to
@@ -179,18 +178,19 @@ Four things did not work at first. None of them is about the Keystore.
    system process, inside the emulator's graphics driver:
    `mapper.ranchu.so`, "Assertion failed:
    !rcEnc->featureInfo()->hasReadColorBufferDma". Four other graphics
-   settings of the emulator were tried: `-gpu lavapipe`,
-   `-gpu swangle_indirect`, `-gpu auto` and `-feature -GLDMA`. The run
-   got no further with any of them. With `-gpu lavapipe` the same crash
-   came, and with `-feature -GLDMA` the emulator itself died at the
-   same moment. Android 13, 14 and 15 do not have this fault.
+   settings of the emulator do not help: `-gpu lavapipe`,
+   `-gpu swangle_indirect`, `-gpu auto` and `-feature -GLDMA`. With
+   `-gpu lavapipe` the same crash comes, and with `-feature -GLDMA` the
+   emulator itself dies at the same moment. Android 13, 14 and 15 do not
+   have this fault.
    - What the tests do about it: `SystemPrompt` opens its one empty
      screen at the first prompt and leaves it open until the run ends.
      It is never closed and never hidden.
    - So the emulator may be locked only before the first prompt.
      `ScreenLock.lockPhone` checks this, and the suite runs
      `UnlockedKeyTest` before the prompt tests.
-   - No test was left out or weakened for it. All 68 run on Android 17.
+   - No test is left out or weakened for it. All of them run on
+     Android 17.
    - It is a fault of the emulator image, revision 6 of
      `system-images;android-37.0;default;x86_64`, with emulator 37.2.13.
      A later revision may fix it. The tests can stay as they are.
@@ -199,9 +199,9 @@ Four things did not work at first. None of them is about the Keystore.
 
 ## The tests of `core/notify`
 
-Phase 1, step 6 built `core/notify` with unit tests on the JVM. There
-the clock is the test's own, and Robolectric stands in for Android's
-alarms ([notifications.md](../architecture/notifications.md#tests)).
+`core/notify` has unit tests on the JVM. There the clock is the test's
+own, and Robolectric stands in for Android's alarms
+([notifications.md](../architecture/notifications.md#tests)).
 The tests below use the real `AlarmManager` and `NotificationManager`,
 and the emulator's own clock.
 
@@ -214,7 +214,7 @@ module's manifest.
 |---|---|
 | `PermissionOnAndroidTest` | A newly installed app shows no notifications, and the state is "never asked". After the answer "no" it is "denied". After the permission is granted it is "ready". The app has the three permissions of the module's manifest and no other. `Notify.start` made the channel, with its name, description and importance. |
 | `AlarmsOnAndroidTest` | Android allows exact alarms with `USE_EXACT_ALARM`, without asking the user. An alarm set seven seconds ahead fires, not before its time, through the receiver that is not exported, and the app's notification is shown. Two alarms with two ids both fire. An alarm that is no longer wanted does not fire. An alarm whose time has passed fires within seconds. |
-| `ButtonsOnAndroidTest` | Android takes a notification with two buttons, and each asks for the phone's unlock. The pending intent of a button reaches the receiver that is not exported, and the app gets the press with the key, the action, the time and the value. Added in Phase 2, step 4. |
+| `ButtonsOnAndroidTest` | Android takes a notification with two buttons, and each asks for the phone's unlock. The pending intent of a button reaches the receiver that is not exported, and the app gets the press with the key, the action, the time and the value. |
 | `ClockChangesOnAndroidTest` | The time zone is changed: Android tells the receiver, and the app is asked for its alarms again. The clock is set eleven minutes ahead: an alarm that is now due fires, and the app is asked again. |
 
 How the tests reach what an app cannot:
@@ -234,15 +234,12 @@ How the tests reach what an app cannot:
 
 ### What the notify tests showed
 
-First runs on 2026-11-12 and 2026-11-13, in
-[pull request 26](https://github.com/shkriuss/shkriuss.app/pull/26), on
-AOSP emulators with Android 13, 14, 15 and 17. Each run has 10 tests,
-and all of them pass on every version. On Android 17 the first runs did
-not get to their end, until the job waited for Android
+The tests run on AOSP emulators with Android 13, 14, 15 and 17. All of
+them pass on every version. On Android 17 they get to their end only
+because the job waits for Android
 ([below](#android-17-the-job-waits-for-android)).
 
-Android behaved the same on every version. The numbers of the first
-runs are from Android 13, 14 and 15.
+Android behaves the same on every version.
 
 | What | Result |
 |---|---|
@@ -253,56 +250,55 @@ runs are from Android 13, 14 and 15.
 | Exact alarms with `USE_EXACT_ALARM` | `AlarmManager.canScheduleExactAlarms` is true. The user is not asked. |
 | The receivers, which are not exported | Android reaches both: the alarm's own broadcast, `TIME_SET` and `TIMEZONE_CHANGED`. |
 | An alarm fires | The app's handler runs, never before the alarm's time, and the notification is shown with the alarm's time. |
-| **How exact an alarm is** | An alarm set 7 seconds ahead reached the app's handler 2 to 3 milliseconds after its time, on all four versions. The emulator was awake. |
-| **The shortest wait** | Android fires no alarm sooner than 5 seconds after it was set. In the first runs an alarm set 3 seconds ahead fired 2.0 seconds after its time, on all three versions. An alarm whose time had passed fired 5.0 seconds after it was set. This is Android's own limit for every app. |
-| **Two alarms that are due together** | They arrive in either order. In the first runs two alarms one second apart, both inside the 5 seconds, came together, on Android 13 and 15 the later one first. The handler ran once for each. Two alarms two seconds apart, both more than 5 seconds ahead, came in their order. |
+| **How exact an alarm is** | An alarm set 7 seconds ahead reaches the app's handler at its time or later, never before, within the test's wait of 30 seconds. The test writes the delay into the log. |
+| **The shortest wait** | Android fires no alarm sooner than 5 seconds after it was set. This is Android's own limit for every app. An alarm whose time has passed fires within the test's wait, and the test writes into the log how long after it was set. |
+| **Two alarms that are due together** | They can arrive in either order. The handler runs once for each. The test writes into the log when they came in the other order. |
 | An alarm that is no longer wanted | Does not fire. |
 | The clock is set eleven minutes ahead | `cmd alarm set-time` sets it. Android fires the alarm that is now due and sends `TIME_SET`. The app is asked for its alarms once for each. |
 | The time zone is changed | `cmd alarm set-timezone` sets it. Android sends `TIMEZONE_CHANGED`, and the app is asked for its alarms again. |
 
-After the first runs the tests set their alarms seven seconds ahead,
-so that they measure the alarm and not the 5 seconds. What this showed
-changed the code: a sync after a change in the app no longer sets an
-alarm again that already waits at Android
+The tests set their alarms seven seconds ahead, so that they measure
+the alarm and not the 5 seconds. Because of the 5 seconds, a sync after
+a change in the app leaves alone an alarm that already waits at Android
 ([notifications.md](../architecture/notifications.md#how-alarms-are-kept-right)).
 
 #### Android 17: the job waits for Android
 
-On the Android 17 image the first runs of `core/notify` were stopped
-after a few tests, with "INSTRUMENTATION_ABORTED: System has crashed".
+On the Android 17 image, without a wait, the tests of `core/notify` are
+stopped after a few tests, with "INSTRUMENTATION_ABORTED: System has
+crashed".
 
 - The cause is fault 3 of
-  [What the job and the tests had to learn](#what-the-job-and-the-tests-had-to-learn).
+  [What the job and the tests work around](#what-the-job-and-the-tests-work-around).
   The tests of `core/crypto` leave their one screen open until their
   run ends. When the run ends the screen closes, and Android's system
   process aborts in `TaskSnapshotPersister`, 0.2 seconds later. Android
   then starts again by itself.
-- Until then no test APK ran after `core/crypto`, so nobody saw it. The
-  job runs the test APKs in the order of their names, and
+- The job runs the test APKs in the order of their names, and
   `core/notify` comes second.
-- Nothing in `core/notify` can prevent it. Its tests were stopped from
+- Nothing in `core/notify` can prevent it. Its tests are stopped from
   outside.
 - The fix is in the job, and the owner asked for it: before each test
   APK after the first, the job waits until Android answers again
   ([ci.md](ci.md#job-emulator), step 8). The wait has a limit, and the
   log says when Android started again.
-- No test was left out or changed for it.
+- No test is left out or changed for it.
 
-What the first run with the wait showed, on 2026-11-13:
+What the log says with the wait:
 
-| Android | What the log said | The tests of `core/notify` |
+| Android | What the log says | The tests of `core/notify` |
 |---|---|---|
-| 13, 14, 15 | "Waited 10 seconds before the next test APK. Android did not start again." | All 10 pass, as before. |
-| 17 | A warning: "Android 17 started again after the tests of `app.shkriuss.core.crypto.test` ... The job waited 20 seconds until it answered." | All 10 pass. |
+| 13, 14, 15 | "Waited 10 seconds before the next test APK. Android did not start again." | All pass. |
+| 17 | A warning: "Android 17 started again after the tests of `app.shkriuss.core.crypto.test` ... The job waited 20 seconds until it answered." | All pass. |
 
-- On Android 17, Android answered again within the first 10 seconds
+- On Android 17, Android answers again within the first 10 seconds
   after the crash. The other 10 seconds are the pause the job adds
   after a restart.
 - The wait makes each job about 10 seconds longer, and about 20 on
   Android 17.
-- The warning shows on the page of the run, above the jobs. It will
-  show on every run for as long as the Android 17 image has this
-  fault. If a later image fixes it, the warning stops by itself.
+- The warning shows on the page of the run, above the jobs. It shows
+  on every run for as long as the Android 17 image has this fault. If
+  a later image fixes it, the warning stops by itself.
 
 ## What an emulator cannot check
 
@@ -312,8 +308,8 @@ These points stay unproven until they are checked on a device:
 | What | Why the emulator cannot check it |
 |---|---|
 | StrongBox | An emulator has none. The tests never take the StrongBox path of `AndroidHardwareKeys`, and never the second try without StrongBox. |
-| A real fingerprint | The prompt was answered with the PIN only. A fingerprint as the answer, and a fingerprint added or removed (the table "When things change"), were not tested. |
-| A pattern or a password as the screen lock | The emulator's lock was always a PIN. |
+| A real fingerprint | The tests answer the prompt with the PIN only. A fingerprint as the answer, and a fingerprint added or removed (the table "When things change"), are not tested. |
+| A pattern or a password as the screen lock | The emulator's lock is always a PIN. |
 | A restart of the phone | The tests run inside one start of the emulator. |
 | App data cleared, app uninstalled | Clearing the data of the test APK ends the test. |
 | A real update from Android 14 to 15 | The test runs the app "as on Android 14" on a newer emulator. No real update happens. |
@@ -322,7 +318,7 @@ These points stay unproven until they are checked on a device:
 | A Keystore that fails for a moment | A test cannot make the real Keystore fail. What `getKey` and `aliases` answer then stays read from Android's source. The rules for it are tested with the stand-in (`HardwareKeyRulesTest`). |
 | A loss of power while a keyset file is replaced | A test cannot cut the power. |
 | The time before the first unlock after a restart | No test runs then. |
-| The app lock in a real app | Water has it since step 2.5, and has no emulator tests. Its rules are unit tests with Robolectric. What a real phone does with the screen-off broadcast, the recent apps, the system pickers and the prompt's PIN view needs a real phone. |
+| The app lock in a real app | Water has it, and has no emulator tests. Its rules are unit tests with Robolectric. What a real phone does with the screen-off broadcast, the recent apps, the system pickers and the prompt's PIN view needs a real phone. |
 
 For `core/notify`, these points stay unproven until they are checked on
 a device:
@@ -335,7 +331,7 @@ a device:
 | A secondary user profile and Private Space | The images are plain AOSP with one user. |
 | Deep sleep with the screen off for a long time | The job keeps the emulator awake, and a run takes minutes. |
 | A channel the user turned off, Do Not Disturb, an app with restricted battery use | No test changes these settings on the emulator. The state for a channel that is off is tested with Robolectric. |
-| The dialog for the notification permission | Water asks from Phase 2, step 4, but Water has no emulator tests. The test of `core/notify` answers through `UiAutomation`. Robolectric shows no question either. |
+| The dialog for the notification permission | Water asks for it, but Water has no emulator tests. The test of `core/notify` answers through `UiAutomation`. Robolectric shows no question either. |
 | A press of a button on the screen, and the unlock it asks for | `ButtonsOnAndroidTest` sends the button's pending intent, as Android does after the unlock. No test taps the notification shade or unlocks the phone. |
 | GrapheneOS | The images are plain AOSP. |
 
@@ -344,21 +340,18 @@ of them ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)).
 
 ## Decided
 
-The owner's decisions on
-[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24):
+The owner's decisions:
 
 1. **The runner.** ADR 0028 is accepted: the project's own runner, shell
    steps and AOSP images. A test class that the suite does not list
    fails the build.
-2. **Required checks.** Decided at the Phase 1 gate, on 2026-11-13.
-   "Emulator (Android 13)", "(Android 14)" and "(Android 15)" become
-   required checks. "Emulator (Android 17)" does not, while its image
-   crashes Android's system process (point 3 of
-   [What the tests showed](#what-the-tests-showed)). The owner turned
-   the three on in the ruleset on 2026-11-13. "Emulator (Android 17)"
-   stays not required. Whether it becomes required is an open point with
-   no date: the owner decides it when asking for it
-   ([ci.md](ci.md#the-emulator-jobs)).
+2. **Required checks.** "Emulator (Android 13)", "(Android 14)" and
+   "(Android 15)" are required checks, turned on in the ruleset.
+   "Emulator (Android 17)" is not, while its image crashes Android's
+   system process (point 3 of
+   [What the job and the tests work around](#what-the-job-and-the-tests-work-around)).
+   Whether it becomes required is an open point with no date: the owner
+   decides it when asking for it ([ci.md](ci.md#the-emulator-jobs)).
 3. **Pinning.** The emulator and the system images are not pinned to a
    revision. `sdkmanager` takes the newest, and the job writes the
    installed revisions into its log. A new revision can fix a fault,
@@ -371,12 +364,12 @@ The owner's decisions on
 - A restart of the emulator, and clearing the app's data, could be
   tested in a job with two runs of the tests and a step between them.
   Not built.
-- `core/notify`: alarms that are registered again after a restart (the
-  Phase 1 gate in the [plan](../plan/PLAN.md), section 16) need the
-  job with two runs above. Today the restart is tested with Robolectric.
-  Alarms that fire, and a change of
-  the time and the time zone, are tested on the emulator.
-- The other first instrumented tests the plan names: Compose
-  accessibility checks (plan section 11). Compose's test rule for
-  instrumented tests expects the AndroidX runner, so that step decides
-  about the runner again (ADR 0028).
+- `core/notify`: alarms that are registered again after a restart
+  ([plan](../plan/PLAN.md), section 16) need the job with two runs
+  above. Today the restart is tested with Robolectric. Alarms that
+  fire, and a change of the time and the time zone, are tested on the
+  emulator.
+- The other instrumented tests the plan names: Compose accessibility
+  checks (plan section 11). Compose's test rule for instrumented tests
+  expects the AndroidX runner, so the work that adds them decides about
+  the runner again (ADR 0028).

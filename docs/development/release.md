@@ -8,8 +8,7 @@ Why it works this way is in
 [ADR 0013](../adr/0013-signing-key-custody-and-rotation.md) (the signing
 key) and [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)
 (the release flow). The workflow is
-[`release.yml`](../../.github/workflows/release.yml). Set up in Phase 0,
-step 6.
+[`release.yml`](../../.github/workflows/release.yml).
 
 ## What the workflow does
 
@@ -177,7 +176,7 @@ asked to approve.
 |---|---|
 | Only the repository owner may start or re-run a release. | Someone other than you started the run, or re-ran a job in it. Start a new run yourself. |
 | Start the release on the branch main. | Run it again with the branch `main`. |
-| Unknown app. | Pick an app from the list: `catalog` or `water`. A new app is added to the list in a pull request, as Water was in step 2.6. |
+| Unknown app. | Pick an app from the list: `catalog` or `water`. A new app is added to the list in a pull request. |
 | The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 ... | Type a version in one of those forms. No `v` in front. |
 | CI (ci.yml) has not run for commit ... on main. | CI has not started yet, or the commit is not on `main`. Wait a minute, then start again. |
 | CI (ci.yml) has not passed for commit ... | CI is still running, or it failed. The message links to the run. Wait until it is green, or fix it first, then start again. |
@@ -283,8 +282,8 @@ If the restore fails with "failed to fetch public key: HTTP 404: Not
 Found" and "The backup is saved, but the secrets were not all stored.
 Check CEREMONY_TOKEN, then run restore.":
 
-1. Check that `release` exists in shkriuss.app. In the rehearsal, this
-   error came from an environment that had been deleted.
+1. Check that `release` exists in shkriuss.app. This error comes when
+   the environment does not exist, for example after it was deleted.
 2. Check that the token reaches shkriuss.app, with the permissions of
    step 5.
 3. Run `restore` again. Then clean up as in steps 14 and 15.
@@ -395,23 +394,23 @@ enough. In short:
 
 ## Rehearsal with Catalog
 
-The cloud environment has no keys and cannot run GitHub Actions, so these
-were not tried there: the **Run workflow** form, the approval, the real
+The cloud environment has no keys and cannot run GitHub Actions, so it
+cannot try these: the **Run workflow** form, the approval, the real
 secrets and key, passing files between jobs, the attestation, a draft
 without a tag, publishing under your tag rule, Obtainium and AppVerifier.
 The rehearsal tries all of them.
 
 ### Part A: a dry run that leaves nothing behind
 
-Done on 2026-11-11. The draft was deleted afterwards.
-
 1. Do all of [Before the first release](#before-the-first-release).
 2. Start a run with a wrong version, `0.1`. **Build** must fail within a
    minute with "The version must look like 1.0.0".
-3. Start a run with app `catalog` and version `0.1.0`
-   ([Run a release](#run-a-release)). Approve **Sign**.
+3. Start a run with app `catalog` and the version in Catalog's
+   `build.gradle.kts` ([Run a release](#run-a-release)). That version
+   must have no release yet. If it has one, raise it first, as
+   [Run a release](#run-a-release) says. Approve **Sign**.
 4. On the run's summary page, check:
-   - **Build** shows the package `app.shkriuss.catalog` and version `0.1.0`.
+   - **Build** shows the package `app.shkriuss.catalog` and that version.
    - **Rebuild** says the second build made the same files.
    - **Sign** shows the certificate SHA-256 from fingerprints.md.
 5. Open the draft and check it as in
@@ -420,7 +419,7 @@ Done on 2026-11-11. The draft was deleted afterwards.
 6. Tap the attestation link in the notes. The page must name
    `.github/workflows/release.yml` and the commit from the notes.
 7. Open `github.com/shkriuss/shkriuss.app/tags`. There must be no tag
-   `catalog-v0.1.0`.
+   `catalog-v` with that version.
 8. Optional: tap the APK in the draft to download it, install it, and check
    it with AppVerifier against fingerprints.md.
 9. Delete the draft: on the Releases page, tap the bin next to it, then
@@ -429,22 +428,20 @@ Done on 2026-11-11. The draft was deleted afterwards.
 
 ### Part B: the Phase 0 gate
 
-Done on 2026-11-11. Catalog 0.1.0 was published as `catalog-v0.1.0`,
-installed with Obtainium and checked with AppVerifier. Nothing differed
-from these steps.
+This makes a real, permanent release of the version of Part A. Its tag
+can never be used again, even if the release is deleted.
 
-This makes a real, permanent release. The tag `catalog-v0.1.0` can never be
-used again, even if the release is deleted.
-
-1. Start a run with app `catalog` and version `0.1.0`. Approve **Sign**.
+1. Start a run with app `catalog` and the same version as in Part A.
+   Approve **Sign**.
 2. Check and publish the draft
    ([Check and publish the draft](#check-and-publish-the-draft)).
-3. Open `github.com/shkriuss/shkriuss.app/tags`. The tag `catalog-v0.1.0`
-   is there, on the commit from the notes.
+3. Open `github.com/shkriuss/shkriuss.app/tags`. The tag `catalog-v` with
+   that version is there, on the commit from the notes.
 4. In Obtainium, add the app with the URL
-   `https://github.com/shkriuss/shkriuss.app`. In its settings, filter
-   release titles with the regular expression `^catalog-v`, so that other
-   apps' releases from this repository are ignored. Install it.
+   `https://github.com/shkriuss/shkriuss.app`, or open it if you have it
+   already. In its settings, filter release titles with the regular
+   expression `^catalog-v`, so that other apps' releases from this
+   repository are ignored. Install or update it.
 5. Check the installed app with AppVerifier against
    [fingerprints.md](../security/fingerprints.md).
 

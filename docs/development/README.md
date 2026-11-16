@@ -42,5 +42,5 @@ Pages:
 
 What else belongs here, as each part is built:
 
-- The other `Shk*` component batches of Phase 1, step 2, added to
+- Further `Shk*` components, added to
   [design-system.md](design-system.md#components) as each is built.
