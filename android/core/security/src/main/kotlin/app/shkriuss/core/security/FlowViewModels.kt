@@ -91,6 +91,11 @@ class CreateViewModel internal constructor(
         }
     }
 
+    override fun dropRecoveryKey() {
+        key = null
+        super.dropRecoveryKey()
+    }
+
     override fun onCleared() {
         key = null
         super.onCleared()
@@ -198,6 +203,11 @@ class EnterViewModel internal constructor(
         show(WordEntry.empty())
     }
 
+    override fun dropRecoveryKey() {
+        entered = null
+        super.dropRecoveryKey()
+    }
+
     override fun onCleared() {
         entered = null
         super.onCleared()
@@ -208,7 +218,8 @@ class EnterViewModel internal constructor(
  * Showing the kept recovery key again ("Showing it again" in
  * crypto-design.md): one prompt, one showing. The words are dropped when
  * the screen stops: when it closes, the phone turns its screen off, or
- * another app comes to the front.
+ * another app comes to the front. A prompt shows the words only if the
+ * screen has not stopped since the prompt was asked for.
  */
 class ShowViewModel internal constructor(
     private val crypto: ShkCrypto,
@@ -219,14 +230,20 @@ class ShowViewModel internal constructor(
     @Volatile
     private var requests = 0
 
+    /** Counts the stops. Read and written on the main thread only. */
+    private var stops = 0
+
     /** The one state of the screen. */
     val state: StateFlow<ShowScreen> = screen.asStateFlow()
 
     /** Starts the system prompt that opens the kept key. */
     fun onShow() {
+        // Taken before the prompt shows, not when its answer arrives: Android can run a stop before it hands a success
+        // over. It goes with this request, so a request made after a stop cannot lend its count to an older prompt.
+        val asked = stops
         work {
             val step = crypto.setup.beginShowRecoveryKey()
-            screen.value = ShowIntro(prompt = PromptRequest(++requests, step))
+            screen.value = ShowIntro(prompt = PromptRequest(++requests, step, asked))
         }
     }
 
@@ -241,12 +258,26 @@ class ShowViewModel internal constructor(
         }
         work {
             val key = request.step.finish() as RecoveryKey
-            screen.value = ShowWords(key.words())
+            // The stop runs on the main thread. So does this, and no stop can come between the check and the words.
+            withContext(Dispatchers.Main.immediate) {
+                if (request.askedAt == stops) {
+                    screen.value = ShowWords(key.words())
+                } else if ((screen.value as? ShowIntro)?.prompt?.id == request.id) {
+                    // The screen stopped since the prompt was asked for: nothing shows, and the key is dropped. The
+                    // prompt of a newer request stays.
+                    screen.value = ShowIntro()
+                }
+            }
         }
     }
 
-    /** The screen stopped: the words leave memory. A new prompt shows them again. */
+    /**
+     * The screen stopped: the words leave memory. A new prompt shows them
+     * again. A prompt that was asked for before the stop shows nothing,
+     * whether its answer comes before the stop or after it.
+     */
     fun onStop() {
+        stops++
         if (screen.value is ShowWords) screen.value = ShowIntro()
     }
 

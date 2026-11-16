@@ -14,6 +14,7 @@ import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.RecoveryKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -124,7 +125,7 @@ class AppLockWatcherTest {
             comeBack(screen)
             assertEquals("$choice, on time", AppGate.LOCKED, watcher.gate.value)
             app.crypto.appLock.beginUnlock().finish()
-            watcher.unlocked()
+            watcher.unlocked(watcher.unlockMark())
         }
     }
 
@@ -205,6 +206,126 @@ class AppLockWatcherTest {
         assertLocked()
     }
 
+    // A prompt whose file keys come after a newer lock.
+
+    @Test
+    fun anUnlockOfTheLockScreenThatFinishesAfterTheAppLockedAgainDoesNotCount() {
+        turnOn()
+        val screen = screen()
+        leave(screen)
+        comeBack(screen)
+        assertLocked()
+        val queued = QueuedDispatcher()
+        val model = UnlockViewModel(app.crypto, watcher, queued)
+        model.onLocked(watcher.locks)
+        queued.runAll()
+
+        // The prompt succeeds, and the app leaves the screen before the file keys are in memory.
+        model.onPromptResult(model.state.value.prompt!!, PromptOutcome.SUCCEEDED)
+        leave(screen)
+        queued.runAll()
+
+        assertLocked()
+        comeBack(screen)
+        assertLocked()
+        assertEquals("the lock screen is ready to ask again", LockScreen(), model.state.value)
+        model.onLocked(watcher.locks)
+        queued.runAll()
+        model.onPromptResult(model.state.value.prompt!!, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+        assertOpen()
+    }
+
+    @Test
+    fun anUnlockThatFinishesAfterTheLockScreenWasToldOfTheNewerLockMakesItAskAgain() {
+        turnOn()
+        val screen = screen()
+        leave(screen)
+        comeBack(screen)
+        val queued = QueuedDispatcher()
+        val model = UnlockViewModel(app.crypto, watcher, queued)
+        model.onLocked(watcher.locks)
+        queued.runAll()
+
+        model.onPromptResult(model.state.value.prompt!!, PromptOutcome.SUCCEEDED)
+        leave(screen)
+        comeBack(screen)
+        // The lock screen is back before the file keys are in memory. Its prompt cannot show yet.
+        model.onLocked(watcher.locks)
+        val told = watcher.locks
+        queued.runAll()
+
+        assertLocked()
+        assertTrue("a lock more, so the lock screen shows its prompt by itself", watcher.locks > told)
+        model.onLocked(watcher.locks)
+        queued.runAll()
+        assertNotNull(model.state.value.prompt)
+    }
+
+    @Test
+    fun anUnlockThatFinishesWhileTheAppIsAwayButNotLockedCounts() {
+        turnOn()
+        val screen = screen()
+        leave(screen)
+        comeBack(screen)
+        watcher.lockAfter = LockAfter.FIVE_MINUTES
+        val queued = QueuedDispatcher()
+        val model = UnlockViewModel(app.crypto, watcher, queued)
+        model.onLocked(watcher.locks)
+        queued.runAll()
+
+        model.onPromptResult(model.state.value.prompt!!, PromptOutcome.SUCCEEDED)
+        leave(screen)
+        queued.runAll()
+
+        assertOpen()
+        comeBack(screen)
+        assertOpen()
+    }
+
+    @Test
+    fun aPromptOfTheAppLockScreenThatFinishesAfterTheAppLockedDoesNotCountAndTheScreenAsksAgain() {
+        turnOn()
+        val screen = screen()
+        val queued = QueuedDispatcher()
+        val model = AppLockViewModel(app.crypto, watcher, queued)
+        model.refresh()
+        queued.runAll()
+        model.onAsk()
+        queued.runAll()
+
+        // The prompt succeeds, and the app leaves the screen before the file keys are in memory.
+        model.onPromptResult((model.state.value as AppLockAsking).prompt!!, PromptOutcome.SUCCEEDED)
+        leave(screen)
+        queued.runAll()
+
+        assertLocked()
+        assertEquals("nothing of the settings shows", AppLockAsking(), model.state.value)
+        comeBack(screen)
+        model.refresh()
+        queued.runAll()
+        assertEquals(AppLockAsking(), model.state.value)
+        model.onAsk()
+        queued.runAll()
+        model.onPromptResult((model.state.value as AppLockAsking).prompt!!, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+        assertOpen()
+        assertTrue(model.state.value is AppLockSettingsScreen)
+    }
+
+    @Test
+    fun afterALockOnlyAPromptOpensTheGateNotAReadOfTheKeys() {
+        turnOn()
+        leave(screen())
+        assertLocked()
+
+        // The file keys of a prompt that came too late are in memory for a moment, and a read of the keys sees them.
+        app.crypto.appLock.beginUnlock().finish()
+        watcher.refresh()
+
+        assertEquals(AppGate.LOCKED, watcher.gate.value)
+    }
+
     // What the windows hide.
 
     @Test
@@ -237,7 +358,7 @@ class AppLockWatcherTest {
         assertTrue("a screen that starts while locked too", screen().get().hidesOtherAppsWindows())
 
         app.crypto.appLock.beginUnlock().finish()
-        watcher.unlocked()
+        watcher.unlocked(watcher.unlockMark())
         assertOpen()
         assertFalse(screen.get().hidesOtherAppsWindows())
     }

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
+import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.notify.Notify
 import app.shkriuss.core.notify.NotifyHost
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
@@ -31,8 +32,18 @@ internal class RemindersSetup(val clock: TestClock) {
     val app = RuntimeEnvironment.getApplication() as RemindersTestApp
     val database = memoryDatabase()
 
+    /** True while no record can be saved, as when the phone has no room. A save then fails before it writes. */
+    var savingFails = false
+
     /** One source of ids for every start of the app, so that a new start never makes an id that exists. */
-    private val ids = TestIdSource()
+    private val ids = object : IdSource {
+        private val real = TestIdSource()
+
+        override fun newId(): String {
+            check(!savingFails) { "The record cannot be written" }
+            return real.newId()
+        }
+    }
 
     /** The app's keys, on the stand-in for the Keystore. The app has no recovery key until a test gives it one. */
     val keys = SoftwareKeysApp(File(app.filesDir, "shk-keys"), WaterServices.APP_NAME)

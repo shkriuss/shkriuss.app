@@ -42,8 +42,12 @@ For every app of the suite:
    shown notification again in the hidden form, its buttons go too. A
    tap still opens the app, behind its lock screen.
 2. **Unlock first.** Every button asks Android for the phone's unlock
-   before it runs (`setAuthenticationRequired(true)`). Without the
-   unlock nothing happens.
+   before it runs (`setAuthenticationRequired(true)`). In Android's own
+   notification list, nothing happens without the unlock. An app that
+   the user gives notification access can press a button without it.
+   The app's receiver does not check the phone's lock: a check there
+   would not stop such an app, which can wait for the unlock
+   ([threat-model.md](../security/threat-model.md#other-apps-on-the-phone)).
 3. **With the text shown, no app lock prompt.** When the app lock is on
    and the user chose to show the text, a button works after the phone's
    unlock, without the app lock's prompt. It changes records only, which

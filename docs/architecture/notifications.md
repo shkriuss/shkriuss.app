@@ -19,7 +19,7 @@ a notification, and the notice when an app's handler fails.
 | Permissions | `POST_NOTIFICATIONS`, `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, in the module's manifest ([permissions.md](../security/permissions.md#apps-that-use-corenotify)) |
 | Lint | `MissingPermission` is suppressed on the one function that sets an alarm, because lint does not know `USE_EXACT_ALARM` ([ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md), point 10) |
 | Receivers | Three, in the module's manifest. None is exported. |
-| Buttons | At most three on a notification, each after the phone's unlock, none while the app lock hides the text ([ADR 0034](../adr/0034-notification-buttons.md)) |
+| Buttons | At most three on a notification. Android's notification list asks for the phone's unlock first. None while the app lock hides the text ([ADR 0034](../adr/0034-notification-buttons.md)) |
 | Where the reminders are | In the app's own database. `core/notify` stores no reminder. |
 | What `core/notify` stores | The ids and times of the alarms it registered, and whether the user was asked for the permission. No title, no text. |
 | Before the first unlock | Nothing runs and nothing fires ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)) |
@@ -233,7 +233,7 @@ all.
 | The alarm at Android | The time, and a broadcast to `AlarmReceiver` of this app with the alarm id. No title, no text, no extras. |
 | The file `app.shkriuss.core.notify.xml` in the app's private storage | For each registered alarm its id and time. For each fired alarm its id and time. Whether the user was asked for the permission. |
 | The notification | The title and text the app's handler read from its database at that moment, and the labels of its buttons. They go to Android to be shown. While the app lock hides the text: only the channel's name and a fixed text, and no buttons. Its end, if it has one, as a time in its extras. |
-| A button's press | A broadcast to `ButtonReceiver` of this app, after the phone's unlock: the notification's key, the button's action, the notification's time and the button's fixed value. No text. |
+| A button's press | A broadcast to `ButtonReceiver` of this app: the notification's key, the button's action, the notification's time and the button's fixed value. No text. |
 
 - The file is in credential-encrypted storage, like the database. It
   can be read only after the first unlock.
@@ -286,14 +286,24 @@ for every app are in [ADR 0034](../adr/0034-notification-buttons.md).
    such as `drank`, never text) and a fixed value (such as an amount in
    millilitres).
 2. Each button asks Android for the phone's unlock before it runs
-   (`setAuthenticationRequired`). Without the unlock nothing happens.
+   (`setAuthenticationRequired`). In Android's own notification list,
+   nothing happens without the unlock. `ButtonReceiver` does not check
+   the phone's lock. An app with notification access can press a button
+   without the unlock, and a check in the receiver would not stop such
+   an app, which can wait for the unlock
+   ([threat-model.md](../security/threat-model.md#other-apps-on-the-phone)).
 3. While the app lock hides the text, a notification has no buttons. A
-   notification posted again in the hidden form loses them.
+   notification posted again in the hidden form loses them. A press
+   that comes then, from a button that an app with notification access
+   kept, does nothing: the handler is not called and the notification
+   stays. The same holds when the state of the app lock cannot be read.
 4. A press is a broadcast to `ButtonReceiver` of this app, which is not
    exported. The button's pending intent is immutable, and Android keeps
-   one for each key and action. It carries the notification's key, the
-   button's action, the notification's time and the button's value. No
-   text.
+   one for each key, action and time of the notification. So the next
+   notification with the same key gets pending intents of its own, and
+   an older button keeps its own time and value. It carries the
+   notification's key, the button's action, the notification's time and
+   the button's value. No text.
 5. `ButtonReceiver` hands the press to the app's `ButtonHandler` on the
    one worker thread, after any alarm handler that is running.
 6. Android does not remove a notification when one of its buttons is
@@ -381,7 +391,7 @@ Unit tests, on the JVM. They are in `core/notify/src/test/`:
 |---|---|
 | `AlarmSyncTest` | The rules of "How alarms are kept right", with a clock the test moves and a stand-in for Android's alarms: what is registered, that an alarm fires once and not before its time, changed and removed reminders, a reminder that repeats, a reboot, a missed alarm, the clock set forward and back, a new time zone, more than 100 alarms, a handler that fails (the notice, and the sync after it), and that a change in the app does not set the other alarms again. |
 | `AlarmManagerSchedulerTest` | What is asked of `AlarmManager`: exact, on the wall clock, waking the device, one alarm for each id, a broadcast that only this app can send and that carries only the id. |
-| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. The hidden form while the app lock is on, also when `hidesText` fails, and the shown notifications posted again in it with the same key and tap target and no new alert. The buttons: their labels, the unlock, their pending intents and what a press carries, a press through the receiver, at most three, none in the hidden form. The end of a notification, kept in the hidden form. The notice when a handler fails, and that the next alarm still comes. |
+| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. The hidden form while the app lock is on, also when `hidesText` fails, and the shown notifications posted again in it with the same key and tap target and no new alert. The buttons: their labels, the unlock, their pending intents and what a press carries, a press through the receiver, at most three, none in the hidden form. An old button keeps its own time and value after the next notification with the same key, and a button that was kept does nothing while the text is hidden. The end of a notification, kept in the hidden form. The notice when a handler fails, and that the next alarm still comes. |
 | `ManifestTest` | The module's manifest: the three permissions and no other, three receivers, not exported, nothing that runs before the first unlock, exactly the four broadcasts, and no intent filter on the receivers of alarms and buttons. |
 | `NotifyBoundaryTest` | No other module under `android/` names `AlarmManager` or a notification class of Android or AndroidX. It reads source, like `CryptoBoundaryTest` ([build.md](../development/build.md#unit-tests)). |
 

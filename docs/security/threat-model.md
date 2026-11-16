@@ -269,9 +269,21 @@ What does not:
    every notification, unless the app lock hides it. It also gets the
    buttons of a reminder. Such an app can pass them on to a watch, for
    example a watch's companion app. A reminder's text and buttons reach
-   another app only this way. With the app lock on, a reminder shows its
-   hidden form, without amounts and without buttons, unless "Show the
-   text in notifications" is on. Marking a reminder "local only" would
+   another app only this way.
+   - Such an app can press a button without the phone's unlock. Android
+     asks for the unlock only in its own notification list. The app's
+     receiver does not check the phone's lock: a check there would not
+     stop an app with notification access, which can wait for the
+     unlock. Water's buttons add one drink or put the reminder off,
+     and nothing else.
+   - A button that such an app kept from an older reminder keeps the
+     time of that reminder, and the app refuses it.
+   - A button that such an app kept does nothing while the app lock
+     hides the text.
+
+   With the app lock on, a reminder shows its hidden form, without
+   amounts and without buttons, unless "Show the text in notifications"
+   is on. Marking a reminder "local only" would
    not change what an app with notification access gets. It only asks
    apps that pass notifications to a watch not to pass that one. Water
    does not mark its reminders so. Whether it should, or offers a

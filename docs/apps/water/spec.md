@@ -184,7 +184,10 @@ The reminder line:
   the backup, and Android has not asked yet on this phone.
 
 At midnight, while the screen is open, Today moves to the new day by
-itself.
+itself. After a change of the phone's clock or time zone it moves within
+one minute, and at once when Water comes to the front. Today, History, an
+open Day, Settings and the reminder line take today's date from one
+place (`WaterToday`), so they never disagree about which day is today.
 
 Layout by width:
 
@@ -272,6 +275,10 @@ The goal shown is the goal that day had
 ([The goal of a day](#the-goal-of-a-day)). A change of the goal never
 changes how a past day looks.
 
+An open Day keeps showing the day that was opened. After midnight it is
+no longer today: its title is the full date, and the header of its list
+is "Drinks", not "Drinks today".
+
 ### Settings screen
 
 One column of list items under section headers. Each item shows its
@@ -292,6 +299,11 @@ otherwise below.
   old goal. The owner decided the words on pull request 40.
 - Setting the goal to the value today already has writes nothing
   ([Changing the goal](#the-goal-of-a-day)).
+- A field of these dialogs that you do not change keeps its stored
+  millilitres, as the drink sheet does. In fluid ounces the field shows
+  a rounded number: the goal 2,000 ml shows as 68 fl oz. Saving the
+  dialog with "68" still in the field keeps 2,000 ml, and does not store
+  2,011 ml. The same holds for each quick amount by itself.
 - Each quick amount is from 1 to 3,000 ml (1 to 101 fl oz). Otherwise
   the field that is wrong says "Enter an amount from 1 to 3,000 ml."
   under it, the same words as the drink sheet, in the unit in use: "Enter
@@ -533,7 +545,7 @@ One row per drink.
 | Column | SQL type | What it holds | Limits |
 |---|---|---|---|
 | `amountMl` | `INTEGER NOT NULL` | The amount, in whole millilitres | 1 to 3,000 |
-| `day` | `INTEGER NOT NULL` | The day of the drink: days since 1970-01-01 (`LocalDate.toEpochDay`) | Any day |
+| `day` | `INTEGER NOT NULL` | The day of the drink: days since 1970-01-01 (`LocalDate.toEpochDay`) | 0 to 2,932,896: 1970-01-01 to 9999-12-31 |
 | `minuteOfDay` | `INTEGER NOT NULL` | The time of the drink: minutes after midnight | 0 to 1439 |
 
 - Index on `day`, for the total of one day.
@@ -551,7 +563,7 @@ One row per change of the goal.
 | Column | SQL type | What it holds | Limits |
 |---|---|---|---|
 | `amountMl` | `INTEGER NOT NULL` | The daily goal, in whole millilitres | 500 to 10,000 |
-| `fromDay` | `INTEGER NOT NULL` | The first day this goal counts for, as `intake.day` | Any day |
+| `fromDay` | `INTEGER NOT NULL` | The first day this goal counts for, as `intake.day` | 0 to 2,932,896, as `intake.day` |
 
 #### The goal of a day
 
@@ -733,6 +745,13 @@ The rule:
      a running process, that is the usual case.
    - So a reminder can come up to one minute late, for example right
      after an unlock.
+   - If the clock was set back, the last alarm that reached the handler
+     can lie later than now. Water forgets it then, so the alarm it sets
+     next still comes this way. `core/notify` forgets its own fired
+     times that lie ahead in the same way.
+
+Times count in whole minutes. A press of **Later** at 12:22:40 counts as
+12:22, and its snooze comes at 12:37.
 
 "The time of your latest drink" is the latest `minuteOfDay` among
 today's drinks that are not deleted, as you entered it. A reminder
@@ -812,8 +831,10 @@ rules for every app.
    shown, in the unit of that moment. If you change your quick amounts
    later, the reminder already shown still logs what its button says.
    The next reminder shows the new first amount.
-3. Removes the reminder. The next one comes 1 interval later, or none
-   if the goal is now met.
+3. Removes the reminder, once the drink is stored. The next one comes 1
+   interval later, or none if the goal is now met.
+4. If the drink cannot be stored, nothing changes: the reminder stays
+   with its buttons, and **Drank** can be pressed again.
 
 **Later**:
 
@@ -1120,8 +1141,10 @@ so that nothing changes, when it meets:
 
 1. a type name other than the three,
 2. a content of another length than its type's,
-3. a value outside its limits in the tables above,
-4. a File entry. Water has no files.
+3. a value outside its limits in the tables above, a day among them,
+4. a `createdAt`, `updatedAt` or `deletedAt` that no record can hold
+   ([data.md](../../architecture/data.md#record-fields)),
+5. a File entry. Water has no files.
 
 This is the third failure of
 [backup-format.md](../../architecture/backup-format.md#the-answers): "the

@@ -1,7 +1,10 @@
 package app.shkriuss.feature.water
 
 import android.provider.Settings
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -26,9 +29,18 @@ class RemindersViewModelTest {
     private val repository get() = water.repository
 
     @After
-    fun closeTheDatabase() = water.database.close()
+    fun closeTheDatabase() {
+        sourceScope.cancel()
+        water.database.close()
+    }
 
-    private fun model() = RemindersViewModel(repository, water.reminders, water.time, Dispatchers.Unconfined)
+    private val waitEnds = Channel<Unit>(Channel.UNLIMITED)
+    private val sourceScope = CoroutineScope(Dispatchers.Unconfined)
+
+    /** The one source of today's date, with a wait that the test ends. */
+    private val date = WaterToday(water.time, sourceScope) { waitEnds.receive() }
+
+    private fun model() = RemindersViewModel(repository, water.reminders, date, Dispatchers.Unconfined)
 
     private fun remindersOn(change: (WaterSettings) -> WaterSettings = { it }) =
         runBlocking { repository.changeSettings { change(it.copy(remindersOn = true)) } }
@@ -136,6 +148,20 @@ class RemindersViewModelTest {
         // The user allowed notifications in Android's settings.
         water.device.allowNotifications(true)
         model.refresh()
+
+        model.line(ReminderLine.NextAt(9 * 60))
+    }
+
+    @Test
+    fun atMidnightTheLineMovesToTheNewDayByItself() {
+        remindersOn()
+        clock.setTo(at(22, 30))
+        val model = model()
+        model.line(ReminderLine.NoneLeftToday)
+
+        // Midnight passes. Nothing is written and no screen comes to the front: only the date changes.
+        clock.setTo(THE_DAY.plusDays(1).atTime(0, 0))
+        waitEnds.trySend(Unit)
 
         model.line(ReminderLine.NextAt(9 * 60))
     }

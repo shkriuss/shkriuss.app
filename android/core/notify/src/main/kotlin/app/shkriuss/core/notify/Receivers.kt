@@ -60,14 +60,19 @@ class SystemEventReceiver : BroadcastReceiver() {
 }
 
 /**
- * Android starts this when the user presses a button on a notification of
- * the app, after the phone's unlock (ADR 0034). It hands the press to the
- * app's [Notify] and keeps the broadcast open until the app has handled
- * it.
+ * Android starts this when a button on a notification of the app is
+ * pressed (ADR 0034). It hands the press to the app's [Notify] and keeps
+ * the broadcast open until the app has handled it.
  *
  * It is not exported: only the button's own pending intent, which this
  * app made, reaches it. The press carries a key, an action, a time and a
  * value, and no text.
+ *
+ * It does not check the phone's lock. Android's own notification list
+ * asks for the unlock before it sends the press. An app with notification
+ * access holds the pending intent and can send it without the unlock, and
+ * a check here would not stop such an app: it can wait for the unlock.
+ * While the app lock hides the text, [Notify] drops the press.
  */
 class ButtonReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -87,11 +92,19 @@ class ButtonReceiver : BroadcastReceiver() {
         const val EXTRA_AT = "app.shkriuss.core.notify.AT"
         const val EXTRA_VALUE = "app.shkriuss.core.notify.VALUE"
 
-        /** The broadcast of [press]. Two buttons differ in the identifier, so Android keeps one press for each key and action. */
+        /**
+         * The broadcast of [press]. Two buttons differ in the identifier,
+         * so Android keeps one pending intent for each key, action and
+         * time. The time is part of it, so that the next notification
+         * with the same key gets pending intents of its own. Otherwise
+         * Android would give the buttons of the old notification the time
+         * and the value of the new one, and an old button that is pressed
+         * late would act as the new one.
+         */
         fun intentFor(context: Context, press: ButtonPress): Intent =
             Intent(context, ButtonReceiver::class.java)
                 .setAction(ACTION_BUTTON)
-                .setIdentifier("${press.key}/${press.action}")
+                .setIdentifier("${press.key}/${press.action}/${press.atMillis}")
                 .putExtra(EXTRA_KEY, press.key)
                 .putExtra(EXTRA_ACTION, press.action)
                 .putExtra(EXTRA_AT, press.atMillis)

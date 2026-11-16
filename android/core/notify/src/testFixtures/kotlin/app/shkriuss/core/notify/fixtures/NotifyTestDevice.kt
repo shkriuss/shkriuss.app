@@ -96,6 +96,21 @@ class NotifyTestDevice(private val context: Context) {
         idle()
     }
 
+    /**
+     * Keeps button [index] of the notification [key], as a press that
+     * arrives late does, or an app with notification access. The answer
+     * sends the button's pending intent when it is called, whatever the
+     * app shows by then.
+     */
+    fun keepButton(key: String, index: Int): () -> Unit {
+        val shown = checkNotNull(notification(key)) { "No notification $key is shown" }
+        val kept = checkNotNull(shown.actions) { "The notification $key has no buttons" }[index].actionIntent
+        return {
+            kept.send()
+            idle()
+        }
+    }
+
     /** The times of the alarms that wait at Android, soonest first. */
     fun waitingAlarms(): List<Long> = shadowOf(alarms).scheduledAlarms.map { it.triggerAtMs }.sorted()
 

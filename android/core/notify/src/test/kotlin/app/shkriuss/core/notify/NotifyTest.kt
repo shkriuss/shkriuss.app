@@ -552,7 +552,7 @@ class NotifyTest {
         val sent = first.savedIntent
         assertEquals(ComponentName(context, ButtonReceiver::class.java), sent.component)
         assertEquals(ButtonReceiver.ACTION_BUTTON, sent.action)
-        assertEquals("next/drank", sent.identifier)
+        assertEquals("next/drank/${start + HOUR}", sent.identifier)
         val extras = checkNotNull(sent.extras)
         assertEquals(
             setOf(ButtonReceiver.EXTRA_KEY, ButtonReceiver.EXTRA_ACTION, ButtonReceiver.EXTRA_AT, ButtonReceiver.EXTRA_VALUE),
@@ -564,7 +564,7 @@ class NotifyTest {
         assertEquals(250L, extras.getLong(ButtonReceiver.EXTRA_VALUE))
         // The two buttons are two presses.
         assertNotEquals(actions[0].actionIntent, actions[1].actionIntent)
-        assertEquals("next/later", shadowOf(actions[1].actionIntent).savedIntent.identifier)
+        assertEquals("next/later/${start + HOUR}", shadowOf(actions[1].actionIntent).savedIntent.identifier)
     }
 
     @Test
@@ -588,6 +588,67 @@ class NotifyTest {
         press("next", 1)
 
         assertEquals(listOf(ButtonPress("next", "later", start + HOUR, 0)), presses)
+    }
+
+    @Test
+    fun anOldButtonKeepsItsOwnTimeAndValueAfterTheNextNotificationWithTheSameKey() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(withButtons())
+        // What a late press sends, or what an app with notification access kept: the pending intent of the old button.
+        val old = actionsOf(shownBy.getNotification("next", 0))[0].actionIntent
+
+        // The next reminder has the same key, a later time and another amount.
+        val next = ShkNotificationButton("Drank 300 ml", "drank", 300)
+        notifications.show(
+            ShkNotification("next", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start + 2 * HOUR, listOf(next, later)),
+        )
+        val shown = actionsOf(shownBy.getNotification("next", 0))[0].actionIntent
+        old.send()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals("the old time and the old value, so the app can tell it is old", listOf(ButtonPress("next", "drank", start + HOUR, 250)), presses)
+        presses.clear()
+        shown.send()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("the button that shows has its own", listOf(ButtonPress("next", "drank", start + 2 * HOUR, 300)), presses)
+    }
+
+    @Test
+    fun aButtonThatWasKeptDoesNothingWhileTheAppLockHidesTheText() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        context.notify.notifications.show(withButtons())
+        // An app with notification access keeps the pending intent of the button.
+        val kept = actionsOf(shownBy.getNotification("next", 0))[0].actionIntent
+
+        hidesText = { true }
+        context.notify.hideShownText()
+        kept.send()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals("the handler is not called", emptyList<ButtonPress>(), presses)
+        assertHidden(shownBy.getNotification("next", 0), context.getString(android.R.string.ok))
+
+        hidesText = { throw IllegalStateException("The keyset file cannot be read now") }
+        kept.send()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals("nor when the state of the app lock cannot be read", emptyList<ButtonPress>(), presses)
+        assertEquals("the notification stays", 1, shownBy.size())
+    }
+
+    @Test
+    fun whileTheAppLockHidesTheTextAPressInAnAppWithoutAButtonHandlerLeavesTheNotification() {
+        context.notify.start()
+        context.notify.notifications.show(withButtons(buttons = emptyList()))
+        hidesText = { true }
+
+        context.sendBroadcast(ButtonReceiver.intentFor(context, ButtonPress("next", "drank", start + HOUR, 250)))
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals(1, shownBy.size())
     }
 
     @Test

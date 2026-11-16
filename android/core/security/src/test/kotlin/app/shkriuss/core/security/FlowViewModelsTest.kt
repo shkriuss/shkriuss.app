@@ -324,6 +324,120 @@ class FlowViewModelsTest {
     }
 
     @Test
+    fun aPromptAnsweredBeforeTheScreenStoppedShowsNoWordsOnceTheKeyIsRead() {
+        val (app, _) = newApp()
+        val key = app.crypto.setup.createRecoveryKey()
+        app.crypto.setup.storeDerivedKeys(key)
+        app.crypto.setup.beginKeepRecoveryKey(key)!!.finish()
+        val queued = QueuedDispatcher()
+        val model = ShowViewModel(app.crypto, queued)
+        model.onShow()
+        queued.runAll()
+
+        // The prompt succeeds, and the screen stops before the kept key is read.
+        model.onPromptResult((model.state.value as ShowIntro).prompt!!, PromptOutcome.SUCCEEDED)
+        model.onStop()
+        queued.runAll()
+
+        assertEquals("no words on a screen that stopped, and none on the way back", ShowIntro(), model.state.value)
+        model.onShow()
+        queued.runAll()
+        model.onPromptResult((model.state.value as ShowIntro).prompt!!, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+        assertEquals("a new prompt shows them", ShowWords(key.words()), model.state.value)
+    }
+
+    @Test
+    fun aStopThatRunsBeforeThePromptsAnswerArrivesShowsNoWords() {
+        val (app, _) = newApp()
+        val key = app.crypto.setup.createRecoveryKey()
+        app.crypto.setup.storeDerivedKeys(key)
+        app.crypto.setup.beginKeepRecoveryKey(key)!!.finish()
+        val queued = QueuedDispatcher()
+        val model = ShowViewModel(app.crypto, queued)
+        model.onShow()
+        queued.runAll()
+        val prompt = (model.state.value as ShowIntro).prompt!!
+
+        // The prompt succeeds as the screen stops. Android runs the stop first, and hands the answer over after it.
+        model.onStop()
+        model.onPromptResult(prompt, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+
+        assertEquals("no words on a screen that stopped, and none on the way back", ShowIntro(), model.state.value)
+        model.onShow()
+        queued.runAll()
+        model.onPromptResult((model.state.value as ShowIntro).prompt!!, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+        assertEquals("a new prompt shows them", ShowWords(key.words()), model.state.value)
+    }
+
+    @Test
+    fun aPromptAskedForBeforeAStopShowsNoWordsWhateverWasAskedForAfterIt() {
+        val (app, _) = newApp()
+        val key = app.crypto.setup.createRecoveryKey()
+        app.crypto.setup.storeDerivedKeys(key)
+        app.crypto.setup.beginKeepRecoveryKey(key)!!.finish()
+        val queued = QueuedDispatcher()
+        val model = ShowViewModel(app.crypto, queued)
+        model.onShow()
+        queued.runAll()
+        val first = (model.state.value as ShowIntro).prompt!!
+
+        // The screen stops, and a second request is made before the first prompt is answered. Its prompt is not there yet.
+        model.onStop()
+        model.onShow()
+        model.onPromptResult(first, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+
+        // Each prompt carries the count of stops of its own request: the first was asked for before the stop.
+        assertTrue("no words for the prompt asked for before the stop", model.state.value is ShowIntro)
+        model.onPromptResult((model.state.value as ShowIntro).prompt!!, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+        assertEquals("the prompt asked for after it shows them", ShowWords(key.words()), model.state.value)
+    }
+
+    /** A reference to the recovery key that a flow holds now, read from the ViewModel itself. */
+    private fun heldKey(model: FlowViewModel<*>, owner: Class<*>, field: String): Any? =
+        owner.getDeclaredField(field).apply { isAccessible = true }.get(model)
+
+    @Test
+    fun aFailureAfterTheFourWordsLeavesNoRecoveryKeyBehindTheFailureScreen() {
+        val (app, _) = newApp()
+        val model = create(app)
+        model.onShowWords()
+        val words = (model.state.value as CreateWords).words
+        model.onWordsWritten()
+        val confirm = model.state.value as CreateConfirm
+        confirm.positions.forEachIndexed { index, position -> model.onAnswerChange(index, words[position - 1]) }
+        // Meanwhile the app got its keys from another recovery key, for example on another screen.
+        app.crypto.setup.storeDerivedKeys(app.crypto.setup.createRecoveryKey())
+        assertNotNull(heldKey(model, CreateViewModel::class.java, "key"))
+
+        model.onCheck()
+
+        assertEquals(FlowFailed(SecurityProblem.ALREADY_SET_UP), model.state.value)
+        assertNull("the new key left memory", heldKey(model, CreateViewModel::class.java, "key"))
+        assertNull(heldKey(model, FlowViewModel::class.java, "keeping"))
+    }
+
+    @Test
+    fun aFailureOfTheKeepingStepLeavesNoRecoveryKeyBehindTheFailureScreen() {
+        val (app, _) = newApp()
+        val model = create(app)
+        createUpToKeeping(model)
+        answer(model, PromptOutcome.CANCELLED)
+        assertNotNull("held for a new try of the prompt", heldKey(model, FlowViewModel::class.java, "keeping"))
+        // The Keystore fails for a moment: the app's keys cannot be read now.
+        app.keystoreFails = true
+
+        model.onKeepAgain()
+
+        assertEquals(FlowFailed(SecurityProblem.NOT_NOW), model.state.value)
+        assertNull("the key left memory", heldKey(model, FlowViewModel::class.java, "keeping"))
+    }
+
+    @Test
     fun anAppThatDoesNotKeepTheKeySaysSo() {
         val (app, _) = newApp()
         app.crypto.setup.storeDerivedKeys(app.crypto.setup.createRecoveryKey())

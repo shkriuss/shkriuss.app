@@ -72,6 +72,20 @@ Every table that stores records has these columns (ADR 0027).
 The first four are `RecordFields`. They travel with the record. The change
 number is a column of its own, so it stays on the device.
 
+The three times have limits. `createdAt`, `updatedAt` and `deletedAt` are
+from 0 to 253,402,300,799,999, the last millisecond of the year 9999
+(`RecordTimes`).
+
+1. `RecordWriter.takeFromBackup` refuses a record with another value, and
+   writes nothing. An app's restore then rolls back
+   ([Records from a backup](#records-from-a-backup)).
+2. No write moves `updatedAt` past the last value. A record that holds
+   it keeps it.
+3. The limit keeps a time away from the end of a 64-bit number, where
+   "one millisecond later" does not exist. Without it, a record of a
+   backup with such a time could move back at its next change, and the
+   same backup could then bring a deleted record back.
+
 There is no index on `updatedAt`. An app that needs one, for example to
 sort by the last change, adds its own.
 
@@ -134,7 +148,8 @@ the table's DAO, a `Clock` and an `IdSource` through its constructor.
    and `update` ignore any change a caller makes to them.
 8. `updatedAt` always moves forward, even when the clock was set back. A
    write sets it to now, or to one millisecond after the record's last
-   `updatedAt` if that is later.
+   `updatedAt` if that is later. It stops at the last time a record can
+   hold ([Record fields](#record-fields)), and it never moves back.
 9. `takeFromBackup(record)` takes one record of a backup. It is the one
    write that keeps the record fields it is given, because that record
    was stamped when it was first written. See below.
@@ -162,6 +177,11 @@ newest edit wins.
 4. Taking the same records twice writes nothing the second time.
 5. An app takes all records of a backup inside one write transaction.
    The calls join it, and a failure rolls all of them back.
+   - A record whose `createdAt`, `updatedAt` or `deletedAt` is outside
+     the limits of [Record fields](#record-fields) is such a failure:
+     `takeFromBackup` throws `IllegalArgumentException`.
+   - An app checks first, with `RecordFields.timesAreWithinLimits`, and
+     gives the answer it gives for any record it cannot read.
 6. It is the function for backups. Sync gets its own, because there the
    same `updatedAt` must end the same on every device.
 
@@ -368,7 +388,7 @@ a wrong migration and a missing step fail.
 
 | Test | Module | What it checks |
 |---|---|---|
-| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back; every write gets a new change number, across the tables of a database; a number is not used again after a purge; a failed write transaction rolls back, its numbers with it. For `takeFromBackup`: each of its three answers, the record fields kept, a change number only for a write, a deletion as an edit like any other, the same records taken twice, and several calls that roll back together. |
+| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back, stops at the last time a record can hold and never moves back; every write gets a new change number, across the tables of a database; a number is not used again after a purge; a failed write transaction rolls back, its numbers with it. For `takeFromBackup`: each of its three answers, the record fields kept, a change number only for a write, a deletion as an edit like any other, the same records taken twice, several calls that roll back together, and a time that no record can hold refused. |
 | `ChangedSinceTest` | `core/data` | Paging reads every change once, in order, deleted records included; a clock set back hides no change; a write that commits while a reader is paging is read after it; the query plan uses the index. |
 | `SampleMigrationTest` | `core/data` | The example migration with its change numbers and counter, Room opening the migrated file and counting on, every version migrating to the newest, the record conventions, and that a wrong migration and a missing step fail. |
 | `RecordConventionsTest` | `core/testing` | The conventions check passes a good database and names each problem; the change number check finds shared and too high numbers. |

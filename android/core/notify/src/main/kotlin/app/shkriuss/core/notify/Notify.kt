@@ -139,12 +139,19 @@ class Notify(
     }
 
     /**
-     * The user pressed a button on a notification. [done] runs when the
-     * app has handled it. A press that fails changes nothing more: the
+     * A button on a notification was pressed. [done] runs when the app
+     * has handled it. A press that fails changes nothing more: the
      * notification stays, so the user can open the app.
+     *
+     * While the app lock hides the text there are no buttons (ADR 0034,
+     * point 1). A press that comes then, from a button that an app with
+     * notification access kept, does nothing: the handler is not called
+     * and the notification stays. The same holds if the state of the app
+     * lock cannot be read.
      */
     internal fun buttonPressed(press: ButtonPress, done: () -> Unit) = worker.execute {
         try {
+            if (notifications.mustHide()) return@execute
             val handler = buttons
             if (handler == null) notifications.cancel(press.key) else handler.onButton(press, notifications)
         } catch (_: Exception) {

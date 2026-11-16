@@ -170,7 +170,9 @@ internal fun SettingItem(name: String, value: String, onClick: () -> Unit, spoke
 @Composable
 private fun GoalDialog(screen: SettingsScreen, model: SettingsViewModel, format: WaterFormat, onClose: () -> Unit) {
     val unit = screen.settings.unit
-    var text by rememberSaveable { mutableStateOf(AmountInput.textOf(screen.goalMl, unit)) }
+    // The goal the dialog opened with. A field that still shows it was not changed, whatever today's goal is by now.
+    val openedMl = rememberSaveable { screen.goalMl }
+    var text by rememberSaveable { mutableStateOf(AmountInput.textOf(openedMl, unit)) }
     var refused by rememberSaveable { mutableStateOf(false) }
     val limits = unit.goalLimits
     val name = stringResource(R.string.water_daily_goal)
@@ -178,7 +180,7 @@ private fun GoalDialog(screen: SettingsScreen, model: SettingsViewModel, format:
         title = name,
         confirmAction = ShkDialogAction(
             text = stringResource(R.string.water_save),
-            onClick = { if (model.setGoal(text)) onClose() else refused = true },
+            onClick = { if (model.setGoal(text, openedMl)) onClose() else refused = true },
             closesDialog = false,
         ),
         dismissAction = ShkDialogAction(text = stringResource(R.string.water_cancel), onClick = {}),
@@ -230,7 +232,8 @@ private fun UnitDialog(current: WaterUnit, model: SettingsViewModel, format: Wat
 @Composable
 private fun QuickAmountsDialog(screen: SettingsScreen, model: SettingsViewModel, format: WaterFormat, onClose: () -> Unit) {
     val unit = screen.settings.unit
-    val amounts = screen.settings.quickAmountsMl
+    // The amounts the dialog opened with. A field that still shows its amount was not changed.
+    val amounts = rememberSaveable { screen.settings.quickAmountsMl.toIntArray() }
     var first by rememberSaveable { mutableStateOf(AmountInput.textOf(amounts[0], unit)) }
     var second by rememberSaveable { mutableStateOf(AmountInput.textOf(amounts[1], unit)) }
     var third by rememberSaveable { mutableStateOf(AmountInput.textOf(amounts[2], unit)) }
@@ -242,7 +245,7 @@ private fun QuickAmountsDialog(screen: SettingsScreen, model: SettingsViewModel,
         confirmAction = ShkDialogAction(
             text = stringResource(R.string.water_save),
             onClick = {
-                val refused = model.setQuickAmounts(listOf(first, second, third))
+                val refused = model.setQuickAmounts(listOf(first, second, third), amounts.toList())
                 if (refused.isEmpty()) onClose() else wrong = refused.fold(0) { bits, place -> bits or (1 shl place) }
             },
             closesDialog = false,

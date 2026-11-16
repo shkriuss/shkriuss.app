@@ -15,6 +15,9 @@ class WaterTime(
     private val clock: Clock,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
 ) {
+    /** Now, in milliseconds since 1970. */
+    fun nowMillis(): Long = clock.nowMillis()
+
     /** The local date and time now. */
     fun now(): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(clock.nowMillis()), zone())
 
@@ -43,6 +46,15 @@ class WaterTime(
         const val MIN_WAIT_MILLIS = 1_000L
     }
 }
+
+/**
+ * The days a record of Water can hold (`intake.day`, `goal.fromDay`):
+ * from 1970-01-01, day 0, to 9999-12-31 (docs/apps/water/spec.md, "Data
+ * model"). A backup with another day is refused. Without the limit, one
+ * record with a far day would make History build a row for every day up
+ * to today.
+ */
+val WATER_DAYS: IntRange = 0..2_932_896
 
 /** This date as a day of the database: days since 1970-01-01 (`intake.day`, `goal.fromDay`). */
 fun LocalDate.asWaterDay(): Int = Math.toIntExact(toEpochDay())

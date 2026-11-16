@@ -6,7 +6,6 @@ import java.time.LocalDate
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +13,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -30,7 +28,7 @@ data class DayScreen(
     val loaded: Boolean,
     /** The day shown. */
     val day: LocalDate,
-    /** True if [day] is today. */
+    /** True if [day] is today. It follows the date, also while [day] stays the same. */
     val isToday: Boolean,
     /** The unit amounts are shown in. */
     val unit: WaterUnit = WaterUnit.MILLILITRES,
@@ -107,10 +105,11 @@ data class DrinkSnackbar(
 
 /**
  * The ViewModel of Today ([fixedDay] null) and of the open Day of History.
- * Today follows the phone's clock: at midnight it moves to the new day by
- * itself, and [checkTheDay] moves it when the screen comes to the front.
- * The open Day starts at [fixedDay], and [show] moves it to the day that
- * History opens, so one ViewModel serves every day opened.
+ * Today shows the date of [today], the one source of today's date: it
+ * moves to the new day when that date changes. The open Day starts at
+ * [fixedDay], and [show] moves it to the day that History opens, so one
+ * ViewModel serves every day opened. Its day stays the one opened, and
+ * only whether it is today follows [today].
  *
  * Every change runs in [work] on top of the ViewModel's scope. Tests pass
  * `Dispatchers.Unconfined`.
@@ -119,10 +118,15 @@ data class DrinkSnackbar(
 class DayViewModel(
     private val repository: WaterRepository,
     private val time: WaterTime,
+    private val today: WaterToday,
     private val fixedDay: LocalDate? = null,
     private val work: CoroutineContext = EmptyCoroutineContext,
 ) : ViewModel() {
-    private val day = MutableStateFlow(fixedDay ?: time.today())
+    /** The day the open Day shows. [show] moves it. */
+    private val openedDay = MutableStateFlow(fixedDay ?: today.date.value)
+
+    /** The day shown: the date itself for Today, so it moves in the same step as the date, and the opened day for a Day. */
+    private val day: StateFlow<LocalDate> = if (fixedDay == null) today.date else openedDay
     private val sheet = MutableStateFlow<DrinkSheet?>(null)
     private val snackbar = MutableStateFlow<DrinkSnackbar?>(null)
     private val screen = MutableStateFlow(notLoaded(day.value))
@@ -147,15 +151,15 @@ class DayViewModel(
         },
         repository.settings(),
         repository.goals(),
-        sheet,
-        snackbar,
-    ) { ofDay, settings, goals, openSheet, shownSnackbar ->
+        combine(sheet, snackbar, ::Pair),
+        today.date,
+    ) { ofDay, settings, goals, (openSheet, shownSnackbar), dateToday ->
         val shown = ofDay.day
         val drinks = ofDay.drinks
         DayScreen(
             loaded = drinks != null,
             day = shown,
-            isToday = shown == time.today(),
+            isToday = isToday(shown, dateToday),
             unit = settings.unit,
             totalMl = drinks.orEmpty().sumOf { it.amountMl },
             goalMl = goals.goalOf(shown.asWaterDay()),
@@ -173,20 +177,10 @@ class DayViewModel(
                 synchronized(dayLock) { if (next.day == day.value) screen.value = next }
             }
         }
-        if (fixedDay == null) {
-            viewModelScope.launch(work) {
-                while (isActive) {
-                    delay(time.millisToNextDay())
-                    checkTheDay()
-                }
-            }
-        }
     }
 
-    /** Today moves to the new day after midnight. The screen calls it each time it comes to the front. */
-    fun checkTheDay() {
-        if (fixedDay == null) day.value = time.today()
-    }
+    /** Today's screen is today by what it is. An open Day is today while the date is its day. */
+    private fun isToday(shown: LocalDate, dateToday: LocalDate): Boolean = fixedDay == null || shown == dateToday
 
     /**
      * The open Day of History shows [shown] from now on. Until its drinks
@@ -200,7 +194,7 @@ class DayViewModel(
             if (day.value == shown) return
             sheet.value = null
             snackbar.value = null
-            day.value = shown
+            openedDay.value = shown
             // Unless the new day already shows, it shows as not loaded from now on.
             if (screen.value.day != shown) screen.value = notLoaded(shown, screen.value)
         }
@@ -210,7 +204,7 @@ class DayViewModel(
     private fun notLoaded(shown: LocalDate, before: DayScreen? = null) = DayScreen(
         loaded = false,
         day = shown,
-        isToday = shown == time.today(),
+        isToday = isToday(shown, today.date.value),
         unit = before?.unit ?: WaterUnit.MILLILITRES,
         quickAmountsMl = before?.quickAmountsMl ?: WaterUnit.MILLILITRES.defaultQuickAmountsMl,
     )

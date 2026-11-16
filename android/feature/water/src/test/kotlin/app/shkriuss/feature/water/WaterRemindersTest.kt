@@ -1,5 +1,6 @@
 package app.shkriuss.feature.water
 
+import android.content.Intent
 import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.notify.Alarm
 import app.shkriuss.core.notify.ButtonPress
@@ -298,6 +299,25 @@ class WaterRemindersTest {
         assertNull(reminders.entries.value.pending)
     }
 
+    @Test
+    fun afterTheClockIsSetBackPastTheLastAlarmTheNextReminderStillShows() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        assertEquals(water.millisOf(at(9, 0)), reminders.entries.value.lastAlarm)
+
+        // The phone's date goes back one day. Android tells the app, and core/notify registers the alarms again.
+        val dayBefore = THE_DAY.minusDays(1)
+        clock.setTo(dayBefore.atTime(8, 30))
+        water.device.send(Intent.ACTION_TIME_CHANGED)
+        assertEquals(listOf(water.millisOf(dayBefore.atTime(9, 0))), water.waiting())
+        assertNull("the last alarm lies later than now: it is forgotten", reminders.entries.value.lastAlarm)
+        assertEquals("so the alarm Water set is pending", water.millisOf(dayBefore.atTime(9, 0)), reminders.entries.value.pending)
+
+        alarmComes(dayBefore.atTime(9, 0))
+
+        assertEquals(water.millisOf(dayBefore.atTime(9, 0)), checkNotNull(water.reminder()).atMillis)
+    }
+
     // Drank.
 
     @Test
@@ -355,6 +375,41 @@ class WaterRemindersTest {
         press(WaterReminders.DRANK, at(9, 0), pressedAt = at(9, 3), value = 150)
 
         assertEquals(1, drinksToday().size)
+    }
+
+    @Test
+    fun aDrankThatCannotBeSavedLeavesTheReminderAndTheNextPressSavesTheDrink() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        water.savingFails = true
+        clock.setTo(at(9, 3))
+
+        // Through the button's pending intent and core/notify, which holds the failure back.
+        water.device.press(WaterReminders.KEY, 0)
+
+        assertEquals(emptyList<Drink>(), drinksToday())
+        assertEquals("the reminder stays, with its buttons", listOf("Drank 150 ml", "Later"), checkNotNull(water.reminder()).buttons)
+        assertEquals(water.millisOf(at(9, 0)), reminders.entries.value.showing)
+
+        water.savingFails = false
+        water.device.press(WaterReminders.KEY, 0)
+
+        assertEquals(listOf(150), drinksToday().map { it.amountMl })
+        assertNull(water.reminder())
+    }
+
+    @Test
+    fun aSecondPressOfTheSameDrankButtonDoesNothing() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        val drank = water.device.keepButton(WaterReminders.KEY, 0)
+        clock.setTo(at(9, 3))
+
+        drank()
+        drank()
+
+        assertEquals(1, drinksToday().size)
+        assertNull(water.reminder())
     }
 
     @Test

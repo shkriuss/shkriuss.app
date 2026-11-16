@@ -52,10 +52,18 @@ enum class KeepNote {
 /**
  * One request to show Android's system prompt. Only the module makes
  * one, for one `PromptStep`; a screen in the Catalog never has one.
+ *
+ * [askedAt] is what its screen noted on the main thread when the prompt
+ * was asked for, before it showed: the count of stops of the screen that
+ * shows the words, or the app lock's mark of its locks. The answer of
+ * the prompt counts only if that has not changed since. It belongs to
+ * this one request, so a later request cannot lend an older prompt its
+ * own. A screen that needs none leaves it 0.
  */
 class PromptRequest internal constructor(
     internal val id: Int,
     internal val step: app.shkriuss.core.crypto.PromptStep<*>,
+    internal val askedAt: Int = 0,
 ) {
     override fun toString(): String = "PromptRequest($id)"
 }

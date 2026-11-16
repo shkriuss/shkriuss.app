@@ -25,6 +25,29 @@ val RecordFields.isDeleted: Boolean
     get() = deletedAt != null
 
 /**
+ * The limits of the three times of a record: `createdAt`, `updatedAt` and
+ * `deletedAt` are from 0 to [LAST_MILLIS] (docs/architecture/data.md,
+ * "The record fields"). The limit keeps a time from a backup away from
+ * the edge of a 64-bit number, where "one millisecond later" does not
+ * exist.
+ */
+object RecordTimes {
+    /** The last time a record can hold: 9999-12-31T23:59:59.999Z. */
+    const val LAST_MILLIS: Long = 253_402_300_799_999L
+
+    /** True if [millis] is a time a record can hold. */
+    fun allows(millis: Long): Boolean = millis in 0..LAST_MILLIS
+}
+
+/**
+ * True if `createdAt`, `updatedAt` and `deletedAt` are all times a record
+ * can hold ([RecordTimes]). An app checks the records of a backup with it
+ * before it takes them.
+ */
+val RecordFields.timesAreWithinLimits: Boolean
+    get() = RecordTimes.allows(createdAt) && RecordTimes.allows(updatedAt) && (deletedAt == null || RecordTimes.allows(deletedAt))
+
+/**
  * A stored record: a Room entity that embeds [RecordFields] and has a
  * [changeNumber].
  *

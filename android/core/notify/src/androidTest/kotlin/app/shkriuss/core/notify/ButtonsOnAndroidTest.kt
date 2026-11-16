@@ -47,7 +47,9 @@ class ButtonsOnAndroidTest {
                 buttons = listOf(ShkNotificationButton("Done", "done", 7), ShkNotificationButton("Later", "later")),
             ),
         )
-        assertTrue("the notification is not shown", TestDevice.waitUntil(WAIT_MILLIS) { shown() != null })
+        // Android removes and shows a notification a moment after it is asked to. Until then the notification of the
+        // test before, which has the same key, can still be listed. Its buttons are its own: they carry its time.
+        assertTrue("the notification is not shown", TestDevice.waitUntil(WAIT_MILLIS) { shown()?.`when` == at })
         return at
     }
 

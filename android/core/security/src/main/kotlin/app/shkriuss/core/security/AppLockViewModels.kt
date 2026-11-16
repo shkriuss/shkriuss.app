@@ -41,12 +41,14 @@ private fun cancelQuietly(request: PromptRequest?) {
 /**
  * The lock screen of [AppLockGate]: one system prompt of the Lock key,
  * one unlock ("Unlock" in crypto-design.md). The prompt shows by itself
- * once for each lock, and after that from the button. [onUnlocked] runs
- * on the main thread when the file keys are in memory.
+ * once for each lock, and after that from the button. When the file keys
+ * are in memory, [watcher] is told on the main thread. The unlock counts
+ * only if the app has not locked since the prompt was asked for
+ * ([AppLockWatcher.unlocked]).
  */
 class UnlockViewModel internal constructor(
     private val crypto: ShkCrypto,
-    private val onUnlocked: () -> Unit,
+    private val watcher: AppLockWatcher,
     private val background: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
     private val screen = MutableStateFlow(LockScreen())
@@ -70,9 +72,11 @@ class UnlockViewModel internal constructor(
         val now = screen.value
         if (now.prompt != null || now.working) return
         screen.value = LockScreen(working = true)
+        // The watcher's mark from before the prompt shows. It goes with this request.
+        val mark = watcher.unlockMark()
         work {
             val step = crypto.appLock.beginUnlock()
-            screen.value = LockScreen(prompt = PromptRequest(++requests, step))
+            screen.value = LockScreen(prompt = PromptRequest(++requests, step, mark))
         }
     }
 
@@ -88,8 +92,11 @@ class UnlockViewModel internal constructor(
         screen.value = LockScreen(working = true)
         work {
             request.step.finish()
-            screen.value = LockScreen()
-            withContext(Dispatchers.Main.immediate) { onUnlocked() }
+            // Every lock runs on the main thread. So does this, and the watcher decides there whether the unlock counts.
+            withContext(Dispatchers.Main.immediate) {
+                screen.value = LockScreen()
+                watcher.unlocked(request.askedAt)
+            }
         }
     }
 
@@ -118,6 +125,8 @@ class UnlockViewModel internal constructor(
  * lock off, pick a longer time or show the text of notifications.
  *
  * The prompt is the unlock of the Lock key, so it also unlocks the app.
+ * It counts only if the app has not locked since it was asked for
+ * ([AppLockWatcher.unlocked]). Otherwise the screen asks again.
  */
 class AppLockViewModel internal constructor(
     private val crypto: ShkCrypto,
@@ -155,9 +164,11 @@ class AppLockViewModel internal constructor(
     fun onAsk() {
         val now = screen.value as? AppLockAsking ?: return
         if (now.prompt != null) return
+        // The watcher's mark from before the prompt shows. It goes with this request.
+        val mark = watcher.unlockMark()
         work {
             val step = crypto.appLock.beginUnlock()
-            screen.value = AppLockAsking(PromptRequest(++requests, step))
+            screen.value = AppLockAsking(PromptRequest(++requests, step, mark))
         }
     }
 
@@ -170,9 +181,15 @@ class AppLockViewModel internal constructor(
                 screen.value = AppLockLoading
                 work {
                     request.step.finish()
-                    opened = true
-                    withContext(Dispatchers.Main.immediate) { watcher.unlocked() }
-                    screen.value = settingsOf(crypto.status(), crypto.appLock.canTurnOn())
+                    // Every lock runs on the main thread. So does this, and the watcher decides there whether the unlock counts.
+                    val counts = withContext(Dispatchers.Main.immediate) {
+                        watcher.unlocked(request.askedAt).also { counted ->
+                            if (counted) opened = true
+                            // The app locked after the prompt was asked for: nothing shows, and the screen asks again.
+                            if (!counted && screen.value == AppLockLoading) screen.value = AppLockAsking()
+                        }
+                    }
+                    if (counts) screen.value = settingsOf(crypto.status(), crypto.appLock.canTurnOn())
                 }
             }
             PromptOutcome.GONE -> {

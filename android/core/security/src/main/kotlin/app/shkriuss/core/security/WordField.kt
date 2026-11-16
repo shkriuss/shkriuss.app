@@ -8,17 +8,32 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
+import androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuDropdownProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuDataProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalTextToolbar
 import androidx.compose.ui.platform.PlatformTextInputMethodRequest
 import androidx.compose.ui.platform.TextToolbar
 import androidx.compose.ui.platform.TextToolbarStatus
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.copyText
+import androidx.compose.ui.semantics.cutText
+import androidx.compose.ui.semantics.pasteText
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -89,11 +104,17 @@ internal object WordInput {
  *
  * The keyboard is asked for a password field that shows its letters, with
  * no suggestions and no learning ([NoLearningKeyboard]): it offers no
- * spell check and keeps nothing of what is typed. The field
- * offers no paste: its text menu shows nothing, and [WordInput.accept]
- * refuses a change of more than one letter. Autofill and content capture
- * are off for the whole window ([secureWindow]). The suggestions are drawn
- * in the screen itself, never in a popup window of their own.
+ * spell check and keeps nothing of what is typed.
+ *
+ * Nothing is copied or cut from the field, and nothing is pasted into it
+ * ([noCopyCutPaste]): not from a menu, not by a keyboard shortcut such as
+ * Ctrl+C, and not by an accessibility action. Its text menu offers
+ * nothing, so no menu shows. [WordInput.accept] also refuses a change of
+ * more than one letter.
+ *
+ * Autofill and content capture are off for the whole window
+ * ([secureWindow]). The suggestions are drawn in the screen itself, never
+ * in a popup window of their own.
  */
 @Composable
 internal fun WordField(
@@ -107,12 +128,16 @@ internal fun WordField(
 ) {
     val startsNoWord = if (WordInput.startsNoWord(value)) stringResource(R.string.sec_word_starts_no_word) else null
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(ShkSpacing.Small)) {
-        CompositionLocalProvider(LocalTextToolbar provides NoTextToolbar) {
+        CompositionLocalProvider(
+            LocalTextContextMenuDropdownProvider provides NoTextMenu,
+            LocalTextToolbar provides NoTextToolbar,
+        ) {
             NoLearningKeyboard {
                 ShkTextField(
                     value = value,
                     onValueChange = { new -> WordInput.accept(value, new)?.let(onValueChange) },
                     label = label,
+                    modifier = Modifier.noCopyCutPaste(),
                     errorText = startsNoWord ?: errorText,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.None,
@@ -165,7 +190,56 @@ private fun NoLearningKeyboard(content: @Composable () -> Unit) {
     )
 }
 
-/** A text menu that never shows: no copy, no cut and no paste. */
+/**
+ * Closes every way in which a text field of Compose copies, cuts or
+ * pastes. They are read in the sources of Compose Foundation 1.12.1; a
+ * newer version is checked against this list again.
+ *
+ * 1. The menu over selected text. Every entry is taken out: copy, cut and
+ *    paste, and also the entries that hand the selected text to another
+ *    app, such as "Share". Android shows no menu that has no entry.
+ * 2. Keys. A keyboard shortcut for copy, cut or paste is taken before the
+ *    field sees it ([isClipboardKey]). A keyboard app sends its own copy,
+ *    cut and paste as such keys too.
+ * 3. Accessibility actions. The field's own copy, cut and paste are
+ *    replaced by actions that do nothing. An accessibility tool may still
+ *    list them.
+ */
+private fun Modifier.noCopyCutPaste(): Modifier = this
+    .filterTextContextMenuComponents { false }
+    .onPreviewKeyEvent { event -> event.isClipboardKey() }
+    .semantics {
+        copyText { false }
+        cutText { false }
+        pasteText { false }
+    }
+
+/**
+ * True for a key that a text field of Compose takes as copy, cut or paste
+ * (its `KeyMapping`): Ctrl with C, X, V or Insert, Shift with Insert, and
+ * the keys Copy, Cut and Paste. It is also true for the same letters with
+ * the Meta key and with more keys held, which a text field ignores.
+ */
+private fun KeyEvent.isClipboardKey(): Boolean = when (key) {
+    Key.Copy, Key.Cut, Key.Paste -> true
+    Key.C, Key.X, Key.V -> isCtrlPressed || isMetaPressed
+    Key.Insert, Key.NumPadInsert -> isCtrlPressed || isMetaPressed || isShiftPressed
+    else -> false
+}
+
+/**
+ * The menu that a click of the right mouse button opens on a text field.
+ * With no entry it would open empty, so it never opens.
+ */
+private object NoTextMenu : TextContextMenuProvider {
+    override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) = Unit
+}
+
+/**
+ * The text menu of Compose before its new context menu
+ * (`ComposeFoundationFlags.isNewContextMenuEnabled`). It never shows
+ * either: no copy, no cut and no paste.
+ */
 private object NoTextToolbar : TextToolbar {
     override val status: TextToolbarStatus = TextToolbarStatus.Hidden
 

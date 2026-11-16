@@ -37,6 +37,16 @@ class SoftwareKeysApp(folder: File, appName: AppName) {
         }
 
     /**
+     * True for a Keystore that fails for a moment: no hardware key can be
+     * used, so the app's keys cannot be read now.
+     */
+    var keystoreFails: Boolean
+        get() = hardware.keystoreFails
+        set(value) {
+            hardware.keystoreFails = value
+        }
+
+    /**
      * False for a phone with no screen lock: the recovery key cannot be
      * kept, and there is no app lock. Setting it to false also deletes the
      * keys that need the prompt, as Android does when the screen lock is

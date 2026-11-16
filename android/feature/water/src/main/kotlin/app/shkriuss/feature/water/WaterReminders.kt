@@ -79,7 +79,22 @@ class WaterReminders(
         val now = time.now()
         val settings = repository.settingsNow()
         val day = repository.factsOf(now.toLocalDate())
-        return NextReminder.after(now, settings, factsOf(now.toLocalDate(), day, book.entries.value))
+        return NextReminder.after(now, settings, factsOf(now.toLocalDate(), day, entriesNow()))
+    }
+
+    /**
+     * The book as the rule may use it now. A last alarm that lies later
+     * than now means that the clock was set back. It is forgotten, so
+     * that the alarm Water sets next is pending again, and the grace of
+     * one minute holds for it. `core/notify` forgets its own fired times
+     * that lie ahead in the same way.
+     */
+    private fun entriesNow(): ReminderEntries {
+        val now = time.nowMillis()
+        return book.update { entries ->
+            val last = entries.lastAlarm
+            if (last != null && last > now) entries.copy(lastAlarm = null) else entries
+        }
     }
 
     // As the AlarmHandler.
@@ -101,7 +116,7 @@ class WaterReminders(
         runBlocking {
             lock.withLock {
                 // The rule sees the book as it was when the alarm came: this alarm still pending.
-                val before = book.entries.value
+                val before = entriesNow()
                 book.update { it.copy(lastAlarm = alarm.atMillis) }
                 val now = time.now()
                 val today = now.toLocalDate()
@@ -147,33 +162,45 @@ class WaterReminders(
      * A press of **Drank** or **Later** (spec, "Buttons on a reminder").
      * It works once, and only while its reminder is the one showing. A
      * press on an older one only removes it, and never a newer one.
+     *
+     * **Drank** takes its reminder only once the drink is stored: the
+     * repository then calls [afterChange], which removes it. So a save
+     * that fails leaves the reminder as it is, and `core/notify` leaves
+     * the notification. A second press finds no reminder showing and does
+     * nothing: presses run one after another on the worker of
+     * `core/notify`. Any other press takes the reminder first.
      */
     override fun onButton(press: ButtonPress, notifications: Notifications) {
         if (press.key != KEY) {
             notifications.cancel(press.key)
             return
         }
+        val logsADrink = press.action == DRANK && press.value in Amounts.DRINK_ML.first.toLong()..Amounts.DRINK_ML.last.toLong()
         val current = runBlocking {
             lock.withLock {
                 val showing = book.entries.value.showing
-                if (showing == press.atMillis) book.update { it.copy(showing = null) }
+                val taken = showing == press.atMillis && !logsADrink
+                if (taken) book.update { it.copy(showing = null) }
                 // An older reminder is no longer on screen: its key now shows the newer one, which stays.
-                if (showing == press.atMillis || showing == null) notifications.cancel(KEY)
+                if (taken || showing == null) notifications.cancel(KEY)
                 showing == press.atMillis
             }
         }
         if (!current) return
-        when (press.action) {
-            DRANK -> drank(press.value)
-            LATER -> later()
+        when {
+            logsADrink -> drank(press.value.toInt())
+            press.action == LATER -> later()
         }
     }
 
-    /** Logs one drink of the amount on the button, now. The repository then calls [afterChange], which moves the alarm. */
-    private fun drank(amount: Long) {
-        if (amount !in Amounts.DRINK_ML.first.toLong()..Amounts.DRINK_ML.last.toLong()) return
+    /**
+     * Logs one drink of [amountMl], the amount on the button, now. The
+     * repository then calls [afterChange], which removes the reminder and
+     * moves the alarm.
+     */
+    private fun drank(amountMl: Int) {
         val now = time.now()
-        runBlocking { repository.addDrink(now.toLocalDate(), now.hour * MINUTES_PER_HOUR + now.minute, amount.toInt()) }
+        runBlocking { repository.addDrink(now.toLocalDate(), now.hour * MINUTES_PER_HOUR + now.minute, amountMl) }
     }
 
     /** Sets a snooze 15 minutes from now, or none if that is after "Until", and moves the count to now. */

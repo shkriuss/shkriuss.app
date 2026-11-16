@@ -33,7 +33,7 @@ class WaterActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        // Today and History move to the new day if midnight passed while the app was away.
+        // Every screen moves to the new day if midnight passed, or the clock changed, while the app was away.
         models.checkTheDay()
     }
 }

@@ -143,9 +143,22 @@ More:
 3. The word field asks the keyboard for a password field that shows its
    letters, adds `IME_FLAG_NO_PERSONALIZED_LEARNING` and
    `TYPE_TEXT_FLAG_NO_SUGGESTIONS`, and turns autocorrect off.
-4. The field's text menu shows nothing. It takes only `a` to `z`, at most
-   eight letters, and at most one new letter per change. So a paste never
-   lands, also not through the paste action TalkBack offers.
+4. Nothing is copied or cut from the word field, and nothing is pasted
+   into it (`noCopyCutPaste` in `WordField.kt`):
+   - The field's text menu has no entry, so Android shows no menu. That
+     also takes out the entries that hand selected text to another app,
+     such as "Share". A click of the right mouse button opens nothing.
+   - The keys for copy, cut and paste are taken before the field sees
+     them: Ctrl with C, X, V or Insert, Shift with Insert, and the keys
+     Copy, Cut and Paste. A keyboard app sends its own copy, cut and
+     paste as those keys.
+   - The accessibility actions copy, cut and paste do nothing. TalkBack
+     may still list them.
+   - The field takes only `a` to `z`, at most eight letters, and at most
+     one new letter per change.
+
+   These are the ways a text field of Compose Foundation 1.12.1 copies,
+   cuts and pastes. A newer version is read again for others.
 5. The words of the list that start with what is typed show as buttons
    under the field, in the screen itself. A popup would be a second
    window. When the letters start no word of the list, the field says so
@@ -157,8 +170,13 @@ More:
    ([Overlays and accessibility services](#overlays-and-accessibility-services)).
 7. The words leave the show screen when it stops: the phone's screen
    turns off or another app comes to the front. A new prompt shows them
-   again. The create and enter flows keep the key while stopped, because
+   again. A prompt that was asked for before the stop shows nothing,
+   whether its answer comes before the stop or after it: the check and
+   the stop both run on the main thread.
+   The create and enter flows keep the key while stopped, because
    nothing is stored yet and a screen times out while the user writes.
+   A flow that ends on its failure screen drops the key as that screen
+   shows. The screen has only "Done" and no way back to the words.
 8. A preview build shows a warning on every screen: never type your real
    recovery words into it.
 9. Other apps' windows are hidden, a tap under another app's window does
@@ -355,6 +373,14 @@ class WaterActivity : ComponentActivity() {
    and after each flow. `core/crypto` is the truth: a keyset write drops
    the keys from memory (for example keeping the recovery key), and the
    next read locks the gate.
+7. An unlock counts only if the app has not locked since its prompt was
+   asked for. The file keys come into memory on a background thread,
+   after the prompt. If the app locked meanwhile, for example because it
+   left the screen, the watcher drops those keys again, the gate stays
+   locked, and the lock screen shows its prompt again. The watcher
+   decides this on the main thread, where every lock runs
+   (`AppLockWatcher.unlocked`). After a lock, a read of the keys never
+   opens the gate. Only a prompt does, or turning the app lock on.
 
 The screens of the recovery key are not behind the gate. They show no
 records, "Show the words" has its own prompt, and the repair must be
@@ -496,7 +522,9 @@ guide says so.
    or show the text of notifications.
 2. The prompt is `beginUnlock` of the Lock key, which reads the keyset
    file and works also while the app is unlocked. So it unlocks the app
-   too.
+   too. Like the lock screen's prompt, it counts only if the app has not
+   locked since it was asked for ([The gate](#the-gate)). Otherwise
+   nothing of the settings shows, and the screen asks again.
 3. If the app locks while the screen is away, it asks again. It reads
    the watcher's state on the main thread, so the first frame after the
    lock shows nothing of the settings.
@@ -584,7 +612,9 @@ file says that.
 - `FlowViewModelsTest`: every flow with real cryptography on the
   stand-in for the Keystore, with the prompt answered, closed and gone.
   This includes start over, repair, giving files up and a phone with no
-  screen lock.
+  screen lock. A prompt asked for before the show screen stopped shows no
+  words, also when the stop runs before its answer arrives. A flow on its
+  failure screen holds no recovery key.
 - `SecurityActivitiesTest`: every screen blocks screenshots and keeps
   autofill and content capture away. Every screen ignores a covered tap,
   every view of it is marked for accessibility tools only, and it hides
@@ -603,6 +633,11 @@ file says that.
   `HIDE_OVERLAY_WINDOWS`, and its six screens are not exported.
 - `WordInputTest`: what a word field accepts and offers, and which
   letters start no word.
+- `WordFieldTest`: select all and copy by keys leaves the clipboard as
+  it was, and so do cut by keys and the accessibility actions. Paste by
+  keys or by the accessibility action brings nothing into the field.
+  The text menu is offered nothing, and the right mouse button opens no
+  menu.
 - Catalog's `SecurityScreensScreenshotTest`: every state in the four
   standard configurations: phone light at font scale 1.0, phone dark at
   2.0, tablet light at 2.0 and tablet dark at 1.0.
@@ -611,7 +646,11 @@ file says that.
   it, a screen-off broadcast in time and late, a watcher that finds no
   keys in memory starting locked, a keyset write that drops the keys,
   the window flags, `hidesNotificationText`, `onTextHidden` and the
-  notices. While locked, every screen of the app hides other apps'
+  notices. An unlock whose file keys come after the app locked again
+  does not count, from the lock screen and from the app lock screen, and
+  the prompt is asked for again. One that comes while the app is away
+  but not locked counts. After a lock, a read of the keys does not open
+  the gate. While locked, every screen of the app hides other apps'
   windows, set before the screen starts again. The six screens of the
   module always do. Without the permission, the lock screen still shows.
 - `AppLockGateTest`: nothing of the screen while locked, not one frame
