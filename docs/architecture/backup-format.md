@@ -850,16 +850,10 @@ three, and all are cheap (`LargeFileTest`):
    read from the document run ahead of the bytes put into staging. The
    gap never passes 4 MiB.
 
-In the cloud environment, the first takes about 3 seconds and needs no
-disk. The other two together take under 1 second, and the third needs
-64 MiB in a temporary folder for that time. All the tests of
-`core/backup` together take about 11 seconds.
-
-In CI, the whole test task of `core/backup` ends about 29 seconds after
-its code is compiled. That is an upper limit, because other tasks run
-in between. The log of CI gives no time for a single test. So the first
-proof stays well under the owner's limit of about a minute, and it is
-kept.
+The first needs no disk. The third needs 64 MiB in a temporary folder
+while it runs. The first proof is kept while it takes less than about a
+minute in CI, the owner's limit
+([Decided by the owner](#decided-by-the-owner)).
 
 No test of `core/backup` runs on an emulator, and none opens the picker
 itself. The picker is checked by hand with the first app, Water

@@ -244,9 +244,7 @@ What the user sees:
     cannot read these screens.
   - A harmful service can falsely claim to be a tool
     ([threat model](../security/threat-model.md#out-of-scope)).
-  - TalkBack must keep reading them. On a Pixel 9 Pro it reads
-    Catalog's pages of these screens with the switch **Protect this
-    page, as in an app** on.
+  - TalkBack must keep reading them.
 - Android 13 has no way to keep a window from accessibility services that
   are not tools. There, every accessibility service the user turned on
   can read these screens.
@@ -700,10 +698,9 @@ What a unit test cannot show: `setRecentsScreenshotEnabled`, the real
 prompt, a real keyboard, a real picker, an app that Android stops while
 a picker is open, and how a real phone delivers the screen-off
 broadcast. Also: that Android really hides other apps' windows and drops
-a covered tap, and which accessibility services it lets read a screen.
+a covered tap, and which accessibility services it lets read a screen,
+TalkBack among them.
 They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
-How TalkBack reads the shielded screens is in
-[Overlays and accessibility services](#overlays-and-accessibility-services).
 
 ## Open
 
