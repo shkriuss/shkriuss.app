@@ -233,19 +233,17 @@ class ShowViewModel internal constructor(
     /** Counts the stops. Read and written on the main thread only. */
     private var stops = 0
 
-    /** The count of stops when the prompt that is open was asked for. Read and written on the main thread only. */
-    private var askedAt = 0
-
     /** The one state of the screen. */
     val state: StateFlow<ShowScreen> = screen.asStateFlow()
 
     /** Starts the system prompt that opens the kept key. */
     fun onShow() {
-        // Taken before the prompt shows, not when its answer arrives: Android can run a stop before it hands a success over.
-        askedAt = stops
+        // Taken before the prompt shows, not when its answer arrives: Android can run a stop before it hands a success
+        // over. It goes with this request, so a request made after a stop cannot lend its count to an older prompt.
+        val asked = stops
         work {
             val step = crypto.setup.beginShowRecoveryKey()
-            screen.value = ShowIntro(prompt = PromptRequest(++requests, step))
+            screen.value = ShowIntro(prompt = PromptRequest(++requests, step, asked))
         }
     }
 
@@ -258,13 +256,17 @@ class ShowViewModel internal constructor(
             work { request.step.cancel() }
             return
         }
-        val asked = askedAt
         work {
             val key = request.step.finish() as RecoveryKey
             // The stop runs on the main thread. So does this, and no stop can come between the check and the words.
             withContext(Dispatchers.Main.immediate) {
-                // The screen stopped since the prompt was asked for: nothing shows, and the key is dropped.
-                screen.value = if (asked == stops) ShowWords(key.words()) else ShowIntro()
+                if (request.askedAt == stops) {
+                    screen.value = ShowWords(key.words())
+                } else if ((screen.value as? ShowIntro)?.prompt?.id == request.id) {
+                    // The screen stopped since the prompt was asked for: nothing shows, and the key is dropped. The
+                    // prompt of a newer request stays.
+                    screen.value = ShowIntro()
+                }
             }
         }
     }

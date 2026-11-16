@@ -60,9 +60,6 @@ class UnlockViewModel internal constructor(
     private var requests = 0
     private var shownFor = -1
 
-    /** The watcher's mark from before the prompt that is open now. Read and written on the main thread only. */
-    private var mark = 0
-
     /** The app locked for the [lock]th time. The prompt shows by itself once for each lock. */
     fun onLocked(lock: Int) {
         if (lock == shownFor) return
@@ -75,10 +72,11 @@ class UnlockViewModel internal constructor(
         val now = screen.value
         if (now.prompt != null || now.working) return
         screen.value = LockScreen(working = true)
-        mark = watcher.unlockMark()
+        // The watcher's mark from before the prompt shows. It goes with this request.
+        val mark = watcher.unlockMark()
         work {
             val step = crypto.appLock.beginUnlock()
-            screen.value = LockScreen(prompt = PromptRequest(++requests, step))
+            screen.value = LockScreen(prompt = PromptRequest(++requests, step, mark))
         }
     }
 
@@ -92,13 +90,12 @@ class UnlockViewModel internal constructor(
             return
         }
         screen.value = LockScreen(working = true)
-        val asked = mark
         work {
             request.step.finish()
             // Every lock runs on the main thread. So does this, and the watcher decides there whether the unlock counts.
             withContext(Dispatchers.Main.immediate) {
                 screen.value = LockScreen()
-                watcher.unlocked(asked)
+                watcher.unlocked(request.askedAt)
             }
         }
     }
@@ -148,9 +145,6 @@ class AppLockViewModel internal constructor(
     @Volatile
     private var opened = false
 
-    /** The watcher's mark from before the prompt that is open now. Read and written on the main thread only. */
-    private var mark = 0
-
     /** Reads the keys again. The screen calls it each time it comes to the front. */
     fun refresh() {
         val now = screen.value
@@ -170,10 +164,11 @@ class AppLockViewModel internal constructor(
     fun onAsk() {
         val now = screen.value as? AppLockAsking ?: return
         if (now.prompt != null) return
-        mark = watcher.unlockMark()
+        // The watcher's mark from before the prompt shows. It goes with this request.
+        val mark = watcher.unlockMark()
         work {
             val step = crypto.appLock.beginUnlock()
-            screen.value = AppLockAsking(PromptRequest(++requests, step))
+            screen.value = AppLockAsking(PromptRequest(++requests, step, mark))
         }
     }
 
@@ -184,12 +179,11 @@ class AppLockViewModel internal constructor(
         when (outcome) {
             PromptOutcome.SUCCEEDED -> {
                 screen.value = AppLockLoading
-                val asked = mark
                 work {
                     request.step.finish()
                     // Every lock runs on the main thread. So does this, and the watcher decides there whether the unlock counts.
                     val counts = withContext(Dispatchers.Main.immediate) {
-                        watcher.unlocked(asked).also { counted ->
+                        watcher.unlocked(request.askedAt).also { counted ->
                             if (counted) opened = true
                             // The app locked after the prompt was asked for: nothing shows, and the screen asks again.
                             if (!counted && screen.value == AppLockLoading) screen.value = AppLockAsking()
