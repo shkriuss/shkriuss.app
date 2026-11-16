@@ -442,8 +442,8 @@ lock, and they are all deleted when the screen lock is removed. Android
 and later.
 
 The minimum is Android 15
-([ADR 0040](../adr/0040-minimum-android-15.md)). So every supported
-phone has the Unlocked key, and there is one key layout. The code does
+([ADR 0040](../adr/0040-minimum-android-15.md)). So the Unlocked key is
+safe on every supported phone, and there is one key layout. The code does
 not check the Android version itself: Android refuses to install an app
 on a version below its minimum.
 
