@@ -1559,7 +1559,7 @@ What today's APKs hold. Catalog's three APKs, searched with the SDK's
 |---|---|---|
 | release | None | `System.loadLibrary` in the static block of `androidx.graphics.path.PathIteratorPreApi34Impl` |
 | preview | None | The same |
-| debug | `android.webkit.WebView`, in `androidx.core.text.util.LinkifyCompat.findAddress` (`androidx.core`). `android.webkit.MimeTypeMap`, in `androidx.core.content.FileProvider`. `dalvik.system.ZipPathValidator$Callback`, a stub that D8 adds by itself for a class of Android 14. It is no class loader. | `System.loadLibrary` in the static block of `androidx.graphics.path.PathIteratorImpl` |
+| debug | `android.webkit.WebView`, in `androidx.core.text.util.LinkifyCompat.findAddress` (`androidx.core`). `android.webkit.MimeTypeMap`, in `androidx.core.content.FileProvider`. | `System.loadLibrary` in the static block of `androidx.graphics.path.PathIteratorImpl` |
 
 No APK calls `System.load`, `Runtime.load`, `Runtime.loadLibrary`,
 `Runtime.exec` or `ProcessBuilder.start`. The graphics-path library is
@@ -1622,8 +1622,9 @@ UI, Foundation, Material 3 or Animation code calls these itself, and no
 module in this project does.
 
 If any code did, the app would crash with `UnsatisfiedLinkError` on every
-Android version. The library's loader runs even on Android 14 and later,
-where the library is not used. The graphics-path check turns that crash
+Android version. The library's loader runs all the same, although no
+supported Android version uses the library: Android 14 and later have
+their own path iterator. The graphics-path check turns that crash
 into a build failure.
 
 ### The graphics-path check
