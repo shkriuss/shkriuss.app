@@ -8,8 +8,7 @@ Why it works this way is in
 [ADR 0013](../adr/0013-signing-key-custody-and-rotation.md) (the signing
 key) and [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)
 (the release flow). The workflow is
-[`release.yml`](../../.github/workflows/release.yml). Set up in Phase 0,
-step 6.
+[`release.yml`](../../.github/workflows/release.yml).
 
 ## What the workflow does
 
@@ -177,7 +176,7 @@ asked to approve.
 |---|---|
 | Only the repository owner may start or re-run a release. | Someone other than you started the run, or re-ran a job in it. Start a new run yourself. |
 | Start the release on the branch main. | Run it again with the branch `main`. |
-| Unknown app. | Pick an app from the list: `catalog` or `water`. A new app is added to the list in a pull request, as Water was in step 2.6. |
+| Unknown app. | Pick an app from the list: `catalog` or `water`. A new app is added to the list in a pull request. |
 | The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 ... | Type a version in one of those forms. No `v` in front. |
 | CI (ci.yml) has not run for commit ... on main. | CI has not started yet, or the commit is not on `main`. Wait a minute, then start again. |
 | CI (ci.yml) has not passed for commit ... | CI is still running, or it failed. The message links to the run. Wait until it is green, or fix it first, then start again. |
@@ -283,8 +282,8 @@ If the restore fails with "failed to fetch public key: HTTP 404: Not
 Found" and "The backup is saved, but the secrets were not all stored.
 Check CEREMONY_TOKEN, then run restore.":
 
-1. Check that `release` exists in shkriuss.app. In the rehearsal, this
-   error came from an environment that had been deleted.
+1. Check that `release` exists in shkriuss.app. This error comes when
+   the environment does not exist, for example after it was deleted.
 2. Check that the token reaches shkriuss.app, with the permissions of
    step 5.
 3. Run `restore` again. Then clean up as in steps 14 and 15.
@@ -395,15 +394,13 @@ enough. In short:
 
 ## Rehearsal with Catalog
 
-The cloud environment has no keys and cannot run GitHub Actions, so these
-were not tried there: the **Run workflow** form, the approval, the real
+The cloud environment has no keys and cannot run GitHub Actions, so it
+cannot try these: the **Run workflow** form, the approval, the real
 secrets and key, passing files between jobs, the attestation, a draft
 without a tag, publishing under your tag rule, Obtainium and AppVerifier.
 The rehearsal tries all of them.
 
 ### Part A: a dry run that leaves nothing behind
-
-Done on 2026-11-11. The draft was deleted afterwards.
 
 1. Do all of [Before the first release](#before-the-first-release).
 2. Start a run with a wrong version, `0.1`. **Build** must fail within a
@@ -429,12 +426,9 @@ Done on 2026-11-11. The draft was deleted afterwards.
 
 ### Part B: the Phase 0 gate
 
-Done on 2026-11-11. Catalog 0.1.0 was published as `catalog-v0.1.0`,
-installed with Obtainium and checked with AppVerifier. Nothing differed
-from these steps.
-
 This makes a real, permanent release. The tag `catalog-v0.1.0` can never be
-used again, even if the release is deleted.
+used again, even if the release is deleted. Catalog 0.1.0 is published as
+`catalog-v0.1.0`, so these steps cannot be run again with that version.
 
 1. Start a run with app `catalog` and version `0.1.0`. Approve **Sign**.
 2. Check and publish the draft

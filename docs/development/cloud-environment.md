@@ -24,7 +24,16 @@ Why each allowed domain is there:
 - `dl.google.com`: the Android SDK and Google's Maven repository.
 - `keys.openpgp.org` and `pgp.mit.edu`: PGP key servers. Gradle asks these,
   and `keyserver.ubuntu.com`, when it writes PGP verification metadata.
-  `keyserver.ubuntu.com` is reachable without being listed.
+  `keyserver.ubuntu.com` is reachable without being listed. Key server
+  lookups fail now and then. A second run with `--refresh-keys` works.
+
+Two hosts are blocked, and the build does not need them:
+
+- `downloads.gradle.org`, where Gradle's `.sha256` files now live. The
+  checksums on `services.gradle.org` work instead.
+- `repo.gradle.org`. Android Lint would ask it for the newest Gradle
+  version. The owner turned off lint's version lookups (see
+  [build.md](build.md#lint)), so lint does not ask.
 
 Environment variables:
 
@@ -46,9 +55,13 @@ BASH_MAX_TIMEOUT_MS=1800000
 
 ## The Maven Central mirror
 
-Maven Central answered "429 Too Many Requests" several times from the shared
+Maven Central answers "429 Too Many Requests" now and then to the shared
 cloud address. The setup script adds a cloud-only Gradle init script that
-asks Google's public mirror of Maven Central first. That avoided the problem.
+asks Google's public mirror of Maven Central first. That avoids the problem:
+the build fetches every Maven Central file through the mirror and never
+contacts `repo.maven.apache.org`. Direct requests to
+`repo.maven.apache.org` from a session can still answer 429, so the mirror
+is still needed.
 
 The mirror exists only in the cloud environment. Never add it to the
 project's own repositories.
@@ -91,6 +104,12 @@ This is an environment check. Do not change project files.
 
 The setup script installs the Android SDK and the cloud-only Gradle init
 script for the mirror.
+
+- The SDK packages are `platforms;android-37.0`, for compile SDK 37, and
+  `build-tools;36.0.0`, which the build pins. See [build.md](build.md).
+- Robolectric runs offline: Gradle downloads its Android image and
+  checks it. So the two Robolectric lines in the init script are not
+  used. They do no harm.
 
 This is a copy of the script in the environment's settings. Keep the two
 identical.
@@ -186,27 +205,6 @@ exit 0
 ```
 
 <!-- SETUP SCRIPT END -->
-
-## What Phase 0, step 3 found
-
-- The packages the setup script installs are the right ones:
-  `platforms;android-37.0` for compile SDK 37, and `build-tools;36.0.0`,
-  which the build pins. See [build.md](build.md).
-- Robolectric now runs offline. Gradle downloads its Android image and
-  checks it. The two Robolectric lines in the init script are no longer
-  used. They do no harm.
-- Two hosts are blocked here:
-  - `downloads.gradle.org`, where Gradle's `.sha256` files now live. The
-    checksums on `services.gradle.org` work instead.
-  - `repo.gradle.org`. Android Lint asked it for the newest Gradle version.
-    The owner turned off lint's version lookups (see [build.md](build.md#lint)),
-    so lint no longer asks, and the build does not need this host.
-- Key server lookups failed now and then while Gradle wrote the
-  verification metadata. A second run with `--refresh-keys` worked.
-- No build download answered 429. The build fetched every Maven Central
-  file through the mirror and never contacted `repo.maven.apache.org`.
-  Direct test requests to `repo.maven.apache.org` from the same session did
-  answer 429, so the mirror is still needed.
 
 ## Open
 

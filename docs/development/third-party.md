@@ -3,13 +3,9 @@
 What others made and the apps contain: where it comes from, its licence
 and its notice.
 
-- Status: started on 2026-11-12 in Phase 1, step 4, session B
-  ([PROMPTS.md](PROMPTS.md)), with what `core/crypto` brings. Completed
-  for Water on 2026-11-14 in Phase 2, step 2.5, with everything that
-  ships in Water's release APK, and the screen that shows it in the app.
-  Checked again on 2026-11-15 in step 2.6, in the release APK of Water
-  `1.0.0` ([How to check again](#how-to-check-again)). Nothing had
-  changed.
+- Status: complete for Water: everything that ships in the release APK
+  of Water `1.0.0`, and the screen that shows it in the app.
+  [How to check again](#how-to-check-again) says how to keep it right.
 - The project's own licences are in
   [ADR 0018](../adr/0018-licences.md).
 
@@ -25,10 +21,8 @@ and its notice.
 
 ## What ships in Water
 
-Seven parts. Checked on 2026-11-14 in the release APK of Water
-`1.0.0-alpha.1`, built in the cloud environment
-([How the list was made](#how-the-list-was-made)), and again on
-2026-11-15 in the release APK of Water `1.0.0`.
+Seven parts, in the release APK of Water `1.0.0`
+([How the list is made](#how-the-list-is-made)).
 
 | Part in the app's list | Version | Licence | What it is in Water |
 |---|---|---|---|
@@ -65,10 +59,9 @@ app's list in the same pull request. [How to check again](#how-to-check-again)
 says how to see it.
 
 In Catalog, Tink and Protocol Buffers are not in the APK either: Catalog
-never calls them. Checked in Catalog's release build on 2026-11-13, and
-in the published `catalog-v0.3.0.apk`. From version 0.3.0, Catalog's
-sample recovery words come from the word list, so the word list and its
-`LICENSE.txt` are in Catalog's APK.
+never calls them. The published `catalog-v0.3.0.apk` shows this. From
+version 0.3.0, Catalog's sample recovery words come from the word list,
+so the word list and its `LICENSE.txt` are in Catalog's APK.
 Catalog has no Licences screen. That is [open](#open).
 
 ## The licence texts in the app
@@ -88,7 +81,7 @@ for byte the file of its source. `LicencesTest` checks the SHA-256.
   lines read at the source, and where the source is. The notices are
   written for this project; only the copyright lines and Kotlin's
   `NOTICE` lines are quoted.
-- All of these files were checked in the release APK by their SHA-256.
+- All of these files are in the release APK, with the same SHA-256.
   The build gives them short names there.
 - Six small AndroidX libraries also bring their own `LICENSE.txt`, which
   the build keeps under `META-INF/androidx/` in the APK: `annotation`,
@@ -128,7 +121,7 @@ The Jetpack libraries of the Android Open Source Project.
 - **Source:** <https://github.com/androidx/androidx>, the public copy of
   `https://android.googlesource.com/platform/frameworks/support`. The
   cloud environment cannot reach `android.googlesource.com`, so the
-  licence and the file headers were read at GitHub.
+  licence and the file headers are read at GitHub.
 - **Licence:** Apache-2.0. The repository's `LICENSE.txt` is the Apache
   text without its appendix.
 - **Notice:** the repository has no `NOTICE` file. Its files carry lines
@@ -188,7 +181,7 @@ not a library.
   `android/core/crypto/src/main/resources/app/shkriuss/core/crypto/words/english.txt`.
 - **Source:** the file `src/mnemonic/wordlist/english.txt` of Trezor's
   [python-mnemonic](https://github.com/trezor/python-mnemonic), the
-  reference implementation of BIP-39. Taken on 2026-11-12 from commit
+  reference implementation of BIP-39. Taken from commit
   `b57a5ad77a981e743f4167ab2f7927a55c1e82a8`.
 - **Unchanged:** the file is byte for byte the source's. Its SHA-256 is
   `2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda`. A
@@ -255,10 +248,9 @@ not in Water's APK; the fourth, AndroidX Annotation, is one of the
 
 - **Artifact:** `com.google.code.findbugs:jsr305`, version 3.0.2.
 - **Source:** its POM names <http://findbugs.sourceforge.net/> and
-  `https://code.google.com/p/jsr-305/`. Google Code is closed. Its
-  archive of the project was read on 2026-11-14.
-- **Licence:** confirmed at the source on 2026-11-14, which the first
-  version of this page left open. The two say different things:
+  `https://code.google.com/p/jsr-305/`. Google Code is closed. The
+  source is read in its archive of the project.
+- **Licence:** the listing and the source say different things:
   - The POM at Maven Central says "The Apache Software License, Version
     2.0".
   - The source has one licence file, `ri/LICENSE`. It is the BSD licence
@@ -316,24 +308,23 @@ not in Water's APK; the fourth, AndroidX Annotation, is one of the
 - No app code uses it ([spec.md](../apps/water/spec.md#assumptions),
   assumption 15). AndroidX names it.
 
-## How the list was made
+## How the list is made
 
-On 2026-11-14, in the cloud environment, with dependency verification
-on:
+In the cloud environment, with dependency verification on:
 
 1. `./gradlew :app:water:dependencies --configuration
    releaseRuntimeClasspath`, from `android/`. It lists 110 modules. They
    are the 14 projects of the two tables above.
 2. `./gradlew :app:water:assembleRelease`. Then the APK,
-   `app/water/build/outputs/apk/release/`, was read as a zip file:
+   `app/water/build/outputs/apk/release/`, is read as a zip file:
    - the class names in its dex files, by package. The seven libraries of
      [On the class path, not in the APK](#on-the-class-path-not-in-the-apk)
      have none;
    - the files `META-INF/*.version`, one for each AndroidX library that
      is in it;
    - the licence texts and notices, by their SHA-256.
-3. Each licence and each copyright line was read at the source named in
-   its section, on the same day, and not copied from memory.
+3. Each licence and each copyright line is read at the source named in
+   its section, and not copied from memory.
 4. Nothing in the apps is taken from an icon set or a font. Every icon is
    drawn for the suite, and the text is in the phone's own font.
 
@@ -347,23 +338,21 @@ After a dependency change, and before a release:
 3. Change this page, `Licences` in `android/feature/water` and the files
    in `res/raw` together. `LicencesTest` then needs the new count.
 
-### Checked for Water 1.0.0
+### What the APK of Water 1.0.0 holds
 
-On 2026-11-15, in step 2.6, with dependency verification on:
+What steps 1 and 2 give for version `1.0.0`, to compare with:
 
-1. `./gradlew :app:water:dependencies --configuration
-   releaseRuntimeClasspath` lists the same 110 modules as before.
-2. In `./gradlew :app:water:assembleRelease`, the APK of version `1.0.0`
-   has one dex file. It holds classes of the seven parts, with Protocol
-   Buffers under `com.google.crypto.tink.shaded.protobuf`. It holds no
-   class of the seven libraries of
-   [On the class path, not in the APK](#on-the-class-path-not-in-the-apk),
-   none of Google Play services and no `WebView`. It has no native
-   library.
-3. Its 54 files `META-INF/*.version` name the versions of
-   [AndroidX libraries](#androidx-libraries), Compose 1.12.1, Material 3
-   1.4.0 and kotlinx.coroutines 1.9.0.
-4. The three licence texts are in it, by their SHA-256.
+- The class path has the 110 modules.
+- The APK has one dex file. It holds classes of the seven parts, with
+  Protocol Buffers under `com.google.crypto.tink.shaded.protobuf`. It
+  holds no class of the seven libraries of
+  [On the class path, not in the APK](#on-the-class-path-not-in-the-apk),
+  none of Google Play services and no `WebView`. It has no native
+  library.
+- Its 54 files `META-INF/*.version` name the versions of
+  [AndroidX libraries](#androidx-libraries), Compose 1.12.1, Material 3
+  1.4.0 and kotlinx.coroutines 1.9.0.
+- The three licence texts are in it, by their SHA-256.
 
 ## Open
 

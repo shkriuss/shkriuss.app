@@ -124,8 +124,8 @@ jobs**.
 
 ## Why this way
 
-Phase 0, step 4 asked for the simplest way to get a preview APK from a pull
-request onto a phone with only a browser. Options:
+The aim is the simplest way to get a preview APK from a pull request onto
+a phone with only a browser. Options:
 
 1. **A workflow file that is not zipped (chosen).** GitHub's
    upload-artifact action can upload one file as it is. The link downloads
@@ -135,9 +135,8 @@ request onto a phone with only a browser. Options:
    the Files app before it can install, which adds steps.
 3. **A release per pull request.** A release needs a tag, and only the
    owner creates tags (section 15 of the [plan](../plan/PLAN.md)).
-4. **A comment on the pull request with the link (added).** It saves three
-   taps: the checks, the job and its summary. The owner decided on
-   [pull request 6](https://github.com/shkriuss/shkriuss.app/pull/6) to add
-   it, in its own small job that may only write to pull requests, checks
-   out nothing and runs no code from the pull request
+4. **A comment on the pull request with the link (also chosen).** It saves
+   three taps: the checks, the job and its summary. The owner decided to
+   add it, in its own small job that may only write to pull requests,
+   checks out nothing and runs no code from the pull request
    ([ci.md](ci.md#job-comment)).

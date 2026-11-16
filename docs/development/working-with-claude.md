@@ -28,8 +28,7 @@ only. That account:
 Claude has no Cloudflare access and no access to the signing-ceremony
 repository.
 
-The machine account is `shkriuss-bot`. It has worked since Phase 0. The
-owner recorded its name on 2026-11-13.
+The machine account is `shkriuss-bot`.
 
 ## Rules that enforce this
 

@@ -2,7 +2,7 @@
 
 The project's website. It shows the apps, how to install them with
 Obtainium, how to check them with AppVerifier against the signing
-fingerprint, and a link to the source. Set up in Phase 0, step 7.
+fingerprint, and a link to the source.
 
 - The workflow is [`site.yml`](../../.github/workflows/site.yml).
 - The generator is [`tools/site/build.py`](../../tools/site/build.py).
@@ -10,10 +10,13 @@ fingerprint, and a link to the source. Set up in Phase 0, step 7.
 - It is served by the Cloudflare Worker `shkriuss-hub`, which has static
   files only and no Worker script. Why, and how the deploy is protected:
   [ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md).
-- It is live at <https://shkriuss.app> since 2026-11-11.
+- It is live at <https://shkriuss.app>.
 - The site has no JavaScript, no cookies, no analytics and no fonts from
   other sites. Light and dark follow the phone's setting, with the palette
   of [ADR 0017](../adr/0017-design-system-tokens.md).
+- On a phone 320 px wide no page scrolls sideways. Every menu link is at
+  least 48 px high. The lowest text contrast is 6.61:1 in light and
+  7.68:1 in dark.
 
 ## Pages
 
@@ -35,7 +38,8 @@ fingerprint, and a link to the source. Set up in Phase 0, step 7.
 
 The menu shows Apps, Install, Verify, Privacy and Water. The pages of
 the recovery key, the app lock, backups and reminders are not in the
-menu: Water's page and the other guides link to them.
+menu: Water's page and the other guides link to them. On the verify
+page, the box for AppVerifier copies as exactly two lines.
 
 Every page has a link to the source code on GitHub. A link in a page to
 another page of the site stays on the site. A link to any other file of
@@ -51,6 +55,8 @@ the repository goes to that file on GitHub.
 
 Pull requests are never deployed. "Site / Build" is not a required check.
 It runs only when a pull request changes the site.
+
+`CLOUDFLARE_API_TOKEN` never appears on a command line or in the log.
 
 ### What Build checks
 
@@ -93,9 +99,13 @@ There are no cookies to protect: the site sets none.
 ## Set up Cloudflare
 
 Do this once, before the first deploy. Only you can, because Claude has no
-Cloudflare access and cannot change repository settings. Do it before you
-merge the pull request that adds the workflow: a run that names an
+Cloudflare access and cannot change repository settings. Set up the
+environment before the workflow runs on `main`: a run that names an
 environment that does not exist creates it, with no protection.
+
+Of the labels of the Cloudflare dashboard in these steps, only the
+token's scope and role are confirmed. Write down any other label that
+differs, so Claude can fix this page.
 
 | What | Kind | Where |
 |---|---|---|
@@ -161,6 +171,11 @@ Worker only with an account API token.
 The token in use was made this way: the scope **Specified Workers**,
 `shkriuss-hub`, with the role **Editor**.
 
+Every request that Wrangler 4.156.2 makes to deploy this configuration is
+about the Worker itself. None is about a zone, a domain or another
+Worker, as long as the Worker already has its `workers.dev` address,
+which a Worker made in the dashboard has.
+
 #### If your account does not offer Specified Workers
 
 1. Make the same account API token, but with the scope **All Workers** and
@@ -198,12 +213,9 @@ add `shkriuss`.
 
 ### 5. The first deploy
 
-Done on 2026-11-11.
-
-1. Merge the pull request. Its push to `main` starts the workflow. Or, if
-   it is merged already, open
-   `github.com/shkriuss/shkriuss.app/actions/workflows/site.yml`, tap **Run
-   workflow**, leave the branch at `main` and tap **Run workflow**.
+1. Open `github.com/shkriuss/shkriuss.app/actions/workflows/site.yml`, tap
+   **Run workflow**, leave the branch at `main` and tap **Run workflow**.
+   Every push to `main` also starts the workflow.
 2. Wait for **Deploy** to finish. Its summary names the address,
    `https://shkriuss-hub.<your subdomain>.workers.dev`, and the new
    version of the Worker.
@@ -219,8 +231,7 @@ page.
 You attach `shkriuss.app` by hand. The workflow never changes routes or
 domains, and the token cannot.
 
-Done on 2026-11-11. `SITE_DOMAIN` is set to `shkriuss.app`, so Deploy
-checks the domain too.
+`SITE_DOMAIN` is set to `shkriuss.app`, so Deploy checks the domain too.
 
 1. In **Workers & Pages**, tap `shkriuss-hub`.
 2. Open **Settings**, then **Domains & Routes**. Tap **Add**, then
@@ -359,61 +370,11 @@ only when you ask for exactly that.
    `npm install --package-lock-only --ignore-scripts --no-audit --no-fund`.
    It rewrites `package-lock.json`.
 4. Check that `install.sh` installs it:
-   `.github/site-deploy/install.sh /tmp/deploy`.
+   `.github/site-deploy/install.sh /tmp/deploy`. It installs Wrangler
+   only from the lockfile. It stops on a checksum that differs from the
+   lockfile, and on a Node.js that is too old.
 5. Open a pull request. The job **Deploy tool** installs it again on
    GitHub, and tries the deploy without uploading.
 
 Prompt R5 in [PROMPTS.md](PROMPTS.md), the monthly updates, includes
 these steps.
-
-## How it was tested
-
-Before the first merge, in the cloud environment:
-
-1. 34 unit tests of the generator, on Python 3.11, 3.12 and 3.13.
-2. Every Markdown file of the repository, 62 files, rendered by the
-   generator and by pandoc 3.1.3 (GFM), gave the same structure and text,
-   except the intended differences listed in ADR 0022. All 382 headings got
-   the same anchors. Every link to a file or a heading in them exists.
-3. Chromium showed every page with the real security headers, on a phone,
-   at 320 px wide and on a tablet, in light and dark. No page scrolled
-   sideways, the style sheet and the icon loaded, every menu link was at
-   least 48 px high, and the lowest text contrast was 6.61:1 in light and
-   7.68:1 in dark. The AppVerifier box copies as exactly two lines.
-4. The shell steps of `site.yml`, taken from the file, passed 77 checks
-   against stand-ins for GitHub, the Cloudflare API, Wrangler,
-   `workers.dev` and your own domain. Among them: 22 kinds of harmful file that Build must
-   refuse; a Worker that does not exist, a token that cannot reach it, a
-   missing secret or variable, where Wrangler never ran; Wrangler
-   reporting another Worker, no new version or another address; an older
-   commit; a changed artifact; and a live site that still serves the old
-   version, sends a header twice or not at all, or turns away a default
-   User-Agent; `SITE_DOMAIN` not set, set, or set with `https://`, a path
-   or capitals; and a domain that adds a second HSTS header. The token
-   never appeared on a command line or in the log.
-5. `install.sh` installed the pinned Wrangler from the lockfile. A changed
-   checksum in the lockfile, and a too-old Node.js, both stopped it. The
-   real Wrangler 4.156.2 tried the deploy of the built site with the real
-   `wrangler.jsonc`, without uploading.
-6. Claude read the requests that Wrangler 4.156.2 makes to deploy this
-   configuration. All are about the Worker itself. None is about a zone,
-   a domain or another Worker, as long as the Worker already has its
-   `workers.dev` address, which a Worker made in the dashboard has.
-7. `actionlint` with `shellcheck` found no problems.
-
-Not tried in the cloud environment, because Claude has no Cloudflare
-access: the real token and its per-Worker scope, the real upload, how
-Cloudflare sends `_headers`, and the labels in the Cloudflare dashboard.
-
-The first deploys, on 2026-11-11, tried the first three:
-
-1. The token is an account API token with the scope **Specified
-   Workers**, `shkriuss-hub`, and the role **Editor**. The fallback for
-   all Workers was not needed.
-2. Deploy uploaded the site. Every file was live, byte for byte, with
-   every security header, on the `workers.dev` address and on
-   <https://shkriuss.app>.
-3. The job Deploy checks the same on every run.
-
-Of the dashboard labels, only the token's scope and role are confirmed.
-Write down any other label that differs, so Claude can fix this page.
