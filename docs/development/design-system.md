@@ -2,20 +2,25 @@
 
 The colours, type, shapes and spacing every app uses, the `Shk*`
 components built from them, and how both are checked. They live in
-`android/core/design`. The tokens were built in Phase 1, step 1. The
-decision and its reasons are in
-[ADR 0017](../adr/0017-design-system-tokens.md). The components come in
-Phase 1, step 2, batch by batch. Five batches are here. Batch 1:
-buttons, floating action buttons and chips. Batch 2: the text field,
-checkbox, switch, radio button and slider. Batch 3: the card, list item,
-divider and section header, and the empty, loading and error states.
-Batch 4: the top bar, the navigation bar and rail that switch by window
-size, and the list-and-detail scaffold. Batch 5: the dialog, the bottom
-sheet, the snackbar, the menu, and the date and time pickers. See
-[Components](#components), [Window sizes](#window-sizes) and
-[Windows of their own](#windows-of-their-own). Step 2.3 of Phase 2
-added the progress bar for Water, and four optional parts of existing
-components ([Added in step 2.3](#added-in-step-23)).
+`android/core/design`. The decision on the tokens and its reasons are
+in [ADR 0017](../adr/0017-design-system-tokens.md). The components:
+
+- Buttons, floating action buttons and chips.
+- The inputs: the text field, checkbox, switch, radio button and
+  slider.
+- The progress bar.
+- The card, list item, divider and section header, and the empty,
+  loading and error states.
+- The top bar, the navigation bar and rail that switch by window size,
+  and the list-and-detail scaffold.
+- The dialog and the progress dialog, the bottom sheet, the snackbar,
+  the menu, and the date and time pickers.
+
+See [Components](#components), [Window sizes](#window-sizes) and
+[Windows of their own](#windows-of-their-own). Some components have
+optional parts that Water uses
+([Optional parts for Water's screens](#optional-parts-for-waters-screens),
+[parts for backup and the recovery key](#optional-parts-for-backup-and-the-recovery-key)).
 
 ## Rules
 
@@ -57,7 +62,7 @@ components ([Added in step 2.3](#added-in-step-23)).
 | `ShkCard.kt` | `ShkCard`, with and without `onClick`. |
 | `ShkLists.kt` | `ShkListItem`, `ShkDivider` and `ShkSectionHeader`. |
 | `ShkContentStates.kt` | `ShkEmptyState`, `ShkLoadingState`, `ShkErrorState`, and `ShkStateAction`, the button of a state. |
-| `ShkDialog.kt` | `ShkDialog` and `ShkDialogAction`, a question in a window and one of its buttons, up to three. `ShkProgressDialog`, a dialog with a progress circle and no button, from step 2.5. `DialogPanel` and `DialogButtons`, the panel and the buttons of every dialog, the pickers included, are internal to `core/design`. |
+| `ShkDialog.kt` | `ShkDialog` and `ShkDialogAction`, a question in a window and one of its buttons, up to three. `ShkProgressDialog`, a dialog with a progress circle and no button. `DialogPanel` and `DialogButtons`, the panel and the buttons of every dialog, the pickers included, are internal to `core/design`. |
 | `ShkBottomSheet.kt` | `ShkBottomSheet`. |
 | `ShkSnackbar.kt` | `ShkSnackbarHostState`, `rememberShkSnackbarHostState` and `ShkSnackbarResult`. `ShkScreen` shows the snackbars. |
 | `ShkMenu.kt` | `ShkMenu` and `ShkMenuItem`. |
@@ -93,11 +98,10 @@ Read colours with `ShkTheme.colors`, for example
 | `warning` | `#7A5800` | `#F2C24B` | Something needs attention but is not an error. |
 
 The values are from ADR 0017. The "Use" column is the starting guidance;
-the component batches in Phase 1, step 2 may refine it.
+the components may refine it.
 
-The owner confirmed the teal accent as it is, with Catalog 0.2.0 on the
-Pixel 9 Pro, the Pixel Tablet and the Pixel 6a on 2026-11-12, at the
-Phase 1 gate ([ADR 0017](../adr/0017-design-system-tokens.md), point 1).
+The owner confirmed the teal accent as it is
+([ADR 0017](../adr/0017-design-system-tokens.md), point 1).
 
 ### Which colours may be text, and on what
 
@@ -108,7 +112,7 @@ Phase 1 gate ([ADR 0017](../adr/0017-design-system-tokens.md), point 1).
 - `divider` is never text, and never the border of a control. It is
   decorative, so WCAG asks no contrast of it. It needs at least 1.5:1
   against the three backgrounds, so it stays visible, and less than the
-  outline, so it stays quieter (owner decision on pull request 15,
+  outline, so it stays quieter (owner decision,
   [ADR 0017](../adr/0017-design-system-tokens.md), point 13).
 - Status colours are for text and icons. Where Material 3 fills an area
   with the error colour, its text is the background colour: 6.54:1 in the
@@ -122,9 +126,7 @@ its contrast.
 
 ## Type
 
-Six styles, all in the system font. The owner confirmed them as they are,
-with Catalog 0.2.0 on the Pixel 9 Pro, the Pixel Tablet and the Pixel 6a
-on 2026-11-12, at the Phase 1 gate
+Six styles, all in the system font. The owner confirmed them as they are
 ([ADR 0017](../adr/0017-design-system-tokens.md), point 6).
 
 Use them through `ShkText`:
@@ -163,12 +165,11 @@ Buttons and chips are pills at their normal height of one line. When
 large text wraps them onto more lines, their corners keep the radius of
 one line: 20 dp for buttons, 16 dp for chips. A fully rounded end on a
 taller button would cut off the corners of the text. This is what "pill
-buttons" means in ADR 0017, point 3 (owner decision on
-[pull request 13](https://github.com/shkriuss/shkriuss.app/pull/13)).
-See [Large text](#large-text).
+buttons" means in ADR 0017, point 3 (owner decision). See
+[Large text](#large-text).
 
 The floating action buttons use `ShkShapes.Card`, 16 dp corners, as
-Material 3 does (owner decision on pull request 13).
+Material 3 does (owner decision).
 
 ## Spacing
 
@@ -229,7 +230,7 @@ The suite builds these layouts itself, from Material 3's own parts and
 Compose. It does not use Material 3's adaptive libraries
 (`material3-adaptive`, `material3-adaptive-navigation-suite` and
 `material3-window-size-class`), because fewer dependencies is a goal of
-the project (owner decision on pull request 16). Why, what that leaves
+the project (owner decision). Why, what that leaves
 out, such as support for the hinge of a foldable, and when to look again
 are in [ADR 0024](../adr/0024-own-adaptive-layouts.md).
 
@@ -298,16 +299,17 @@ list item, use `ShkShapes.Field`.
 
 ## Components
 
-Batches 1 to 5 of Phase 1, step 2. Each component is one function in
-`core/design`, built on Material 3. Apps call these, never Material 3.
-`ShkListItem`, `ShkSectionHeader` and the three states are laid out by
-`core/design` itself, from Material 3's text, icons, pressed state,
-progress circle and tonal button. That way the text of list items and
-section headers lines up with the rest of the screen, as the rows of
-batch 2 do (see [Rows](#rows)).
+Each component is one function in `core/design`, built on Material 3.
+Apps call these, never Material 3. `ShkListItem`, `ShkSectionHeader`
+and the three states are laid out by `core/design` itself, from
+Material 3's text, icons, pressed state, progress circle and tonal
+button. That way the text of list items and section headers lines up
+with the rest of the screen, as the rows of a checkbox, switch or radio
+button do (see [Rows](#rows)).
 
-The parts of batch 4 are laid out by `core/design` itself too, from
-Material 3's text, icons, icon buttons and pressed state. Material 3's
+The top bar, the navigation bar and rail, and the list and detail are
+laid out by `core/design` itself too, from Material 3's text, icons,
+icon buttons and pressed state. Material 3's
 small top app bar is made for one line of title at a fixed height, and a
 title that wraps at font scale 2.0 needs the bar to grow. The bar and the
 rail are laid out here so that their icons grow with the text, as the
@@ -352,50 +354,49 @@ icon rule asks, and the rail grows with its labels.
 
 Material 3 also has input chips (a removable tag) and suggestion chips.
 They are built when the first app needs them, not before (owner
-decision on pull request 13).
+decision).
 
-Batch 2 leaves out these parts of Material 3: the checkbox with a third,
-mixed state, the range slider and the vertical slider, and text field
-icons, prefixes, suffixes and placeholders. They are built when the first
-app needs them, not before (owner decision on pull request 14). Water
-needed a suffix for its amounts: it came in step 2.3
-([Added in step 2.3](#added-in-step-23)).
+The inputs leave out these parts of Material 3: the checkbox with a
+third, mixed state, the range slider and the vertical slider, and text
+field icons, prefixes and placeholders. They are built when the first
+app needs them, not before (owner decision). The text field has a
+suffix, because Water needed one for its amounts
+([Optional parts for Water's screens](#optional-parts-for-waters-screens)).
 
-Batch 3 leaves out, in the same way: the elevated and the filled card, a
-card that can be selected, a list item with a third "overline" line or
-with an image, a control or an icon button at the end of a list item, the
-vertical divider, and a progress circle that shows how far it has got.
-A row with a switch at its end is a `ShkSwitch`.
+The card, the list item, the divider and the states leave out, in the
+same way: the elevated and the filled card, a card that can be
+selected, a list item with a third "overline" line or with an image, a
+control or an icon button at the end of a list item, the vertical
+divider, and a progress circle that shows how far it has got. A row
+with a switch at its end is a `ShkSwitch`.
 
-Batch 4 leaves out: Material 3's medium and large top bars, a top bar
-that shrinks or changes colour while the content scrolls, badges on
-destinations, a disabled destination, the navigation drawer, moving or
-animating between panes, and panes the user can resize. They are built
-when the first app needs them. The menu of more actions it left out came
-with batch 5, as `menuItems` of `ShkTopBar`. Where the floating action
-button goes in these layouts was left to batch 5, together with the
-snackbar (owner decision on pull request 16). Batch 5 answers it; see
+The top bar, the navigation and the list and detail leave out: Material
+3's medium and large top bars, a top bar that shrinks or changes colour
+while the content scrolls, badges on destinations, a disabled
+destination, the navigation drawer, moving or animating between panes,
+and panes the user can resize. They are built when the first app needs
+them. The top bar's menu of more actions is its `menuItems`, a
+`ShkMenu`. Where the floating action button goes in these layouts is in
 [Floating action button and snackbar](#floating-action-button-and-snackbar).
 
-Batch 5 leaves out, until an app needs them: Material 3's full-screen
-dialog, the date range picker, a sheet with a half-open step or one that
-stays on the screen without dimming it, a snackbar that stays until it is
-closed or has a close button, and menus with sub-menus, rows that can be
-checked, dividers or text at the end of a row.
+The dialog, the sheet, the snackbar, the menu and the pickers leave
+out, until an app needs them: Material 3's full-screen dialog, the date
+range picker, a sheet with a half-open step or one that stays on the
+screen without dimming it, a snackbar that stays until it is closed or
+has a close button, and menus with sub-menus, rows that can be checked,
+dividers or text at the end of a row.
 
-Batch 5 builds the time picker from the suite's own parts, not from
-Material 3's (owner decision while batch 5 was built). Material 3's AM
-and PM buttons are 40 dp tall, under the 48 dp of rule 7, and the touch
-targets of the numbers on its clock face lie on top of each other, most
-of all in the two rings of the 24-hour clock. The suite's time picker has
-a field for the hour and one for the minute, with large numbers and the
-number keyboard, and AM and PM as radio buttons, only with the 12-hour
-clock. It has no clock face. This record is enough; the decision needs no
-ADR (owner decision on pull request 17).
+The time picker is built from the suite's own parts, not from Material
+3's (owner decision). Material 3's AM and PM buttons are 40 dp tall,
+under the 48 dp of rule 7, and the touch targets of the numbers on its
+clock face lie on top of each other, most of all in the two rings of the
+24-hour clock. The suite's time picker has a field for the hour and one
+for the minute, with large numbers and the number keyboard, and AM and
+PM as radio buttons, only with the 12-hour clock. It has no clock face.
+This record is enough; the decision needs no ADR (owner decision).
 
-Batch 4 adds one state to a component of batch 3: a list item can be
-selected (owner decision on pull request 16). See
-[How they look](#how-they-look).
+A list item can be selected, for the list and detail (owner decision).
+See [How they look](#how-they-look).
 
 ### How they look
 
@@ -411,7 +412,7 @@ selected (owner decision on pull request 16). See
 | Filter chip, selected | `accent` | `textOnAccent`, with a check mark | None | Pill, 16 dp | 32 dp tall |
 | Assist chip | None | `text`, icon in `accent` | `outline` | Pill, 16 dp | 32 dp tall |
 
-The inputs of batch 2:
+The inputs:
 
 | Component | Off, or not focused | On, selected or focused | Shape | Drawn size |
 |---|---|---|---|---|
@@ -421,7 +422,7 @@ The inputs of batch 2:
 | Radio button | Ring in `textSecondary` | Ring and dot in `accent` | Circle | 20 dp, in a row at least 48 dp tall. It grows with the font size. |
 | Slider | Track after the thumb in `outline`, its step marks in `background` | Track before the thumb, and the thumb, in `accent`. Its step marks in `textOnAccent`. | Rounded track | Track 16 dp tall, thumb 4 by 44 dp |
 
-The progress bar, from step 2.3:
+The progress bar:
 
 | Component | The part not yet reached | The part reached | Shape | Drawn size |
 |---|---|---|---|---|
@@ -433,7 +434,8 @@ The progress bar, from step 2.3:
   indicator, which leaves a gap between the two parts and draws a dot at
   the end.
 
-The parts of batch 3:
+The card, the list item, the section header, the divider and the
+states:
 
 | Component | Fill | Text and icon | Outline | Shape | Size |
 |---|---|---|---|---|---|
@@ -445,7 +447,7 @@ The parts of batch 3:
 | Loading state | None | A turning circle in `accent`, 4 dp wide. Text `textSecondary` in `Body`, centred. | None | Circle | Circle 40 dp. Fills the width, 24 dp above and below. |
 | Error state | None | As the empty state, with the suite's error icon in `error`. | None | None | As the empty state. |
 
-The parts of batch 4:
+The top bar, the navigation and the list and detail:
 
 | Component | Fill | Text and icon | Line | Shape | Size |
 |---|---|---|---|---|---|
@@ -455,7 +457,7 @@ The parts of batch 4:
 | Selected destination | Pill in `accent` behind the icon | Label `text`. Icon `textOnAccent`. | None | Pill, 56 by 32 dp at font scale 1.0 | As the others |
 | List and detail, two panes | None: each pane is a screen | None | `divider`, 1 dp, between the panes | None | List pane 360 dp wide, the detail the rest. |
 
-The parts of batch 5:
+The dialog, the sheet, the snackbar, the menu and the pickers:
 
 | Component | Fill | Text and icon | Line | Shape | Size |
 |---|---|---|---|---|---|
@@ -483,7 +485,7 @@ The parts of batch 5:
   `onValueChange` instead, which fits the one immutable state a view
   model exposes (CLAUDE.md, "Architecture rules"). It draws the label
   above the box itself, inset 4 dp, in `Caption`, as Material 3 does
-  (owner decision on pull request 14).
+  (owner decision).
 - The box of a checkbox and the ring of a radio button that are off are
   `textSecondary`, as in Material 3. That is stronger than the outline
   (8.35:1 against 4.03:1 on the light background), because they are small
@@ -492,17 +494,17 @@ The parts of batch 5:
   container" colour. This theme maps that role to `textOnAccent`, the
   thumb's own colour, so the mark would not show. `ShkSwitch` draws it in
   `accent`.
-- The track after a slider's thumb is `outline` (owner decision on pull
-  request 14). Material 3 uses the higher surface colour there, which is
-  1.22:1 on the background. WCAG asks for 3:1 for the parts of a control,
-  and the outline is at least 3.30:1 on all three backgrounds. The step
-  marks on it are the background colour, so they stand out from the
-  track by the same pair.
+- The track after a slider's thumb is `outline` (owner decision).
+  Material 3 uses the higher surface colour there, which is 1.22:1 on
+  the background. WCAG asks for 3:1 for the parts of a control, and the
+  outline is at least 3.30:1 on all three backgrounds. The step marks on
+  it are the background colour, so they stand out from the track by the
+  same pair.
 - Material 3 marks the end of a slider's track with a dot in the accent.
   On the outline it is 1.64:1 in the light theme and 2.67:1 in the dark
   one. It repeats what the track already shows, where the range ends.
 - A selected filter chip is filled with the accent colour, because the
-  accent is the colour of selection (owner decision on pull request 13).
+  accent is the colour of selection (owner decision).
   Material 3's default, the higher surface colour, is hard to tell from
   not selected. It also shows a check mark, so the state does not depend
   on colour alone.
@@ -512,18 +514,18 @@ The parts of batch 5:
   also while it is dragged.
 - The main line of a list item and a section header both use `Subtitle`,
   as the type table says. The section header is in the accent colour, so
-  it does not look like the first list item under it (owner decision on
-  pull request 15). Android's own settings draw their group headings in
-  the accent colour too.
+  it does not look like the first list item under it (owner decision).
+  Android's own settings draw their group headings in the accent colour
+  too.
 - A list item's icon takes as much space as a checkbox, with the same gap
   to its text, so their text lines up.
 - A divider is the `divider` colour, lighter than the outline of a
-  control, because it is decorative (owner decision on pull request 15).
-  See [Colour](#colour).
+  control, because it is decorative (owner decision). See
+  [Colour](#colour).
 - The text of the states is centred, because it stands alone in the
   middle of a screen. Text everywhere else starts at the start edge.
 - The title of a top bar is in `Headline`, because the type table makes
-  that the style of a screen's title (owner decision on pull request 16).
+  that the style of a screen's title (owner decision).
   Material 3's small top app bar uses its "title large" style, which
   this theme maps to `Title`.
 - A top bar's title starts at the screen margin, where the content under
@@ -534,31 +536,31 @@ The parts of batch 5:
   item's icon and its text.
 - The selected destination's icon sits on a pill in the accent colour,
   because the accent is the colour of selection, as on a selected filter
-  chip (owner decisions on pull requests 13 and 16). Material 3's default, the
-  higher surface colour, is 1.11:1 on the bar's surface in the light
-  theme, and hard to tell from not selected. The accent pill is 5.99:1
-  there, and 10.94:1 in the dark theme. The pill is there or not, so the
-  choice does not rely on colour alone.
+  chip (owner decisions). Material 3's default, the higher surface
+  colour, is 1.11:1 on the bar's surface in the light theme, and hard to
+  tell from not selected. The accent pill is 5.99:1 there, and 10.94:1
+  in the dark theme. The pill is there or not, so the choice does not
+  rely on colour alone.
 - The bar and the rail are the surface colour, with a line in the
-  divider colour on the side of the content (owner decision on pull
-  request 16). In the dark theme the surface is close to black, so the
-  line is what sets them apart. The line only separates, so it is the
-  divider colour, as between two panes.
-- The list pane is 360 dp wide, as in Material 3's list and detail (owner
-  decision on pull request 16). That is about the width of a phone, so a
-  list looks the same in a pane as on a phone.
+  divider colour on the side of the content (owner decision). In the
+  dark theme the surface is close to black, so the line is what sets
+  them apart. The line only separates, so it is the divider colour, as
+  between two panes.
+- The list pane is 360 dp wide, as in Material 3's list and detail
+  (owner decision). That is about the width of a phone, so a list looks
+  the same in a pane as on a phone.
 - The space under a top bar is the screen margin, 16 or 24 dp, as on
-  every side of a screen (owner decision on pull request 16). Material 3
-  leaves none above a list.
+  every side of a screen (owner decision). Material 3 leaves none above
+  a list.
 - A selected list item marks the item that is open beside the list, in
   two panes. It must show with more than a change of colour (owner
-  decision on pull request 16). So besides the higher surface colour
-  over its pressed area, it has a bar in the accent colour along its
-  start edge: 4 dp wide, in the 8 dp before the text, so the text does
-  not move, and 12 dp short of the top and the bottom, clear of the
-  rounded corners. The bar is accent on the higher surface, which the
-  contrast tests already check, 4.5:1 or more. The fill alone is 1.22:1
-  on the background, too little to show a state by itself.
+  decision). So besides the higher surface colour over its pressed
+  area, it has a bar in the accent colour along its start edge: 4 dp
+  wide, in the 8 dp before the text, so the text does not move, and
+  12 dp short of the top and the bottom, clear of the rounded corners.
+  The bar is accent on the higher surface, which the contrast tests
+  already check, 4.5:1 or more. The fill alone is 1.22:1 on the
+  background, too little to show a state by itself.
 - Text on buttons, chips and floating action buttons uses the `Label`
   style. The text of a checkbox, switch, radio button or slider uses
   `Body`, and so does the text typed in a field. The label above a text
@@ -580,10 +582,10 @@ The parts of batch 5:
   cannot be turned off. It is drawn in the inverse colours that
   `ShkTheme` already maps for snackbars: the text colour as its fill, so
   it stands out on every surface in both themes without an outline
-  (owner decision on pull request 17).
+  (owner decision).
 - A menu has the `Card` corners of a raised surface, 16 dp. Material 3
   gives menus its smallest corners, which this theme maps to `Field`,
-  12 dp (owner decision on pull request 17).
+  12 dp (owner decision).
 - A row of a menu uses `Label`, as Material 3 does, because each row is
   an action.
 - The date picker is Material 3's, in the suite's panel, with the suite's
@@ -594,7 +596,7 @@ The parts of batch 5:
 #### Rows
 
 A list item, a section header, and the row of a checkbox, switch or
-radio button follow one rule (owner decision on pull request 15):
+radio button follow one rule (owner decision):
 
 1. Their content starts and ends at the edges of the space they are
    given. That is where the page title and all other text start, so the
@@ -630,7 +632,7 @@ sheet stay in the screen, and are shown by their state: `expanded` and
 2. A sheet's content is the app's own, so a tap on a row only calls the
    row. The row closes the sheet by setting `visible` to false. The sheet
    then slides down before it goes, as it does for a swipe, a tap above
-   it, Back and TalkBack's "Dismiss" (owner decision on pull request 17).
+   it, Back and TalkBack's "Dismiss" (owner decision).
    Set `visible` to true again while it slides, and it slides back up.
 3. The dialog and the pickers keep 16 dp from the edges of the window.
    When they are taller than the window, as at font scale 2.0 on a phone
@@ -655,8 +657,7 @@ Material 3 marks its date picker, its bottom sheet and parts of them as
 experimental. `core/design` opts in where it uses them, and only there.
 An update of Material 3 may change them; the tests and screenshots show
 it if so. The owner accepted this, and the date picker offering typing
-only in a window narrower than 360 dp (owner decision on pull request
-17).
+only in a window narrower than 360 dp (owner decision).
 
 ### Floating action button and snackbar
 
@@ -673,18 +674,15 @@ only in a window narrower than 360 dp (owner decision on pull request
    screen's corner, not in the rail. In a list and detail it belongs to
    the screen of its pane.
 
-Pull request 16 left the place of the button to this batch, and the
-owner accepted this answer (owner decision on pull request 17). Material
-3 puts it in the rail on wide windows; keeping it in the screen keeps one
-rule for every width and keeps the rail unchanged.
+This place for the button is the owner's decision. Material 3 puts it
+in the rail on wide windows; keeping it in the screen keeps one rule for
+every width and keeps the rail unchanged.
 
-### Added in step 2.3
+### Optional parts for Water's screens
 
-Water's screens needed four parts that the components did not have. Each
-is optional, and its default leaves every existing use as it was: with
-the four changes alone, no Catalog screenshot changed (owner's decision
-in step 2.3). Each has a sample at the end of its component's page in
-the Catalog.
+Four components have a part that Water's screens use. Each is optional,
+and its default leaves every other use as it is (owner's decision). Each
+has a sample at the end of its component's page in the Catalog.
 
 | Component | Part | What it does |
 |---|---|---|
@@ -693,26 +691,23 @@ the Catalog.
 | `ShkTextField` | `suffix` and `suffixDescription` | A short unit after the typed text, inside the box, such as "ml", in `textSecondary`. TalkBack reads `suffixDescription`, such as "millilitres", with the label, or the suffix itself without one. |
 | `ShkListItem` | `trailingIcon` | A decorative icon at the very end of the row, after the trailing text, in `textSecondary`, such as a check next to "Goal reached". It grows with the text. Say in the text what it shows. |
 
-### Added in step 2.5
+### Optional parts for backup and the recovery key
 
 Water's backup and restore, and the dialog for the moment the recovery
-key is first needed, needed two parts that the dialog did not have
-(owner's decision in step 2.5). Each has a sample at the end of the
-Dialogs page in the Catalog.
+key is first needed, use two parts of the dialog (owner's decision).
+Each has a sample at the end of the Dialogs page in the Catalog.
 
 | Component | Part | What it does |
 |---|---|---|
-| `ShkDialog` | `otherAction` | An optional third button, for a question with two answers and a way out, such as "Create a recovery key", "I already have one" and "Not now". It sits between the way out and the confirm button. When the buttons do not fit side by side, they go one above the other: the confirm button on top, the way out lowest. Two buttons are easier to choose from, so use it rarely. Its default is none, which leaves every existing dialog as it was. |
+| `ShkDialog` | `otherAction` | An optional third button, for a question with two answers and a way out, such as "Create a recovery key", "I already have one" and "Not now". It sits between the way out and the confirm button. When the buttons do not fit side by side, they go one above the other: the confirm button on top, the way out lowest. Two buttons are easier to choose from, so use it rarely. Its default is none, which leaves every other dialog as it is. |
 | `ShkProgressDialog` | New | A dialog that only says what the app is doing, with a turning circle, while the user waits: "Writing the backup". It has no button. A tap outside it and Back do nothing. The caller stops showing it when the work has ended, and then says how it ended, for example in a `ShkDialog`. It looks like every dialog: the higher surface colour, a 1 dp outline, 280 to 560 dp wide. Its words wrap. |
 
 1. TalkBack reads the words of a progress dialog and "in progress" as
    one item, and announces them when the dialog opens. The dialog has no
    title of its own, so the words are announced once, not twice.
-2. With the two changes alone, no existing Catalog screenshot changed
-   except those of the Dialogs page and the start screen, which grew.
+2. Neither part changes a dialog that does not use it.
 3. Open: how TalkBack announces the progress dialog on a real phone. A
-   unit test shows what it would read, not that it speaks. It is in the
-   phone steps of the pull request of step 2.5.
+   unit test shows what it would read, not that it speaks.
 
 ### States
 
@@ -731,10 +726,10 @@ Dialogs page in the Catalog.
 | Keeping the dialog open (`closesDialog = false`) | A button of a dialog: a tap only calls it. |
 | With an icon at the end (`trailingIcon` given) | List item. |
 | Collapsed (`expanded = false`) | Extended floating action button. |
-| Tappable (`onClick` given) | Card, list item. A card that can be tapped has no disabled state: when it cannot be opened, leave out `onClick` (owner decision on pull request 15). |
+| Tappable (`onClick` given) | Card, list item. A card that can be tapped has no disabled state: when it cannot be opened, leave out `onClick` (owner decision). |
 | With supporting or trailing text, with an icon | List item. |
 | Announced (`announce = true`) | Empty state, when it answers something the user just did. Loading and error states are always announced. See [TalkBack](#talkback). |
-| With a button (`action` given) | Empty state, error state. `action` is a `ShkStateAction`: the words on the button and what a tap does, together, so a state cannot show a button that does nothing (owner decision on pull request 15). |
+| With a button (`action` given) | Empty state, error state. `action` is a `ShkStateAction`: the words on the button and what a tap does, together, so a state cannot show a button that does nothing (owner decision). |
 | With Back (`onBack` given), with actions (`actions` given) | Top bar. Each action is a `ShkTopBarAction`: its icon, its label and what a tap does. An action can be turned off (`enabled = false`). |
 | Selected (`selectedIndex`) | One destination of the navigation. A destination has no disabled state: leave out a place that is not there. |
 | Bar or rail (`windowWidth`) | Navigation. It follows the window; the Catalog passes `windowWidth` to show both. |
@@ -751,8 +746,8 @@ Dialogs page in the Catalog.
 | With a floating action button, with snackbars | `ShkScreen`. |
 
 The states themselves cannot be turned off. Their button is a
-`ShkTonalButton` that is always enabled (owner decision on pull request
-15): when its action is not possible, leave the button out.
+`ShkTonalButton` that is always enabled (owner decision): when its
+action is not possible, leave the button out.
 
 ### Touch targets
 
@@ -801,8 +796,7 @@ an icon button.
 - Wrapped text keeps space above and below it, so it never touches the
   edge of a chip or a floating action button.
 - An icon next to text grows with the font size, so it keeps its
-  proportion to the text (owner decision on pull request 13). See
-  [Icons](#icons).
+  proportion to the text (owner decision). See [Icons](#icons).
 - A text field's label and help wrap above and below its box. A field of
   one line scrolls sideways when the text is wider than the box, as every
   text field does.
@@ -810,11 +804,11 @@ an icon button.
   control, which stays centred on it. The text of a slider's label wraps
   beside its value.
 - The box of a checkbox and the ring of a radio button grow with the font
-  size, by the rule for an icon next to text (owner decision on pull
-  request 14). See [Icons](#icons).
+  size, by the rule for an icon next to text (owner decision). See
+  [Icons](#icons).
 - The switch and the slider keep their size at every font size (owner
-  decisions on pull request 14). The slider's track already fills the
-  width. So does the progress bar, which keeps its 8 dp.
+  decisions). The slider's track already fills the width. So does the
+  progress bar, which keeps its 8 dp.
 - The text of a card, a list item, a section header and the states
   wraps. In a list item, the text at the end keeps its place beside the
   main lines, which wrap, and the icon stays centred on them.
@@ -887,7 +881,7 @@ an icon button.
   the text at the end, in that order. With `onClick` it is also read as
   "button". Its icon is decorative. A selected list item is also read as
   "selected". Rows that are not selected say nothing about it, so a list
-  where nothing can be open sounds as before.
+  where nothing can be open never mentions selection.
 - A section header is read as a heading, so TalkBack users can jump from
   group to group.
 - A divider is not read.
@@ -901,15 +895,14 @@ an icon button.
 - A loading state and an error state are status messages (WCAG 2.2,
   success criterion 4.1.3). TalkBack announces them when they appear,
   politely: after what it is saying, without moving its focus (owner
-  decision on pull request 15). The loading state announces its text, the
-  error state its title and body, not its button. They are polite live
-  regions, as Material 3's snackbar is.
+  decision). The loading state announces its text, the error state its
+  title and body, not its button. They are polite live regions, as
+  Material 3's snackbar is.
 - An empty state is announced the same way only with `announce = true`.
   Turn it on when the state answers something the user just did, such as
   a search or a filter that found nothing: then it is a status message.
   Leave it off, the default, when the state is simply what a screen shows
-  when it opens, such as "No notes yet" (owner decision on pull request
-  15).
+  when it opens, such as "No notes yet" (owner decision).
 - A top bar's title is read as a heading, so TalkBack users can jump to
   it. The Back button is read as "Back", then "button". Each action is
   read by its label; `ShkTopBarAction` takes the label with the icon, so
@@ -950,7 +943,7 @@ an icon button.
   back gesture. `core/design` declares Activity Compose for this. It is
   the version the apps already use; Material 3 brings an older one at run
   time anyway. Activity Compose is already part of the stack, so this
-  needs no ADR of its own (owner decision on pull request 16).
+  needs no ADR of its own (owner decision).
 
 ### Icons
 
@@ -974,7 +967,7 @@ an icon button.
 5. Size at the default font size, as in Material 3: 18 dp in buttons and
    chips, 24 dp elsewhere, a list item included. The icon at the top of an
    empty or an error state is 48 dp, because it stands for the whole
-   screen (owner decision on pull request 15).
+   screen (owner decision).
 6. An icon next to text grows when the user makes text larger. It grows
    the way text of its own size grows: an 18 dp icon like 18 sp text,
    along Android's own font size curve. At font scale 2.0 an 18 dp icon
@@ -988,11 +981,11 @@ an icon button.
      extended floating action button shows a larger icon than a floating
      action button.
    - The box of a checkbox and the ring of a radio button follow the same
-     rule (owner decision on pull request 14). Both are 20 dp at the
-     default font size and grow like a 20 dp icon: 34 dp at font scale
-     2.0. Material 3 draws them at a fixed size, so `ShkCheckbox` and
-     `ShkRadioButton` scale the drawing about its centre and make room
-     for it. Their strokes grow with them, as an icon's strokes do.
+     rule (owner decision). Both are 20 dp at the default font size and
+     grow like a 20 dp icon: 34 dp at font scale 2.0. Material 3 draws
+     them at a fixed size, so `ShkCheckbox` and `ShkRadioButton` scale
+     the drawing about its centre and make room for it. Their strokes
+     grow with them, as an icon's strokes do.
    - The switch keeps its size, and so does the check mark on its thumb,
      Material 3's 16 dp.
    - The icon of a list item grows like 24 sp text, to 36 dp at font
@@ -1092,15 +1085,19 @@ for every component with an icon next to text.
    right in right-to-left languages, with round ends. The drawing is
    checked pixel by pixel on a plain image.
 
-The two parts added in step 2.5 are checked in `ShkDialogTest`, at font
-scale 1.0 and 2.0: the third button is read once, as a button, calls its
-action and closes the dialog; side by side it sits between the way out
-and the confirm button, and one above the other it sits in the middle;
-three touch targets do not overlap. The progress dialog is one item for
-TalkBack, with its words, has no button, stays open after Back, and its
-long words wrap inside the dialog.
+The dialog's third button and the progress dialog
+([parts for backup and the recovery key](#optional-parts-for-backup-and-the-recovery-key)) are
+checked in `ShkDialogTest`, at font scale 1.0 and 2.0: the third button
+is read once, as a button, calls its action and closes the dialog; side
+by side it sits between the way out and the confirm button, and one
+above the other it sits in the middle; three touch targets do not
+overlap. The progress dialog is one item for TalkBack, with its words,
+has no button, stays open after Back, and its long words wrap inside
+the dialog.
 
-The four parts added in step 2.3 are checked where their component is:
+The four optional parts for Water's screens
+([Optional parts for Water's screens](#optional-parts-for-waters-screens))
+are checked where their component is:
 
 1. `ShkDialogTest`: a button with `closesDialog = false` keeps the dialog
    open, and the error that the caller then shows under the field is the
@@ -1136,10 +1133,10 @@ grow like a 20 dp icon above it, to 40.8 dp at 2.0. The switch keeps
 `ShkRadioGroupTest` checks that a `ShkRadioGroup` tells TalkBack its radio
 buttons belong to one group.
 
-`ShkContentComponentsTest` checks the parts of batch 3 at font scale 1.0
-and 2.0. It runs on the screen of the screenshot phone, because at font
-scale 2.0 the long samples are taller than Robolectric's own small
-screen. It checks:
+`ShkContentComponentsTest` checks the card, the list item, the section
+header, the divider and the states at font scale 1.0 and 2.0. It runs
+on the screen of the screenshot phone, because at font scale 2.0 the
+long samples are taller than Robolectric's own small screen. It checks:
 
 1. A list item is at least 48 dp tall. TalkBack reads it as one item, with
    all its text in order, and as a button when it can be tapped. Turned
@@ -1231,8 +1228,9 @@ tablet held sideways.
    With the list composed in place, without moving its state, the
    one-pane-to-two-panes check fails.
 
-The tests of batch 5 run at font scale 1.0 and 2.0, on the screen of the
-screenshot phone:
+The tests of the dialog, the sheet, the snackbar, the menu and the
+pickers run at font scale 1.0 and 2.0, on the screen of the screenshot
+phone:
 
 - `ShkDialogTest`: the dialog is a pane announced by its title, which is
   a heading. Each button is read once, as a button, and their 48 dp touch
@@ -1293,8 +1291,9 @@ words. On Lists, exactly one list item, the selected sample, is
 read as selected. On Navigation, a tap selects a destination and shows
 its name as the title. On List and detail, a tap on a note opens it in
 place of the list, and the back gesture, then Back in its top bar, closes
-it and leaves the page open. On the pages of batch 5, it opens each
-component under "Try it" in its window and uses it: the dialog's Delete
+it and leaves the page open. On Dialogs, Bottom sheets, Snackbars,
+Menus, Date pickers and Time pickers, it opens each component under
+"Try it" in its window and uses it: the dialog's Delete
 and Cancel, a row of the sheet, the snackbar's Undo, a row of the top
 bar's menu, a date typed in the date picker (the test window is too
 narrow for the month), and an impossible hour, then a time, in the time
@@ -1351,7 +1350,7 @@ Components:
     long text; the
     loading state with short and long text; the error state with and
     without a button and with long text; then an error state to try,
-    which turns into a loading state (owner decision on pull request 15).
+    which turns into a loading state (owner decision).
 15. **Top bars**: the top bar with a title only, with Back, with actions,
     with Back and an action, with an action turned off, and with a long
     title. Each is in a frame that stands for the top of a screen.
@@ -1368,8 +1367,7 @@ Components:
 18. **Dialogs**: the dialog with text and two buttons, with one button,
     with a choice, with its confirm button turned off and with long text,
     then one to try, one that stays open with an error under its
-    field, and, from step 2.5, one with a third button and a progress
-    dialog.
+    field, one with a third button, and a progress dialog.
 19. **Bottom sheets**: the sheet with a title, without one and with long
     text, then one to try.
 20. **Snackbars**: the snackbar with a message only, with an action and
@@ -1403,12 +1401,12 @@ Shared screens:
     screen, its dialogs, the notices, and turning the app lock on, with
     sample data
     ([security-screens.md](../architecture/security-screens.md#catalog)).
-26. **Recovery key when first needed**, from step 2.5: the four forms of
-    the dialog an app shows when a backup, a restore or the app lock
-    first needs the recovery key: for a backup, for the app lock, for a
-    restore, and after a setup that stopped. Each opens on a screen of
-    its own, drawn in place, and Back returns to the list. Their buttons
-    do nothing: Catalog holds no keys
+26. **Recovery key when first needed**: the four forms of the dialog an
+    app shows when a backup, a restore or the app lock first needs the
+    recovery key: for a backup, for the app lock, for a restore, and
+    after a setup that stopped. Each opens on a screen of its own, drawn
+    in place, and Back returns to the list. Their buttons do nothing:
+    Catalog holds no keys
     ([security-screens.md](../architecture/security-screens.md#the-recovery-key-when-first-needed)).
 
 The samples of pages 18 to 23 are drawn in place
@@ -1459,20 +1457,20 @@ loading circle as it starts: a short arc at its top. On a phone it turns.
 screens from its page, the way the owner does, and captures it to its end
 in the four standard configurations: `RecoveryKey<State>_<config>.png`.
 
-`FirstNeedScreenshotTest`, from step 2.5, opens each of the four forms
-from the page "Recovery key when first needed" and captures it in the
-four standard configurations: `FirstNeedBackup`, `FirstNeedAppLock`,
-`FirstNeedRestore` and `FirstNeedFinish`. The page itself is
+`FirstNeedScreenshotTest` opens each of the four forms from the page
+"Recovery key when first needed" and captures it in the four standard
+configurations: `FirstNeedBackup`, `FirstNeedAppLock`, `FirstNeedRestore`
+and `FirstNeedFinish`. The page itself is
 `RecoveryKeyFirstNeedPage_<config>.png`.
 
-`OpenComponentsScreenshotTest` opens each component of batch 5 from "Try
-it", the way a user does, and captures the whole screen with its window,
-in the four standard configurations: `DialogOpen`, `BottomSheetOpen`,
-`MenuOpen`, `DatePickerOpen` and `TimePickerOpen`, and `SnackbarShown`,
-the snackbar above its floating action button. They show where each
-window sits and that nothing in it is cut off at font scale 2.0. The
-clock stands still while the snackbar shows, so it does not go away
-before the capture.
+`OpenComponentsScreenshotTest` opens the dialog, the sheet, the menu,
+the pickers and the snackbar from "Try it", the way a user does, and
+captures the whole screen with its window, in the four standard
+configurations: `DialogOpen`, `BottomSheetOpen`, `MenuOpen`,
+`DatePickerOpen` and `TimePickerOpen`, and `SnackbarShown`, the snackbar
+above its floating action button. They show where each window sits and
+that nothing in it is cut off at font scale 2.0. The clock stands still
+while the snackbar shows, so it does not go away before the capture.
 
 ## How to check it on a phone
 
@@ -1587,8 +1585,8 @@ before the capture.
 
 ## Open
 
-- The "Use" columns above are starting guidance, to be refined by the
-  component batches.
+- The "Use" columns above are starting guidance, which the components
+  may refine.
 - `ScreenshotConfig` and `captureWholeScreen` live in the tests of the
   Catalog, and copies in Water's. Moving them to `core/testing` is left
   for later.
@@ -1601,10 +1599,10 @@ before the capture.
   Water, the first app, does not use Navigation 3
   ([ADR 0003](../adr/0003-kotlin-compose-material-3-navigation-3.md),
   point 2).
-- What batch 4 leaves out (see [Components](#components)), until an app
-  needs it.
+- What the top bar, the navigation and the list and detail leave out
+  (see [Components](#components)), until an app needs it.
 - A month that fits a window narrower than 360 dp would need the
   suite's own date picker. Until then the date picker offers typing
-  there (accepted by the owner on pull request 17).
-- What batch 5 leaves out (see [Components](#components)), until an app
-  needs it.
+  there (accepted by the owner).
+- What the dialog, the sheet, the snackbar, the menu and the pickers
+  leave out (see [Components](#components)), until an app needs it.

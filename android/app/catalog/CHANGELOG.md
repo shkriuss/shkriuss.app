@@ -14,7 +14,7 @@ development.
 - **Dialogs** has two more samples at its end: a dialog with a third
   button, between the way out and the answer, and a progress dialog,
   which only says what the app is doing and has no button
-  ([design-system.md](../../../docs/development/design-system.md#added-in-step-25)).
+  ([design-system.md](../../../docs/development/design-system.md#optional-parts-for-backup-and-the-recovery-key)).
 - **Recovery key screens** and **App lock screens**: the switch is now
   **Protect this page, as in an app**, under the heading **Protection**.
   It does what the screens of `core/security` do in an app
