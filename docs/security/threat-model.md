@@ -25,7 +25,7 @@ does not. It ends with the OWASP MASVS controls and every open question.
 | [A lost or stolen phone](#a-lost-or-stolen-phone) | Android's file-based encryption, keys in the phone's hardware, the optional app lock | All of it rests on the screen lock. Notification text on the lock screen while the app lock is off. |
 | [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
 | [A network attacker](#a-network-attacker) | Data apps have no network permission. Everything synced is sealed. | Traffic analysis (out of scope). The Sync app's network settings are Open. |
-| [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing and the key ID. Replay and withholding wait for Phase 5. |
+| [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing and the key ID. Replay and withholding wait for the sync design. |
 | [Malicious dependencies or CI actions](#malicious-dependencies-or-ci-actions) | Dependency verification, pinned GitHub actions, secrets in one step, reproducible builds, Dependabot alerts for the libraries that ship | Trust on first use. A harmful release signed by its real publisher. Known vulnerabilities in the build tools and test libraries. |
 | [Takeover of GitHub, Cloudflare or the domain](#takeover-of-github-cloudflare-or-the-domain) | The owner's approval, a second factor on the owner's accounts, narrow tokens, the registrar lock and DNSSEC, the fingerprint in more than one place | A takeover of the owner's GitHub account can sign a release with the suite key. |
 | [Unsafe changes by an AI agent](#unsafe-changes-by-an-ai-agent) | Write access only, the owner's review, owner-only build checks | For most code, the owner's review is the only gate. |
@@ -51,7 +51,7 @@ Section 10 of the plan names five things.
 3. **Backups** are one encrypted stream under the app's `backup` key
    ([ADR 0008](../adr/0008-backup-file-format.md)).
 4. **Synced data** will be sealed records and the same encrypted file
-   streams ([ADR 0009](../adr/0009-sync-protocol-and-server.md), Phase 5).
+   streams ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
 5. Data about the data also counts: the text of notifications, the times
    of reminders, and how large things are.
 
@@ -81,7 +81,7 @@ Section 10 of the plan names five things.
 5. A new recovery key cannot take back what the old one could already
    open ([crypto-design.md](crypto-design.md#a-new-recovery-key)).
 6. Open: whether the words alone let someone add a device to the sync
-   server. That belongs to the sync design (Phase 5).
+   server. That belongs to the sync design.
 
 So the paper is worth as much as all the data. The user guide says the
 same: "Whoever has the words can read your backups and your synced data"
@@ -98,7 +98,7 @@ same: "Whoever has the words can read your backups and your synced data"
    no-backup folder ([crypto-design.md](crypto-design.md#where-keys-are-stored)).
 3. Later, each device gets a sync signing key that cannot leave it
    ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). Its
-   design is Open (crypto-design.md, open question 7, Phase 5).
+   design is Open (crypto-design.md, open question 7, the sync design).
 
 ### The signing key
 
@@ -251,7 +251,7 @@ What stops it:
    ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
 8. Apps of the suite are to share keys and data only through screens and
    interfaces that only apps signed with the suite key can open: the
-   handover between apps (step 3.0) and the courier interface of sync
+   handover between apps and the courier interface of sync
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
    Neither is built.
 
@@ -302,8 +302,8 @@ What does not:
 Open:
 
 - The handover: its screen, its signature permission and what it checks
-  (crypto-design.md, open questions 1 and 2, step 3.0).
-- The courier interface (ADR 0005, Phase 5).
+  (crypto-design.md, open questions 1 and 2).
+- The courier interface (ADR 0005).
 
 ### A network attacker
 
@@ -338,7 +338,7 @@ What does not:
    AppVerifier.
 
 Open: the Sync app's network settings, and whether it pins the server's
-identity (Phase 5). See [Network](#network) under MASVS.
+identity (the sync design). See [Network](#network) under MASVS.
 
 ### A compromised or curious sync server
 
@@ -371,7 +371,7 @@ What does not:
    (crypto-design.md, open question 9).
 
 Open: the protocol, a hostile server, replay and reordering, lost and
-revoked devices (ADR 0009, Phase 5, step 1).
+revoked devices (ADR 0009, the sync design).
 
 ### Malicious dependencies or CI actions
 
@@ -682,13 +682,14 @@ What stops it:
 4. Owner-only paths ([CODEOWNERS](../../.github/CODEOWNERS)), and the
    [protected-paths flag](protected-paths.md), which marks a pull request
    that changes one.
-5. Owner-only build checks ([build.md](../development/build.md)):
-   - The APK rules check and the graphics-path check enforce hard rules
-     1, 2, 3 and 4, and that Android's own backup and device transfer
-     are off.
-   - The logging check enforces hard rule 10.
-   - The schema and DAO checks enforce the record rules.
-   - The suite check makes sure that every instrumented test runs.
+5. Owner-only build checks fail the build on what they can see. Point 3
+   under "What does not" says what they miss
+   ([build.md](../development/build.md)):
+   - The APK rules check and the graphics-path check: hard rules 1, 2,
+     3 and 4, and Android's own backup and device transfer off.
+   - The logging check: hard rule 10.
+   - The schema and DAO checks: the record rules.
+   - The suite check: that every instrumented test runs.
 6. Dependency verification fails a build that downloads a file it does
    not know.
 7. Preview builds use a throwaway key and their own application ID, so
@@ -777,7 +778,7 @@ Limits that other pages decided:
    ([crypto-design.md](crypto-design.md#what-the-design-protects)).
 
 Replay and withholding by the sync server are not out of scope. They
-wait for the sync design (Phase 5).
+wait for the sync design.
 
 ### How the optional app lock fits
 
@@ -879,7 +880,7 @@ How this fits with an unlocked phone in an attacker's hands:
 
 Nothing of sync is built. This section says what follows from the
 formats that are fixed, and what the sync design still has to decide
-([ADR 0009](../adr/0009-sync-protocol-and-server.md), Phase 5).
+([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
 
 ### The network
 
@@ -914,7 +915,7 @@ What it learns for certain, from the formats in crypto-design.md:
 7. **The network details** of each request, such as the address and the
    time.
 
-What depends on the sync design (Open, Phase 5): whether record IDs, app
+What depends on the sync design (Open): whether record IDs, app
 names, kinds of record, file IDs and deletion markers travel in the
 clear, and how a file's ciphertext is tied to its record. A sealed
 record is opened with its record ID, which comes with it, not inside it.
@@ -1054,7 +1055,7 @@ Status: **Met for what is built.**
 - MASWE-0009, MACs: met. There is no MAC of our own. The AEADs check
   every blob.
 - MASWE-0010 and 0011, signatures: nothing signs yet. The sync signing
-  key is Open (crypto-design.md, open question 7, Phase 5).
+  key is Open (crypto-design.md, open question 7, the sync design).
 - MASWE-0012, random numbers: met. Every key, nonce and salt comes from
   Tink or the Keystore.
 - MASWE-0047, standard APIs: met. Tink and the Android Keystore only,
@@ -1088,13 +1089,13 @@ Status: **Partly met.**
   - MASWE-0020 and 0022: as AUTH-2.
   - MASWE-0001: as STORAGE-1.
 - Open: a new recovery key, and the sync signing key (crypto-design.md,
-  open questions 6 and 7, Phase 5).
+  open questions 6 and 7, the sync design).
 
 ### Authentication
 
 **MASVS-AUTH-1: The app uses secure authentication and authorization
 protocols and follows the relevant best practices.**
-Status: **Open (Phase 5).**
+Status: **Open (the sync design).**
 
 - No app talks to a server yet, so there is no remote login. The sync
   server will check a signature from each device
@@ -1140,8 +1141,8 @@ Status: **Partly met.**
     ([crypto-design.md](crypto-design.md#showing-it-again)).
   - The app lock screen asks for the prompt each time it opens.
   - Turning the app lock on needs the words and a prompt.
-  - Setting up another app from a keeper will need a prompt (step 3.0,
-    not built).
+  - Setting up another app from a keeper will need a prompt (the
+    handover between apps, not built).
   - With the app lock off, opening a file needs nothing more than the
     unlocked phone. The app lock is optional
     ([crypto-design.md](crypto-design.md#the-app-lock)).
@@ -1149,7 +1150,7 @@ Status: **Partly met.**
   `file-key` is dropped when the app locks. An app that waits with a
   timer keeps it until it comes back or locks.
 - MASWE-0025, non-repudiation: does not apply today. Nothing is sent to
-  anyone. Sync is Phase 5.
+  anyone. Sync is not built yet.
 - MASWE-0016 and 0019: as above.
 
 ### Network
@@ -1162,11 +1163,11 @@ Status: **Does not apply to data apps. Open for the Sync app.**
   ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). They
   have no traffic, so MASWE-0026 and 0027 do not apply to them.
 - The Sync app does not exist yet. Its TLS settings and certificate
-  checks are Open (Phase 5).
+  checks are Open (the sync design).
 
 **MASVS-NETWORK-2: The app performs identity pinning for all remote
 endpoints under the developer's control.**
-Status: **Open (Phase 5).**
+Status: **Open (the sync design).**
 
 - MASWE-0028. Only the Sync app will have a remote endpoint. Each user
   deploys the server to their own Cloudflare account (plan section 7),
@@ -1190,10 +1191,9 @@ Status: **Met for what is built.**
   Nothing else uses the clipboard today.
 - MASWE-0031, app extensions: does not apply. The apps offer no
   extension points.
-- Open: the handover between apps (step 3.0) and the courier interface
-  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md),
-  Phase 5). Both are to be signature-protected. Both will carry keys or
-  data.
+- Open: the handover between apps and the courier interface
+  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
+  Both are to be signature-protected. Both will carry keys or data.
 
 **MASVS-PLATFORM-2: The app uses WebViews securely.**
 Status: **Does not apply.**
@@ -1260,7 +1260,7 @@ Status: **Partly met.**
     them. From Android 16, their gestures are blocked too.
   - TalkBack reads the words aloud, and the screen says so first.
     TalkBack still reads every label on these screens with the
-    protection on, as the owner checked on a Pixel 9 Pro.
+    protection on.
   - An assistive app that does not declare itself an accessibility tool
     cannot read these screens on Android 14 and later.
   - A harmful service can falsely claim to be a tool. It stays
@@ -1307,7 +1307,7 @@ Status: **Not met.**
   ([SECURITY.md](../../SECURITY.md)).
 - Accepted deviation, decided by the owner: no forced
   update. Data apps have no network, and updates come through Obtainium.
-  Step 5.1 decides again for the Sync app
+  The sync protocol design decides again for the Sync app
   ([PROMPTS.md](../development/PROMPTS.md#51-protocol-design)).
 
 **MASVS-CODE-3: The app only uses software components without known
@@ -1374,7 +1374,7 @@ Status: **Met for what is built.**
   `ProcessBuilder.start`
   ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
 - MASWE-0045: as CODE-3.
-- Open: what the Sync app takes in (Phase 5). File ciphertext that
+- Open: what the Sync app takes in (the sync design). File ciphertext that
   arrives while an app is locked is checked only when the file is first
   opened (crypto-design.md, open question 9).
 
@@ -1409,7 +1409,7 @@ Status: **Partly met.**
     reporter and no Google Play services (hard rule 3).
   - The key ID is the same in every sealed record, every backup and
     every app of one user. It is a stable identifier wherever these go.
-    The device signing keys will be stable too (Phase 5).
+    The device signing keys will be stable too.
   - The sync server is the user's own.
 - MASWE-0069, functions that protect privacy: met. The system pickers
   take the place of storage permissions. Reminders use alarms on the
@@ -1457,7 +1457,7 @@ Status: **Partly met.**
   - Clearing an app's data in Android's settings deletes everything of
     that app, keys included.
   - How a user deletes their data from the sync server is Open
-    (Phase 5).
+    (the sync design).
 - MASWE-0077, what is shown: the user chooses whether notifications show
   their text, and whether the app blocks screenshots.
 - MASWE-0078, consent: nothing leaves the phone unless the user sets up
@@ -1490,7 +1490,7 @@ The owner's decisions on this page. Each is built into the page above.
 | The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted ([Status words](#status-words)). |
 | The points under [Found while writing this page](#found-while-writing-this-page) | Each point says what answers it. Point 5 is an accepted deviation. Points 6 and 12, and the CAA records of point 10, are Open. |
 | Required checks | The emulator jobs for Android 13, 14 and 15 are required. The job for Android 17 is not. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
-| The seventh deviation | No forced update (MASVS-CODE-2). Accepted. Step 5.1 decides again for the Sync app. |
+| The seventh deviation | No forced update (MASVS-CODE-2). Accepted. The sync protocol design decides again for the Sync app. |
 | The name of Claude's machine account | `shkriuss-bot`. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
 | MASVS-CODE-1 | **Met.** The overlay gaps that remain are deviations under PLATFORM-3, not CODE-1. |
 | The deviations for overlays and accessibility services: no accessibility marking on Android 13; the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted ([PLATFORM-3](#platform)). |
@@ -1548,7 +1548,7 @@ The first app that stores files:
    ([backup-format.md](../architecture/backup-format.md#open-questions),
    question 4).
 
-Step 3.0, the handover between apps:
+The handover between apps:
 
 9. The handover interface, its signature permission, and what happens
    when the asking app already has keys. Whether a keeper can check the
@@ -1556,7 +1556,7 @@ Step 3.0, the handover between apps:
    ([crypto-design.md](crypto-design.md#open-questions), questions 1
    and 2).
 
-Phase 5, sync:
+Sync:
 
 10. The protocol: formats, cursors, conflicts, a hostile server, replay,
     rollback and reordering, lost and revoked devices, and what the
@@ -1584,7 +1584,7 @@ Phase 5, sync:
 16. A notification that is not a reminder, for example in the Sync app
     ([notifications.md](../architecture/notifications.md#open),
     question 3).
-17. The QR code for the words, decided again in Phase 5
+17. The QR code for the words, decided again with sync
     ([crypto-design.md](crypto-design.md#the-qr-code)).
 
 Other:
@@ -1623,8 +1623,8 @@ Other:
 
 ### Found while writing this page
 
-Each point says what answers it. A point with no answer yet says which
-step decides it, and stays Open until then. Other pages refer to these
+Each point says what answers it. A point with no answer yet says what
+decides it, and stays Open until then. Other pages refer to these
 points by their numbers.
 
 1. That every app turns Android's own backup and device transfer off
@@ -1650,11 +1650,11 @@ points by their numbers.
    ([ci.md](../development/ci.md#dependency-graph)).
 5. Whether there is a way to make users update (CODE-2).
    **Decided: no forced update.** Data apps have no network, and
-   updates come through Obtainium. An accepted deviation. **Step 5.1**
-   decides again for the Sync app.
+   updates come through Obtainium. An accepted deviation. The sync
+   protocol design decides again for the Sync app.
 6. The Sync app's TLS settings, and whether it pins the server
-   (NETWORK-1 and NETWORK-2, Phase 5).
-   **Step 5.1.**
+   (NETWORK-1 and NETWORK-2).
+   **Open**: the sync protocol design decides it.
 7. Protection against overlays, and marking views as sensitive for
    accessibility services (PLATFORM-3, CODE-1).
    **Done**, as the owner decided
@@ -1692,5 +1692,5 @@ points by their numbers.
     which passed in every part
     ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)).
 12. Whether the recovery words alone can add a device to the sync
-    server (Phase 5).
-    **Step 5.1.**
+    server.
+    **Open**: the sync protocol design decides it.
