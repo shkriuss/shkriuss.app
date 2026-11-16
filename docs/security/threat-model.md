@@ -962,8 +962,8 @@ controls. The resilience profile is skipped on purpose (plan section 10).
    [MASWE](https://github.com/OWASP/maswe) and to tests in the
    [MASTG](https://github.com/OWASP/owasp-mastg). Each weakness names the
    MASVS controls it falls under.
-3. This page uses that mapping as it was read on 2026-11-13. It changes
-   upstream. Several tests are still placeholders, for example
+3. The mapping changes upstream, so a newer version may differ from this
+   page. Several tests are still placeholders, for example
    MASTG-TEST-0306.
 4. With that mapping:
    - **L2** covers all 16 controls of STORAGE, CRYPTO, AUTH, NETWORK,
