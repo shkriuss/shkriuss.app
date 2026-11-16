@@ -3,16 +3,12 @@
 What the suite protects, against whom, what stops each attacker and what
 does not. It ends with the OWASP MASVS controls and every open question.
 
-- Status: written on 2026-11-13, in Phase 1, step 1.8
-  ([PROMPTS.md](../development/PROMPTS.md)).
 - Sources: section 10 of the [plan](../plan/PLAN.md#10-security-and-privacy),
   [crypto-design.md](crypto-design.md), and the decision records in
   [docs/adr](../adr/README.md).
 - This page adds no decision of its own. It says what other pages
   decided, and where. The owner's decisions on this page are under
-  [Decided on pull request 30](#decided-on-pull-request-30),
-  [Decided on pull request 35](#decided-on-pull-request-35) and
-  [Decided in step 2.6](#decided-in-step-26). Where
+  [The owner's decisions](#the-owners-decisions). Where
   nothing is decided, it says **Open**. Every open point is listed at
   the [end](#open-questions).
 - What exists today: Catalog, Water and the core modules
@@ -235,7 +231,7 @@ What stops it:
    - One exception, in Catalog only: the receiver of
      `androidx.profileinstaller` is exported to callers with
      `android.permission.DUMP`, which only the system and the developer
-     shell hold. Water removes it (owner's decision on pull request 40).
+     shell hold. Water removes it (owner's decision).
      Open, for the next change to Catalog: remove it there too
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 4. There is no content provider of our own, no file provider and no deep
@@ -447,8 +443,9 @@ What stops it:
 What does not:
 
 1. Trust on first use. The checksums and keys were taken from what the
-   servers gave on 2026-11-10. Except for one key, nothing was checked by
-   hand ([build.md](../development/build.md#where-trust-comes-from)).
+   servers gave when each file was first added. Except for one key,
+   nothing was checked by hand
+   ([build.md](../development/build.md#where-trust-comes-from)).
 2. Gradle trusts a key for a whole Maven group where it can. A new
    version in that group, signed by the same key, is then trusted
    without a new entry.
@@ -475,9 +472,9 @@ What does not:
 
 #### The rules for the owner's accounts and the domain
 
-The owner decided these rules in step 2.6, checked on 2026-11-15 that
-they hold, and keeps them. They are rules only. No name, address or
-setting of the accounts or the domain is written in this repository.
+The owner set these rules and keeps them. They are rules only. No name,
+address or setting of the accounts or the domain is written in this
+repository.
 
 The owner's GitHub and Cloudflare accounts:
 
@@ -574,7 +571,7 @@ What limits it, and no more than this:
      ([install.md](../user/install.md#when-the-signing-key-changes)).
      This was not tested. It follows from how a lineage works.
    - Both records are accepted. Parts A and B of the rehearsal showed
-     what they rest on, on 2026-11-14: a rotated update installed over
+     what they rest on: a rotated update installed over
      the old app, and Android refused the old key alone and a thief's
      lineage over the rotated app
      ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)).
@@ -608,7 +605,7 @@ What does not:
    ([test-a-pull-request.md](../development/test-a-pull-request.md#safety)).
    A taken-over account could put anything into one.
 
-The account is `shkriuss-bot`. It has worked since Phase 0
+The account is `shkriuss-bot`
 ([working-with-claude.md](../development/working-with-claude.md#claude)).
 
 Review tools of other vendors can be connected to this repository only,
@@ -678,9 +675,9 @@ What stops it:
    environment that holds no secrets
    ([cloud-environment.md](../development/cloud-environment.md)).
 3. The owner reviews and approves every pull request. The required checks
-   "Gradle wrapper" and "Check" must pass. The owner decided on
-   2026-11-13 that the emulator jobs for Android 13, 14 and 15 are
-   required too, and turns that on in the ruleset
+   "Gradle wrapper" and "Check" must pass. The owner decided that the
+   emulator jobs for Android 13, 14 and 15 are required too, and turns
+   that on in the ruleset
    ([ci.md](../development/ci.md#required-checks)).
 4. Owner-only paths ([CODEOWNERS](../../.github/CODEOWNERS)), and the
    [protected-paths flag](protected-paths.md), which marks a pull request
@@ -872,7 +869,7 @@ Also:
   ([security-screens.md](../architecture/security-screens.md#the-gate)).
 - A check makes sure every screen of an app puts its content behind the
   gate: a unit test of each app starts every screen of its merged
-  manifest locked. Built in step 2.2
+  manifest locked
   ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
 
 How this fits with an unlocked phone in an attacker's hands:
@@ -983,7 +980,7 @@ controls. The resilience profile is skipped on purpose (plan section 10).
 - **Partly met.** Some weaknesses are handled and some are not. Each gap
   is named. A gap that a decision chose is a **deviation**, with a link
   to the decision. The owner confirmed every deviation on this page as
-  accepted on 2026-11-13.
+  accepted.
 - **Not met.** Nothing handles it.
 - **Does not apply.** The suite has nothing the control is about. The
   reason is given.
@@ -1131,7 +1128,7 @@ Status: **Partly met.**
     MASTG-TEST-0328), so that no phone setting destroys files
     ([crypto-design.md](crypto-design.md#no-phone-setting-destroys-files)).
   - MASWE-0016: as CRYPTO-2.
-- Met: a check that every screen is behind the gate, built in step 2.2
+- Met: a check that every screen is behind the gate
   ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
 
 **MASVS-AUTH-3: The app secures sensitive operations with additional
@@ -1228,7 +1225,7 @@ Status: **Partly met.**
   - Other screens block screenshots only with "Hide in recent apps and
     block screenshots", which is off by default.
 - MASWE-0039, overlays (MASTG-TEST-0340). Met on the screens of
-  `core/security` and on the lock screen. Built in step 1.10
+  `core/security` and on the lock screen
   ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services),
   [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
   - Android 12 and later block a tap through another app's window that
@@ -1243,10 +1240,10 @@ Status: **Partly met.**
   - Without the permission `HIDE_OVERLAY_WINDOWS`, a screen still works,
     but hides nothing.
     - `ManifestTest` checks that `core/security` asks for it.
-    - Since step 2.5, the APK rules check fails the build of an app that
+    - The APK rules check fails the build of an app that
       has one of the screens and does not request it
       ([build.md](../development/build.md#the-security-screens-rule)).
-  - Accepted deviations, decided by the owner on 2026-11-13:
+  - Accepted deviations, decided by the owner:
     - The other screens of the apps hide no other app's windows. They
       show records, not keys, and a dimmer or a floating button would
       vanish whenever the app is open.
@@ -1256,21 +1253,19 @@ Status: **Partly met.**
       elsewhere (`FLAG_WINDOW_IS_PARTIALLY_OBSCURED`). That would refuse
       taps whenever a video in picture-in-picture overlaps the screen.
 - MASWE-0040, accessibility services. Met on Android 14 and later, on the
-  screens of `core/security`. Built in step 1.10, as above.
+  screens of `core/security`, as above.
   - On Android 14 and later, the six screens and their four dialogs
     speak only to accessibility services that declare themselves
     accessibility tools. Other services can neither read them nor act on
     them. From Android 16, their gestures are blocked too.
-  - TalkBack reads the words aloud, and the screen says so first. The
-    owner checked on 2026-11-13 that TalkBack still reads every label on
-    these screens: on the Pixel 9 Pro, with the Catalog preview of pull
-    request 35 and its protection switch on, TalkBack read everything in
-    the steps of that pull request.
+  - TalkBack reads the words aloud, and the screen says so first.
+    TalkBack still reads every label on these screens with the
+    protection on, as the owner checked on a Pixel 9 Pro.
   - An assistive app that does not declare itself an accessibility tool
     cannot read these screens on Android 14 and later.
   - A harmful service can falsely claim to be a tool. It stays
     [out of scope](#out-of-scope).
-  - Accepted deviations, decided by the owner on 2026-11-13:
+  - Accepted deviations, decided by the owner:
     - Android 13 has no way to keep a window from services that are not
       tools. There, every accessibility service the user turned on can
       read these screens.
@@ -1310,7 +1305,7 @@ Status: **Not met.**
   ([install.md](../user/install.md#updates)).
 - Only the newest release of each app gets security fixes
   ([SECURITY.md](../../SECURITY.md)).
-- Accepted deviation, decided by the owner on 2026-11-13: no forced
+- Accepted deviation, decided by the owner: no forced
   update. Data apps have no network, and updates come through Obtainium.
   Step 5.1 decides again for the Sync app
   ([PROMPTS.md](../development/PROMPTS.md#51-protocol-design)).
@@ -1320,7 +1315,7 @@ vulnerabilities.**
 Status: **Partly met.**
 
 - MASWE-0044, known vulnerabilities: partly met (MASTG-TEST-0272 and
-  0274). Decided by the owner in step 2.6, on 2026-11-15:
+  0274). Decided by the owner:
   - The workflow Dependency graph sends each app's release runtime class
     path to GitHub's dependency graph, built with dependency verification
     on. Dependabot alerts name a library with a known vulnerability
@@ -1333,7 +1328,7 @@ Status: **Partly met.**
     (`-Dorg.gradle.dependency.verification=off`), and with a plugin that
     it downloads from the Gradle Plugin Portal, which this project does
     not use. Read in the source of `actions/gradle-build-tools-actions`,
-    which runs it, on 2026-11-15.
+    which runs it.
   - Gaps: the build tools, the test libraries and the Gradle wrapper are
     not in the list, and actions pinned to a commit get no alerts. Wrangler's
     lockfile is read by GitHub itself. Before every release,
@@ -1434,12 +1429,12 @@ Status: **Partly met.**
 
 - MASWE-0072, a privacy policy: met. The privacy page,
   [privacy.md](../user/privacy.md), is in the user guide and on the hub
-  site, at `/privacy/`. Written in step 2.6. It says what each app
+  site, at `/privacy/`. It says what each app
   stores, that data apps have no network permission, what the Sync app
   and its server will see, and that nothing tracks the user.
 - MASWE-0073, declared data: met for what is built. The
   [data inventory](data-inventory.md) lists what Catalog and Water store,
-  where, and what leaves the phone and how. Written in step 2.6, from the
+  where, and what leaves the phone and how. It is written from the
   code. Each later app adds its part before its first release.
 - MASWE-0074, tracking domains: met. Data apps connect nowhere. The hub
   site loads nothing from other sites
@@ -1454,7 +1449,7 @@ Status: **Partly met.**
   - The data stays on the phone unless the user sets up sync or makes a
     backup.
   - Backup and restore to a file of the user's choice exist in
-    `core/backup`. Water has the screens since step 2.5
+    `core/backup`. Water has the screens
     ([spec.md](../apps/water/spec.md#backup-and-restore-screens)). The
     app reads every backup again right after it is written and checks
     it, so a backup that cannot be restored is found on the day it is
@@ -1486,39 +1481,20 @@ spawning and restricted dynamic code loading
 ([ADR 0039](../adr/0039-no-manual-checklist-for-a-release.md)). It protects the app through the platform. It
 is not a resilience control.
 
-## Decided on pull request 30
+## The owner's decisions
 
-The owner's decisions of 2026-11-13 on this page. Each is built into the
-page above.
-
-| Question | Decision |
-|---|---|
-| The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted. Confirmed by the owner on 2026-11-13 ([Status words](#status-words)). |
-| The points under [Found while writing this page](#found-while-writing-this-page) | Decided at the Phase 1 gate, on 2026-11-13: a step for each, written next to the point. The points stay Open until their step is done, except point 5, which is an accepted deviation. |
-| Required checks | The emulator jobs for Android 13, 14 and 15 become required. The job for Android 17 stays not required. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
-| The seventh deviation | No forced update (MASVS-CODE-2). Accepted by the owner on 2026-11-13. Step 5.1 decides again for the Sync app. |
-| The name of Claude's machine account | `shkriuss-bot`. It has worked since Phase 0. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
-
-## Decided on pull request 35
-
-The owner's decisions of 2026-11-13 on step 1.10, overlays and
-accessibility services
-([pull request 35](https://github.com/shkriuss/shkriuss.app/pull/35)).
-Each is built into the page above.
+The owner's decisions on this page. Each is built into the page above.
 
 | Question | Decision |
 |---|---|
+| The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted ([Status words](#status-words)). |
+| The points under [Found while writing this page](#found-while-writing-this-page) | Each point says what answers it. Point 5 is an accepted deviation. Points 6 and 12, and the CAA records of point 10, are Open. |
+| Required checks | The emulator jobs for Android 13, 14 and 15 are required. The job for Android 17 is not. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
+| The seventh deviation | No forced update (MASVS-CODE-2). Accepted. Step 5.1 decides again for the Sync app. |
+| The name of Claude's machine account | `shkriuss-bot`. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
 | MASVS-CODE-1 | **Met.** The overlay gaps that remain are deviations under PLATFORM-3, not CODE-1. |
-| The deviations for overlays and accessibility services: no accessibility marking on Android 13; the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted. Confirmed by the owner on 2026-11-13 ([PLATFORM-3](#platform)). |
-| The TalkBack check, and the accessibility marking | Passed on 2026-11-13, on the Pixel 9 Pro with the Catalog preview. The marking stays. [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md) is accepted. |
-
-## Decided in step 2.6
-
-The owner's decisions of 2026-11-15, in the planning of step 2.6, the
-preparation of Water 1.0.0. Each is built into the page above.
-
-| Question | Decision |
-|---|---|
+| The deviations for overlays and accessibility services: no accessibility marking on Android 13; the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted ([PLATFORM-3](#platform)). |
+| The accessibility marking | It stays. TalkBack still reads every label with it on. [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md) is accepted. |
 | Point 4: how dependencies are checked for known vulnerabilities | A workflow of the project, Dependency graph, with dependency verification on. The job that runs Gradle has no write token; the job that sends the list runs no code of the build. Only on pushes to `main` and by hand, never on pull requests, and with no new action. The owner turns on the dependency graph and Dependabot alerts. Automatic dependency submission, Dependabot security updates and version updates stay off ([CODE-3](#code)). [Before and after a release](../development/release.md#before-and-after-a-release) asks that no alert is open. |
 | Points 9 and 10: the owner's accounts and the domain | Seven rules, three of them for the domain, and no details ([The rules](#the-rules-for-the-owners-accounts-and-the-domain)). The domain has no CAA record: that stays Open. |
 | Reminders that reach a watch | A known problem, decided after the release of Water 1.0.0 ([Other apps on the phone](#other-apps-on-the-phone), "What does not", point 2). |
@@ -1529,23 +1505,23 @@ Everything this page marks Open. None is decided here.
 
 ### Open in other pages
 
-Phase 2, Water:
+Water:
 
-1. Done in step 2.2: a check that every screen is behind the app lock's
+1. Done: a check that every screen is behind the app lock's
    gate
    ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
-2. Done in step 2.4: the screen that asks for the notification
+2. Done: the screen that asks for the notification
    permission, in Water
    ([spec.md](../apps/water/spec.md#asking-for-notifications)). The
    buttons on a reminder ask for the phone's unlock and carry no text
    ([ADR 0034](../adr/0034-notification-buttons.md)).
-3. Done in step 2.5: when the app checks a backup. After every backup,
+3. Done: when the app checks a backup. After every backup,
    by itself, and before every restore (owner's decision;
    [backup-format.md](../architecture/backup-format.md#open-questions),
    question 2). What keeps a long backup running while the screen is off
    stays open for the first app that stores large files (question 3).
    Water stores no files.
-4. Done in step 2.6: the data inventory, what data each app stores, and
+4. Done: the data inventory, what data each app stores, and
    where ([data-inventory.md](data-inventory.md)).
 5. Reminders on a GrapheneOS phone: after a restart, in a second
    profile and in Private Space. Closed. Water's reminders behave as
@@ -1558,7 +1534,7 @@ Phase 2, Water:
    notifications to current user** on
    ([notifications.md](../architecture/notifications.md#open),
    question 4).
-6. Done in step 2.5: the check that every app that uses `core/security`
+6. Done: the check that every app that uses `core/security`
    requests `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`, in the APK rules
    check
    ([build.md](../development/build.md#the-security-screens-rule),
@@ -1618,16 +1594,14 @@ Other:
     ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md),
     point 5).
 19. The rehearsal of restoring and rotating the signing key, and the
-    decision record a rotation needs. Step 2.7
+    decision record a rotation needs
     ([ADR 0013](../adr/0013-signing-key-custody-and-rotation.md)).
-    Step 2.7 wrote the rehearsal
-    ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md))
+    **Done**: the rehearsal
+    ([signing-key-rehearsal.md](../development/signing-key-rehearsal.md)),
+    which passed in every part
+    ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)),
     and the records [ADR 0037](../adr/0037-signing-key-rotation.md) and
-    [ADR 0038](../adr/0038-a-stolen-signing-key.md).
-    **Done on 2026-11-14**: the owner did the rehearsal, and every part
-    passed
-    ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)). ADR 0037
-    and ADR 0038 are accepted.
+    [ADR 0038](../adr/0038-a-stolen-signing-key.md), both accepted.
 20. Whether the emulator job for Android 17 becomes required (no date:
     the owner decides it when asking for it), and the unpinned images
     ([ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)).
@@ -1649,38 +1623,33 @@ Other:
 
 ### Found while writing this page
 
-The owner decided a step for each point at the Phase 1 gate, on
-2026-11-13. A point stays Open until its step is done.
+Each point says what answers it. A point with no answer yet says which
+step decides it, and stays Open until then. Other pages refer to these
+points by their numbers.
 
-1. No build check made sure that every app turns Android's own backup
-   and device transfer off (STORAGE-2).
-   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): rule 6 of the APK rules check
+1. That every app turns Android's own backup and device transfer off
+   (STORAGE-2).
+   **Done**: rule 6 of the APK rules check
    ([build.md](../development/build.md#the-backup-rule)).
-2. No build check refused a WebView or code loaded at runtime (hard
-   rule 1; PLATFORM-2, CODE-4).
-   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): rules 7 to 9 of the APK rules check, on the
-   APKs that ship
+2. That no app has a WebView or loads code at runtime (hard rule 1;
+   PLATFORM-2, CODE-4).
+   **Done**: rules 7 to 9 of the APK rules check, on the APKs that ship
    ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
    No library that ships today trips them. In the debug APK, which never
    ships, `androidx.core` names `WebView`; the owner decided that the
    rules run on the APKs that ship only.
-3. Logging of user content was tested only in `core/crypto`
-   (STORAGE-2).
-   **Done in step 1.9** ([pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)): the logging check, for the main code of every
-   module ([build.md](../development/build.md#logging-check)). It
-   replaced the test in `core/crypto`.
-4. Nothing scans the dependencies for known vulnerabilities (CODE-3).
-   **Step 2.6** decides how, before Water's first release. It first
-   tries what GitHub offers by itself.
-   **Decided and built in step 2.6**, on 2026-11-15: the workflow
-   Dependency graph, with dependency verification on, and Dependabot
-   alerts. GitHub's automatic dependency submission stays off, because
-   it builds with dependency verification turned off and with a plugin
-   from the Gradle Plugin Portal ([CODE-3](#code)). The owner turns on
-   the dependency graph and Dependabot alerts after the merge
+3. That no module logs user content (STORAGE-2).
+   **Done**: the logging check, for the main code of every module
+   ([build.md](../development/build.md#logging-check)).
+4. How the dependencies are checked for known vulnerabilities (CODE-3).
+   **Done**: the workflow Dependency graph, with dependency verification
+   on, and Dependabot alerts. GitHub's automatic dependency submission
+   stays off, because it builds with dependency verification turned off
+   and with a plugin from the Gradle Plugin Portal ([CODE-3](#code)).
+   The owner turns on the dependency graph and Dependabot alerts
    ([ci.md](../development/ci.md#dependency-graph)).
-5. There is no way to make users update (CODE-2).
-   **Decided now: no forced update.** Data apps have no network, and
+5. Whether there is a way to make users update (CODE-2).
+   **Decided: no forced update.** Data apps have no network, and
    updates come through Obtainium. An accepted deviation. **Step 5.1**
    decides again for the Sync app.
 6. The Sync app's TLS settings, and whether it pins the server
@@ -1688,51 +1657,40 @@ The owner decided a step for each point at the Phase 1 gate, on
    **Step 5.1.**
 7. Protection against overlays, and marking views as sensitive for
    accessibility services (PLATFORM-3, CODE-1).
-   **Done in step 1.10** ([pull request 35](https://github.com/shkriuss/shkriuss.app/pull/35)),
-   "Overlays and accessibility data on the security screens". The owner
-   decided on 2026-11-13:
+   **Done**, as the owner decided
+   ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)):
    - The six screens of `core/security` hide other apps' windows. They
      ignore a tap under another app's window. On Android 14 and later
      they speak only to accessibility tools.
    - Their dialogs take the same.
    - The lock screen hides other apps' windows while the app is locked.
-   - The new permission `HIDE_OVERLAY_WINDOWS` has
+   - The permission `HIDE_OVERLAY_WINDOWS` has
      [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md).
    - What is not done is an accepted deviation under [PLATFORM-3](#platform).
-   - Step 2.5 added the check that each app requests the permission.
-8. There is no privacy policy page (PRIVACY-3).
-   **Step 2.6**: a privacy page in the user guide and on the hub site.
-   **Done in step 2.6**: [privacy.md](../user/privacy.md), also at
-   `/privacy/` on the hub site.
+   - The APK rules check makes sure that each app with these screens
+     requests the permission.
+8. A privacy policy page (PRIVACY-3).
+   **Done**: [privacy.md](../user/privacy.md), also at `/privacy/` on
+   the hub site.
 9. How the owner's GitHub and Cloudflare accounts are protected, for
-   example by a second factor. It is not documented.
-   The owner checks their accounts themselves. **Step 2.6** asks the
-   owner what to record. Only the rule goes into the repository, no
-   details of the accounts.
-   **Done in step 2.6**, on 2026-11-15: the owner checked their accounts
-   and chose four rules
+   example by a second factor.
+   The owner checks their accounts themselves. Only the rules go into
+   the repository, no details of the accounts.
+   **Done**: four rules
    ([The rules for the owner's accounts and the domain](#the-rules-for-the-owners-accounts-and-the-domain)).
-10. The domain's registrar lock, DNSSEC and CAA records. They are not
-    documented.
-    As point 9: the owner checks the domain themselves, and step 2.6
-    asks what to record.
-    **Done in step 2.6**, on 2026-11-15: three rules, in the same
-    section: the registrar lock, DNSSEC and the registrar account. CAA
-    records stay Open: none is set.
+10. The domain's registrar lock, DNSSEC and CAA records.
+    As point 9, the owner checks the domain themselves.
+    **Done**: three rules, in the same section: the registrar lock,
+    DNSSEC and the registrar account. CAA records stay Open: none is
+    set.
 11. What to do if the signing key is stolen.
-    **Step 2.7**: the restore and rotation rehearsal with a throwaway
-    key (ADR 0013, point 8), and the decision record for a rotation and
-    for a stolen key. It can run at any time, and is done before the
-    first data app is released.
-    **Written in step 2.7**:
-    [ADR 0037](../adr/0037-signing-key-rotation.md) (a rotation),
-    [ADR 0038](../adr/0038-a-stolen-signing-key.md) (a stolen key) and
-    the rehearsal in
-    [signing-key-rehearsal.md](../development/signing-key-rehearsal.md).
-    **Done on 2026-11-14**: the owner did the rehearsal on the Pixel 9
-    Pro, and every part passed
-    ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)). ADR 0037
-    and ADR 0038 are accepted.
+    **Done**: [ADR 0037](../adr/0037-signing-key-rotation.md) (a
+    rotation) and [ADR 0038](../adr/0038-a-stolen-signing-key.md) (a
+    stolen key), both accepted, and the restore and rotation rehearsal
+    with a throwaway key (ADR 0013, point 8) in
+    [signing-key-rehearsal.md](../development/signing-key-rehearsal.md),
+    which passed in every part
+    ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)).
 12. Whether the recovery words alone can add a device to the sync
     server (Phase 5).
     **Step 5.1.**
