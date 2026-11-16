@@ -510,7 +510,7 @@ a backup can be larger than memory. So what is read is first put aside.
 
 1. The app gives `core/backup` one staging folder inside its private
    storage. It is not the cache folder, which Android may empty at any
-   time. Proposed: `shk-restore/` in the app's no-backup files folder,
+   time. Water uses `shk-restore/` in the app's no-backup files folder,
    next to `shk-keys/`.
 2. Each restore gets a folder of its own inside it. The folder is made
    when the first record or file arrives. A file that is refused by its

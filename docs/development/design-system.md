@@ -468,7 +468,7 @@ The dialog, the sheet, the snackbar, the menu and the pickers:
 | Date picker | `surfaceHigh`, as a dialog | Title `textSecondary` in `Label`. The chosen date `text` in `Headline`. Days `text`; the chosen day `textOnAccent` on a circle in `accent`; today ringed in `accent`. | As a dialog, and a line in `divider` under the date | `Sheet`, 28 dp | 360 dp wide, the width Material 3's month needs. |
 | Time picker | `surfaceHigh`, as a dialog | Title `text` in `Title`. The hour and the minute `text` in `Headline`, in text fields. AM and PM are radio buttons. | As a dialog | `Sheet`, 28 dp | 280 to 560 dp wide. |
 
-- Every pair in the five tables is one the contrast tests already check,
+- Every pair in the six tables is one the contrast tests already check,
   except the dot at the end of a slider's track (below). The snackbar's
   pairs are Material 3's inverse roles: "inverseOnSurface on
   inverseSurface" and "inversePrimary on inverseSurface" in
