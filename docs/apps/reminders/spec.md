@@ -224,18 +224,25 @@ When the alarm for time T reaches the handler:
    later than now ([The mark](#the-mark), point 3). If the rule does not
    give T, it shows nothing, writes nothing more, and ends. That is the
    case when the reminder was deleted or changed in that moment, or a
-   later occurrence is due.
+   later occurrence is due. Otherwise it writes `showing` = T, so that a
+   press on the notification counts from the moment it shows.
 2. It shows [the notification](#the-notification).
 3. It writes: the mark is the later of the mark and T as a local
-   minute, no snooze, and `showing` is T.
+   minute, and no snooze.
 
-- If reading or showing fails with an error, step 3 is still written,
-  and the error then goes on to `core/notify`, which shows its notice.
-  So a failure never names T again.
+- If reading fails with an error, the rule is not checked. Step 3 is
+  written with the mark as the later of the stored mark, if it can be
+  read, and T. The error then goes on to `core/notify`, which shows its
+  notice.
+- If showing fails with an error, step 3 is still written, and the
+  error goes on to `core/notify` in the same way. So a failure never
+  names T again.
 - If Reminders is stopped before step 3, the rule still gives T at the
   next start, or a later occurrence if one is due by then, and the
   reminder shows then, late if more than a minute passed. If it is
-  stopped between steps 2 and 3, it shows once more. A reminder is never
+  stopped between steps 2 and 3, it shows once more, unless a press on
+  it comes first: that press counts, because `showing` is T, and it
+  moves the mark ([the buttons](#the-notification)). A reminder is never
   lost this way.
 - After step 3, a second run for T shows nothing: the mark is already at
   T.
@@ -245,8 +252,8 @@ When the alarm for time T reaches the handler:
 |---|---|
 | A new reminder, or a new date, time or repeat | The mark is now. The snooze ends. Its notification goes. |
 | A new title only | Nothing more. A notification on screen keeps the old title. |
-| **Snooze 10 min** at t, a press that is current | In one write, `showing` goes and a snooze until t + 10 minutes is set. The notification goes. |
-| **Done**, a press that is current | In one write, `showing` goes. The notification goes. Nothing more. |
+| **Snooze 10 min** at t, a press that is current | In one write, `showing` goes, the mark moves to at least the notification's time, and a snooze until t + 10 minutes is set. The notification goes. |
+| **Done**, a press that is current | In one write, `showing` goes, the mark moves to at least the notification's time, and a snooze ends. The notification goes. Nothing more. |
 | The same press a second time | Not current. It only removes its notification, never a newer one. |
 | A swipe or a tap | The notification goes. Nothing more. |
 | An occurrence comes due during a snooze | It shows. The snooze ends. |
@@ -272,6 +279,7 @@ When the alarm for time T reaches the handler:
 | A restart on Mon at 13:00, the unlock at 15:10 | Nothing before the unlock. Then "Call the bank", "Missed: 14:00". |
 | **Force stop** on Mon at 08:00, opened at 12:00 | At 12:00: "Pills", "Missed: 09:00" |
 | Reminders is stopped while "Call the bank" is being shown at 14:00 | It shows at the next start, as "Missed: 14:00" if more than a minute passed |
+| Monday's "Pills" is snoozed on Tuesday at 08:55. Tuesday's shows at 09:00, and Reminders is stopped before it writes the mark. **Done** on it at the next start. | Nothing more until Wed at 09:00. Done moves the mark and ends the snooze, so neither 09:00 nor the snooze shows again. |
 | Snoozed until 09:12, the phone off from 09:10 to 10:00 | After the unlock, the snoozed reminder |
 | Monday's "Pills" is still on screen on Tuesday. **Snooze 10 min** at 08:55. | Tue at 09:00, on time. The snooze ends. |
 | Private Space locked, or the profile stopped | As with the phone off, once it runs again |
@@ -336,11 +344,19 @@ current, no undo. A press carries the reminder's `id`, the action, the
 notification's time and the value. It is current when its time is
 `showing`.
 
-A press that is current removes `showing` in the same write as its
-change: **Done** removes it, **Snooze 10 min** removes it and sets the
-snooze. A second arrival of the same press is then not current. It only
-removes its notification, and never a newer one of the same reminder,
-as ADR 0034, point 5, says and as Water does.
+A press that is current removes `showing` and moves the mark to at
+least its time, as a local minute, in the same write as its change:
+**Done** also ends a snooze, **Snooze 10 min** sets the snooze. A second
+arrival of the same press is then not current. It only removes its
+notification, and never a newer one of the same reminder, as ADR 0034,
+point 5, says and as Water does.
+
+So a press still does what it says when Reminders was stopped after
+showing the notification and before the handler's step 3
+([The rule](#the-rule)). Moving the mark keeps that time from showing
+again. Done ends a snooze because after such a stop a snooze that step
+3 would have ended can still be set, and the reminder would show once
+more.
 
 | Channel | Value |
 |---|---|

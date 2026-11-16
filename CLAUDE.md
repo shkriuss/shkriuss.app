@@ -134,8 +134,9 @@ Emulator tests, signing and releases run only in GitHub Actions.
   `docs/security/data-inventory.md` (anything stored, and anything that
   leaves the phone) and the app's `CHANGELOG.md`.
 - `docs/architecture/`, `docs/security/crypto-design.md` and
-  `docs/security/threat-model.md` change only when a format, a key, a
-  permission, a dependency or what an attacker can do changes.
+  `docs/security/threat-model.md` change only when what they describe
+  changes: a format, a key, a permission, a dependency, a rule that the
+  apps or the shared modules follow, or what an attacker can do.
 - A decision that is costly to reverse gets an ADR in `docs/adr/` using
   the template there. Nothing smaller does.
 - No new page where a section of an existing page will do. No page that
