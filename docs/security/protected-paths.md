@@ -2,13 +2,26 @@
 
 A workflow that tells the owner when a pull request changes a path that only
 the owner may change. Those paths are listed in
-[CODEOWNERS](../../.github/CODEOWNERS): the workflows, `CLAUDE.md`,
-`AGENTS.md`, the Claude rules, dependency verification, the Gradle
-wrapper, the repository list, the build checks for hard rules 2, 3 and 4,
-the record rules checks,
-the runner of the emulator tests with its plugin and its suite check,
-signing files, the signing certificate fingerprint and the prompts in
-`docs/development/PROMPTS.md`.
+[CODEOWNERS](../../.github/CODEOWNERS):
+
+- Everything under `.github/`, such as the workflows, the Wrangler pin of
+  the site deploy and CODEOWNERS itself.
+- `CLAUDE.md`, `AGENTS.md` and the Claude rules in `.claude/`.
+- Dependency verification, the Gradle wrapper and the repositories the
+  build downloads from.
+- The APK rules check and the graphics-path check. They enforce hard
+  rules 1, 2, 3 and 4, and that Android's own backup and device transfer
+  are off. With them: the readers they use and the plugin that connects
+  them to the build.
+- The logging check, which enforces hard rule 10.
+- The tests of the build checks, and the build file of `build-logic`,
+  which sets those tests up.
+- The R8 rules every app shares. The APK rules check depends on them.
+- The record rules checks (schema files and DAOs) and their plugin.
+- The runner of the emulator tests, with its plugin and its suite check.
+- The settings every Android module shares, in `AndroidCommon.kt`.
+- Signing files and the signing certificate fingerprint.
+- The prompts in `docs/development/PROMPTS.md`.
 
 The flag is a notice. It never blocks a merge. The gate is the owner's
 review ([working-with-claude.md](../development/working-with-claude.md)).
