@@ -13,9 +13,9 @@ and has its own decision record ([CLAUDE.md](../../CLAUDE.md)).
 - Every APK build fails if the app's final manifest declares or requests a
   permission it is not allowed. Each app has an allow list in the APK
   rules check. Only the owner changes it, after the app's ADR and its
-  entry on this page. Today only Water is allowed any: the three of
-  `core/notify`, since step 2.4, and the two of `core/security`, since
-  step 2.5 ([PROMPTS.md](../development/PROMPTS.md)).
+  entry on this page. The sentence the owner uses for it is in
+  [PROMPTS.md](../development/PROMPTS.md#2-build). Today only Water is
+  allowed any: the three of `core/notify` and the two of `core/security`.
   An app that is not on the list may request none, and no app may
   declare a permission of its own. The check is described in
   [build.md](../development/build.md#apk-rules-check).
@@ -49,8 +49,7 @@ Other components that libraries add, none of them a permission:
   get that permission; the system and the developer shell have it. It
   installs the app's start-up profile.
   - Open, for the next change to Catalog: remove it, as Water does
-    (owner's decision on pull request 40;
-    [Water](#water-appshkriusswater)).
+    (owner's decision; [Water](#water-appshkriusswater)).
 - The emoji font loader from `androidx.emoji2` is removed, because it would
   ask a system font provider, usually Google Play services, for a font.
 
@@ -59,9 +58,8 @@ turned off.
 
 ### Water (`app.shkriuss.water`)
 
-Five permissions: three from `core/notify`, for its reminders, since
-step 2.4, and two from `core/security`, for the recovery key screens and
-the app lock, since step 2.5.
+Five permissions: three from `core/notify`, for its reminders, and two
+from `core/security`, for the recovery key screens and the app lock.
 
 | Permission | From | Why |
 |---|---|---|
@@ -72,17 +70,12 @@ the app lock, since step 2.5.
 | `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | To hide other apps' windows while a screen of the recovery key or the lock screen shows ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Granted at install. |
 
 - They are Water's allow list in the APK rules check. The owner asked
-  for the first three in step 2.4 and for the last two in step 2.5. A
-  build of Water with any other permission fails.
+  for all five. A build of Water with any other permission fails.
 - What they allow and do not allow is under
   [Apps that use core/notify](#apps-that-use-corenotify) and
   [Apps that use core/security](#apps-that-use-coresecurity).
 - Water asks the user for one only: `POST_NOTIFICATIONS`. Android grants
   the other four at install.
-- Until step 2.5, Water's manifest removed the two of `core/security`,
-  and the six screens with them. The owner decided that in step 2.2:
-  nothing in Water opened those screens then. Step 2.5 took the removals
-  out, with the buttons that open the screens.
 
 Water's manifest still removes one permission that a library asks for:
 
@@ -116,7 +109,7 @@ Other components that libraries add, none of them a permission:
   libraries when the app starts. The emoji font loader is removed from
   it, as in Catalog.
 - `androidx.profileinstaller.ProfileInstallReceiver`: removed in Water's
-  manifest (owner's decision on pull request 40). It is exported to
+  manifest (owner's decision). It is exported to
   callers with `android.permission.DUMP`, the system and the developer
   shell, so that developer tools can install or save the start-up
   profile from outside the app. Water lets no other app reach any part
@@ -125,7 +118,7 @@ Other components that libraries add, none of them a permission:
   `androidx.startup`.
 - The app lock's screen-off receiver, registered while the app runs,
   not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
-  Water starts its `AppLockWatcher` from step 2.2.
+  Water starts its `AppLockWatcher`.
 - `WaterManifestTest` fails unless `WaterActivity` is the only exported
   part of Water's merged manifest, so a library that adds another fails
   the tests.
@@ -139,8 +132,8 @@ are turned off.
 `core/notify` sets the alarms and shows the notifications of an app with
 reminders ([notifications.md](../architecture/notifications.md)). Its
 manifest declares three permissions and three receivers. Every app that
-uses the module gets them when the app is built. Water uses it since
-step 2.4. Calendar, Reminders and Tasks follow
+uses the module gets them when the app is built. Water uses it.
+Calendar, Reminders and Tasks will use it too
 ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)).
 
 An app does not get them unnoticed. The APK rules check fails the app
@@ -207,14 +200,12 @@ intent filter on the receiver of alarms or of buttons.
 the app lock ([security-screens.md](../architecture/security-screens.md)).
 Its manifest declares two permissions and six screens. Every app that
 uses the module gets them when the app is built. Water is the first app
-that has them, since step 2.5 ([Water](#water-appshkriusswater)). It
-used the module from step 2.2, for the app lock's gate, and removed both
-permissions and the six screens until then. Catalog removes them for
-good.
+that has them ([Water](#water-appshkriusswater)). Catalog removes them
+for good.
 
 An app does not get the permissions unnoticed. The APK rules check fails
-the app until the owner allows them for that app (step 2.5 for Water),
-and this page then lists them under the app.
+the app until the owner allows them for that app, and this page then
+lists them under the app.
 
 An app does not lose them unnoticed either:
 
@@ -223,8 +214,7 @@ An app does not lose them unnoticed either:
 2. The APK rules check fails an app whose merged manifest declares a
    screen of `core/security` but does not request both
    ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md);
-   [build.md](../development/build.md#the-security-screens-rule)). Built
-   in step 2.5.
+   [build.md](../development/build.md#the-security-screens-rule)).
 3. Without `HIDE_OVERLAY_WINDOWS`, the screens still work. They only no
    longer hide other apps' windows.
 

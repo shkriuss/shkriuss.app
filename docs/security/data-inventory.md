@@ -3,9 +3,9 @@
 What each app stores on the phone, where, whether it is in a backup, and
 what leaves the phone and how.
 
-- Status: written on 2026-11-15 in Phase 2, step 2.6, for Catalog and
-  Water. It was checked against the code, not against other pages. The
-  file names and keys below are the ones in the code.
+- Status: covers Catalog and Water. It is written from the code, not
+  from other pages. The file names and keys below are the ones in the
+  code.
 - Each later app adds its section before its first release.
 - The same, in plain words for users: [privacy.md](../user/privacy.md).
   The permissions behind it: [permissions.md](permissions.md).
