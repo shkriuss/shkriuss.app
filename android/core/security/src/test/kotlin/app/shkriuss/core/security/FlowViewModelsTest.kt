@@ -347,6 +347,31 @@ class FlowViewModelsTest {
         assertEquals("a new prompt shows them", ShowWords(key.words()), model.state.value)
     }
 
+    @Test
+    fun aStopThatRunsBeforeThePromptsAnswerArrivesShowsNoWords() {
+        val (app, _) = newApp()
+        val key = app.crypto.setup.createRecoveryKey()
+        app.crypto.setup.storeDerivedKeys(key)
+        app.crypto.setup.beginKeepRecoveryKey(key)!!.finish()
+        val queued = QueuedDispatcher()
+        val model = ShowViewModel(app.crypto, queued)
+        model.onShow()
+        queued.runAll()
+        val prompt = (model.state.value as ShowIntro).prompt!!
+
+        // The prompt succeeds as the screen stops. Android runs the stop first, and hands the answer over after it.
+        model.onStop()
+        model.onPromptResult(prompt, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+
+        assertEquals("no words on a screen that stopped, and none on the way back", ShowIntro(), model.state.value)
+        model.onShow()
+        queued.runAll()
+        model.onPromptResult((model.state.value as ShowIntro).prompt!!, PromptOutcome.SUCCEEDED)
+        queued.runAll()
+        assertEquals("a new prompt shows them", ShowWords(key.words()), model.state.value)
+    }
+
     /** A reference to the recovery key that a flow holds now, read from the ViewModel itself. */
     private fun heldKey(model: FlowViewModel<*>, owner: Class<*>, field: String): Any? =
         owner.getDeclaredField(field).apply { isAccessible = true }.get(model)

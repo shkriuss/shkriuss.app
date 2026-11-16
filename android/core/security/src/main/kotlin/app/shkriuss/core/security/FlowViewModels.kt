@@ -218,8 +218,8 @@ class EnterViewModel internal constructor(
  * Showing the kept recovery key again ("Showing it again" in
  * crypto-design.md): one prompt, one showing. The words are dropped when
  * the screen stops: when it closes, the phone turns its screen off, or
- * another app comes to the front. A prompt whose key is read only after
- * the screen stopped shows nothing.
+ * another app comes to the front. A prompt shows the words only if the
+ * screen has not stopped since the prompt was asked for.
  */
 class ShowViewModel internal constructor(
     private val crypto: ShkCrypto,
@@ -233,11 +233,16 @@ class ShowViewModel internal constructor(
     /** Counts the stops. Read and written on the main thread only. */
     private var stops = 0
 
+    /** The count of stops when the prompt that is open was asked for. Read and written on the main thread only. */
+    private var askedAt = 0
+
     /** The one state of the screen. */
     val state: StateFlow<ShowScreen> = screen.asStateFlow()
 
     /** Starts the system prompt that opens the kept key. */
     fun onShow() {
+        // Taken before the prompt shows, not when its answer arrives: Android can run a stop before it hands a success over.
+        askedAt = stops
         work {
             val step = crypto.setup.beginShowRecoveryKey()
             screen.value = ShowIntro(prompt = PromptRequest(++requests, step))
@@ -253,12 +258,12 @@ class ShowViewModel internal constructor(
             work { request.step.cancel() }
             return
         }
-        val asked = stops
+        val asked = askedAt
         work {
             val key = request.step.finish() as RecoveryKey
             // The stop runs on the main thread. So does this, and no stop can come between the check and the words.
             withContext(Dispatchers.Main.immediate) {
-                // The screen stopped while the key was read: nothing shows, and the key is dropped.
+                // The screen stopped since the prompt was asked for: nothing shows, and the key is dropped.
                 screen.value = if (asked == stops) ShowWords(key.words()) else ShowIntro()
             }
         }
@@ -266,7 +271,8 @@ class ShowViewModel internal constructor(
 
     /**
      * The screen stopped: the words leave memory. A new prompt shows them
-     * again. A prompt that was answered before the stop shows nothing.
+     * again. A prompt that was asked for before the stop shows nothing,
+     * whether its answer comes before the stop or after it.
      */
     fun onStop() {
         stops++

@@ -170,8 +170,9 @@ More:
    ([Overlays and accessibility services](#overlays-and-accessibility-services)).
 7. The words leave the show screen when it stops: the phone's screen
    turns off or another app comes to the front. A new prompt shows them
-   again. A prompt that was answered before the stop shows nothing once
-   its key is read: the check and the stop both run on the main thread.
+   again. A prompt that was asked for before the stop shows nothing,
+   whether its answer comes before the stop or after it: the check and
+   the stop both run on the main thread.
    The create and enter flows keep the key while stopped, because
    nothing is stored yet and a screen times out while the user writes.
    A flow that ends on its failure screen drops the key as that screen
@@ -611,8 +612,9 @@ file says that.
 - `FlowViewModelsTest`: every flow with real cryptography on the
   stand-in for the Keystore, with the prompt answered, closed and gone.
   This includes start over, repair, giving files up and a phone with no
-  screen lock. A prompt answered before the show screen stopped shows no
-  words. A flow on its failure screen holds no recovery key.
+  screen lock. A prompt asked for before the show screen stopped shows no
+  words, also when the stop runs before its answer arrives. A flow on its
+  failure screen holds no recovery key.
 - `SecurityActivitiesTest`: every screen blocks screenshots and keeps
   autofill and content capture away. Every screen ignores a covered tap,
   every view of it is marked for accessibility tools only, and it hides
