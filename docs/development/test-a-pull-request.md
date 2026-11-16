@@ -120,7 +120,7 @@ jobs**.
    from code that is not reviewed yet, and from the same words it makes
    the same keys as the real app. So it could read your real backups.
    Make a new recovery key in the preview for testing
-   ([crypto-design.md](../security/crypto-design.md#decided-on-pull-request-22)).
+   ([crypto-design.md](../security/crypto-design.md#the-owners-decisions)).
 
 ## Why this way
 
