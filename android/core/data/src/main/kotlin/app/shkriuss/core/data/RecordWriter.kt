@@ -33,8 +33,9 @@ enum class BackupTake {
  *
  * `updatedAt` always moves forward, even when the device's clock was set
  * back: a write sets it to now, or to one millisecond after the record's
- * last `updatedAt` if that is later. The change number does not depend on
- * the clock at all.
+ * last `updatedAt` if that is later. It never passes the last time a
+ * record can hold ([RecordTimes]): a record that holds that time keeps
+ * it. The change number does not depend on the clock at all.
  *
  * Each write is one write transaction: it reads the stored record, takes a
  * change number and writes the record back, so two changes to the same
@@ -124,10 +125,18 @@ class RecordWriter<T : Record<T>>(
      * and a record that was changed or deleted after the backup stays as
      * it is. A deleted record is taken like any other.
      *
+     * A record whose `createdAt`, `updatedAt` or `deletedAt` is not a
+     * time a record can hold ([RecordTimes]) is refused with
+     * [IllegalArgumentException], and nothing is written. An app checks
+     * the records of a backup first ([timesAreWithinLimits]) and gives
+     * its own answer. Thrown inside the app's write transaction, it rolls
+     * the whole restore back.
+     *
      * This is the function for backups. It is not the function for sync,
      * where the same `updatedAt` must end the same on every device.
      */
     suspend fun takeFromBackup(record: T): BackupTake = database.withWriteTransaction {
+        require(record.record.timesAreWithinLimits) { "A record's times are from 0 to ${RecordTimes.LAST_MILLIS}" }
         val stored = dao.find(record.record.id)
         when {
             stored == null -> {
@@ -148,7 +157,17 @@ class RecordWriter<T : Record<T>>(
         return record
     }
 
-    private fun nextUpdatedAt(fields: RecordFields): Long = maxOf(clock.nowMillis(), fields.updatedAt + 1)
+    /**
+     * The `updatedAt` of the next write to a record: now, or one
+     * millisecond after its last `updatedAt` if that is later. It never
+     * moves back, and it stops at the last time a record can hold, so
+     * the sum cannot pass the end of a 64-bit number.
+     */
+    private fun nextUpdatedAt(fields: RecordFields): Long {
+        val last = fields.updatedAt
+        if (last >= RecordTimes.LAST_MILLIS) return last
+        return maxOf(clock.nowMillis(), last + 1).coerceAtMost(RecordTimes.LAST_MILLIS)
+    }
 
     /** Raises [ChangeCounter] by one and returns the new number. Call it inside the write transaction. */
     private suspend fun PooledConnection.nextChangeNumber(): Long {

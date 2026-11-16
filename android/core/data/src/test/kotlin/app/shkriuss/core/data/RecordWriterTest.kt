@@ -13,7 +13,9 @@ import app.shkriuss.core.testing.inMemoryTestDatabaseBuilder
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -310,6 +312,77 @@ class RecordWriterTest {
         assertTrue(failure.isFailure)
         assertEquals(listOf(kept), database.notes().all())
         assertEquals("the numbers of writes that never happened are free", 2L, createNote("Next").changeNumber)
+    }
+
+    @Test
+    fun takeFromBackupRefusesATimeThatNoRecordCanHoldAndWritesNothing() = runBlocking {
+        val id = TestIdSource.idNumber(50)
+        val wrong = listOf(
+            RecordFields(id, createdAt = -1, updatedAt = 1_000, deletedAt = null),
+            RecordFields(id, createdAt = RecordTimes.LAST_MILLIS + 1, updatedAt = 1_000, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = -1, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = RecordTimes.LAST_MILLIS + 1, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = Long.MAX_VALUE, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = 2_000, deletedAt = -1),
+            RecordFields(id, createdAt = 1_000, updatedAt = 2_000, deletedAt = RecordTimes.LAST_MILLIS + 1),
+        )
+
+        wrong.forEach { fields ->
+            assertFalse(fields.toString(), fields.timesAreWithinLimits)
+            assertThrows(fields.toString(), IllegalArgumentException::class.java) {
+                runBlocking { notes.takeFromBackup(SampleNote(fields, changeNumber = 0, title = "Milk", pinned = false)) }
+            }
+        }
+
+        assertEquals(emptyList<SampleNote>(), database.notes().all())
+    }
+
+    @Test
+    fun takeFromBackupTakesTheFirstAndTheLastTimeARecordCanHold() = runBlocking {
+        val first = RecordFields(TestIdSource.idNumber(50), createdAt = 0, updatedAt = 0, deletedAt = 0)
+        val last = RecordTimes.LAST_MILLIS
+        val latest = RecordFields(TestIdSource.idNumber(51), createdAt = last, updatedAt = last, deletedAt = last)
+
+        assertEquals(BackupTake.TAKEN, notes.takeFromBackup(SampleNote(first, changeNumber = 0, title = "Milk", pinned = false)))
+        assertEquals(BackupTake.TAKEN, notes.takeFromBackup(SampleNote(latest, changeNumber = 0, title = "Bread", pinned = false)))
+
+        assertEquals("9999-12-31T23:59:59.999Z", java.time.Instant.ofEpochMilli(last).toString())
+    }
+
+    @Test
+    fun updatedAtStopsAtTheLastTimeARecordCanHoldSoADeletionStaysTheNewestEdit() = runBlocking {
+        val last = RecordTimes.LAST_MILLIS
+        val fromBackup = SampleNote(
+            RecordFields(TestIdSource.idNumber(50), createdAt = 1_000, updatedAt = last, deletedAt = null),
+            changeNumber = 0,
+            title = "Milk",
+            pinned = false,
+        )
+        notes.takeFromBackup(fromBackup)
+
+        val changed = notes.update(fromBackup.record.id) { it.copy(title = "Bread") }
+        val deleted = notes.markDeleted(fromBackup.record.id)
+
+        assertEquals(last, changed?.record?.updatedAt)
+        assertEquals(RecordFields(fromBackup.record.id, createdAt = 1_000, updatedAt = last, deletedAt = last), deleted?.record)
+        assertEquals("the same backup again does not bring it back", BackupTake.SAME, notes.takeFromBackup(fromBackup))
+        assertTrue(database.notes().find(fromBackup.record.id)!!.record.isDeleted)
+    }
+
+    @Test
+    fun aStoredTimeAtTheEndOfA64BitNumberNeverMovesBack() = runBlocking {
+        val stored = createNote("Milk")
+        // What an older restore could have left. No write of RecordWriter stores such a time.
+        database.useWriterConnection {
+            it.executeSQL("UPDATE sample_note SET updatedAt = ${Long.MAX_VALUE} WHERE id = '${stored.record.id}'")
+        }
+
+        val changed = notes.update(stored.record.id) { it.copy(title = "Bread") }
+        val deleted = notes.markDeleted(stored.record.id)
+
+        assertEquals(Long.MAX_VALUE, changed?.record?.updatedAt)
+        assertEquals(Long.MAX_VALUE, deleted?.record?.updatedAt)
+        assertEquals(Long.MAX_VALUE, deleted?.record?.deletedAt)
     }
 
     private suspend fun createNote(title: String): SampleNote =

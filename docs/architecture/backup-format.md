@@ -574,6 +574,12 @@ three answers:
 
 1. A record keeps its own `id`, `createdAt`, `updatedAt` and `deletedAt`.
    Only the change number is new, and only when something is written.
+   - A record is taken only if its three times are ones a record can
+     hold ([data.md](data.md#record-fields)). The file can hold any
+     signed 64-bit number, and a reader of the file takes it as it is.
+     `takeFromBackup` refuses a record outside those limits, and the
+     restore rolls back: the third failure of
+     [The answers](#the-answers).
 2. A deleted record is a record like any other. If the stored record was
    deleted after the backup, it stays deleted. If the backup's deletion
    is newer, the record becomes deleted.

@@ -533,7 +533,7 @@ One row per drink.
 | Column | SQL type | What it holds | Limits |
 |---|---|---|---|
 | `amountMl` | `INTEGER NOT NULL` | The amount, in whole millilitres | 1 to 3,000 |
-| `day` | `INTEGER NOT NULL` | The day of the drink: days since 1970-01-01 (`LocalDate.toEpochDay`) | Any day |
+| `day` | `INTEGER NOT NULL` | The day of the drink: days since 1970-01-01 (`LocalDate.toEpochDay`) | 0 to 2,932,896: 1970-01-01 to 9999-12-31 |
 | `minuteOfDay` | `INTEGER NOT NULL` | The time of the drink: minutes after midnight | 0 to 1439 |
 
 - Index on `day`, for the total of one day.
@@ -551,7 +551,7 @@ One row per change of the goal.
 | Column | SQL type | What it holds | Limits |
 |---|---|---|---|
 | `amountMl` | `INTEGER NOT NULL` | The daily goal, in whole millilitres | 500 to 10,000 |
-| `fromDay` | `INTEGER NOT NULL` | The first day this goal counts for, as `intake.day` | Any day |
+| `fromDay` | `INTEGER NOT NULL` | The first day this goal counts for, as `intake.day` | 0 to 2,932,896, as `intake.day` |
 
 #### The goal of a day
 
@@ -1120,8 +1120,10 @@ so that nothing changes, when it meets:
 
 1. a type name other than the three,
 2. a content of another length than its type's,
-3. a value outside its limits in the tables above,
-4. a File entry. Water has no files.
+3. a value outside its limits in the tables above, a day among them,
+4. a `createdAt`, `updatedAt` or `deletedAt` that no record can hold
+   ([data.md](../../architecture/data.md#record-fields)),
+5. a File entry. Water has no files.
 
 This is the third failure of
 [backup-format.md](../../architecture/backup-format.md#the-answers): "the

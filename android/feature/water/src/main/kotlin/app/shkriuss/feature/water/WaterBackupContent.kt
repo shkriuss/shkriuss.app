@@ -11,6 +11,7 @@ import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.data.Record
 import app.shkriuss.core.data.RecordFields
 import app.shkriuss.core.data.RecordWriter
+import app.shkriuss.core.data.timesAreWithinLimits
 import app.shkriuss.feature.water.data.GoalEntity
 import app.shkriuss.feature.water.data.IntakeEntity
 import app.shkriuss.feature.water.data.SettingsEntity
@@ -76,7 +77,8 @@ class WaterBackupContent(private val database: WaterDatabase, clock: Clock, ids:
 /**
  * Thrown by [WaterBackupContent.restore] when a backup holds something this
  * version of Water cannot read: another record type, a content of another
- * length, a value outside its limits, or a file. It is the third failure of
+ * length, a value or a record time outside its limits, or a file. It is
+ * the third failure of
  * docs/architecture/backup-format.md, "The answers". The message names
  * what was wrong, never what a record holds.
  */
@@ -131,14 +133,19 @@ object WaterBackupCodec {
     /**
      * The row a backup record holds, with the record fields of the backup
      * and change number 0, which `takeFromBackup` replaces. Throws
-     * [UnreadableBackupException] for another type, another length or a
-     * value outside its limits.
+     * [UnreadableBackupException] for another type, another length, a
+     * value outside its limits, or a `createdAt`, `updatedAt` or
+     * `deletedAt` that no record can hold.
      */
-    fun decode(record: BackupRecord): Record<*> = when (record.type) {
-        IntakeEntity.TABLE -> decodeIntake(record.fields, contentOf(record, INTAKE_LENGTH))
-        GoalEntity.TABLE -> decodeGoal(record.fields, contentOf(record, GOAL_LENGTH))
-        SettingsEntity.TABLE -> decodeSettings(record.fields, contentOf(record, SETTINGS_LENGTH))
-        else -> throw UnreadableBackupException("a record of the type ${record.type}")
+    fun decode(record: BackupRecord): Record<*> {
+        val row = when (record.type) {
+            IntakeEntity.TABLE -> decodeIntake(record.fields, contentOf(record, INTAKE_LENGTH))
+            GoalEntity.TABLE -> decodeGoal(record.fields, contentOf(record, GOAL_LENGTH))
+            SettingsEntity.TABLE -> decodeSettings(record.fields, contentOf(record, SETTINGS_LENGTH))
+            else -> throw UnreadableBackupException("a record of the type ${record.type}")
+        }
+        within(record.fields.timesAreWithinLimits, record.type, "createdAt, updatedAt or deletedAt")
+        return row
     }
 
     private fun contentOf(record: BackupRecord, length: Int): ByteBuffer {
@@ -153,6 +160,7 @@ object WaterBackupCodec {
         val day = content.int
         val minute = content.int
         within(amount in Amounts.DRINK_ML, "intake", "amountMl")
+        within(day in WATER_DAYS, "intake", "day")
         within(minute in 0..SettingsRules.LAST_MINUTE, "intake", "minuteOfDay")
         return IntakeEntity(fields, NO_CHANGE_NUMBER, amountMl = amount, day = day, minuteOfDay = minute)
     }
@@ -161,6 +169,7 @@ object WaterBackupCodec {
         val amount = content.int
         val fromDay = content.int
         within(amount in Amounts.GOAL_ML, "goal", "amountMl")
+        within(fromDay in WATER_DAYS, "goal", "fromDay")
         return GoalEntity(fields, NO_CHANGE_NUMBER, amountMl = amount, fromDay = fromDay)
     }
 

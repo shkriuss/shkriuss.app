@@ -44,6 +44,15 @@ class WaterTime(
     }
 }
 
+/**
+ * The days a record of Water can hold (`intake.day`, `goal.fromDay`):
+ * from 1970-01-01, day 0, to 9999-12-31 (docs/apps/water/spec.md, "Data
+ * model"). A backup with another day is refused. Without the limit, one
+ * record with a far day would make History build a row for every day up
+ * to today.
+ */
+val WATER_DAYS: IntRange = 0..2_932_896
+
 /** This date as a day of the database: days since 1970-01-01 (`intake.day`, `goal.fromDay`). */
 fun LocalDate.asWaterDay(): Int = Math.toIntExact(toEpochDay())
 

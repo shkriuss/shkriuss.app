@@ -10,6 +10,7 @@ import app.shkriuss.core.backup.RestoreResult
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.data.RecordFields
+import app.shkriuss.core.data.RecordTimes
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.water.data.GoalEntity
@@ -206,6 +207,64 @@ class WaterBackupContentTest {
         // A flag that is neither 0 nor 1.
         val settings = WaterBackupCodec.encode(SettingsEntity(fields(1), 0, 0, 150, 250, 500, true, 60, 480, 1_320))
         assertRefused(listOf(BackupRecord("settings", settings.fields, settings.content.copyOf().also { it[13] = 2 })))
+    }
+
+    @Test
+    fun aDayOutsideItsLimitsStopsTheRestore() {
+        val wrong = listOf(-1, WATER_DAYS.last + 1, Int.MIN_VALUE, Int.MAX_VALUE).flatMap { day ->
+            listOf(
+                WaterBackupCodec.encode(IntakeEntity(fields(1), 0, 250, day, 600)),
+                WaterBackupCodec.encode(GoalEntity(fields(1), 0, 2_000, day)),
+            )
+        }
+        wrong.forEach { assertRefused(listOf(it)) }
+    }
+
+    @Test
+    fun theFirstAndTheLastDayAreRestored() = runBlocking {
+        val records = listOf(
+            WaterBackupCodec.encode(IntakeEntity(fields(1), 0, 250, 0, 600)),
+            WaterBackupCodec.encode(IntakeEntity(fields(2), 0, 250, WATER_DAYS.last, 600)),
+            WaterBackupCodec.encode(GoalEntity(fields(3), 0, 2_000, 0)),
+            WaterBackupCodec.encode(GoalEntity(fields(4), 0, 2_000, WATER_DAYS.last)),
+        )
+
+        restore(content, records)
+
+        assertEquals(listOf(0, WATER_DAYS.last), database.intake().all().map { it.day }.sorted())
+        assertEquals("9999-12-31", waterDayDate(WATER_DAYS.last).toString())
+    }
+
+    @Test
+    fun aRecordTimeThatNoRecordCanHoldStopsTheRestore() {
+        val id = TestIdSource.idNumber(101)
+        val wrong = listOf(
+            RecordFields(id, createdAt = -1, updatedAt = 1_000, deletedAt = null),
+            RecordFields(id, createdAt = RecordTimes.LAST_MILLIS + 1, updatedAt = 1_000, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = -1, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = RecordTimes.LAST_MILLIS + 1, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = Long.MAX_VALUE, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = 2_000, deletedAt = -1),
+            RecordFields(id, createdAt = 1_000, updatedAt = 2_000, deletedAt = Long.MAX_VALUE),
+        )
+        wrong.forEach { fields ->
+            assertRefused(listOf(WaterBackupCodec.encode(IntakeEntity(fields, 0, 250, THE_DAY.asWaterDay(), 600))))
+            assertRefused(listOf(WaterBackupCodec.encode(GoalEntity(fields, 0, 2_000, THE_DAY.asWaterDay()))))
+            assertRefused(listOf(WaterBackupCodec.encode(SettingsEntity(fields, 0, 0, 150, 250, 500, false, 60, 480, 1_320))))
+        }
+    }
+
+    @Test
+    fun aDrinkWithTheLastTimeARecordCanHoldStaysDeletedWhenTheSameBackupIsRestoredAgain() = runBlocking {
+        val last = RecordFields(TestIdSource.idNumber(101), createdAt = 1_000, updatedAt = RecordTimes.LAST_MILLIS, deletedAt = null)
+        val backup = listOf(WaterBackupCodec.encode(IntakeEntity(last, 0, 250, THE_DAY.asWaterDay(), 600)))
+        restore(content, backup)
+        assertEquals(250, repository.factsOf(THE_DAY).totalMl)
+
+        repository.deleteDrink(last.id)
+        restore(content, backup)
+
+        assertEquals("the deleted drink does not come back", 0, repository.factsOf(THE_DAY).totalMl)
     }
 
     @Test
