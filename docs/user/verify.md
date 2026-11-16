@@ -4,10 +4,6 @@ Every app of the suite is signed with one key. AppVerifier shows the
 fingerprint of the key that signed an app on your phone. If it is the
 fingerprint below, the app comes from this project and was not changed.
 
-These steps were checked with the first release, Catalog 0.1.0, on
-2026-11-11. The steps after a new signing key were checked on
-2026-11-14, in a rehearsal with throwaway keys.
-
 ## What you need
 
 - The app, installed. See [Install with Obtainium](install.md).
@@ -89,7 +85,3 @@ Before the update, in Obtainium, the last downloaded hash must be the new
 fingerprint. Until you update, someone who holds the old key could also
 make a file that your phone accepts, and Obtainium would warn in the same
 way. Only the last hash shows whose new key it is.
-
-In the rehearsal of 2026-11-14, AppVerifier showed both fingerprints, the
-old one first, and the new fingerprint gave "Verification Status:
-SUCCESS".

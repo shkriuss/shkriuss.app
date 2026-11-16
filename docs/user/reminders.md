@@ -4,10 +4,8 @@ Some apps of the suite remind you at a time you set: Water, Reminders,
 Tasks and Calendar. This page says when a reminder shows, and when it
 cannot.
 
-Water is the first app with reminders. This page was written on
-2026-11-13, with the code that sets the alarms, and updated on
-2026-11-14 with Water's buttons. How to use Water's reminders is in
-[its guide](water.md#reminders).
+Water is the first app with reminders. How to use Water's reminders is
+in [its guide](water.md#reminders).
 
 ## The short version
 
