@@ -45,8 +45,7 @@ and when its base branch changes. Then:
 5. After a new push it updates the same comment. If no owner-only file is
    left, the comment says so. The workflow never removes the label, so a
    change that was added and then reverted still leaves a mark. The
-   owner's decision on
-   [pull request 7](https://github.com/shkriuss/shkriuss.app/pull/7).
+   owner's decision.
 6. It also flags the owner's own pull requests.
 
 The check **Protected paths / Flag owner-only paths** passes when it flags.
@@ -115,10 +114,12 @@ required check.
 7. **It trusts CODEOWNERS on `main`.** A path that is missing there is not
    flagged. The flag reads the patterns itself, by GitHub's documented
    rules. GitHub's own reading, which requests your review, is the
-   authority. The two were compared with Git's own matching (below). They
-   can still differ for patterns that GitHub does not support: `!`, `[ ]`,
-   and `\#` at the start of a line. GitHub also skips a line with an error
-   in it. Keep CODEOWNERS simple, as it is today.
+   authority. The flag's reading agrees with Git's own `.gitignore`
+   matching, except for `docs/*`: GitHub documents that nested files do
+   not match it, and the flag follows GitHub. The two can still differ for
+   patterns that GitHub does not support: `!`, `[ ]`, and `\#` at the
+   start of a line. GitHub also skips a line with an error in it. Keep
+   CODEOWNERS simple, as it is today.
 8. **No label does not prove that no owner-only file changed.** The flag is
    missing if the run failed, if GitHub Actions was down or turned off, or
    if GitHub did not start the workflow. GitHub does not start
@@ -143,8 +144,7 @@ required check.
    - `contents: read`, only for reading CODEOWNERS from the default branch
      through the API. It is never used to check out code. In a public
      repository it grants nothing new. With it, the flag also works if the
-     repository is made private. The owner's decision on
-     [pull request 7](https://github.com/shkriuss/shkriuss.app/pull/7).
+     repository is made private. The owner's decision.
    - `pull-requests: write`, for every other call: reading the pull
      request, its files, its comments and the label, and writing the label
      and the comment.
@@ -163,26 +163,9 @@ required check.
    characters, so the comment stays under GitHub's size limit. The rest are
    counted.
 
-## How it was tested
+## Check that it works
 
-Before the first merge, in the cloud environment:
-
-1. The shell step, taken straight from the workflow file, ran against a
-   stand-in for the GitHub API. Fifteen cases passed: a first flag, a
-   re-run with no change, a push that removes every owner-only file, a
-   newer push during the run, more than 3000 files, 150 owner-only files,
-   very long names, CODEOWNERS in another place or missing, failed API
-   calls, and file names with line breaks, backticks, mentions, links,
-   HTML and hidden characters.
-2. The comments were rendered with `cmark-gfm`, the Markdown library
-   GitHub uses. The only links were the workflow's own three.
-3. The pattern matching was compared with Git's own `.gitignore` matching
-   for 34 patterns and 48 paths. They agreed, except for `docs/*`, where
-   GitHub documents that nested files do not match.
-4. `actionlint` with `shellcheck` found no problems.
-
-The workflow cannot run on the pull request that adds it, because it is not
-on `main` yet. To check it after merging, on a phone:
+To see the flag at work, on a phone:
 
 1. Open `github.com/shkriuss/shkriuss.app/blob/main/CLAUDE.md` in the
    browser.
