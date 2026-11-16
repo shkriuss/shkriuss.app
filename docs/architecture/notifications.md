@@ -6,9 +6,7 @@ notifications ([CLAUDE.md](../../CLAUDE.md)). The decisions are in
 [ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md) and
 [ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md).
 
-Built in Phase 1, step 6. Water is the first app that uses it, from
-Phase 2, step 4. That step added buttons on a notification, the end of
-a notification, and the notice when an app's handler fails.
+Water is the first app that uses it.
 
 ## At a glance
 
@@ -109,7 +107,7 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
    time then, and the alarm would be dropped. Water keeps a due alarm for
    one minute, unless its handler ran
    ([spec.md](../apps/water/spec.md#when-the-next-reminder-comes), rule
-   7). Found in Phase 2, step 4.
+   7).
 
 ### Rules for the app's `AlarmHandler`
 
@@ -189,10 +187,10 @@ When Android fires an alarm:
    see it." It has no buttons and nothing of the app's own. Its key is
    the alarm's id, so the app's next notification for that alarm
    replaces it. A tap opens the app's start screen. Then the sync runs as
-   after any alarm, so the next reminder is set. The owner decided this
-   in Phase 2, step 4, for every app ([Open](#open), item 6). Before, the
-   failure stopped the app's process in the background, and the next
-   reminder was set only at the next start of the app.
+   after any alarm, so the next reminder is set. This is the owner's
+   decision, for every app ([Open](#open), item 6). Without it, the
+   failure would stop the app's process in the background, and the next
+   reminder would be set only at the next start of the app.
 
 Two more rules:
 
@@ -240,7 +238,7 @@ all.
 - The file is not in a backup. After a restore, the app calls
   `Notify.sync()`, so the alarms follow the restored data. A
   notification that is showing is the app's to take away, if it no
-  longer fits. Water does both in one step since step 2.5
+  longer fits. Water does both in one step
   (`WaterReminders.afterRestore`;
   [spec.md](../apps/water/spec.md#after-a-restore)).
 - A notification is shown with `VISIBILITY_PRIVATE`. On a locked screen
@@ -251,8 +249,8 @@ all.
 
 ## While the app lock is on
 
-Decided by the owner on 2026-11-13, in Phase 1, step 7, session B, with
-the app lock ([security-screens.md](security-screens.md#the-app-lock)).
+Decided by the owner, with the app lock
+([security-screens.md](security-screens.md#the-app-lock)).
 
 1. While the app lock is on, a notification shows only the name of its
    channel, for example "Drink reminders", and the text "The app lock
@@ -278,8 +276,8 @@ the app lock ([security-screens.md](security-screens.md#the-app-lock)).
 
 ## Buttons on a notification
 
-Built in Phase 2, step 4, with Water's **Drank** and **Later**. The rules
-for every app are in [ADR 0034](../adr/0034-notification-buttons.md).
+Water's **Drank** and **Later** are the first. The rules for every app
+are in [ADR 0034](../adr/0034-notification-buttons.md).
 
 1. A notification has at most three buttons, each a
    `ShkNotificationButton`: the label it shows, an action (a fixed name
@@ -365,9 +363,9 @@ the app starts it.
   The user is not asked and cannot take them away.
 
 The screen itself, with its words, is the app's. `core/notify` has no
-screen. Water built the first in Phase 2, step 4: a dialog that explains,
-then Android's question, and a line on Today and in Settings for each
-state ([spec.md](../apps/water/spec.md#asking-for-notifications)).
+screen. Water's is the first: a dialog that explains, then Android's
+question, and a line on Today and in Settings for each state
+([spec.md](../apps/water/spec.md#asking-for-notifications)).
 
 ## Limits of Android
 
@@ -406,8 +404,7 @@ button, fire an alarm, forget the alarms at a reboot, send a broadcast.
 So an app's tests check its reminders without naming Android's alarm and
 notification classes, which `NotifyBoundaryTest` forbids also in tests.
 The APK rules check fails an app that holds one of its classes
-([build.md](../development/build.md#test-fixtures)). Added in Phase 2,
-step 4, for Water.
+([build.md](../development/build.md#test-fixtures)).
 
 Tests on an emulator, with a real Android and the device's clock, are in
 [emulator-tests.md](../development/emulator-tests.md#the-tests-of-corenotify).
@@ -415,11 +412,11 @@ That page also lists what no emulator can check.
 
 ## Open
 
-1. The screen for the permission, and its words. Built in Water in
-   Phase 2, step 4
+1. The screen for the permission, and its words. Each app has its own.
+   Water's is the first
    ([The permission and the states](#the-permission-and-the-states)).
-2. Buttons on a notification. Built in Phase 2, step 4, with Water's
-   **Drank** and **Later**
+2. Buttons on a notification. Water's **Drank** and **Later** are the
+   first
    ([Buttons on a notification](#buttons-on-a-notification),
    [ADR 0034](../adr/0034-notification-buttons.md)).
 3. A notification that is not a reminder, for example progress in the
@@ -442,13 +439,12 @@ That page also lists what no emulator can check.
    4. After "Force stop", nothing fires until the app is opened.
    5. After a change of time zone, the next reminder moves to the new
       local time.
-5. What a notification shows while the app lock is on. Decided in
-   Phase 1, step 7, session B
-   ([While the app lock is on](#while-the-app-lock-is-on)).
+5. What a notification shows while the app lock is on. Decided by the
+   owner ([While the app lock is on](#while-the-app-lock-is-on)).
 6. What the user sees when an app's alarm handler fails. Decided by the
-   owner in Phase 2, step 4, with the reminders of Water: a notice from
+   owner, with the reminders of Water: a notice from
    `core/notify` in place of the reminder, and the next reminder still
    comes ([How alarms are kept right](#how-alarms-are-kept-right), when
    Android fires an alarm, point 5).
-7. A failing `AlarmSource` still stops the app's process: nothing can be
-   registered then. Not changed in step 2.4.
+7. A failing `AlarmSource` stops the app's process: nothing can be
+   registered then.

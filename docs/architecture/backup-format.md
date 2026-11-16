@@ -3,21 +3,17 @@
 The exact bytes of a backup file, what an app puts into it, and how a
 backup is written, checked and restored.
 
-- Status: built. The design was written on 2026-11-12 in Phase 1, step 5
-  ([PROMPTS.md](../development/PROMPTS.md)). The owner read it on the
-  same day, added one point and accepted the rest
-  ([Decided by the owner](#decided-by-the-owner)). The code and its
-  tests were built from this page on the same day, in the same pull
-  request. On that pull request the owner changed one thing: a backup
-  with a higher data version is refused right after the Manifest. That
-  is a change to the order of reading, not to the file format.
-- The first app with a backup is Water. Its screens were built in
-  Phase 2, step 2.5, on 2026-11-14
-  ([spec.md](../apps/water/spec.md#backup-and-restore-screens)). In that
-  step the owner decided when a backup is checked
-  ([open question 2](#open-questions)), and a backup that was written or
-  checked now also says how many of its records are not deleted, per
-  type name. The file format did not change.
+- Status: built. The owner read this page and accepted it, with the
+  points in [Decided by the owner](#decided-by-the-owner). One of them
+  is that a backup with a higher data version is refused right after
+  the Manifest. That is a rule of the order of reading, not of the file
+  format.
+- The first app with a backup is Water
+  ([spec.md](../apps/water/spec.md#backup-and-restore-screens)). The
+  owner decided when a backup is checked
+  ([Checking a backup](#checking-a-backup)). A backup that was written
+  or checked also says how many of its records are not deleted, per
+  type name. Neither is part of the file format.
 - The code is `android/core/backup`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -306,8 +302,8 @@ Never in a backup:
    ([crypto-design.md](../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key)).
 
 Which tables, type names and contents one app has is part of that app's
-own pages. The first is Water (step 2.1 in
-[PROMPTS.md](../development/PROMPTS.md)).
+own pages. The first is Water
+([spec.md](../apps/water/spec.md#backup-contents)).
 
 ### The data version
 
@@ -398,7 +394,7 @@ made, not on the day it is needed. The app can read back the file it has
 just written. The check also lets a screen say what a file holds before
 the user restores it.
 
-When a screen calls the check (owner's decision in step 2.5):
+When a screen calls the check (the owner's decision):
 
 1. **After every backup**, by itself. The app reads the file it has just
    written and checks it. The user does not have to ask.
@@ -450,8 +446,8 @@ In this order. The first rule that does not hold gives the answer.
 9. The stream has ended without an error, right after End, and the
    counts are right. Only now is the backup good.
 
-Step 7 comes before the rest of the file is read. The owner decided this
-on pull request 25. Two things follow:
+Step 7 comes before the rest of the file is read. This is the owner's
+decision. Two things follow:
 
 - The answer for a backup from a newer version of the app is quick, also
   for a very large file, and such a backup takes no room on the phone.
@@ -560,8 +556,7 @@ This section is about code. It is **not part of the file format**. It
 can change, and a second rule can be added, without a new format
 version.
 
-The owner decided the rule in the planning session of this step: **the
-newest edit wins, per record.**
+The rule is the owner's decision: **the newest edit wins, per record.**
 
 For each record of the backup, `RecordWriter.takeFromBackup` gives one of
 three answers:
@@ -611,8 +606,9 @@ For sync, later:
 
 - "Same keeps the stored record" is right for a restore, which touches
   one device. In sync it would let two devices keep different records
-  with the same `updatedAt`. Phase 5 must decide ties so that all devices
-  end the same ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
+  with the same `updatedAt`. The sync design must decide ties so that
+  all devices end the same
+  ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
 - `takeFromBackup` is the function for backups. It is not assumed to be
   the function sync uses. ADR 0027 gives sync its own.
 
@@ -634,7 +630,7 @@ For sync, later:
 2. `core` never depends on a feature. So `core/backup` knows no table and
    no record type of any app.
 3. No screen is part of `core/backup`. The screens are the app's. The
-   first are Water's, built in step 2.5
+   first are Water's
    ([spec.md](../apps/water/spec.md#backup-and-restore-screens)).
 
 ## The system file picker
@@ -782,7 +778,7 @@ e6dc37ca14b88d0e8f7cf7f904652d82e223b8facd0d855e71b0f2418c453041
 899b22808e26
 ```
 
-How it was made, and how it is checked:
+How the bytes are made and checked:
 
 1. `BackupExampleFileTest` in `core/crypto` builds the stream from the
    values above with a second, separate build of the stream layout, from
@@ -793,7 +789,7 @@ How it was made, and how it is checked:
    in an app with the recovery words of the vectors. It must be a good
    backup with three records and one file, and a restore must give
    exactly the records and the file stream described above.
-3. No tool outside the Gradle build made any of these bytes.
+3. No tool outside the Gradle build makes any of these bytes.
 
 ## What the tests must cover
 
@@ -837,10 +833,10 @@ In `core/data`: `takeFromBackup` gives each of its three answers, keeps
 the four fields, takes a change number only when it writes, and several
 calls in one transaction roll back together.
 
-The very large file. The first plan was one file longer than all the
-memory the test may use, 2 GiB, restored through staging. That needs a
-little over 2 GiB of disk in every run. The check needs no disk, so the
-proof is split in three, and all are cheap (`LargeFileTest`):
+The very large file. One file longer than all the memory the test may
+use, 2 GiB, restored through staging, would need a little over 2 GiB of
+disk in every run. The check needs no disk, so the proof is split in
+three, and all are cheap (`LargeFileTest`):
 
 1. A file longer than all the memory of the test, a little over 2 GiB,
    goes into a backup and through the check. A writer and a reader run
@@ -854,25 +850,18 @@ proof is split in three, and all are cheap (`LargeFileTest`):
    read from the document run ahead of the bytes put into staging. The
    gap never passes 4 MiB.
 
-Measured on 2026-11-12 in the cloud environment: the first takes about 3
-seconds and needs no disk. The other two together take under 1 second,
-and the third needs 64 MiB in a temporary folder for that time. All 71
-tests of `core/backup` together take about 11 seconds.
+The first needs no disk. The third needs 64 MiB in a temporary folder
+while it runs. The first proof is kept while it takes less than about a
+minute in CI, the owner's limit
+([Decided by the owner](#decided-by-the-owner)).
 
-In CI, on 2026-11-12: the whole test task of `core/backup`, then 68
-tests, ended 29 seconds after its code was compiled. That is an upper
-limit, because other tasks ran in between. The log of CI gives no time
-for a single test. So the first proof stays well under the owner's limit
-of about a minute, and it is kept.
-
-No test in this step runs on an emulator, and none opens the picker
+No test of `core/backup` runs on an emulator, and none opens the picker
 itself. The picker is checked by hand with the first app, Water
 ([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
 
 ## Decided by the owner
 
-In the planning session of this step, after reading this page, and on
-pull request 25, all on 2026-11-12.
+On the format and `core/backup`:
 
 | Question | Decision |
 |---|---|
@@ -881,13 +870,12 @@ pull request 25, all on 2026-11-12.
 | A record that is in the app and in the backup | The newest edit wins, by `updatedAt`. The same `updatedAt` keeps the stored record. |
 | What the user is told | The user guide says plainly that a restore cannot undo a deletion or an edit made after the backup. |
 | The restore rule and the format | The format stays free of the rule, so that a "restore as it was" mode can be added later without a new format version. |
-| Checking a backup after it is written | Built in this step: one function that reads a backup from a URI, checks everything a restore checks, and changes nothing. The screen of step 2.5 decides when to call it. |
-| Ties in sync | Not decided here. Phase 5 must decide ties so that all devices end the same. `takeFromBackup` is not assumed to be sync's function. |
+| Checking a backup after it is written | One function reads a backup from a URI, checks everything a restore checks, and changes nothing. The app's screens decide when to call it (below). |
+| Ties in sync | Not decided here. The sync design must decide ties so that all devices end the same. `takeFromBackup` is not assumed to be sync's function. |
 | The very large file test | If it takes more than about a minute in CI, a cheaper proof is used. |
-| When code starts | After the owner has read this page and ADR 0008. The owner gave the OK on 2026-11-12. |
-| A backup with a higher data version (on pull request 25) | It is refused right after the Manifest, before anything is staged. This changes the order of reading, not the file format. |
+| A backup with a higher data version | It is refused right after the Manifest, before anything is staged. This is a rule of the order of reading, not of the file format. |
 
-In the planning session of Phase 2, step 2.5, on 2026-11-14.
+On the backup and restore screens of Water:
 
 | Question | Decision |
 |---|---|
@@ -897,8 +885,8 @@ In the planning session of Phase 2, step 2.5, on 2026-11-14.
 ## Assumptions
 
 Things this page chose without a decision by the owner on that point.
-The owner read them on 2026-11-12 and accepted them as they are. A later
-reader may still object to each one.
+The owner read them and accepted them as they are. A later reader may
+still object to each one.
 
 1. The magic is `SHKBAK` and the format version is one byte.
 2. The app name is in the public header.
@@ -912,7 +900,7 @@ reader may still object to each one.
 7. A backup holds records and files only. A setting that must come back
    is a record.
 8. A file whose stream is not on the device is left out of a backup.
-   The owner added that this is never silent
+   By the owner's decision, this is never silent
    ([Files that are left out](#files-that-are-left-out)).
 9. A backup is of one app. There is no file for the whole suite.
 10. No compression.
@@ -928,15 +916,15 @@ reader may still object to each one.
 
 ## Open questions
 
-What is left, with the step that decides it.
+What is left, with the work that decides it.
 
 1. **A "restore as it was" mode.** It would bring back records that were
    deleted or changed after the backup. The format allows it. It needs a
    second `RecordWriter` function and a choice on the screen. Not built.
    The owner decides whether and when.
-2. **When the app checks a backup.** Decided by the owner in step 2.5,
-   on 2026-11-14: after every backup, by itself, and before every
-   restore. Not only when the user asks
+2. **When the app checks a backup.** Decided by the owner: after every
+   backup, by itself, and before every restore. Not only when the user
+   asks
    ([Checking a backup](#checking-a-backup);
    [Decided by the owner](#decided-by-the-owner)).
 3. **Progress, stopping in the middle, and a long backup while the
@@ -944,29 +932,31 @@ What is left, with the step that decides it.
    backup that is being written may finish
    ([crypto-design.md](../security/crypto-design.md#keys-in-memory)).
    What keeps the app running for a backup of many gigabytes is not
-   decided. Step 2.5 built what Water needs, and Water stores no files:
-   a dialog with a progress circle and no button, no way to stop in the
-   middle, and no service that keeps the app running. A restore and the
-   step after it are not stopped when the screen goes away. Still open
-   for the first app that stores large files.
+   decided. Water stores no files and has what it needs: a dialog with
+   a progress circle and no button, no way to stop in the middle, and
+   no service that keeps the app running. A restore and the step after
+   it are not stopped when the screen goes away. Open for the first app
+   that stores large files.
 4. **One snapshot of records and files.** How an app with files makes
    sure that a file in a backup is the content its record describes,
    when a file can change while a backup runs. The first app that stores
    files.
-5. **What Water puts in**, and its type names and contents. Step 2.1.
-   Answered in Water's
+5. **What Water puts in**, and its type names and contents. Answered in
+   Water's
    [specification](../apps/water/spec.md#backup-contents): data version
    1, the types `intake`, `goal` and `settings`, and no files.
 6. **Whether the content of a record is also the plaintext of a sealed
-   record in sync.** One encoding for both would be less code. Phase 5.
-7. **Ties in sync.** See [The restore rule](#the-restore-rule). Phase 5.
+   record in sync.** One encoding for both would be less code. The sync
+   design.
+7. **Ties in sync.** See [The restore rule](#the-restore-rule). The sync
+   design.
 8. **Purged deletion markers and old backups.** If deletion markers are
    ever purged, an old backup holds a record whose marker is gone, and a
    restore would bring it back. When markers may be purged is for the
-   sync design ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
-   Phase 5 must look at backups too.
+   sync design ([ADR 0009](../adr/0009-sync-protocol-and-server.md)),
+   which must look at backups too.
 9. **A backup made with an older recovery key** opens while that key is
    still in the `backup` keyset. What happens to old backups when an old
    key is dropped belongs to the "new recovery key" flow
    ([crypto-design.md](../security/crypto-design.md#a-new-recovery-key)).
-   Phase 5.
+   The sync design.
