@@ -3,6 +3,7 @@ package app.shkriuss.core.security
 import android.Manifest
 import android.app.Activity
 import android.app.Application
+import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -11,6 +12,8 @@ import app.shkriuss.core.crypto.ShkCrypto
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import java.io.File
 import java.util.concurrent.Executor
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import org.robolectric.Shadows.shadowOf
 
@@ -30,6 +33,21 @@ internal fun damage(file: File) {
 
 /** Runs each piece of work at once, on the test's thread. */
 internal val atOnce = Executor { it.run() }
+
+/** Holds background work until the test runs it, so that a test can stop the screen or lock the app while work is under way. */
+internal class QueuedDispatcher : CoroutineDispatcher() {
+    private val tasks = ArrayDeque<Runnable>()
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        tasks += block
+    }
+
+    /** Runs the work that waits, and what it hands back to the main thread. */
+    fun runAll() {
+        while (tasks.isNotEmpty()) tasks.removeFirst().run()
+        shadowOf(Looper.getMainLooper()).idle()
+    }
+}
 
 /** The app class of the screen tests: a [SecurityHost] with real cryptography on the stand-in. */
 open class TestHostApp : Application(), SecurityHost {

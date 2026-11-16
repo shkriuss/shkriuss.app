@@ -69,7 +69,7 @@ const val LOCK_SCREEN_TEST_TAG: String = "app.shkriuss.core.security.LockScreen"
 @Composable
 private fun Locked(activity: ComponentActivity, watcher: AppLockWatcher) {
     val crypto = activity.securityHost.crypto
-    val model = remember(activity) { activity.viewModelOf { UnlockViewModel(crypto, watcher::unlocked) } }
+    val model = remember(activity) { activity.viewModelOf { UnlockViewModel(crypto, watcher) } }
     val screen by model.state.collectAsState()
     val lock = watcher.locks
     LaunchedEffect(lock) { model.onLocked(lock) }

@@ -91,6 +91,11 @@ class CreateViewModel internal constructor(
         }
     }
 
+    override fun dropRecoveryKey() {
+        key = null
+        super.dropRecoveryKey()
+    }
+
     override fun onCleared() {
         key = null
         super.onCleared()
@@ -198,6 +203,11 @@ class EnterViewModel internal constructor(
         show(WordEntry.empty())
     }
 
+    override fun dropRecoveryKey() {
+        entered = null
+        super.dropRecoveryKey()
+    }
+
     override fun onCleared() {
         entered = null
         super.onCleared()
@@ -208,7 +218,8 @@ class EnterViewModel internal constructor(
  * Showing the kept recovery key again ("Showing it again" in
  * crypto-design.md): one prompt, one showing. The words are dropped when
  * the screen stops: when it closes, the phone turns its screen off, or
- * another app comes to the front.
+ * another app comes to the front. A prompt whose key is read only after
+ * the screen stopped shows nothing.
  */
 class ShowViewModel internal constructor(
     private val crypto: ShkCrypto,
@@ -218,6 +229,9 @@ class ShowViewModel internal constructor(
 
     @Volatile
     private var requests = 0
+
+    /** Counts the stops. Read and written on the main thread only. */
+    private var stops = 0
 
     /** The one state of the screen. */
     val state: StateFlow<ShowScreen> = screen.asStateFlow()
@@ -239,14 +253,23 @@ class ShowViewModel internal constructor(
             work { request.step.cancel() }
             return
         }
+        val asked = stops
         work {
             val key = request.step.finish() as RecoveryKey
-            screen.value = ShowWords(key.words())
+            // The stop runs on the main thread. So does this, and no stop can come between the check and the words.
+            withContext(Dispatchers.Main.immediate) {
+                // The screen stopped while the key was read: nothing shows, and the key is dropped.
+                screen.value = if (asked == stops) ShowWords(key.words()) else ShowIntro()
+            }
         }
     }
 
-    /** The screen stopped: the words leave memory. A new prompt shows them again. */
+    /**
+     * The screen stopped: the words leave memory. A new prompt shows them
+     * again. A prompt that was answered before the stop shows nothing.
+     */
     fun onStop() {
+        stops++
         if (screen.value is ShowWords) screen.value = ShowIntro()
     }
 

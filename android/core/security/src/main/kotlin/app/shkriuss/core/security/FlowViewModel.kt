@@ -47,8 +47,19 @@ abstract class FlowViewModel<S : Any> internal constructor(
     @Volatile
     protected var appLockWentOff = false
 
+    /**
+     * Shows [next]. A failure screen has only "Done" and no way back to
+     * the words, so every reference to the recovery key is dropped as it
+     * shows.
+     */
     protected fun show(next: S) {
+        if (next is FlowFailed) dropRecoveryKey()
         screen.value = next
+    }
+
+    /** Drops every reference to the recovery key. A flow that holds one of its own drops it here too. */
+    protected open fun dropRecoveryKey() {
+        keeping = null
     }
 
     /** The screen of the flow for one of the shared steps. */

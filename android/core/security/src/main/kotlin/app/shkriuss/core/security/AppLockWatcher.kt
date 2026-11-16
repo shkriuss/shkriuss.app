@@ -107,6 +107,15 @@ class AppLockWatcher(
     private var known: AppLockState? = null
     private var readFailed = false
     private var locked = true
+
+    /** Counts every lock, also one with the app lock off. An unlock counts only if no lock came after its prompt. */
+    private var lockings = 0
+
+    /**
+     * True from a lock until a prompt unlocks the app or the app lock is turned on. Until then a read of the keys
+     * cannot open the gate: the file keys of a prompt that came too late can be in memory for a moment.
+     */
+    private var onlyAPromptUnlocks = false
     private var generation = 0
     private var resetAnnounced = false
     private val activities = mutableSetOf<Activity>()
@@ -155,12 +164,35 @@ class AppLockWatcher(
         }
     }
 
-    /** A system prompt unlocked the app: the file keys are in memory. */
-    internal fun unlocked() {
+    /**
+     * The mark of a system prompt that unlocks the app. A lock screen
+     * takes it on the main thread before its prompt shows, and hands it
+     * to [unlocked] when the prompt's file keys are in memory.
+     */
+    internal fun unlockMark(): Int = lockings
+
+    /**
+     * A system prompt unlocked the app: the file keys are in memory.
+     * [mark] is what [unlockMark] gave before the prompt showed.
+     *
+     * The unlock counts only if the app has not locked since. Otherwise
+     * the file keys leave memory again, the gate stays locked, and the
+     * lock screen shows its prompt again as after any lock. It runs on the
+     * main thread, where every lock runs, so no lock can come between the
+     * check and the answer. Returns true if the unlock counts.
+     */
+    internal fun unlocked(mark: Int): Boolean {
+        if (mark != lockings) {
+            // A newer prompt may have unlocked the app meanwhile. The keys in memory are then its keys, and they stay.
+            if (locked) dropFileKeys()
+            return false
+        }
         generation++
         locked = false
+        onlyAPromptUnlocks = false
         publish()
         refresh()
+        return true
     }
 
     /** The app lock was turned on, and the app is unlocked. */
@@ -168,6 +200,7 @@ class AppLockWatcher(
         generation++
         known = AppLockState.ON
         locked = false
+        onlyAPromptUnlocks = false
         publish()
         applyFlagsToAll()
         if (!settings.notificationText) onTextHidden()
@@ -224,7 +257,7 @@ class AppLockWatcher(
         val before = known
         known = read.state
         // A read that started before a lock or an unlock of this thread says nothing about the keys in memory now.
-        if (asked == generation) locked = read.isLocked
+        if (asked == generation) locked = read.isLocked || onlyAPromptUnlocks
         if (announce && before == AppLockState.ON && read.state == AppLockState.OFF) notice = AppLockNotice.TURNED_OFF
         if (announce && read.state == AppLockState.RESET && !resetAnnounced) {
             resetAnnounced = true
@@ -247,12 +280,19 @@ class AppLockWatcher(
         if (lockChanged) applyFlagsToAll()
     }
 
-    /** Drops the file keys at once. With the app lock on, the gate shows the lock screen. */
+    /** Locks the app at once. A prompt that showed before this lock no longer unlocks it ([unlocked]). */
     private fun lockNow() {
+        lockings++
+        dropFileKeys()
+    }
+
+    /** Drops the file keys at once. With the app lock on, the gate shows the lock screen. */
+    private fun dropFileKeys() {
         // With the app lock off this is what the design asks when the screen turns off: the keys load again without a prompt.
         crypto.appLock.lock()
         generation++
         locked = true
+        onlyAPromptUnlocks = true
         if (known == AppLockState.ON) locks++
         publish()
     }

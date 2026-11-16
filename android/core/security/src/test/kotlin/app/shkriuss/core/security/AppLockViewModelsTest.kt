@@ -1,13 +1,10 @@
 package app.shkriuss.core.security
 
-import android.os.Looper
 import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.RecoveryKey
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import java.io.File
-import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
-import kotlinx.coroutines.CoroutineDispatcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -19,7 +16,6 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
-import org.robolectric.Shadows.shadowOf
 
 /**
  * The lock screen, the app lock screen and turning the app lock on,
@@ -52,15 +48,17 @@ class AppLockViewModelsTest {
 
     // The lock screen.
 
-    private fun unlockModel(app: SoftwareKeysApp, onUnlocked: () -> Unit = {}) = UnlockViewModel(app.crypto, onUnlocked, inline)
+    private fun unlockModel(app: SoftwareKeysApp, watcher: AppLockWatcher = watcherOf(app)) =
+        UnlockViewModel(app.crypto, watcher, inline)
 
     @Test
     fun theLockScreenShowsThePromptByItselfOnceForEachLock() {
         val (app, _) = newApp()
         withTheAppLockOn(app)
         app.crypto.appLock.lock()
-        var unlocked = 0
-        val model = unlockModel(app) { unlocked++ }
+        val watcher = watcherOf(app).also { it.refresh() }
+        assertEquals(AppGate.LOCKED, watcher.gate.value)
+        val model = unlockModel(app, watcher)
 
         model.onLocked(0)
         val prompt = model.state.value.prompt
@@ -73,7 +71,7 @@ class AppLockViewModelsTest {
         model.onLocked(1)
         model.onPromptResult(model.state.value.prompt!!, PromptOutcome.SUCCEEDED)
 
-        assertEquals(1, unlocked)
+        assertEquals(AppGate.OPEN, watcher.gate.value)
         assertFalse(app.crypto.appLock.isLocked())
     }
 
@@ -99,14 +97,14 @@ class AppLockViewModelsTest {
         withTheAppLockOn(app)
         app.crypto.appLock.lock()
         damage(File(folder, "file-key"))
-        var unlocked = 0
-        val model = unlockModel(app) { unlocked++ }
+        val watcher = watcherOf(app).also { it.refresh() }
+        val model = unlockModel(app, watcher)
 
         model.onUnlock()
         model.onPromptResult(model.state.value.prompt!!, PromptOutcome.SUCCEEDED)
 
         assertEquals(LockNote.DAMAGED, model.state.value.note)
-        assertEquals(0, unlocked)
+        assertEquals(AppGate.LOCKED, watcher.gate.value)
         assertTrue(app.crypto.appLock.isLocked())
     }
 
@@ -455,20 +453,5 @@ class AppLockViewModelsTest {
         app.screenLock = false
 
         assertEquals(TurnOnFailed(TurnOnProblem.NOT_ALLOWED), turnOnModel(app).state.value)
-    }
-}
-
-/** Holds background work until the test runs it, so that a test can stop the screen while work is under way. */
-private class QueuedDispatcher : CoroutineDispatcher() {
-    private val tasks = ArrayDeque<Runnable>()
-
-    override fun dispatch(context: CoroutineContext, block: Runnable) {
-        tasks += block
-    }
-
-    /** Runs the work that waits, and what it hands back to the main thread. */
-    fun runAll() {
-        while (tasks.isNotEmpty()) tasks.removeFirst().run()
-        shadowOf(Looper.getMainLooper()).idle()
     }
 }
