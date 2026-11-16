@@ -244,9 +244,9 @@ What the user sees:
     cannot read these screens.
   - A harmful service can falsely claim to be a tool
     ([threat model](../security/threat-model.md#out-of-scope)).
-  - TalkBack must keep reading them, and it does: on the Pixel 9 Pro,
-    with Catalog's switch **Protect this page, as in an app** on,
-    TalkBack reads everything on the shielded pages.
+  - TalkBack must keep reading them. On a Pixel 9 Pro it reads
+    Catalog's pages of these screens with the switch **Protect this
+    page, as in an app** on.
 - Android 13 has no way to keep a window from accessibility services that
   are not tools. There, every accessibility service the user turned on
   can read these screens.
