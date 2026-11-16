@@ -7,6 +7,39 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
+Fixed:
+
+- **Settings in fluid ounces.** Saving the daily goal or the quick
+  amounts without changing them no longer changes them. A goal of 2,000
+  ml stays 2,000 ml. Before, it became 2,011 ml.
+- **Drank on a reminder.** If Water cannot save the drink, the reminder
+  stays, so that you can press **Drank** again. Before, the reminder
+  went away and no drink was saved.
+- **A button of an older reminder.** A button that is pressed late, for
+  example while the phone unlocks, no longer acts as the button of the
+  reminder that came after it. It does nothing.
+- **While the app lock hides the text of reminders,** no button of a
+  reminder works, also not one that another app with notification
+  access kept.
+- **Which day is today.** Today, History, an open day, Settings and the
+  reminder line now always agree. After a change of the phone's clock
+  or time zone they follow within a minute. A day that stays open in
+  History is no longer called today after midnight.
+- **After the phone's clock was set back,** the next reminder is no
+  longer lost.
+- **Restore.** Water refuses a backup that holds a date, or a time of a
+  record, outside its limits. It says that it cannot read this backup,
+  and nothing changes. Such a backup could stop Water from starting, or
+  bring a deleted drink back.
+- **The app lock.** If Water leaves the screen in the moment you answer
+  the system prompt, it stays locked and asks again on the way back.
+- **Show the recovery words.** If you leave the screen in the moment
+  you answer the system prompt, the words do not show on the way back.
+  A new prompt shows them.
+- **The field for a recovery word.** No menu for copy and paste shows.
+  Copy, cut and paste do nothing, also from a keyboard and from
+  TalkBack.
+
 ## 1.0.0 (2026-11-15)
 
 Released as `water-v1.0.0`.

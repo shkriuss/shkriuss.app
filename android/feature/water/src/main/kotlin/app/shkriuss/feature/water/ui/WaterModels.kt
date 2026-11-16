@@ -18,13 +18,16 @@ import app.shkriuss.feature.water.WaterServices
  * are these ViewModels and the screen's saved state.
  */
 class WaterModels(owner: ViewModelStoreOwner, services: WaterServices) {
+    /** Today's date: the one source that Today, History, the open day, Settings and the reminder line observe. */
+    private val date = services.today.also { it.check() }
+
     private val provider = ViewModelProvider(
         owner,
         viewModelFactory {
-            initializer { DayViewModel(services.repository, services.time) }
-            initializer { HistoryViewModel(services.repository, services.time) }
-            initializer { SettingsViewModel(services.repository, services.time) }
-            initializer { RemindersViewModel(services.repository, services.reminders, services.time) }
+            initializer { DayViewModel(services.repository, services.time, date) }
+            initializer { HistoryViewModel(services.repository, date) }
+            initializer { SettingsViewModel(services.repository, date) }
+            initializer { RemindersViewModel(services.repository, services.reminders, date) }
             initializer { BackupViewModel(services.backups) }
         },
     )
@@ -33,11 +36,11 @@ class WaterModels(owner: ViewModelStoreOwner, services: WaterServices) {
     private val openDayProvider = ViewModelProvider(
         owner,
         viewModelFactory {
-            initializer { DayViewModel(services.repository, services.time, fixedDay = services.time.today()) }
+            initializer { DayViewModel(services.repository, services.time, date, fixedDay = date.date.value) }
         },
     )
 
-    /** Today: follows the phone's clock. */
+    /** Today: follows today's date. */
     val today: DayViewModel = provider[TODAY_KEY, DayViewModel::class.java]
 
     /** History: the list of days and which day is open. */
@@ -56,16 +59,16 @@ class WaterModels(owner: ViewModelStoreOwner, services: WaterServices) {
     val backup: BackupViewModel = provider[BackupViewModel::class.java]
 
     /**
-     * Today and History move to the new day after midnight, and the
-     * reminder line reads the state of notifications again: the user can
-     * change it in Android's settings at any moment. Settings reads the
-     * keys again: on the way back from a screen of `core/security` the
-     * recovery key or the app lock may have changed. The activity calls it
-     * each time it comes to the front.
+     * Today's date is read again, so every screen moves to the new day if
+     * midnight passed, or the clock or the time zone changed, while the
+     * app was away. The reminder line reads the state of notifications
+     * again: the user can change it in Android's settings at any moment.
+     * Settings reads the keys again: on the way back from a screen of
+     * `core/security` the recovery key or the app lock may have changed.
+     * The activity calls it each time it comes to the front.
      */
     fun checkTheDay() {
-        today.checkTheDay()
-        history.checkTheDay()
+        date.check()
         reminders.refresh()
         backup.refresh()
     }

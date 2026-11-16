@@ -20,8 +20,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Everything of Water that lives as long as the app: its database, the
- * repository on it, the phone's local time, the reminders, and backup and
- * restore. The app class builds one, calls [start] when the app starts,
+ * repository on it, the phone's local time, today's date for the screens,
+ * the reminders, and backup and restore. The app class builds one, calls [start] when the app starts,
  * and hands it out through [WaterHost]. Nothing here is found by a lookup:
  * the ViewModels get what they need through their constructors.
  *
@@ -44,8 +44,13 @@ class WaterServices(
     zone: () -> ZoneId = ZoneId::systemDefault,
     work: CoroutineContext = Dispatchers.IO,
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + work)
+
     /** The phone's local day and time. */
     val time: WaterTime = WaterTime(clock, zone)
+
+    /** Today's date, for every screen: the one source that the ViewModels observe. */
+    val today: WaterToday = WaterToday(time, scope)
 
     /** The drinks, the goals and the settings. After every change, the reminders follow. */
     val repository: WaterRepository = WaterRepository(database, clock, ids) { change -> reminders.afterChange(change) }
@@ -73,8 +78,6 @@ class WaterServices(
         zone,
         work,
     )
-
-    private val scope = CoroutineScope(SupervisorJob() + work)
 
     /**
      * Call once in the app class's `onCreate`. It calls `Backups.start()`,

@@ -183,6 +183,27 @@ class WaterRemindersTest {
     }
 
     @Test
+    fun aButtonOfAnOlderReminderThatIsPressedLateDoesNothingAndLeavesTheNewerOne() {
+        remindersOn()
+        setClock(at(9, 0))
+        androidFiresTheAlarm()
+        // A press that arrives late, or an app with notification access, holds the buttons of the 09:00 reminder.
+        val oldDrank = device.keepButton(WaterReminders.KEY, 0)
+        val oldLater = device.keepButton(WaterReminders.KEY, 1)
+        setClock(at(10, 0))
+        androidFiresTheAlarm()
+        assertEquals(millis(at(10, 0)), checkNotNull(reminder()).atMillis)
+
+        setClock(at(10, 1))
+        oldDrank()
+        oldLater()
+
+        assertEquals("no drink is logged", emptyList<Drink>(), drinksToday())
+        assertEquals("the 10:00 reminder stays", millis(at(10, 0)), checkNotNull(reminder()).atMillis)
+        assertEquals("and no snooze is set", listOf(millis(at(11, 0))), waiting())
+    }
+
+    @Test
     fun laterOnTheReminderSnoozesThroughItsButtonAndTheReminderComesAgain() {
         remindersOn()
         setClock(at(9, 0))

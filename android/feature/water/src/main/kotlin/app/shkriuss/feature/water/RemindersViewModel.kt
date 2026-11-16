@@ -7,15 +7,12 @@ import app.shkriuss.core.notify.NotifyState
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 
 /**
@@ -58,14 +55,16 @@ data class RemindersScreen(
  * A line about notifications comes before a line about the next reminder:
  * while reminders are silent, "Next reminder at 14:30" would hide it. The
  * state of the notification permission is Android's, so the screen calls
- * [refresh] every time it comes to the front.
+ * [refresh] every time it comes to the front. The line is that of the
+ * date of [today], the one source of today's date, and it is read again
+ * when that date changes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RemindersViewModel(
     private val repository: WaterRepository,
     private val reminders: WaterReminders,
-    private val time: WaterTime,
-    private val work: CoroutineContext = EmptyCoroutineContext,
+    private val today: WaterToday,
+    work: CoroutineContext = EmptyCoroutineContext,
 ) : ViewModel() {
     private val permission = MutableStateFlow(reminders.state())
     private val refreshes = MutableStateFlow(0)
@@ -76,7 +75,8 @@ class RemindersViewModel(
         repository.dayTotals(),
         repository.goals(),
         reminders.entries,
-        combine(permission, refreshes) { state, _ -> state },
+        // A new date reads the line again, as Today moves to the new day.
+        combine(permission, refreshes, today.date) { state, _, _ -> state },
     ) { settings, _, _, _, state -> settings to state }
         .mapLatest { (settings, state) -> if (settings.remindersOn) lineOf(state) else null }
 
@@ -84,22 +84,12 @@ class RemindersViewModel(
     val state: StateFlow<RemindersScreen> = combine(line, asking) { shown, open -> RemindersScreen(shown, open) }
         .stateIn(viewModelScope + work, SharingStarted.Eagerly, RemindersScreen())
 
-    init {
-        // At midnight the line moves to the new day, as Today does.
-        viewModelScope.launch(work) {
-            while (isActive) {
-                delay(time.millisToNextDay())
-                refresh()
-            }
-        }
-    }
-
     private suspend fun lineOf(state: NotifyState): ReminderLine = when (state) {
         NotifyState.NotAsked -> ReminderLine.NotAsked
         NotifyState.Denied -> ReminderLine.Denied
         NotifyState.ChannelOff -> ReminderLine.ChannelOff
         NotifyState.Ready -> {
-            val today = time.today()
+            val today = today.date.value
             val next = reminders.next()
             when {
                 repository.factsOf(today).goalMet -> ReminderLine.GoalReached

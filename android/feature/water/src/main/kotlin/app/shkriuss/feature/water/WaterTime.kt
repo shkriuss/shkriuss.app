@@ -15,6 +15,9 @@ class WaterTime(
     private val clock: Clock,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
 ) {
+    /** Now, in milliseconds since 1970. */
+    fun nowMillis(): Long = clock.nowMillis()
+
     /** The local date and time now. */
     fun now(): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(clock.nowMillis()), zone())
 

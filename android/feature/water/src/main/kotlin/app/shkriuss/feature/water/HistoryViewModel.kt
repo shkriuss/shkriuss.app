@@ -6,14 +6,11 @@ import app.shkriuss.feature.water.data.DayTotal
 import java.time.LocalDate
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 
 /** One row of History: one day, its total and the goal it had. */
@@ -50,14 +47,14 @@ data class HistoryScreen(
 
 /**
  * The ViewModel of History. The open day is shown by a [DayViewModel] of
- * its own. At midnight the list gains the new day by itself.
+ * its own. The list ends at the date of [today], the one source of
+ * today's date: at midnight it gains the new day by itself.
  */
 class HistoryViewModel(
-    private val repository: WaterRepository,
-    private val time: WaterTime,
-    private val work: CoroutineContext = EmptyCoroutineContext,
+    repository: WaterRepository,
+    today: WaterToday,
+    work: CoroutineContext = EmptyCoroutineContext,
 ) : ViewModel() {
-    private val today = MutableStateFlow(time.today())
     private val openDay = MutableStateFlow<LocalDate?>(null)
 
     /** What the screen shows. */
@@ -65,7 +62,7 @@ class HistoryViewModel(
         repository.dayTotals(),
         repository.goals(),
         repository.settings(),
-        today,
+        today.date,
         openDay,
     ) { totals, goals, settings, shownToday, open ->
         HistoryScreen(
@@ -75,21 +72,7 @@ class HistoryViewModel(
             days = rowsOf(totals, goals, shownToday),
             openDay = open,
         )
-    }.stateIn(viewModelScope + work, SharingStarted.Eagerly, HistoryScreen(loaded = false, today = today.value))
-
-    init {
-        viewModelScope.launch(work) {
-            while (isActive) {
-                delay(time.millisToNextDay())
-                checkTheDay()
-            }
-        }
-    }
-
-    /** The list gains the new day after midnight. The screen calls it each time it comes to the front. */
-    fun checkTheDay() {
-        today.value = time.today()
-    }
+    }.stateIn(viewModelScope + work, SharingStarted.Eagerly, HistoryScreen(loaded = false, today = today.date.value))
 
     /** A tap on a row: that day opens. */
     fun open(day: LocalDate) {

@@ -23,7 +23,7 @@ data class ReminderEntries(
     val showing: Long? = null,
     /** The time of the alarm Water set last. */
     val named: Long? = null,
-    /** The time of the last alarm that reached Water's handler. */
+    /** The time of the last alarm that reached Water's handler. `WaterReminders` forgets one that lies later than now. */
     val lastAlarm: Long? = null,
 ) {
     /** The alarm Water set that has not reached its handler yet, or null (`NextReminder`, point 7). */

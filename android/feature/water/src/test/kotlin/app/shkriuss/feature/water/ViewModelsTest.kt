@@ -2,9 +2,13 @@ package app.shkriuss.feature.water
 
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.water.data.WaterDatabase
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -28,19 +32,41 @@ import org.robolectric.RobolectricTestRunner
 class ViewModelsTest {
     private val database: WaterDatabase = memoryDatabase()
     private val clock = clockAt(at(14, 5))
-    private val time = WaterTime(clock) { UTC }
+
+    /** The phone's time zone. A test changes it as a trip does. */
+    private var zone: ZoneId = UTC
+    private val time = WaterTime(clock) { zone }
     private val repository = WaterRepository(database, clock, TestIdSource())
 
+    /** How long the source of today's date asked to wait, each time, in milliseconds. */
+    private val waits = CopyOnWriteArrayList<Long>()
+    private val waitEnds = Channel<Unit>(Channel.UNLIMITED)
+    private val sourceScope = CoroutineScope(Dispatchers.Unconfined)
+
+    /** The one source of today's date, as `WaterServices` builds it, with a wait that the test ends. */
+    private val date = WaterToday(time, sourceScope) { millis ->
+        waits += millis
+        waitEnds.receive()
+    }
+
+    /** The time the source waits for has passed: it reads the clock again, by itself. */
+    private fun theWaitEnds() {
+        waitEnds.trySend(Unit)
+    }
+
     @After
-    fun closeTheDatabase() = database.close()
+    fun closeTheDatabase() {
+        sourceScope.cancel()
+        database.close()
+    }
 
-    private fun today() = DayViewModel(repository, time, work = Dispatchers.Unconfined)
+    private fun today() = DayViewModel(repository, time, date, work = Dispatchers.Unconfined)
 
-    private fun dayOf(fixed: java.time.LocalDate) = DayViewModel(repository, time, fixed, Dispatchers.Unconfined)
+    private fun dayOf(fixed: java.time.LocalDate) = DayViewModel(repository, time, date, fixed, Dispatchers.Unconfined)
 
-    private fun history() = HistoryViewModel(repository, time, Dispatchers.Unconfined)
+    private fun history() = HistoryViewModel(repository, date, Dispatchers.Unconfined)
 
-    private fun settings() = SettingsViewModel(repository, time, Dispatchers.Unconfined)
+    private fun settings() = SettingsViewModel(repository, date, Dispatchers.Unconfined)
 
     private fun DayViewModel.loaded() = state.await { it.loaded }
 
@@ -239,13 +265,15 @@ class ViewModelsTest {
     }
 
     @Test
-    fun atMidnightTodayMovesToTheNewDay() {
+    fun atMidnightTodayMovesToTheNewDayByItself() {
+        clock.setTo(at(23, 59, 30))
         val model = today()
         runBlocking { repository.addDrink(THE_DAY, 600, 250) }
         model.state.await { it.drinks.isNotEmpty() }
+        assertEquals("the source waits until midnight", listOf(30_000L), waits)
 
-        clock.setTo(THE_DAY.plusDays(1).atTime(0, 1))
-        model.checkTheDay()
+        clock.setTo(THE_DAY.plusDays(1).atTime(0, 0))
+        theWaitEnds()
 
         val newDay = model.state.await { it.day == THE_DAY.plusDays(1) }
         assertEquals(emptyList<Drink>(), newDay.drinks)
@@ -253,12 +281,57 @@ class ViewModelsTest {
     }
 
     @Test
-    fun aFixedDayDoesNotMoveAtMidnight() {
+    fun theSourceOfTodaysDateReadsTheClockAtLeastOnceAMinuteAndOnlyWhileAScreenObservesIt() {
+        assertEquals("no screen, no wait", emptyList<Long>(), waits)
+
+        today().loaded()
+        theWaitEnds()
+        theWaitEnds()
+
+        assertEquals("at 14:05 midnight is far, so a minute each time", listOf(60_000L, 60_000L, 60_000L), waits)
+    }
+
+    @Test
+    fun afterAChangeOfTheTimeZoneTodayMovesAndOtherAmountSavesADrinkOnTheNewDay() {
+        val model = today()
+        assertEquals(THE_DAY, model.loaded().day)
+
+        // 14:05 in UTC is 04:05 on the next day fourteen hours further east.
+        zone = ZoneOffset.ofHours(14)
+        theWaitEnds()
+
+        val moved = model.state.await { it.loaded && it.day == THE_DAY.plusDays(1) }
+        assertTrue(moved.isToday)
+        model.openAdd()
+        model.onAmountChange("300")
+        model.save()
+        val drink = model.state.await { it.drinks.isNotEmpty() }.drinks.single()
+        assertEquals(THE_DAY.plusDays(1), drink.day)
+        assertEquals(4 * 60 + 5, drink.minuteOfDay)
+    }
+
+    @Test
+    fun anOpenDayKeepsItsDayAtMidnightAndIsNoLongerToday() {
         val model = dayOf(THE_DAY)
-        model.loaded()
+        assertTrue(model.loaded().isToday)
+
         clock.setTo(THE_DAY.plusDays(1).atTime(0, 1))
-        model.checkTheDay()
-        assertEquals(THE_DAY, model.state.value.day)
+        theWaitEnds()
+
+        val after = model.state.await { !it.isToday }
+        assertEquals("the day that was opened stays", THE_DAY, after.day)
+        assertTrue(after.loaded)
+    }
+
+    @Test
+    fun whenTheScreenComesToTheFrontTheDateIsReadAtOnce() {
+        val model = today()
+        model.loaded()
+
+        clock.setTo(THE_DAY.plusDays(1).atTime(7, 0))
+        date.check()
+
+        assertEquals(THE_DAY.plusDays(1), model.state.await { it.day != THE_DAY }.day)
     }
 
     @Test
@@ -370,14 +443,15 @@ class ViewModelsTest {
     }
 
     @Test
-    fun atMidnightHistoryGainsTheNewDay() {
+    fun atMidnightHistoryGainsTheNewDayByItself() {
         runBlocking { repository.addDrink(THE_DAY, 600, 250) }
         val model = history()
         model.state.await { it.days.size == 1 }
         clock.setTo(THE_DAY.plusDays(1).atTime(0, 1))
-        model.checkTheDay()
+        theWaitEnds()
         val screen = model.state.await { it.days.size == 2 }
         assertEquals(HistoryDay(THE_DAY.plusDays(1), 0, 2_000), screen.days.first())
+        assertEquals(THE_DAY.plusDays(1), screen.today)
     }
 
     // Settings.
@@ -388,6 +462,25 @@ class ViewModelsTest {
         assertEquals(WaterSettings(), screen.settings)
         assertEquals(2_000, screen.goalMl)
         assertFalse(screen.noReminderFits)
+    }
+
+    @Test
+    fun afterTheDateIsSetBackSettingsShowAndSaveTheGoalOfThatDay() {
+        runBlocking {
+            repository.setGoal(THE_DAY.minusDays(2), 1_500)
+            repository.setGoal(THE_DAY, 3_000)
+        }
+        val model = settings()
+        assertEquals(3_000, model.state.await { it.loaded && it.goalMl == 3_000 }.goalMl)
+
+        // The phone's date goes back one day.
+        clock.setTo(THE_DAY.minusDays(1).atTime(14, 5))
+        theWaitEnds()
+
+        assertEquals("the goal of the day that is today now", 1_500, model.state.await { it.goalMl != 3_000 }.goalMl)
+        assertTrue(model.setGoal("1800"))
+        val goals = runBlocking { repository.goals().first { it.goalOf(THE_DAY.minusDays(1).asWaterDay()) == 1_800 } }
+        assertEquals("the day before keeps its goal", 1_500, goals.goalOf(THE_DAY.minusDays(2).asWaterDay()))
     }
 
     @Test
@@ -405,6 +498,38 @@ class ViewModelsTest {
         assertFalse(model.setGoal("16"))
         assertTrue(model.setGoal("68"))
         assertEquals(2_011, model.state.await { it.goalMl == 2_011 }.goalMl)
+    }
+
+    @Test
+    fun inFluidOuncesAGoalAndQuickAmountsThatWereNotChangedKeepTheirMillilitres() {
+        runBlocking {
+            repository.setGoal(THE_DAY, 2_000)
+            repository.changeSettings { it.copy(unit = WaterUnit.US_FLUID_OUNCES, cup1Ml = 150, cup2Ml = 250, cup3Ml = 500) }
+        }
+        val model = settings()
+        val shown = model.state.await { it.loaded && it.settings.unit == WaterUnit.US_FLUID_OUNCES }
+        // What the dialogs open with: the stored amounts, rounded to whole fluid ounces.
+        val goalText = AmountInput.textOf(shown.goalMl, WaterUnit.US_FLUID_OUNCES)
+        val cupTexts = shown.settings.quickAmountsMl.map { AmountInput.textOf(it, WaterUnit.US_FLUID_OUNCES) }
+        assertEquals("68", goalText)
+        assertEquals(listOf("5", "8", "17"), cupTexts)
+        val goalsBefore = runBlocking { database.goals().all() }
+        val settingsBefore = runBlocking { database.settings().all() }
+
+        assertTrue(model.setGoal(goalText))
+        assertEquals(emptyList<Int>(), model.setQuickAmounts(cupTexts))
+
+        assertEquals("the goal is not written again", goalsBefore, runBlocking { database.goals().all() })
+        assertEquals("nor the settings", settingsBefore, runBlocking { database.settings().all() })
+        assertEquals(2_000, model.state.value.goalMl)
+
+        // One quick amount is changed. The two others keep their millilitres.
+        assertEquals(emptyList<Int>(), model.setQuickAmounts(listOf("5", "10", "17")))
+        assertEquals(listOf(150, 296, 500), model.state.await { it.settings.cup2Ml != 250 }.settings.quickAmountsMl)
+
+        // A goal that is typed anew is taken as typed.
+        assertTrue(model.setGoal("70"))
+        assertEquals(2_070, model.state.await { it.goalMl != 2_000 }.goalMl)
     }
 
     @Test

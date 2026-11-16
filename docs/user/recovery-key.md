@@ -99,9 +99,10 @@ this phone again:
    the screen says that the app lock is off now. Tap **App lock** to
    turn it on again ([The app lock](app-lock.md)).
 
-You cannot paste the words. The field takes one letter at a time, so
-the words never end up in the clipboard, where other apps could read
-them.
+You cannot paste the words, and you cannot copy or cut what you typed.
+The field takes one letter at a time and shows no menu for copy and
+paste, so the words never end up in the clipboard, where other apps
+could read them.
 
 ## See the words again
 

@@ -54,7 +54,8 @@ While reminders are on, a line says when the next one comes, such as
 "Next reminder at 14:30". If Water cannot show reminders, the line says
 why, with a button to fix it ([Reminders](#reminders)).
 
-At midnight Today moves to the new day by itself.
+At midnight Today moves to the new day by itself. After a change of the
+phone's clock or time zone, every screen follows within a minute.
 
 ## Change or delete a drink
 
@@ -101,6 +102,8 @@ Tap an item to change it. A change takes effect at once.
   nothing you logged.
 - **Quick amounts**: the three buttons of Today. The first one is also
   the amount of a reminder's **Drank** button.
+- In fluid ounces, a goal or a quick amount that you leave as it is in
+  its dialog stays exactly as it was.
 
 **Reminders**
 
@@ -138,7 +141,8 @@ When reminders come:
 The two buttons:
 
 - **Drank 150 ml** logs a drink of your first quick amount, now. The
-  next reminder then comes one interval after it.
+  next reminder then comes one interval after it. If Water cannot save
+  the drink, the reminder stays, and you can press **Drank** again.
 - **Later** reminds you again in 15 minutes.
 - On the lock screen, a button first asks you to unlock the phone.
   Before the unlock it does nothing.
@@ -163,7 +167,8 @@ Who else can see a reminder:
 - On the lock screen, Android shows its text only if your phone's
   setting allows it.
 - A reminder's text and buttons reach another app only if you gave that
-  app notification access. Such an app can pass them on to a watch.
+  app notification access. Such an app can pass them on to a watch. It
+  can also press the buttons, without the phone's unlock.
 - With the app lock on, a reminder shows only "Drink reminders" and "The
   app lock hides this notification. Open the app to see it.", without
   amounts and without buttons. Unless you turn on **Show the text in
@@ -274,7 +279,8 @@ Limits of reminders:
 4. No reminder comes while Water's profile or Private Space is stopped,
    or after **Force stop**, until you open Water again.
 5. A reminder's text and buttons reach apps you gave notification
-   access, and such an app can pass them on to a watch. Water does not
+   access. Such an app can pass them on to a watch, and can press the
+   buttons without the phone's unlock. Water does not
    mark its reminders "local only". Whether it should, or offers a
    setting, is decided after this release.
 6. With the app lock off, the lock screen shows a reminder's text if
