@@ -17,7 +17,7 @@ These add to CLAUDE.md. They never replace it.
   ADR. Stay within the stack in section 3 of `docs/plan/PLAN.md`.
 - `gradle/verification-metadata.xml` and `gradle/wrapper/` are owner-only.
   Change them only when the owner asks for exactly that change.
-- Min SDK 33. Target and compile SDK 37.
+- Min SDK 35. Target and compile SDK 37.
 - Room runs on the system SQLite through `AndroidSQLiteDriver`. No bundled
   SQLite, no SQLCipher, no EncryptedSharedPreferences.
 - Only `app/sync` declares `android.permission.INTERNET`. A new permission

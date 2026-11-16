@@ -267,41 +267,6 @@ class StartOverTest {
     }
 
     @Test
-    fun onAndroid14EverythingStaysUnderTheBackgroundKey() {
-        val (app, files) = stoppedSetup(SoftwareHardwareKeys(unlockedKeyAllowed = false))
-
-        assertEquals(StartOverResult.STORED, app.open().setup.startOver(fresh))
-
-        KeysetName.entries.filter { it != KeysetName.RECOVERY }.forEach { name ->
-            assertEquals(name.text, HardwareKeyRef(HardwareKeyKind.BACKGROUND, 1), app.keyOf(name))
-        }
-        assertEveryFileOpens(app.open(), files)
-    }
-
-    @Test
-    fun theAndroid15MoveBetweenTwoTriesLosesNothing() {
-        val hardware = SoftwareHardwareKeys(unlockedKeyAllowed = false)
-        val (app, files) = stoppedSetup(hardware)
-        app.open()
-        app.store.stopBeforeChange = 2
-        try {
-            app.vault.locked { KeySetup(app.vault).startOver(fresh) }
-            fail("did not stop")
-        } catch (_: Stopped) {
-            // Stopped after file-key-old grew.
-        }
-
-        // The phone is updated to Android 15. The next start moves the keysets to an Unlocked key.
-        hardware.unlockedKeyAllowed = true
-        app.open()
-        assertEquals(HardwareKeyKind.UNLOCKED, app.keyOf(KeysetName.FILE_KEY_OLD)?.kind)
-
-        assertEquals(StartOverResult.STORED, app.open().setup.startOver(fresh))
-        assertEveryFileOpens(app.open(), files)
-        assertEquals(HardwareKeyKind.UNLOCKED, app.keyOf(KeysetName.FILE_KEY)?.kind)
-    }
-
-    @Test
     fun afterAStartOverThatFailsHalfWayFileCodeUsesTheKeysetsOnStorageNotThoseInMemory() {
         val (app, files) = stoppedSetup()
         val crypto = app.open()

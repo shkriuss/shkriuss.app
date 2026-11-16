@@ -10,11 +10,12 @@ import org.gradle.kotlin.dsl.getByType
 
 /**
  * Build numbers shared by every Android module, kept in one place so they
- * always change together. See ADR 0002 for the SDK levels.
+ * always change together. See ADR 0002 for the SDK levels, and ADR 0040
+ * for the minimum.
  */
 internal object ShkBuild {
-    /** Android 13. */
-    const val MIN_SDK = 33
+    /** Android 15. */
+    const val MIN_SDK = 35
 
     /** Android 17. Built against the SDK platform `android-37.0`. */
     const val COMPILE_SDK = 37

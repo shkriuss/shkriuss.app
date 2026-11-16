@@ -3,7 +3,6 @@ package app.shkriuss.core.crypto
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.os.Build
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
@@ -32,19 +31,7 @@ import javax.crypto.spec.GCMParameterSpec
  * reason: every rule about hardware keys is in [KeyVault], which the unit
  * tests cover.
  */
-internal class AndroidHardwareKeys(
-    private val context: Context,
-    /** The Android version this app runs on. */
-    private val androidVersion: Int = Build.VERSION.SDK_INT,
-) : HardwareKeys {
-    /**
-     * Android 12 to 14 delete keys that need an unlocked phone when the
-     * screen lock is removed, and cannot make them without one. Android 15
-     * fixed this, so there is an Unlocked key only from Android 15.
-     */
-    override val unlockedKeyAllowed: Boolean
-        get() = androidVersion >= Build.VERSION_CODES.VANILLA_ICE_CREAM
-
+internal class AndroidHardwareKeys(private val context: Context) : HardwareKeys {
     override fun hasScreenLock(): Boolean =
         context.getSystemService(KeyguardManager::class.java)?.isDeviceSecure == true
 

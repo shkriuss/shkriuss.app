@@ -1,21 +1,17 @@
 package app.shkriuss.core.crypto
 
-import android.os.Build
 import app.shkriuss.core.testing.TestDevice
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 
 /**
- * The Unlocked key ("Android 13 and 14" in crypto-design.md). From
- * Android 15 it exists, wraps `backup` and `file-key`, and is refused
- * while the phone is locked. On Android 13 and 14 the app makes none, and
- * the Background key wraps those keysets.
+ * The Unlocked key ("Hardware keys" in crypto-design.md). It wraps
+ * `backup` and `file-key`, and is refused while the phone is locked.
  */
 class UnlockedKeyTest {
     private val app = DeviceApp()
@@ -27,7 +23,6 @@ class UnlockedKeyTest {
     private val recoveryKey = TestKeys.vectorRecoveryKey()
     private val recordId = "00112233-4455-4677-8899-aabbccddeeff"
     private val fileId = "0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0ff"
-    private val fromAndroid15 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
 
     @Before
     fun clean() = app.reset()
@@ -36,27 +31,7 @@ class UnlockedKeyTest {
     fun cleanUp() = app.reset()
 
     @Test
-    fun anUnlockedKeyIsAllowedFromAndroid15() {
-        assertEquals(fromAndroid15, hardware.unlockedKeyAllowed)
-    }
-
-    @Test
-    fun onAndroid13And14TheAppMakesNoUnlockedKey() {
-        assumeTrue("Android 13 and 14 only", !fromAndroid15)
-        val crypto = app.open()
-
-        assertEquals(KeySetupResult.STORED, crypto.setup.storeDerivedKeys(recoveryKey))
-        crypto.files.wrap(fileId, crypto.files.newFileKey())
-
-        assertEquals(emptySet<String>(), app.aliasesOf(HardwareKeyKind.UNLOCKED))
-        assertEquals(HardwareKeyKind.BACKGROUND, app.keyOf(KeysetName.RECORD)?.kind)
-        assertEquals(HardwareKeyKind.BACKGROUND, app.keyOf(KeysetName.BACKUP)?.kind)
-        assertEquals(HardwareKeyKind.BACKGROUND, app.keyOf(KeysetName.FILE_KEY)?.kind)
-    }
-
-    @Test
-    fun fromAndroid15TheUnlockedKeyWrapsBackupAndFileKey() {
-        assumeTrue("Android 15 and later only", fromAndroid15)
+    fun theUnlockedKeyWrapsBackupAndFileKey() {
         val crypto = app.open()
 
         assertEquals(KeySetupResult.STORED, crypto.setup.storeDerivedKeys(recoveryKey))
@@ -68,8 +43,6 @@ class UnlockedKeyTest {
 
     @Test
     fun withoutAScreenLockTheUnlockedKeyIsMadeAndUsed() {
-        assumeTrue("Android 15 and later only", fromAndroid15)
-
         hardware.make(unlocked)
         val blob = hardware.encrypt(unlocked, plaintext, associatedData)
 
@@ -78,7 +51,6 @@ class UnlockedKeyTest {
 
     @Test
     fun whileThePhoneIsLockedTheUnlockedKeyIsRefusedAndTheBackgroundKeyWorks() {
-        assumeTrue("Android 15 and later only", fromAndroid15)
         ScreenLock.set()
         hardware.make(unlocked)
         hardware.make(background)
@@ -102,7 +74,6 @@ class UnlockedKeyTest {
 
     @Test
     fun whileThePhoneIsLockedRecordsWorkAndBackupAndFilesWait() {
-        assumeTrue("Android 15 and later only", fromAndroid15)
         ScreenLock.set()
         val crypto = app.open()
         assertEquals(KeySetupResult.STORED, crypto.setup.storeDerivedKeys(recoveryKey))
@@ -122,27 +93,6 @@ class UnlockedKeyTest {
         assertTrue(TestDevice.waitUntil(WAIT_MILLIS) { TestKeys.answerOf { whileLocked.backups.keyId() } == null })
         assertEquals(recoveryKey.keyId, whileLocked.backups.keyId())
         whileLocked.files.unwrap(fileId, wrapped)
-    }
-
-    @Test
-    fun afterAnUpdateToAndroid15TheKeysetsMoveUnderAnUnlockedKey() {
-        assumeTrue("Android 15 and later only", fromAndroid15)
-        val before = app.openAsOn(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-        assertEquals(KeySetupResult.STORED, before.setup.storeDerivedKeys(recoveryKey))
-        val sealed = before.records.seal(recordId, "a record".toByteArray())
-        val wrapped = before.files.wrap(fileId, before.files.newFileKey())
-        assertEquals(HardwareKeyKind.BACKGROUND, app.keyOf(KeysetName.BACKUP)?.kind)
-        assertEquals(HardwareKeyKind.BACKGROUND, app.keyOf(KeysetName.FILE_KEY)?.kind)
-        assertEquals(emptySet<String>(), app.aliasesOf(HardwareKeyKind.UNLOCKED))
-
-        val after = app.open()
-
-        assertEquals(HardwareKeyKind.BACKGROUND, app.keyOf(KeysetName.RECORD)?.kind)
-        assertEquals(HardwareKeyKind.UNLOCKED, app.keyOf(KeysetName.BACKUP)?.kind)
-        assertEquals(HardwareKeyKind.UNLOCKED, app.keyOf(KeysetName.FILE_KEY)?.kind)
-        assertEquals("a record", String(after.records.open(recordId, sealed)))
-        assertEquals(recoveryKey.keyId, after.backups.keyId())
-        after.files.unwrap(fileId, wrapped)
     }
 
     private fun opens(blob: ByteArray): Boolean = try {

@@ -110,23 +110,6 @@ class AppLockTest {
     }
 
     @Test
-    fun onAndroid13And14TheBackgroundKeyIsReplaced() {
-        val fixture = appWithKeys(SoftwareHardwareKeys(unlockedKeyAllowed = false))
-        val app = fixture.app
-        val crypto = app.open()
-
-        crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
-
-        assertEquals(listOf("record", "backup", "file-key"), app.store.changes)
-        assertEquals(HardwareKeyRef(HardwareKeyKind.BACKGROUND, 2), app.keyOf(KeysetName.RECORD))
-        assertEquals(HardwareKeyRef(HardwareKeyKind.BACKGROUND, 2), app.keyOf(KeysetName.BACKUP))
-        assertEquals(lockKey, app.keyOf(KeysetName.FILE_KEY))
-        assertEquals(setOf("shk.background.2", "shk.lock.1"), app.hardware.existing())
-        assertRecordsWork(app.open(), fixture)
-        assertNotNull(app.open().backups.keyId())
-    }
-
-    @Test
     fun whileLockedFilesNeedThePromptAndRecordsAndBackupsGoOn() {
         val fixture = appWithKeys()
         val app = fixture.app
@@ -184,33 +167,31 @@ class AppLockTest {
 
     @Test
     fun aStopAtAnyPointLeavesTheAppLockClearlyOnOrClearlyOffAndNoKeyBehind() {
-        listOf(false, true).forEach { unlockedKeyAllowed ->
-            val changes = if (unlockedKeyAllowed) 2 else 3
-            (1..changes).forEach { stopBefore ->
-                val fixture = appWithKeys(SoftwareHardwareKeys(unlockedKeyAllowed))
-                val app = fixture.app
-                val crypto = app.open()
-                app.store.stopBeforeChange = stopBefore
-                try {
-                    crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
-                    fail("did not stop")
-                } catch (_: Stopped) {
-                    // The app was killed while the app lock was turned on.
-                }
-
-                val later = app.open()
-                assertEquals("stop $stopBefore", AppLockState.OFF, later.appLock.state())
-                assertFilesOpen(later, fixture)
-                assertRecordsWork(later, fixture)
-                assertNotNull(later.backups.keyId())
-                // Every key that is left is named by a file. Rule 8 deleted the others at start.
-                val named = KeysetName.entries.mapNotNull { app.keyOf(it)?.alias }.toSet()
-                assertEquals("stop $stopBefore", named, app.hardware.existing())
-
-                later.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
-                assertEquals(AppLockState.ON, app.open().appLock.state())
-                assertRecordsWork(app.open(), fixture)
+        // Turning it on changes two files: backup, then file-key.
+        (1..2).forEach { stopBefore ->
+            val fixture = appWithKeys()
+            val app = fixture.app
+            val crypto = app.open()
+            app.store.stopBeforeChange = stopBefore
+            try {
+                crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
+                fail("did not stop")
+            } catch (_: Stopped) {
+                // The app was killed while the app lock was turned on.
             }
+
+            val later = app.open()
+            assertEquals("stop $stopBefore", AppLockState.OFF, later.appLock.state())
+            assertFilesOpen(later, fixture)
+            assertRecordsWork(later, fixture)
+            assertNotNull(later.backups.keyId())
+            // Every key that is left is named by a file. Rule 8 deleted the others at start.
+            val named = KeysetName.entries.mapNotNull { app.keyOf(it)?.alias }.toSet()
+            assertEquals("stop $stopBefore", named, app.hardware.existing())
+
+            later.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
+            assertEquals(AppLockState.ON, app.open().appLock.state())
+            assertRecordsWork(app.open(), fixture)
         }
     }
 
@@ -312,22 +293,6 @@ class AppLockTest {
         val locked = app.open()
         assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { locked.appLock.beginUnlock().finish() })
         assertTrue(locked.appLock.isLocked())
-    }
-
-    @Test
-    fun afterAnUpdateToAndroid15OnlyBackupMovesWhileTheAppLockIsOn() {
-        val fixture = appWithKeys(SoftwareHardwareKeys(unlockedKeyAllowed = false))
-        val app = fixture.app
-        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
-
-        app.hardware.unlockedKeyAllowed = true
-        app.open()
-
-        assertEquals(listOf("backup"), app.store.changes)
-        assertEquals(HardwareKeyKind.UNLOCKED, app.keyOf(KeysetName.BACKUP)?.kind)
-        assertEquals(HardwareKeyKind.BACKGROUND, app.keyOf(KeysetName.RECORD)?.kind)
-        assertEquals(lockKey, app.keyOf(KeysetName.FILE_KEY))
-        assertEquals(AppLockState.ON, app.open().appLock.state())
     }
 
     @Test

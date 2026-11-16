@@ -144,7 +144,7 @@ class AppLock internal constructor(private val vault: KeyVault) {
         val lockKey = vault.namedKeyOrNull(KeysetName.FILE_KEY)
         check(lockKey?.kind == HardwareKeyKind.LOCK) { "The app lock is not on" }
         val keyset = vault.fileKeyInMemory() ?: throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
-        vault.wrapAndStore(KeysetName.FILE_KEY, keyset, vault.keyFor(vault.fileKeyHome))
+        vault.wrapAndStore(KeysetName.FILE_KEY, keyset, vault.keyFor(HardwareKeyKind.UNLOCKED))
         vault.deleteIfUnnamed(lockKey)
     }
 

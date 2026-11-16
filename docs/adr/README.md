@@ -58,6 +58,9 @@ lineage is kept and the answer to a stolen key in that session, on
 2026-11-14, after parts A and B of the rehearsal passed. Record 0039 says
 that no release waits for a manual checklist. It supersedes point 4 of
 0002, all of 0025, and the sentence of 0011 on the GrapheneOS checklist.
+Record 0040 raises the minimum to Android 15, from the owner's decision
+of 2026-11-16. It supersedes point 2 of 0002, the sentence of point 3 of
+0006 on Android 13 and 14, and the required emulator checks of 0028.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -65,11 +68,11 @@ How a record may be edited or replaced is in point 7 of
 | No. | Decision | Status |
 |---|---|---|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
-| 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025, then superseded by 0039 |
+| 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025, then superseded by 0039; point 2 superseded by 0040 |
 | 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031; Navigation 3 not used by Water (step 2.3) |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027; point 4 superseded by 0036 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
-| 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md |
+| 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md; its sentence on Android 13 and 14 superseded by 0040 |
 | 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md |
 | 0008 | [Backup file format](0008-backup-file-format.md) | Accepted; detail in backup-format.md |
 | 0009 | [Sync protocol and server](0009-sync-protocol-and-server.md) | Accepted |
@@ -91,7 +94,7 @@ How a record may be edited or replaced is in point 7 of
 | 0025 | [Secure app spawning in the GrapheneOS checklist](0025-secure-app-spawning-in-grapheneos-checklist.md) | Superseded by 0039 |
 | 0026 | [Room's build tools and committed schemas](0026-room-build-tools.md) | Accepted |
 | 0027 | [How the record fields are stored and stamped](0027-record-fields-and-stamping.md) | Accepted |
-| 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted |
+| 0028 | [Instrumented tests: own runner, emulator started by shell steps](0028-instrumented-tests-own-runner-and-shell-steps.md) | Accepted; its required emulator checks superseded by 0040 |
 | 0029 | [Test fixtures for the Keystore stand-in](0029-test-fixtures-for-the-keystore-stand-in.md) | Accepted |
 | 0030 | [How core/notify keeps alarms, and what it adds to an app](0030-how-core-notify-keeps-alarms.md) | Accepted |
 | 0031 | [The permission USE_BIOMETRIC for the system prompt](0031-use-biometric-for-the-system-prompt.md) | Accepted |
@@ -103,3 +106,4 @@ How a record may be edited or replaced is in point 7 of
 | 0037 | [Signing key rotation](0037-signing-key-rotation.md) | Accepted |
 | 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Accepted |
 | 0039 | [No manual checklist for a release](0039-no-manual-checklist-for-a-release.md) | Accepted |
+| 0040 | [Minimum Android 15](0040-minimum-android-15.md) | Accepted |

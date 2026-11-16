@@ -13,7 +13,7 @@ account and no network.
 2. Check it with AppVerifier, as [Verify with AppVerifier](verify.md)
    says. Its package name is `app.shkriuss.water`.
 
-Water needs Android 13 or newer.
+Water needs Android 15 or newer.
 
 ## The first start
 

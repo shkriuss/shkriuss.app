@@ -133,8 +133,7 @@ recovery key do
 
 1. Apps that draw over other apps disappear while it shows.
 2. A tap under another app's window does nothing.
-3. On Android 14 and later, only accessibility tools, such as TalkBack,
-   can read it.
+3. Only accessibility tools, such as TalkBack, can read it.
 
 ## Notifications
 

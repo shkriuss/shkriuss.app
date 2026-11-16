@@ -31,7 +31,7 @@ did:
 
 | Permission | Added by | What happens to it |
 |---|---|---|
-| `app.shkriuss.catalog.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Catalog's manifest. `androidx.core` uses it only on Android 12 and older, and the minimum is Android 13. |
+| `app.shkriuss.catalog.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Catalog's manifest. `androidx.core` uses it only on Android 12 and older, and the minimum is Android 15. |
 | `android.permission.USE_BIOMETRIC` | `core/security` | Removed in Catalog's manifest. Catalog shows the recovery key screens with sample data, holds no keys and never shows the system prompt ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). |
 | `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | Removed in Catalog's manifest. Catalog has none of the screens that hide other apps' windows, and no app lock ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Its switch **Protect this page** does the rest of what the screens do, which needs no permission. |
 
@@ -253,8 +253,7 @@ What they do not allow:
   capture away. The app lock screen follows the app's own setting, as
   every screen of the app does.
 - Every screen hides other apps' windows, ignores a tap under another
-  app's window, and on Android 14 and later speaks only to accessibility
-  tools
+  app's window, and speaks only to accessibility tools
   ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
 
 ### A receiver registered at runtime
@@ -268,8 +267,8 @@ The app lock listens for Android's broadcast that the screen turned off
   other app can send to it.
 - It needs no permission. It only drops the app's file keys from
   memory, and locks the app if the app lock is on.
-- Android 14 and later may hold it back while the app waits in the
-  background. A late one is ignored. The app does not depend on it.
+- Android may hold it back while the app waits in the background. A
+  late one is ignored. The app does not depend on it.
 
 The app lock adds no permission. Its settings are in a small file in the
 app's private storage

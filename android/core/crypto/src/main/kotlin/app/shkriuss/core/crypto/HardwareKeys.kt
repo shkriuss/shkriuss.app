@@ -36,9 +36,6 @@ enum class SecurityLevel {
  * means a key is lost for good.
  */
 internal interface HardwareKeys {
-    /** True on Android 15 and later, where an Unlocked key may exist. */
-    val unlockedKeyAllowed: Boolean
-
     /** Whether the phone has a screen lock. Keys that need the prompt can only be made with one. */
     fun hasScreenLock(): Boolean
 

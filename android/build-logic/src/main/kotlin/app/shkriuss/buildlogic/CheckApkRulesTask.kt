@@ -344,7 +344,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
          *   [RULES_DOMAINS] with `path="."` and holds nothing but `<exclude>`.
          *
          * `fullBackupContent` is not read: Android uses it only on Android 11
-         * and older, and the minimum is Android 13.
+         * and older, and the minimum is Android 15.
          */
         fun backupProblems(entries: (String) -> ByteArray?): List<String> {
             val manifest = ApkResourceReader.readXml(entries(APK_MANIFEST) ?: return listOf("no $APK_MANIFEST"))

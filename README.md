@@ -16,7 +16,7 @@ the design components and shared screens for development.
 - **Optional sync.** End-to-end encrypted sync through a backend that each
   user deploys to their own Cloudflare account. The server only sees
   encrypted data.
-- **GrapheneOS first.** Other Android systems come second. Minimum Android 13.
+- **GrapheneOS first.** Other Android systems come second. Minimum Android 15.
 
 ## Planned apps
 

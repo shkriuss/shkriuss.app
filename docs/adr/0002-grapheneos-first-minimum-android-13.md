@@ -3,7 +3,8 @@
 - Status: Accepted. Point 4 extended by
   [0025](0025-secure-app-spawning-in-grapheneos-checklist.md): secure app
   spawning on. Point 4 superseded by
-  [0039](0039-no-manual-checklist-for-a-release.md).
+  [0039](0039-no-manual-checklist-for-a-release.md). Point 2 superseded
+  by [0040](0040-minimum-android-15.md): the minimum is Android 15.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 8), 13, 16
   and 17, and the owner's review of
@@ -22,6 +23,8 @@
 
 1. GrapheneOS is the first target. Other Android systems come second.
 2. The minimum version is Android 13 (API 33).
+   - Superseded by [0040](0040-minimum-android-15.md): the minimum is
+     Android 15 (API 35).
 3. The target SDK and the compile SDK are 37.
 4. Every release passes this GrapheneOS checklist, on the Pixel 9 Pro
    unless noted:

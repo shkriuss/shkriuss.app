@@ -8,7 +8,7 @@ the authoritative build (section 13 of the [plan](../plan/PLAN.md),
 
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
-| CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. Runs the instrumented tests on emulators with Android 13, 14, 15 and 17. |
+| CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. Runs the instrumented tests on emulators with Android 15 and 17. |
 | PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
@@ -165,8 +165,8 @@ The job takes about ten minutes.
 
 ### Job "Emulator"
 
-Four jobs side by side, one for each Android version: "Emulator (Android
-13)", "(Android 14)", "(Android 15)" and "(Android 17)". Each runs the
+Two jobs side by side, one for each Android version: "Emulator (Android
+15)", the minimum, and "(Android 17)", the newest. Each runs the
 instrumented tests of every module that has a folder `src/androidTest/`.
 Today that is `core/crypto`, with the tests of the hardware keys, and
 `core/notify`, with the tests of the alarms
@@ -572,9 +572,8 @@ request.
 
 The owner's decision:
 
-- "Emulator (Android 13)", "Emulator (Android 14)" and "Emulator (Android
-  15)" are required checks, set in the ruleset with the steps below. A
-  red one blocks a merge.
+- "Emulator (Android 15)" is a required check, set in the ruleset with
+  the steps below. A red one blocks a merge.
 - "Emulator (Android 17)" stays **not required**. Its system image
   crashes Android's own system process when a screen of the tests closes
   ([emulator-tests.md](emulator-tests.md#what-the-tests-showed), point
@@ -588,24 +587,22 @@ A pull request that renames one of the emulator jobs, or changes the
 list of Android versions, must say so in its description. Otherwise
 every pull request waits for a check that never comes.
 
-To add the three checks, on a phone:
+To add the check, on a phone:
 
 1. Open `github.com/shkriuss/shkriuss.app/settings/rules` in the browser.
 2. Tap the ruleset that protects `main`.
 3. Under **Require status checks to pass**, tap **Add checks**. GitHub
    lists only checks that have run, and the emulator jobs have.
-4. Type `Emulator (Android 13)` and pick it. Do the same for `Emulator
-   (Android 14)` and `Emulator (Android 15)`. Do not add `Emulator
+4. Type `Emulator (Android 15)` and pick it. Do not add `Emulator
    (Android 17)`.
-5. Next to each of the three, set the source to **GitHub Actions**, not
-   "any source".
-6. Check the list. It must show five checks: "Gradle wrapper", "Check"
-   and the three emulator jobs.
+5. Next to it, set the source to **GitHub Actions**, not "any source".
+6. Check the list. It must show three checks: "Gradle wrapper", "Check"
+   and "Emulator (Android 15)".
 7. Tap **Save changes**.
 
 If `main` is protected by a branch protection rule instead of a ruleset:
 open `github.com/shkriuss/shkriuss.app/settings/branches`, tap **Edit** on
-the rule for `main`, add the same three checks, and tap **Save changes**.
+the rule for `main`, add the same check, and tap **Save changes**.
 
 If an emulator job fails with a fault of the emulator and not of the
 tests, run it again with **Re-run failed jobs**. If it fails the same way
@@ -613,6 +610,6 @@ on several pull requests, tell Claude in a session. Do not take the check
 out of the ruleset to get a merge through.
 
 What a required check proves: that the jobs named "Gradle wrapper",
-"Check" and the three emulator jobs passed, as the pull request's own copy of `ci.yml` defines them. A
+"Check" and "Emulator (Android 15)" passed, as the pull request's own copy of `ci.yml` defines them. A
 pull request that changes `ci.yml` can change what they do. So read every
 change to `.github/` yourself before you approve it.

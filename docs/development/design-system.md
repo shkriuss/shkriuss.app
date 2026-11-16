@@ -144,9 +144,9 @@ ShkText(text = stringResource(R.string.title), style = ShkTextStyle.Headline)
 | `Label` | 14 sp | 20 sp | Medium | Text on buttons, chips and tabs. |
 | `Caption` | 12 sp | 16 sp | Regular | Small notes, such as a time or a count. |
 
-- Sizes are in sp, so text grows with the user's font size. Android 14 and
-  later grow large text less than small text, so at font scale 2.0 the
-  headline grows by about 1.5 times.
+- Sizes are in sp, so text grows with the user's font size. Android grows
+  large text less than small text, so at font scale 2.0 the headline
+  grows by about 1.5 times.
 - Letter spacing is 0. Extra line height is shared evenly above and below
   the text, as in Material 3.
 - `ShkText` uses the current content colour. Pass `color` to pick another

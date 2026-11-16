@@ -14,13 +14,13 @@ the tests compile.
 | Part | Choice |
 |---|---|
 | Where | The job "Emulator" in [`ci.yml`](../../.github/workflows/ci.yml), on every pull request and every push to `main` ([ci.md](ci.md#job-emulator)) |
-| Android versions | 13 (API 33, the minimum), 14 (API 34), 15 (API 35) and 17 (API 37, the newest image) |
+| Android versions | 15 (API 35, the minimum) and 17 (API 37, the newest image) |
 | System images | AOSP only: `system-images;android-<level>;default;x86_64`. No Google APIs, no Google Play. |
 | How the emulator starts | Shell steps with `sdkmanager`, `avdmanager`, `emulator` and `adb`. No action. |
 | Test runner | The project's own, `InstrumentedTestRunner` in `core/testing`, on Android's `Instrumentation` and JUnit 4 |
 | Test libraries | None added |
 | Decision | [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md) |
-| Required checks | Android 13, 14 and 15. Not Android 17, for now ([Decided](#decided)). |
+| Required checks | Android 15. Not Android 17, for now ([Decided](#decided)). |
 
 ## How a module gets instrumented tests
 
@@ -65,8 +65,9 @@ OK    HardwareKeysTest.aChangedBlobIsRefused (0 s)
 
 - `OK`: the test passed.
 - `FAIL`: the test failed. Its stack trace stands above the line.
-- `SKIP`: the test does not apply here, for example a test of the
-  Unlocked key on Android 13. The line above says why.
+- `SKIP`: the test cannot run here, for example a test of the clock
+  when Android takes none of the commands that set it. The line above
+  says why.
 - `NOTE`: something the test wrote down.
 
 The last line is `INSTRUMENTED_TESTS_PASSED` if at least one test ran and
@@ -81,8 +82,8 @@ The same lines go to Android's log under the tag `InstrumentedTests`.
 there, so those tests use a software stand-in for the hardware keys. The
 class that talks to the real Keystore, `AndroidHardwareKeys`, meets a
 real Keystore only in the tests below. On the JVM, `ShkCryptoTest`
-checks what it does where no Keystore answers, and which Android
-versions allow which keys ([build.md](build.md#unit-tests)). The tests
+checks what it does where no Keystore answers
+([build.md](build.md#unit-tests)). The tests
 below are item 9 of
 "What the tests must cover" in
 [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover).
@@ -94,7 +95,7 @@ files are in its own no-backup files folder, exactly where an app's are.
 | Test class | What it checks |
 |---|---|
 | `HardwareKeysTest` | A key that needs no prompt: it exists from when it is made until it is deleted, and the list shows it. It wraps and opens with the layout of kind 5, with a new IV each time. A changed blob, other associated data and another key's blob are "damaged or changed". A key that does not exist is "gone". A key that needs the prompt cannot be made without a screen lock. The security level is read. A new key gets the next number. At start, a key that no keyset file names is deleted. |
-| `UnlockedKeyTest` | Android 13 and 14: the app makes no Unlocked key, and the Background key wraps `backup` and `file-key`. From Android 15: the Unlocked key wraps them. It is made and used without a screen lock. While the emulator is locked it is "not usable now" and not gone, and the Background key works. Records are sealed and opened while the emulator is locked; backup and files wait. An app that ran "as on Android 14" moves its keysets under an Unlocked key at its next start. |
+| `UnlockedKeyTest` | The Unlocked key wraps `backup` and `file-key`. It is made and used without a screen lock. While the emulator is locked it is "not usable now" and not gone, and the Background key works. Records are sealed and opened while the emulator is locked; backup and files wait. |
 | `ScreenLockChangesTest` | The table "When things change": the screen lock is set, changed, removed and set again. After each step every key is there or gone as the table says, and the keys that need no prompt still open their blobs. |
 | `SystemPromptTest` | The Lock key and the Recovery guard through Android's own system prompt, answered with the PIN. The recovery key is kept and shown again. A key that needs the prompt still works after the screen lock is changed. One prompt serves one use. Without the prompt nothing is stored. A changed keyset file is "damaged or changed" after the prompt. Associated data given before the prompt is refused. The app lock is turned on, unlocked and turned off. |
 | `ScreenLockRemovedTest` | After the screen lock is removed. App lock off: files, records and backup go on, the kept recovery key is lost, and the words make the app a keeper again once a screen lock is set. App lock on: the app lock is reset, the files are closed, and the recovery words open them again. An app that was unlocked at that moment keeps its files without the words. |
@@ -111,22 +112,17 @@ How the tests reach what an app cannot:
   APK, shows Android's `BiometricPrompt` with the step's `CryptoObject`,
   waits until the PIN screen is in front, and types the PIN. The emulator
   has no fingerprint enrolled, so Android asks for the PIN at once.
-- **An older Android on a newer emulator.** `AndroidHardwareKeys` takes
-  the Android version as a constructor value. The test of the move to
-  Android 15 first runs the app with version 34 and then with the real
-  one.
 
 ### What the tests showed
 
-The tests run on AOSP emulators with Android 13, 14, 15 and 17. A test
-that does not apply to a version is skipped.
+The tests run on AOSP emulators with Android 15 and 17.
 
 Android behaves as
 [crypto-design.md](../security/crypto-design.md) says, on every version.
 
 | What | Result |
 |---|---|
-| Making and using each kind of key | Works. The Background key and, from Android 15, the Unlocked key wrap and open. The Lock key and the Recovery guard do so through the prompt. |
+| Making and using each kind of key | Works. The Background key and the Unlocked key wrap and open. The Lock key and the Recovery guard do so through the prompt. |
 | The layout of kind 5 | As the page says: a 12-byte IV that the Keystore picks, new each time, then the ciphertext and a 16-byte tag. For a key that needs the prompt, the IV is read from the cipher after encrypting. |
 | "Does this key exist" | `KeyStore.getKey` answers "not found" for a key that was never made, that was deleted, and that Android deleted with the screen lock. Deleting a key that does not exist is not an error. |
 | The list of keys | `KeyStore.aliases` shows each key from when it is made until it is gone. |
@@ -137,9 +133,7 @@ Android behaves as
 | Screen lock changed | Every key stays. A Recovery guard made before the change opens its keyset after it, with the new PIN. |
 | Screen lock removed | The Lock key and the Recovery guard are deleted at once. The Background key and the Unlocked key stay and open their blobs. |
 | Screen lock set again | The deleted keys do not come back. New ones can be made. |
-| The Unlocked key, from Android 15 | Made and used with no screen lock. Refused while the emulator is locked, and usable again after it is unlocked. The Background key works while the emulator is locked. |
-| Android 13 and 14 | The app makes no Unlocked key. The Background key wraps `backup` and `file-key`. |
-| An update to Android 15 | An app that ran "as on Android 14" moves `backup` and `file-key` under a new Unlocked key at its next start. `record` stays under the Background key. |
+| The Unlocked key | Made and used with no screen lock. Refused while the emulator is locked, and usable again after it is unlocked. The Background key works while the emulator is locked. |
 | The order of calls for the prompt | Works as the page says: start the cipher, show the prompt, then give the associated data and finish. |
 | Without the prompt | The last step fails. Nothing is stored, and the new key is deleted. |
 | Associated data before the prompt | Android does not complain at that call. The operation is lost all the same: it fails at its last step, also after a prompt that succeeded. |
@@ -181,8 +175,8 @@ the Keystore.
    settings of the emulator do not help: `-gpu lavapipe`,
    `-gpu swangle_indirect`, `-gpu auto` and `-feature -GLDMA`. With
    `-gpu lavapipe` the same crash comes, and with `-feature -GLDMA` the
-   emulator itself dies at the same moment. Android 13, 14 and 15 do not
-   have this fault.
+   emulator itself dies at the same moment. Android 15 does not have
+   this fault.
    - What the tests do about it: `SystemPrompt` opens its one empty
      screen at the first prompt and leaves it open until the run ends.
      It is never closed and never hidden.
@@ -234,8 +228,8 @@ How the tests reach what an app cannot:
 
 ### What the notify tests showed
 
-The tests run on AOSP emulators with Android 13, 14, 15 and 17. All of
-them pass on every version. On Android 17 they get to their end only
+The tests run on AOSP emulators with Android 15 and 17. All of them
+pass on both. On Android 17 they get to their end only
 because the job waits for Android
 ([below](#android-17-the-job-waits-for-android)).
 
@@ -288,7 +282,7 @@ What the log says with the wait:
 
 | Android | What the log says | The tests of `core/notify` |
 |---|---|---|
-| 13, 14, 15 | "Waited 10 seconds before the next test APK. Android did not start again." | All pass. |
+| 15 | "Waited 10 seconds before the next test APK. Android did not start again." | All pass. |
 | 17 | A warning: "Android 17 started again after the tests of `app.shkriuss.core.crypto.test` ... The job waited 20 seconds until it answered." | All pass. |
 
 - On Android 17, Android answers again within the first 10 seconds
@@ -312,7 +306,6 @@ These points stay unproven until they are checked on a device:
 | A pattern or a password as the screen lock | The emulator's lock is always a PIN. |
 | A restart of the phone | The tests run inside one start of the emulator. |
 | App data cleared, app uninstalled | Clearing the data of the test APK ends the test. |
-| A real update from Android 14 to 15 | The test runs the app "as on Android 14" on a newer emulator. No real update happens. |
 | GrapheneOS, a second user profile, Private Space | The images are plain AOSP with one user. |
 | A screen lock reset by a device administrator | The emulator has no device administrator. |
 | A Keystore that fails for a moment | A test cannot make the real Keystore fail. What `getKey` and `aliases` answer then stays read from Android's source. The rules for it are tested with the stand-in (`HardwareKeyRulesTest`). |
@@ -345,8 +338,9 @@ The owner's decisions:
 1. **The runner.** ADR 0028 is accepted: the project's own runner, shell
    steps and AOSP images. A test class that the suite does not list
    fails the build.
-2. **Required checks.** "Emulator (Android 13)", "(Android 14)" and
-   "(Android 15)" are required checks, turned on in the ruleset.
+2. **Required checks.** "Emulator (Android 15)" is a required check,
+   turned on in the ruleset
+   ([ADR 0040](../adr/0040-minimum-android-15.md)).
    "Emulator (Android 17)" is not, while its image crashes Android's
    system process (point 3 of
    [What the job and the tests work around](#what-the-job-and-the-tests-work-around)).

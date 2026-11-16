@@ -80,10 +80,6 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         }
     }
 
-    /** The kind of hardware key that wraps `backup`, and `file-key` while the app lock is off. */
-    val fileKeyHome: HardwareKeyKind
-        get() = if (hardware.unlockedKeyAllowed) HardwareKeyKind.UNLOCKED else HardwareKeyKind.BACKGROUND
-
     /** Whether a file is stored for [name]. */
     fun isStored(name: KeysetName): Boolean = store.read(name) != null
 
@@ -267,9 +263,6 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
      *    only if it could read the first bytes of every keyset file. It
      *    deletes only keys the Keystore's list shows, so a list that
      *    failed deletes nothing.
-     * 3. On Android 15 and later, moves `backup`, `file-key` and
-     *    `file-key-old` from the Background key to an Unlocked key. If the
-     *    phone is locked now, that waits for a later start.
      */
     fun start() = locked {
         var everyFileRead = store.tidy()
@@ -282,7 +275,6 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
             }
         }
         if (everyFileRead) deleteKeysNotIn(named)
-        moveToUnlockedKey()
     }
 
     private fun deleteKeysNotIn(named: Set<HardwareKeyRef>) {
@@ -292,24 +284,6 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
             } catch (_: HardwareKeyFailure) {
                 // Tried again at the next start.
             }
-        }
-    }
-
-    private fun moveToUnlockedKey() {
-        if (!hardware.unlockedKeyAllowed) return
-        val names = listOf(KeysetName.BACKUP, KeysetName.FILE_KEY, KeysetName.FILE_KEY_OLD)
-            .filter { namedKeyOrNull(it)?.kind == HardwareKeyKind.BACKGROUND }
-        if (names.isEmpty()) return
-        try {
-            val opened = names.map { name -> name to (look(name) as? Stored.Open ?: return) }
-            val unlockedKey = keyFor(HardwareKeyKind.UNLOCKED)
-            opened.forEach { (name, stored) -> wrapAndStore(name, stored.keyset, unlockedKey) }
-        } catch (_: HardwareKeyFailure) {
-            // The phone is locked or the Keystore is busy. A file is replaced
-            // only after its new blob was checked, so nothing is lost. A
-            // later start moves what is left.
-        } catch (_: CannotMakeHardwareKeyException) {
-            // No Unlocked key could be made. The Background key keeps the keysets.
         }
     }
 
@@ -345,7 +319,9 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
         is Stored.Missing -> {
             if (!create || isStored(KeysetName.RECORD)) throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
-            KeysetCodec.newRandom(KeysetType.SEALING).also { wrapAndStore(KeysetName.FILE_KEY, it, keyFor(fileKeyHome)) }
+            KeysetCodec.newRandom(KeysetType.SEALING).also {
+                wrapAndStore(KeysetName.FILE_KEY, it, keyFor(HardwareKeyKind.UNLOCKED))
+            }
         }
         else -> throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
     }
@@ -392,7 +368,7 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         val key = namedKeyOrNull(KeysetName.FILE_KEY) ?: return
         if (key.kind != HardwareKeyKind.LOCK || !isGone(key)) return
         try {
-            wrapAndStore(KeysetName.FILE_KEY, keyset, keyFor(fileKeyHome))
+            wrapAndStore(KeysetName.FILE_KEY, keyset, keyFor(HardwareKeyKind.UNLOCKED))
         } catch (_: HardwareKeyFailure) {
             // The keyset stays in memory. The next use tries again.
         } catch (_: CannotMakeHardwareKeyException) {

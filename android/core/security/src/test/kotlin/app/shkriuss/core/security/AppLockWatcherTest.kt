@@ -147,7 +147,7 @@ class AppLockWatcherTest {
         watcher.lockAfter = LockAfter.ONE_HOUR
         leave(screen())
 
-        // Android 14 and later hold the broadcast back while the app waits. One that comes after the screen is on again is ignored.
+        // Android holds the broadcast back while the app waits. One that comes after the screen is on again is ignored.
         app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF))
         shadowOf(Looper.getMainLooper()).idle()
         assertOpen()

@@ -23,7 +23,7 @@ import javax.crypto.spec.SecretKeySpec
  * The switches make it behave like a phone in the states that the rules
  * for hardware keys are about.
  */
-internal class SoftwareHardwareKeys(override var unlockedKeyAllowed: Boolean = true) : HardwareKeys {
+internal class SoftwareHardwareKeys : HardwareKeys {
     private val keys = LinkedHashMap<String, SecretKey>()
     private val random = SecureRandom()
 

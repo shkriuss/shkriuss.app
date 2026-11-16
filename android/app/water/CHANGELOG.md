@@ -7,6 +7,17 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
+Changed:
+
+- **Water needs Android 15 or newer**
+  ([ADR 0040](../../../docs/adr/0040-minimum-android-15.md)). A phone
+  with Android 14 or older keeps Water 1.0.0.
+- **A phone that got Android 15 after Water 1.0.0 ran on Android 13 or
+  14.** Water 1.0.0 moved its backup key at its first start on Android
+  15 with the phone unlocked. If that start did not happen before this
+  update, the security screen says a key file is damaged. Tap **Enter
+  the words to repair** and enter your 24 words. Nothing is lost.
+
 Fixed:
 
 - **Settings in fluid ounces.** Saving the daily goal or the quick

@@ -16,7 +16,7 @@ build.
 | Room | 3.0.3 | `android/gradle/libs.versions.toml` |
 | KSP (runs Room's compiler) | 2.3.13 | `android/gradle/libs.versions.toml` |
 | Tink (`tink-android`) | 1.24.0 | `android/gradle/libs.versions.toml` |
-| Min SDK | 33 (Android 13) | `build-logic`, `ShkBuild.kt` |
+| Min SDK | 35 (Android 15) | `build-logic`, `ShkBuild.kt` |
 | Compile and target SDK | 37 (Android 17), platform `android-37.0` | `build-logic`, `ShkBuild.kt` |
 | SDK build tools | 36.0.0 | `build-logic`, `ShkBuild.kt` |
 
@@ -303,7 +303,7 @@ second build must write the same mapping file, or the release stops. See
   `core/testing` also has `MergedManifestTest`, for how the app lock
   check reads a merged manifest
   ([Shared test helpers](#shared-test-helpers)).
-- `core/crypto` has 23 test classes with 189 tests. They are the items 1
+- `core/crypto` has 22 test classes with 179 tests. They are the items 1
   to 8 and 10 to 13 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
@@ -1471,7 +1471,7 @@ and needs no library. A file or a layout it cannot read fails the check
 with a message, so the rule never passes by reading nothing.
 
 It does not read `android:fullBackupContent`. Android uses it only on
-Android 11 and older, and the minimum is Android 13.
+Android 11 and older, and the minimum is Android 15.
 
 The rule runs on every APK, `debug` too. Catalog passes: its manifest and
 `res/xml/data_extraction_rules.xml` turn everything off.
@@ -1679,12 +1679,12 @@ two:
 
 1. **A permission from `androidx.core`**,
    `<app ID>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`. `androidx.core`
-   uses it only on Android 12 and older. The minimum is Android 13, so it is
+   uses it only on Android 12 and older. The minimum is Android 15, so it is
    never used.
 2. **The emoji font loader from `androidx.emoji2`**. At start-up it looks
    for a downloadable emoji font from a system font provider. On most
-   phones that provider is Google Play services. Android 13 and later have
-   their own emoji font.
+   phones that provider is Google Play services. Android has its own emoji
+   font.
 
 Every new app must remove the same two. The APK rules check fails until it
 does. Water removes them too. It keeps the two permissions and the six

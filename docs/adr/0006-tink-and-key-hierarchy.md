@@ -1,6 +1,8 @@
 # 0006 Tink and the key hierarchy
 
-- Status: Accepted
+- Status: Accepted. The sentence of point 3 on Android 13 and 14
+  superseded by [0040](0040-minimum-android-15.md): there is one key
+  layout, and the Unlocked key always exists.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 3), 3, 6, 10
   and 17, and the owner's review of
@@ -52,7 +54,9 @@
    - **Unlocked key.** Usable only while the device is unlocked. It wraps
      the backup keyset and, while the app lock is off, the file-key
      keyset. It exists on Android 15 and later. On Android 13 and 14 the
-     Background key takes its place.
+     Background key takes its place. Superseded by
+     [0040](0040-minimum-android-15.md): the minimum is Android 15, and
+     the Unlocked key always exists.
    - **Lock key.** Needs the system prompt for every use. It exists while
      the app lock is on and wraps the file-key keyset.
    - **Recovery guard.** Needs the system prompt for every use, with the

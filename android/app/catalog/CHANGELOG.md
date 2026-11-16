@@ -5,6 +5,8 @@ development.
 
 ## Unreleased
 
+- Catalog needs Android 15 or newer
+  ([ADR 0040](../../../docs/adr/0040-minimum-android-15.md)).
 - New page **Recovery key when first needed**, in the group of shared
   screens: the dialog an app shows when a backup, a restore or the app
   lock first needs the recovery key, in its four forms
@@ -22,9 +24,9 @@ development.
   - Android refuses a screenshot, and the recent apps show Catalog
     blank, as before.
   - A tap where another app's window covers the page does nothing.
-  - On Android 14 and later, only accessibility tools, such as TalkBack,
-    can read the page or act on it. A dialog opened from a sample, such
-    as **Give up these files**, is protected in the same way.
+  - Only accessibility tools, such as TalkBack, can read the page or act
+    on it. A dialog opened from a sample, such as **Give up these
+    files**, is protected in the same way.
   - A line under the switch says so. In an app, these screens also hide
     other apps' windows. Catalog cannot: that needs a permission it does
     not have.

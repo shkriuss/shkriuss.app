@@ -3,7 +3,6 @@ package app.shkriuss.core.security
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
-import android.os.Build
 import android.view.View
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
@@ -18,9 +17,8 @@ import androidx.compose.ui.platform.LocalView
  * 1. A tap is ignored where another app's window covers the screen. That
  *    stops a see-through window on top from steering a tap, for example
  *    onto "Give up the files".
- * 2. On Android 14 and later, only accessibility services that declare
- *    themselves accessibility tools, such as TalkBack, may read the window
- *    or act on it. Android 13 has no way to say this.
+ * 2. Only accessibility services that declare themselves accessibility
+ *    tools, such as TalkBack, may read the window or act on it.
  *
  * Neither needs a permission. Every screen of this module calls it, through
  * [secureWindow] or itself, in `onCreate`, before anything is drawn. The
@@ -36,11 +34,9 @@ fun shieldWindow(activity: Activity, on: Boolean = true) = shieldRoot(activity.w
  */
 internal fun shieldRoot(root: View, on: Boolean) {
     root.filterTouchesWhenObscured = on
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        root.setAccessibilityDataSensitive(
-            if (on) View.ACCESSIBILITY_DATA_SENSITIVE_YES else View.ACCESSIBILITY_DATA_SENSITIVE_AUTO,
-        )
-    }
+    root.setAccessibilityDataSensitive(
+        if (on) View.ACCESSIBILITY_DATA_SENSITIVE_YES else View.ACCESSIBILITY_DATA_SENSITIVE_AUTO,
+    )
 }
 
 /**

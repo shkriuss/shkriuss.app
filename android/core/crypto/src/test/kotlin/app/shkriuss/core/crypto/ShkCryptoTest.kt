@@ -83,12 +83,4 @@ class ShkCryptoTest {
             // The app shows the error and makes nothing.
         }
     }
-
-    @Test
-    fun anUnlockedKeyIsAllowedFromAndroid15() {
-        assertFalse(AndroidHardwareKeys(context, androidVersion = 33).unlockedKeyAllowed)
-        assertFalse(AndroidHardwareKeys(context, androidVersion = 34).unlockedKeyAllowed)
-        assertTrue(AndroidHardwareKeys(context, androidVersion = 35).unlockedKeyAllowed)
-        assertTrue(AndroidHardwareKeys(context, androidVersion = 37).unlockedKeyAllowed)
-    }
 }

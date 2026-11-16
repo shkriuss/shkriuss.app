@@ -10,7 +10,7 @@
 
     <!--
         androidx.core adds this permission for Android 12 and older only.
-        The minimum is Android 13, so it is never used. Remove it.
+        The minimum is Android 15, so it is never used. Remove it.
     -->
     <permission
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
@@ -81,8 +81,7 @@
         <!--
             Emoji support would look for a downloadable font from a system
             font provider. On most phones that is Google Play services, which
-            the suite never uses. Android 13 and later ship their own emoji
-            font.
+            the suite never uses. Android ships its own emoji font.
 
             Lint cannot see this provider class, because it comes from a
             library that Compose uses only at run time (androidx.startup).

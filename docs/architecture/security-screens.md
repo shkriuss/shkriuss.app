@@ -178,17 +178,16 @@ More:
 8. A preview build shows a warning on every screen: never type your real
    recovery words into it.
 9. Other apps' windows are hidden, a tap under another app's window does
-   nothing, and on Android 14 and later only accessibility tools can read
-   the screen
+   nothing, and only accessibility tools can read the screen
    ([Overlays and accessibility services](#overlays-and-accessibility-services)).
 
 ## Overlays and accessibility services
 
 Decided by the owner
 ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
-The ADR says what Android 13 to 17 offers, and why these choices.
+The ADR says what Android offers, and why these choices.
 
-| Where | Other apps' windows | A tap under another app's window | Accessibility services, Android 14 and later |
+| Where | Other apps' windows | A tap under another app's window | Accessibility services |
 |---|---|---|---|
 | The six screens | Hidden while the screen shows | Does nothing | Only accessibility tools |
 | Their four dialogs | Hidden: the screen behind still shows | Does nothing | Only accessibility tools |
@@ -197,9 +196,8 @@ The ADR says what Android 13 to 17 offers, and why these choices.
 How it is built, in `WindowShield.kt`:
 
 1. `shieldWindow` sets `filterTouchesWhenObscured` on the window's root
-   view. On Android 14 and later it also calls
-   `setAccessibilityDataSensitive(YES)` there. Every view below inherits
-   both, Compose's own view too.
+   view, and calls `setAccessibilityDataSensitive(YES)` there. Every view
+   below inherits both, Compose's own view too.
    - `secureWindow` calls it, so the five screens that show or take the
      words get it with the rest.
    - The app lock screen calls it itself: whether it blocks screenshots
@@ -238,29 +236,25 @@ What the user sees:
 - A tap under another app's window does nothing, and nothing says so.
   With other apps' windows hidden, it hardly ever happens. The user
   guide says to close the app that draws over others.
-- On Android 14 and later, only accessibility services that declare
-  themselves accessibility tools can read these screens or act on them.
+- Only accessibility services that declare themselves accessibility
+  tools can read these screens or act on them.
   - An assistive app that does not declare itself an accessibility tool
     cannot read these screens.
   - A harmful service can falsely claim to be a tool
     ([threat model](../security/threat-model.md#out-of-scope)).
   - TalkBack must keep reading them.
-- Android 13 has no way to keep a window from accessibility services that
-  are not tools. There, every accessibility service the user turned on
-  can read these screens.
 
 Not covered, as accepted deviations in the
 [threat model](../security/threat-model.md#platform):
 
-1. Android 13: no accessibility marking, as above.
-2. The lock screen takes a tap under another app's window and speaks to
+1. The lock screen takes a tap under another app's window and speaks to
    every accessibility service. It shows only the app's name and
    "Unlock", which opens the system prompt. It must stay usable with
    every assistive app.
-3. A tap on a screen that another window covers only elsewhere is not
+2. A tap on a screen that another window covers only elsewhere is not
    refused. That would refuse taps whenever a video in
    picture-in-picture overlaps the screen.
-4. The other screens of the apps hide no other app's windows. They show
+3. The other screens of the apps hide no other app's windows. They show
    records, not keys, and a dimmer would vanish whenever the app is
    open.
 
@@ -476,8 +470,8 @@ apps and on the way back. Without it, there is no old picture to show.
 
 What cannot be made sure: with a timer, if the user switches to another
 app and then turns the screen off, and comes back before the chosen
-time, the app may still be unlocked. Android 14 and later hold the
-screen-off broadcast back while the app waits, `ACTION_SCREEN_OFF`
+time, the app may still be unlocked. Android holds the screen-off
+broadcast back while the app waits, `ACTION_SCREEN_OFF`
 cannot be declared in a manifest, and work after a screen stopped is not
 sure to run. "When it leaves the screen" has no such case. The user
 guide says so.
@@ -532,8 +526,8 @@ guide says so.
      what the app lock protects.
 5. It is not behind the gate: its own prompt does that job.
 6. Like the other screens of the module, it hides other apps' windows,
-   ignores a tap under another app's window, and on Android 14 and later
-   speaks only to accessibility tools. So no other app can steer a tap
+   ignores a tap under another app's window, and speaks only to
+   accessibility tools. So no other app can steer a tap
    onto "Turn off" or "Show the text in notifications".
 
 ### Turning it on

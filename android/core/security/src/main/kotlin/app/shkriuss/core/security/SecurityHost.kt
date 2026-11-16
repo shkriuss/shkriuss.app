@@ -56,10 +56,10 @@ object SecurityScreens {
  * Blocks screenshots, screen recording and the recent-apps preview of the
  * window of [activity], and keeps autofill and content capture away from
  * it ("Screens that show or take the words" in crypto-design.md). It also
- * shields the window with [shieldWindow]: covered taps are ignored, and on
- * Android 14 and later only accessibility tools may read it. Every screen
- * of this module that shows or takes the words calls it in `onCreate`,
- * before anything is drawn.
+ * shields the window with [shieldWindow]: covered taps are ignored, and
+ * only accessibility tools may read it. Every screen of this module that
+ * shows or takes the words calls it in `onCreate`, before anything is
+ * drawn.
  *
  * [on] false undoes it. Only the Catalog does that, so that its samples of
  * these screens can be sent as screenshots.

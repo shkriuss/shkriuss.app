@@ -156,12 +156,12 @@ class KeySetup internal constructor(private val vault: KeyVault) {
             vault.wrapAndStore(KeysetName.FILE_KEY_OLD, fileKey.keyset, fileKey.key)
         }
         if (fileKeyDiffers || isToStore(fileKey) || KeysetName.FILE_KEY in damaged) {
-            vault.wrapAndStore(KeysetName.FILE_KEY, derived.fileKey, vault.keyFor(vault.fileKeyHome))
+            vault.wrapAndStore(KeysetName.FILE_KEY, derived.fileKey, vault.keyFor(HardwareKeyKind.UNLOCKED))
         }
         // The repaired file-key no longer names the Lock key: the app lock is off.
         lockKeyOfDamagedFileKey?.let { vault.deleteIfUnnamed(it) }
         if (isToStore(backup) || KeysetName.BACKUP in damaged) {
-            vault.wrapAndStore(KeysetName.BACKUP, derived.backup, vault.keyFor(vault.fileKeyHome))
+            vault.wrapAndStore(KeysetName.BACKUP, derived.backup, vault.keyFor(HardwareKeyKind.UNLOCKED))
         }
         if (isToStore(record) || KeysetName.RECORD in damaged) {
             vault.wrapAndStore(KeysetName.RECORD, derived.record, vault.keyFor(HardwareKeyKind.BACKGROUND))
@@ -214,11 +214,11 @@ class KeySetup internal constructor(private val vault: KeyVault) {
             if (newOld != null) vault.wrapAndStore(KeysetName.FILE_KEY_OLD, newOld, old?.key ?: current.key)
         }
         if (current == null || keep != null) {
-            vault.wrapAndStore(KeysetName.FILE_KEY, derived.fileKey, vault.keyFor(vault.fileKeyHome))
+            vault.wrapAndStore(KeysetName.FILE_KEY, derived.fileKey, vault.keyFor(HardwareKeyKind.UNLOCKED))
         }
         if (backup is Stored.Damaged) vault.setAside(KeysetName.BACKUP)
         val backupIsNew = backup is Stored.Open && KeysetCodec.holdsAll(backup.keyset, derived.backup)
-        if (!backupIsNew) vault.wrapAndStore(KeysetName.BACKUP, derived.backup, vault.keyFor(vault.fileKeyHome))
+        if (!backupIsNew) vault.wrapAndStore(KeysetName.BACKUP, derived.backup, vault.keyFor(HardwareKeyKind.UNLOCKED))
         vault.wrapAndStore(KeysetName.RECORD, derived.record, vault.keyFor(HardwareKeyKind.BACKGROUND))
         vault.forgetAll()
         return StartOverResult.STORED
