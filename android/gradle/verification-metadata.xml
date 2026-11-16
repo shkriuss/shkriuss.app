@@ -486,6 +486,11 @@
             <pgp value="2E3A1AFFE42B5F53AF19F780BCF4173966770193"/>
          </artifact>
       </component>
+      <component group="org.jetbrains.kotlin.jvm" name="org.jetbrains.kotlin.jvm.gradle.plugin" version="2.4.21">
+         <artifact name="org.jetbrains.kotlin.jvm.gradle.plugin-2.4.21.pom">
+            <sha256 value="8e08073d123182e69c07d24c6dca7b98cc53a37707a73a6af7be88e38218b42b" origin="Maven Central, signed by trusted key 6F538074CCEBF35F28AF9B066A0975F8B1127B83" reason="CI runners get no signature file for it now and then"/>
+         </artifact>
+      </component>
       <component group="org.ow2" name="ow2" version="1.5.1">
          <artifact name="ow2-1.5.1.pom">
             <pgp value="10F3C7A02ECA55E502BADCF3991EFB94DB91127D"/>
