@@ -130,7 +130,8 @@ checked. Then:
    `.github/scripts/check-version-code.sh`, the same script that Release
    runs. So a wrong code fails the pull request, not the release.
 8. If anything failed, it uploads the screenshot differences, if there
-   are any.
+   are any, and Gradle's dependency verification report, if Gradle wrote
+   one.
 9. On `main`, it saves the downloads for later runs.
 
 Which build check runs where:
@@ -217,6 +218,8 @@ Each job waits for "Gradle wrapper". Then:
     warnings from the emulator's own log, to read in the browser. It
     also uploads `emulator-logs-android-<version>`: the test output, the
     emulator's own log, Android's whole log and a picture of the screen.
+    If Gradle could not verify a downloaded file while it built the test
+    APKs, it uploads `dependency-verification-report-android-<version>`.
 
 No action starts the emulator. The usual one,
 `reactivecircus/android-emulator-runner`, is not one of GitHub's own
@@ -244,7 +247,12 @@ and one for the tests. Measured on 2026-11-12.
    crashed", open the step **Collect the logs**: it shows the crash.
    More is in the run's **Summary**, under
    **emulator-logs-android-&lt;version&gt;**.
-5. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). Never weaken a
+5. A step that stops with "Dependency verification failed" names the
+   file, but not the reason. Go to the run's **Summary** and download
+   **dependency-verification-report**. For an emulator job the name ends
+   in `-android-<version>`. How to read it is in
+   [build.md](build.md#when-verification-fails).
+6. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). Never weaken a
    check to make it pass (hard rule 9).
 
 ## PR preview
@@ -471,7 +479,7 @@ with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
 | Action | Version | Commit | Used for |
 |---|---|---|---|
 | `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` | Getting the code |
-| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the emulator logs, the artifact numbers for the comment. In Release, the files passed between jobs. In Site, the built site. In Dependency graph, the snapshot |
+| `actions/upload-artifact` | v7.0.2 | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` | The APK, the screenshots, the screenshot differences, the dependency verification report, the emulator logs, the artifact numbers for the comment. In Release, the files passed between jobs. In Site, the built site. In Dependency graph, the snapshot |
 | `actions/download-artifact` | v8.0.2 | `9000827ccba6bdab643e8b6fd33ac0654aef8333` | The artifact numbers, in the comment job. In Release, the files from earlier jobs. In Site, the built site, in "Deploy". In Dependency graph, the snapshot, in "Submit" |
 | `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache. Not used in Release |
 | `actions/attest` | v4.2.2 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Release only: the build provenance attestation of the signed APK |

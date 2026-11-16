@@ -220,6 +220,19 @@ jobs:
           if-no-files-found: ignore
           overwrite: true
 
+      # When Gradle cannot verify a downloaded file, the log names the file
+      # but not the reason. Gradle writes the reason into this report.
+      # Download it from the run's summary page
+      # (docs/development/build.md, "When verification fails").
+      - name: Upload the dependency verification report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-verification-report
+          path: android/build/reports/dependency-verification/
+          if-no-files-found: ignore
+          overwrite: true
+
       - name: Save Gradle downloads
         if: github.event_name == 'push' && steps.gradle-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -509,5 +522,16 @@ jobs:
         with:
           name: emulator-logs-android-${{ matrix.android }}
           path: ${{ runner.temp }}/emulator-logs/
+          if-no-files-found: ignore
+          overwrite: true
+
+      # As in the job "Check": the reason why Gradle could not verify a
+      # downloaded file, if the step "Build the test APKs" failed for that.
+      - name: Upload the dependency verification report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-verification-report-android-${{ matrix.android }}
+          path: android/build/reports/dependency-verification/
           if-no-files-found: ignore
           overwrite: true

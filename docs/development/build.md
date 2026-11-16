@@ -1159,6 +1159,32 @@ file. Never turn verification off or make it lenient (hard rule 9). Find
 out why the file changed. If a dependency was meant to change, follow the
 steps above.
 
+The log names the file, but not the reason. Gradle writes the reason into
+a report: `dependency-verification-report.html`, in a folder of its own
+in `android/build/reports/dependency-verification/`. In CI, the jobs
+"Check" and "Emulator" upload that folder when they fail:
+
+1. Open the failed run and go to its **Summary**.
+2. Under **Artifacts**, download **dependency-verification-report**. For
+   an emulator job the name ends in `-android-<version>`.
+3. Open the ZIP file, then the folder whose name starts with `at-`, then
+   `dependency-verification-report.html`.
+
+The report lists each file that failed, and what was wrong with it:
+
+- **Incorrect checksum** or **Signature didn't match**. The file is not
+  the one the verification file expects. Find out what changed. A job
+  that passes when it runs again does not answer that.
+- **Key isn't trusted** or **Public key couldn't be found**. The file is
+  signed, but not by a key that the verification file trusts, or the key
+  is not in the keyring.
+- **Checksums are missing**. Nothing in the verification file covers the
+  file. For a file that is checked by its signature, this means that
+  Gradle had no signature file (`.asc`) for it. The report does not say
+  why. Run the failed job again with **Re-run failed jobs**: the file
+  must still pass the same check. If it fails the same way again, tell
+  Claude in a session.
+
 This holds for a single diagnostic command too, such as
 `./gradlew dependencies` with `--dependency-verification=off` to see
 where a version comes from. A Claude session asks the owner before it
