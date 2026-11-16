@@ -232,7 +232,10 @@ When the alarm for time T reaches the handler:
 
 - If reading fails with an error, the rule is not checked. Step 3 is
   written with the mark as the later of the stored mark, if it can be
-  read, and T. The error then goes on to `core/notify`, which shows its
+  read, and T, and it also writes `showing` = T. A press from an older
+  notification of the same reminder is then not current: it does not
+  count for the time that failed, and it does not remove the notice of
+  `core/notify`. The error then goes on to `core/notify`, which shows its
   notice.
 - If showing fails with an error, step 3 is still written, and the
   error goes on to `core/notify` in the same way. So a failure never
