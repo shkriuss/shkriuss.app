@@ -4,9 +4,7 @@ The GitHub Actions workflows that check every pull request, the one that
 makes releases, the one that deploys the hub site, and the one that sends
 the apps' libraries to GitHub's dependency graph. GitHub Actions is
 the authoritative build (section 13 of the [plan](../plan/PLAN.md),
-[ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)). Set up in
-Phase 0, step 4. Release was added in Phase 0, step 6, Site in Phase 0,
-step 7, and Dependency graph in Phase 2, step 2.6.
+[ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)).
 
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
@@ -142,7 +140,7 @@ Which build check runs where:
   (`:build-logic:test`).
 - By name, the two release checks below. The APK rules check reads the
   release APK: rules 1 to 6 and rule 10 (the screens of `core/security`
-  with both permissions, since step 2.5) for every APK, and rules 7 to 9
+  with both permissions) for every APK, and rules 7 to 9
   (WebView and code loading) for the APKs that ship.
 - In every Gradle command: the refusal of the bundled SQLite driver, and
   the refusal of `core/testing` outside tests.
@@ -157,15 +155,13 @@ Why the release checks are named one by one:
   graphics-path check.
 - Named by task, a check that is removed from the build makes Gradle fail
   with "task not found". A check that is turned off writes no report, and
-  step 6 fails. Both were tried in the cloud environment: removing
-  `registerApkRulesCheck()` failed with "Cannot locate tasks that match
+  step 6 fails. Removing `registerApkRulesCheck()`, for example, makes
+  Gradle fail with "Cannot locate tasks that match
   ':app:catalog:checkReleaseApkRules'".
 - Naming the task builds the release APK, so R8 runs on every pull request
   too.
 
-With nothing cached, the Gradle command took 3 minutes 43 seconds on
-GitHub's runner on 2026-11-11, and 4 minutes 35 seconds in the cloud
-environment.
+The job takes about ten minutes.
 
 ### Job "Emulator"
 
@@ -228,7 +224,7 @@ they need artifacts that are not in the verification metadata (ADR 0028).
 
 A job takes four to five minutes: about one minute to install the SDK
 packages, two to build the test APK, half a minute to start the emulator
-and one for the tests. Measured on 2026-11-12.
+and one for the tests.
 
 ### When CI fails
 
@@ -311,11 +307,10 @@ carry it, because every app's job would overwrite the same output.
 
 ### Job "Comment"
 
-The owner's decision on
-[pull request 6](https://github.com/shkriuss/shkriuss.app/pull/6). It keeps
-one comment on the pull request, **Preview of this pull request**, with a
-direct link to each APK and to the screenshots zip. It saves the owner
-three taps ([test-a-pull-request.md](test-a-pull-request.md)).
+The owner's decision. It keeps one comment on the pull request,
+**Preview of this pull request**, with a direct link to each APK and to
+the screenshots zip. It saves the owner three taps
+([test-a-pull-request.md](test-a-pull-request.md)).
 
 1. It has only `pull-requests: write`. It checks out nothing and runs no
    code from the pull request.
@@ -370,7 +365,7 @@ in [site.md](site.md). Why it works this way is in
 
 ## Dependency graph
 
-Added in step 2.6, by the owner's decision on threat model point 4
+The owner's decision on threat model point 4
 ([threat-model.md](../security/threat-model.md#code), CODE-3). GitHub
 cannot read Gradle files by itself, so this workflow tells it which
 libraries each app has. Dependabot alerts then name a library with a
@@ -412,11 +407,10 @@ Not used, and why:
   change versions without `verification-metadata.xml`, so CI fails them.
   Updates come from prompt R5 ([PROMPTS.md](PROMPTS.md)).
 
-### Turn it on (owner, once, after the merge)
+### Turn it on (owner, once)
 
 These are repository settings, so only you can change them. The names
-are the ones GitHub's documentation used on 2026-11-15. They can differ a
-little.
+are the ones in GitHub's documentation. They can differ a little.
 
 1. Open `github.com/shkriuss/shkriuss.app/settings` in the browser.
 2. In the menu, under **Security and quality**, tap **Advanced
@@ -484,9 +478,10 @@ with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
 | `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache. Not used in Release |
 | `actions/attest` | v4.2.2 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Release only: the build provenance attestation of the signed APK |
 
-The commits were read from the actions' own repositories on 2026-11-10 and
-2026-11-11. Each version was more than a month old then. `actions/attest`
-v4.2.2 is from 2026-08-04. The comment is
+Each commit is the one its version's tag names in the action's own
+repository. Only versions more than a month old are pinned, the same
+habit as for Wrangler
+([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)). The comment is
 written with the GitHub CLI, `gh`, which GitHub's runners come with. Prompt R5 in
 [PROMPTS.md](PROMPTS.md) updates them.
 
@@ -539,11 +534,12 @@ Not used, and why:
 
 ## Required checks
 
-The owner's decision on
-[pull request 6](https://github.com/shkriuss/shkriuss.app/pull/6): "Gradle
-wrapper" and "Check" must pass before a pull request can be merged into
-`main`. The owner turns this on after their first green run, because GitHub
-suggests only checks that have run.
+The owner's decision: "Gradle wrapper" and "Check" must pass before a
+pull request can be merged into `main`. A check can be added to the
+ruleset by its name at any time. GitHub suggests only checks that have
+run, though, and offers **GitHub Actions** as a check's source only once
+the check has run recently. So a new check is added after its first run,
+with its source set as the steps below say.
 
 The names are the job names in `ci.yml`. A pull request that renames either
 job must say so in its description, because the owner must then update the
@@ -574,20 +570,15 @@ request.
 
 ### The emulator jobs
 
-The owner's decision at the Phase 1 gate, on 2026-11-13, after
-[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24) first
-left the question open:
+The owner's decision:
 
 - "Emulator (Android 13)", "Emulator (Android 14)" and "Emulator (Android
-  15)" become required checks. The owner turned them on in the ruleset
-  on 2026-11-13, with the steps below. Since then, a red one blocks a
-  merge.
+  15)" are required checks, set in the ruleset with the steps below. A
+  red one blocks a merge.
 - "Emulator (Android 17)" stays **not required**. Its system image
   crashes Android's own system process when a screen of the tests closes
   ([emulator-tests.md](emulator-tests.md#what-the-tests-showed), point
-  3; pull requests
-  [26](https://github.com/shkriuss/shkriuss.app/pull/26) and
-  [30](https://github.com/shkriuss/shkriuss.app/pull/30)). The job keeps
+  3). The job keeps
   running on every pull request and every push to `main`. A red result
   is information, not a block.
 - Whether "Emulator (Android 17)" becomes required is an open point
