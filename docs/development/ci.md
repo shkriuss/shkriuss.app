@@ -478,9 +478,11 @@ with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
 | `actions/cache/restore` and `actions/cache/save` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` | The download cache. Not used in Release |
 | `actions/attest` | v4.2.2 | `1e69f48acb82d1966a394da916b4c1698aa569d6` | Release only: the build provenance attestation of the signed APK |
 
-The commits were read from the actions' own repositories. Each version
-was more than a month old when it was pinned. The comment is written
-with the GitHub CLI, `gh`, which GitHub's runners come with. Prompt R5 in
+Each commit is the one its version's tag names in the action's own
+repository. Only versions more than a month old are pinned, the same
+habit as for Wrangler
+([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)). The comment is
+written with the GitHub CLI, `gh`, which GitHub's runners come with. Prompt R5 in
 [PROMPTS.md](PROMPTS.md) updates them.
 
 Not used, and why:
@@ -533,8 +535,11 @@ Not used, and why:
 ## Required checks
 
 The owner's decision: "Gradle wrapper" and "Check" must pass before a
-pull request can be merged into `main`. GitHub suggests only checks that
-have run, so a check can be required only after its first run.
+pull request can be merged into `main`. A check can be added to the
+ruleset by its name at any time. GitHub suggests only checks that have
+run, though, and offers **GitHub Actions** as a check's source only once
+the check has run recently. So a new check is added after its first run,
+with its source set as the steps below say.
 
 The names are the job names in `ci.yml`. A pull request that renames either
 job must say so in its description, because the owner must then update the
