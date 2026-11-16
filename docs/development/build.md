@@ -510,7 +510,7 @@ second build must write the same mapping file, or the release stops. See
     `afterRestore`. `LicencesTest` checks that every part has a name, a
     notice and a licence text, and that each licence text has the
     SHA-256 that [third-party.md](third-party.md) records.
-- `app/water` has seven test classes with 371 tests, most of them
+- `app/water` has seven test classes. Most of their tests are
   screenshots.
   - `EveryScreenIsBehindTheAppLockTest` also locks the app over each
     sheet and dialog, with the dialogs of backup and restore and the
