@@ -307,9 +307,10 @@ carry it, because every app's job would overwrite the same output.
 
 ### Job "Comment"
 
-The owner's decision. It keeps one comment on the pull request, **Preview of this pull request**, with a
-direct link to each APK and to the screenshots zip. It saves the owner
-three taps ([test-a-pull-request.md](test-a-pull-request.md)).
+The owner's decision. It keeps one comment on the pull request,
+**Preview of this pull request**, with a direct link to each APK and to
+the screenshots zip. It saves the owner three taps
+([test-a-pull-request.md](test-a-pull-request.md)).
 
 1. It has only `pull-requests: write`. It checks out nothing and runs no
    code from the pull request.
