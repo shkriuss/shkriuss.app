@@ -61,10 +61,10 @@ enum class AppLockNotice {
  *    lock comes before Android draws the window again.
  * 3. After Android stopped the app: the file keys are then not in memory.
  *
- * The screen-off broadcast is a help only. Android 14 and later hold it
- * back while the app waits in the background. One that comes after the
- * screen is on again is ignored, because a lock then would show the
- * content first and lock after.
+ * The screen-off broadcast is a help only. Android holds it back while
+ * the app waits in the background. One that comes after the screen is on
+ * again is ignored, because a lock then would show the content first and
+ * lock after.
  *
  * With the app lock off it drops the file keys whenever the app leaves
  * the screen. They load again without a prompt.

@@ -28,7 +28,7 @@ enum class HardwareKeyKind(
     /** Usable whenever the app runs. Wraps the `record` keyset. */
     BACKGROUND(1, "background", false),
 
-    /** Usable while the phone is unlocked. Android 15 and later only. */
+    /** Usable while the phone is unlocked. Wraps `backup`, `file-key-old`, and `file-key` while the app lock is off. */
     UNLOCKED(2, "unlocked", false),
 
     /** Needs the system prompt. Exists while the app lock is on. */
@@ -43,7 +43,7 @@ enum class HardwareKeyKind(
      * refuses every other pair.
      */
     internal fun mayWrap(name: KeysetName): Boolean = when (this) {
-        BACKGROUND -> name != KeysetName.RECOVERY
+        BACKGROUND -> name == KeysetName.RECORD
         UNLOCKED -> name == KeysetName.BACKUP || name == KeysetName.FILE_KEY || name == KeysetName.FILE_KEY_OLD
         LOCK -> name == KeysetName.FILE_KEY
         RECOVERY_GUARD -> name == KeysetName.RECOVERY

@@ -20,11 +20,6 @@ internal class DeviceApp {
     /** Starts the app. A new call is the app started again, with nothing in memory. */
     fun open(): ShkCrypto = ShkCrypto.create(context, TestKeys.water).also { it.start() }
 
-    /** The app as it would run on the Android version [androidVersion], on this emulator. */
-    fun openAsOn(androidVersion: Int): ShkCrypto =
-        ShkCrypto(KeyVault(TestKeys.water, KeysetFiles(folder), AndroidHardwareKeys(context, androidVersion)))
-            .also { it.start() }
-
     /** The hardware key the stored keyset names, or null if there is no file. */
     fun keyOf(name: KeysetName): HardwareKeyRef? = KeysetFiles(folder).read(name)?.let { WrappedKeyset.keyOf(it, name) }
 

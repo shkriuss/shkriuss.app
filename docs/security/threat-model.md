@@ -180,9 +180,8 @@ What stops it:
    [crypto-design.md](crypto-design.md#where-keys-are-stored), point 3).
 2. Hardware keys. Every keyset is wrapped by a key inside the Keystore,
    in StrongBox where the phone has it.
-3. On Android 15 and later, the Unlocked key refuses to work while the
-   phone is locked. It wraps `backup`, and `file-key` while the app lock
-   is off.
+3. The Unlocked key refuses to work while the phone is locked. It wraps
+   `backup`, and `file-key` while the app lock is off.
 4. With the app lock on, every file key needs the system prompt
    ([The app lock](#the-app-lock)).
 5. A kept recovery key always needs the system prompt, with the app lock
@@ -203,12 +202,7 @@ What does not:
    ([notifications.md](../architecture/notifications.md#while-the-app-lock-is-on)).
 3. A phone with a software-only Keystore has no hardware to keep the
    keys in.
-4. On Android 13 and 14 there is no Unlocked key. `backup`, and
-   `file-key` while the app lock is off, sit under the Background key,
-   which works while the phone is locked. This matters only against
-   someone who breaks Android on a phone that was unlocked once since it
-   started ([crypto-design.md](crypto-design.md#android-13-and-14)).
-5. On a phone that was unlocked once since it started, Android holds the
+4. On a phone that was unlocked once since it started, Android holds the
    keys of its file-based encryption. Someone who can break Android then
    can read the rows. A compromised operating system is
    [out of scope](#out-of-scope).
@@ -245,9 +239,9 @@ What stops it:
    ([security-screens.md](../architecture/security-screens.md#what-protects-the-words)).
 7. The screens of `core/security` hide other apps' windows while they
    show. So does every screen of an app while the app is locked. A tap
-   under another app's window does nothing on those six screens. On
-   Android 14 and later, only accessibility services that declare
-   themselves accessibility tools can read them or act on them
+   under another app's window does nothing on those six screens. Only
+   accessibility services that declare themselves accessibility tools
+   can read them or act on them
    ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
 8. Apps of the suite are to share keys and data only through screens and
    interfaces that only apps signed with the suite key can open: the
@@ -677,8 +671,8 @@ What stops it:
    ([cloud-environment.md](../development/cloud-environment.md)).
 3. The owner reviews and approves every pull request. The required checks
    "Gradle wrapper" and "Check" must pass. The owner decided that the
-   emulator jobs for Android 13, 14 and 15 are required too, and turns
-   that on in the ruleset
+   emulator job for Android 15 is required too, and turns that on in the
+   ruleset
    ([ci.md](../development/ci.md#required-checks)).
 4. Owner-only paths ([CODEOWNERS](../../.github/CODEOWNERS)), and the
    [protected-paths flag](protected-paths.md), which marks a pull request
@@ -753,11 +747,11 @@ reason below is the plain technical one.
    field asks the keyboard not to learn, but a harmful keyboard can
    ignore that
    ([security-screens.md](../architecture/security-screens.md#what-protects-the-words)).
-   - On Android 14 and later, the screens of `core/security` speak only to
-     accessibility services that declare themselves accessibility tools
+   - The screens of `core/security` speak only to accessibility services
+     that declare themselves accessibility tools
      ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
    - An assistive app that does not declare itself an accessibility tool
-     cannot read these screens on Android 14 and later.
+     cannot read these screens.
    - A harmful service can falsely claim to be a tool. Android itself
      does not check the claim. So this keeps the screens only from
      services that do not make the claim.
@@ -1079,10 +1073,8 @@ Status: **Partly met.**
   - MASWE-0016, limits on key use: the Background key needs no prompt
     and works while the phone is locked, so that sync and reminders go
     on. It wraps only `record`, whose records are in the database anyway
-    ([crypto-design.md](crypto-design.md#why-four-keys)). On Android 13
-    and 14 there is no Unlocked key
-    ([crypto-design.md](crypto-design.md#android-13-and-14)). With the
-    app lock off, `file-key` needs no prompt.
+    ([crypto-design.md](crypto-design.md#why-four-keys)). With the app
+    lock off, `file-key` needs no prompt.
   - MASWE-0017, a screen lock: the app asks Android whether the phone
     has one. A phone without one is allowed. The app says what that
     means and does not offer what needs a screen lock
@@ -1253,23 +1245,19 @@ Status: **Partly met.**
     - A tap is not refused when another window covers the screen only
       elsewhere (`FLAG_WINDOW_IS_PARTIALLY_OBSCURED`). That would refuse
       taps whenever a video in picture-in-picture overlaps the screen.
-- MASWE-0040, accessibility services. Met on Android 14 and later, on the
-  screens of `core/security`, as above.
-  - On Android 14 and later, the six screens and their four dialogs
-    speak only to accessibility services that declare themselves
+- MASWE-0040, accessibility services. Met on the screens of
+  `core/security`, as above.
+  - The six screens and their four dialogs speak only to accessibility services that declare themselves
     accessibility tools. Other services can neither read them nor act on
     them. From Android 16, their gestures are blocked too.
   - TalkBack reads the words aloud, and the screen says so first.
     TalkBack still reads every label on these screens with the
     protection on.
   - An assistive app that does not declare itself an accessibility tool
-    cannot read these screens on Android 14 and later.
+    cannot read these screens.
   - A harmful service can falsely claim to be a tool. It stays
     [out of scope](#out-of-scope).
   - Accepted deviations, decided by the owner:
-    - Android 13 has no way to keep a window from services that are not
-      tools. There, every accessibility service the user turned on can
-      read these screens.
     - The lock screen speaks to every accessibility service. It shows
       only the app's name and "Unlock", and must stay usable with every
       assistive app.
@@ -1282,15 +1270,15 @@ Status: **Partly met.**
 **MASVS-CODE-1: The app requires an up-to-date platform version.**
 Status: **Met.**
 
-- MASWE-0041, a recent platform: met. The minimum is Android 13
-  (API 33), which has every platform feature the design relies on. The
-  design handles what changed in Android 15
-  ([ADR 0002](../adr/0002-grapheneos-first-minimum-android-13.md),
-  [crypto-design.md](crypto-design.md#android-13-and-14)).
+- MASWE-0041, a recent platform: met. The minimum is Android 15
+  (API 35), which has every platform feature the design relies on, also
+  an Unlocked key that a removed screen lock does not delete
+  ([ADR 0040](../adr/0040-minimum-android-15.md),
+  [crypto-design.md](crypto-design.md#the-unlocked-key-needs-android-15)).
 - MASWE-0042, the latest target: met. Target SDK 37
   ([build.md](../development/build.md#at-a-glance)).
 - MASWE-0039, overlays, also falls under this control. Met. The minimum,
-  Android 13, always has two things:
+  Android 15, always has two things:
   - Android 12's block of a tap through another app's window;
   - the way to hide other apps' windows, which the security screens use.
 
@@ -1491,11 +1479,11 @@ The owner's decisions on this page. Each is built into the page above.
 |---|---|
 | The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted ([Status words](#status-words)). |
 | The points under [Found while writing this page](#found-while-writing-this-page) | Each point says what answers it. Point 5 is an accepted deviation. Points 6 and 12, and the CAA records of point 10, are Open. |
-| Required checks | The emulator jobs for Android 13, 14 and 15 are required. The job for Android 17 is not. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
+| Required checks | The emulator job for Android 15 is required. The job for Android 17 is not. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
 | The seventh deviation | No forced update (MASVS-CODE-2). Accepted. The sync protocol design decides again for the Sync app. |
 | The name of Claude's machine account | `shkriuss-bot`. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
 | MASVS-CODE-1 | **Met.** The overlay gaps that remain are deviations under PLATFORM-3, not CODE-1. |
-| The deviations for overlays and accessibility services: no accessibility marking on Android 13; the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted ([PLATFORM-3](#platform)). |
+| The deviations for overlays and accessibility services: the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted ([PLATFORM-3](#platform)). |
 | The accessibility marking | It stays. TalkBack still reads every label with it on. [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md) is accepted. |
 | Point 4: how dependencies are checked for known vulnerabilities | A workflow of the project, Dependency graph, with dependency verification on. The job that runs Gradle has no write token; the job that sends the list runs no code of the build. Only on pushes to `main` and by hand, never on pull requests, and with no new action. The owner turns on the dependency graph and Dependabot alerts. Automatic dependency submission, Dependabot security updates and version updates stay off ([CODE-3](#code)). [Before and after a release](../development/release.md#before-and-after-a-release) asks that no alert is open. |
 | Points 9 and 10: the owner's accounts and the domain | Seven rules, three of them for the domain, and no details ([The rules](#the-rules-for-the-owners-accounts-and-the-domain)). The domain has no CAA record: that stays Open. |
@@ -1665,8 +1653,8 @@ points by their numbers.
    **Done**, as the owner decided
    ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)):
    - The six screens of `core/security` hide other apps' windows. They
-     ignore a tap under another app's window. On Android 14 and later
-     they speak only to accessibility tools.
+     ignore a tap under another app's window. They speak only to
+     accessibility tools.
    - Their dialogs take the same.
    - The lock screen hides other apps' windows while the app is locked.
    - The permission `HIDE_OVERLAY_WINDOWS` has

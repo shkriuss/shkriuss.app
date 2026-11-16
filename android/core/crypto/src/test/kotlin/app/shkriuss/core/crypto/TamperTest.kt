@@ -325,12 +325,14 @@ class TamperTest {
         assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { WrappedKeyset.keyOf(record.withByte(9, 0), KeysetName.RECORD) })
         assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { WrappedKeyset.keyOf(record.withByte(5, 2), KeysetName.RECORD) })
 
-        // A keyset file renamed to another keyset: the name is in the associated data.
-        app.hardware.unlockedKeyAllowed = false
-        app.write(KeysetName.BACKUP, record)
+        // A keyset file renamed to another keyset that the same key may wrap: the name
+        // is in the associated data.
+        val fileKey = files.read(KeysetName.FILE_KEY)!!
+        assertEquals(app.keyOf(KeysetName.BACKUP), app.keyOf(KeysetName.FILE_KEY))
+        app.write(KeysetName.FILE_KEY, backup)
         app.open(start = false)
-        assertEquals(Stored.Damaged::class, app.vault.look(KeysetName.BACKUP)::class)
-        app.write(KeysetName.BACKUP, backup)
+        assertEquals(Stored.Damaged::class, app.vault.look(KeysetName.FILE_KEY)::class)
+        app.write(KeysetName.FILE_KEY, fileKey)
 
         // Another hardware key under the same alias.
         val key = app.keyOf(KeysetName.RECORD)!!
@@ -343,9 +345,9 @@ class TamperTest {
     fun everyPairOfHardwareKeyAndKeysetThatIsNotAllowedIsRefused() {
         val allowed = mapOf(
             KeysetName.RECORD to setOf(HardwareKeyKind.BACKGROUND),
-            KeysetName.BACKUP to setOf(HardwareKeyKind.BACKGROUND, HardwareKeyKind.UNLOCKED),
-            KeysetName.FILE_KEY to setOf(HardwareKeyKind.BACKGROUND, HardwareKeyKind.UNLOCKED, HardwareKeyKind.LOCK),
-            KeysetName.FILE_KEY_OLD to setOf(HardwareKeyKind.BACKGROUND, HardwareKeyKind.UNLOCKED),
+            KeysetName.BACKUP to setOf(HardwareKeyKind.UNLOCKED),
+            KeysetName.FILE_KEY to setOf(HardwareKeyKind.UNLOCKED, HardwareKeyKind.LOCK),
+            KeysetName.FILE_KEY_OLD to setOf(HardwareKeyKind.UNLOCKED),
             KeysetName.RECOVERY to setOf(HardwareKeyKind.RECOVERY_GUARD),
         )
         KeysetName.entries.forEach { name ->

@@ -26,10 +26,9 @@ class ShkCrypto internal constructor(private val vault: KeyVault) {
 
     /**
      * Call once when the app starts, before anything else here. It removes
-     * what a stopped change left behind, deletes hardware keys that no
-     * keyset names, and after an update to Android 15 moves keysets under
-     * the new Unlocked key. It never fails because a key is not usable
-     * now: what could not be done waits for a later start.
+     * what a stopped change left behind and deletes hardware keys that no
+     * keyset names. It never fails because a key is not usable now: what
+     * could not be done waits for a later start.
      */
     fun start() = vault.start()
 

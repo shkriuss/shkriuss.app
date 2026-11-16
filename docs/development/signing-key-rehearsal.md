@@ -32,8 +32,9 @@ Restore:
 
 Rotation:
 
-- With a minimum of Android 13, apksigner puts the new key and the
-  lineage in the scheme v3 block. It writes no v3.1 block.
+- With a minimum of Android 13 or newer (the suite's is Android 15),
+  apksigner puts the new key and the lineage in the scheme v3 block. It
+  writes no v3.1 block.
 - A release after a rotation needs only the new key and the lineage. It
   must turn off schemes v1 and v2 by name. Without that, apksigner asks
   for the old key too, although it would not use it.

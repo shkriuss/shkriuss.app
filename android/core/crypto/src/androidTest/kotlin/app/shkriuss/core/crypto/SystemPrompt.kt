@@ -84,7 +84,7 @@ internal object SystemPrompt {
 
     /**
      * True while the window in front belongs to the system and asks for
-     * the PIN. Android 13 to 15 show a field to type into. Android 17
+     * the PIN. Android 15 shows a field to type into. Android 17
      * shows a number pad: ten buttons or more, and no field.
      */
     private fun pinScreenIsShown(): Boolean {

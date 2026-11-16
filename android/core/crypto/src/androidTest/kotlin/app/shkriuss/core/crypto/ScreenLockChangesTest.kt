@@ -1,6 +1,5 @@
 package app.shkriuss.core.crypto
 
-import android.os.Build
 import app.shkriuss.core.testing.TestDevice
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -30,12 +29,8 @@ class ScreenLockChangesTest {
     private val lock = HardwareKeyRef(HardwareKeyKind.LOCK, 1)
     private val recoveryGuard = HardwareKeyRef(HardwareKeyKind.RECOVERY_GUARD, 1)
 
-    /** The keys that need no prompt. An Unlocked key exists from Android 15 only. */
-    private val withoutPrompt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-        listOf(background, unlocked)
-    } else {
-        listOf(background)
-    }
+    /** The keys that need no prompt. */
+    private val withoutPrompt = listOf(background, unlocked)
     private val withPrompt = listOf(lock, recoveryGuard)
 
     @Before

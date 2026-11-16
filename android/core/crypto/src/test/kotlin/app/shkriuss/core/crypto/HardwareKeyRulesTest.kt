@@ -57,15 +57,6 @@ class HardwareKeyRulesTest {
     }
 
     @Test
-    fun onAndroid13And14TheBackgroundKeyStandsInForTheUnlockedKey() {
-        val app = appWithKeys(SoftwareHardwareKeys(unlockedKeyAllowed = false))
-        KeysetName.entries.filter { it.text in setOf("record", "backup", "file-key") }.forEach {
-            assertEquals(background(1), app.keyOf(it))
-        }
-        assertEquals(setOf("shk.background.1"), app.hardware.existing())
-    }
-
-    @Test
     fun rule1And2AKeystoreThatFailsLosesNothing() {
         val app = appWithKeys()
         val before = app.snapshot()

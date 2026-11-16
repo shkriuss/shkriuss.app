@@ -258,11 +258,8 @@ jobs:
       matrix:
         include:
           # AOSP images only: "default" has no Google apps and no Play
-          # services (hard rule 3). Android 13 is the minimum, 17 the newest.
-          - android: "13"
-            image: "system-images;android-33;default;x86_64"
-          - android: "14"
-            image: "system-images;android-34;default;x86_64"
+          # services (hard rule 3). Only Android 15, the minimum, and
+          # Android 17, the newest.
           - android: "15"
             image: "system-images;android-35;default;x86_64"
           - android: "17"

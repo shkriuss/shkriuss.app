@@ -93,7 +93,7 @@ This is an environment check. Do not change project files.
    what happened.
 3. In a temporary folder outside the repository, create the smallest possible
    Android app: latest stable Android Gradle Plugin, a Gradle wrapper for the
-   version it needs, compile SDK 37, min SDK 33, one Kotlin activity and one
+   version it needs, compile SDK 37, min SDK 35, one Kotlin activity and one
    Robolectric test. Run `./gradlew assembleDebug testDebugUnitTest`.
    Report success or the exact error, how long it took, and every host that
    was blocked or answered 429.

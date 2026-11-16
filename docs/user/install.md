@@ -12,7 +12,7 @@ of Obtainium.
 
 ## What you need
 
-- A phone with Android 13 or newer. GrapheneOS is the first target.
+- A phone with Android 15 or newer. GrapheneOS is the first target.
 - Obtainium. Get it from its releases on GitHub:
   <https://github.com/ImranR98/Obtainium/releases>.
 

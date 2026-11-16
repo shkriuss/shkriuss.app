@@ -157,15 +157,12 @@ security screen and the app lock screen.
    to do nothing, close the app that draws over other apps, then try
    again. To find it: open Android's settings, then **Apps**, then
    **Special app access**, then **Display over other apps**.
-3. **Accessibility apps, on Android 14 and later.** Only apps that
-   declare themselves accessibility tools can read these screens. TalkBack
-   is such an app.
+3. **Accessibility apps.** Only apps that declare themselves
+   accessibility tools can read these screens. TalkBack is such an app.
    - An assistive app that does not declare itself an accessibility tool
-     cannot read these screens on Android 14 and later.
+     cannot read these screens.
    - A harmful app can falsely claim to be an accessibility tool. Only
      turn on accessibility apps you trust.
-   - On Android 13, every accessibility app you turned on can read these
-     screens.
 
 ## If setting up stopped
 

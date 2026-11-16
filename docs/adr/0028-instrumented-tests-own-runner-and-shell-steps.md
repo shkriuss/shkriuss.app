@@ -1,6 +1,8 @@
 # 0028 Instrumented tests: own runner, emulator started by shell steps
 
-- Status: Accepted
+- Status: Accepted. The required emulator checks in its consequences
+  superseded by [0040](0040-minimum-android-15.md): the tests run on
+  Android 15 and 17, and only Android 15 is required.
 - Date: 2026-11-12
 - Source: the owner's prompt for Phase 1, step 4, session C
   ([PROMPTS.md](../development/PROMPTS.md)), which asked for the emulator

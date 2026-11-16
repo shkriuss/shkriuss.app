@@ -246,9 +246,9 @@ The system prompt is Android's own `BiometricPrompt`
 (`android.hardware.biometrics`), not the AndroidX Biometric library. The
 owner decided this.
 
-1. Android's own prompt does everything the design needs on Android 13
-   and later: a `CryptoObject` that holds a cipher, and a prompt that
-   takes a fingerprint or the device credential for it. Read in the
+1. Android's own prompt does everything the design needs: a
+   `CryptoObject` that holds a cipher, and a prompt that takes a
+   fingerprint or the device credential for it. Read in the
    source of Android 13 and Android 16.
 2. The AndroidX library exists to support older Android versions and to
    carry a prompt through a screen rotation. The first is not needed.
@@ -307,13 +307,13 @@ records or files, because StrongBox is slow.
 | | Background key | Unlocked key | Lock key | Recovery guard |
 |---|---|---|---|---|
 | Kind number | 1 | 2 | 3 | 4 |
-| Exists | From the first need | Android 15 and later only, from the first need | While the app lock is on | While this app keeps the recovery key |
+| Exists | From the first need | From the first need | While the app lock is on | While this app keeps the recovery key |
 | Usable | Whenever the app runs | While the phone is unlocked | After the system prompt, once per prompt | After the system prompt, once per prompt |
 | System prompt | No | No | Every use | Every use, app lock on or off |
 | Needs a screen lock | No | No | Yes | Yes |
 | Removed by removing the screen lock | No | No | Yes | Yes |
 | Removed by a fingerprint change | No | No | No | No |
-| Wraps | `record`. On Android 13 and 14 also what the Unlocked key would wrap. | `backup`. `file-key` while the app lock is off. | `file-key` | `recovery` |
+| Wraps | `record` | `backup`, `file-key-old`. `file-key` while the app lock is off. | `file-key` | `recovery` |
 
 "Whenever the app runs" means after the first unlock since the phone
 started. Before that, Android keeps the app's storage locked and the app
@@ -433,7 +433,7 @@ destroying it.
   single use, with the app lock on or off. Day-to-day work never touches
   it.
 
-#### Android 13 and 14
+#### The Unlocked key needs Android 15
 
 Android's reference for `setUnlockedDeviceRequired` warns about Android
 12 to 14: such keys cannot be made or used on a phone with no screen
@@ -441,22 +441,11 @@ lock, and they are all deleted when the screen lock is removed. Android
 15 fixed this. Google's advice is to use the setting only on Android 15
 and later.
 
-So on Android 13 and 14 there is no Unlocked key. The Background key
-wraps `backup` and, with the app lock off, `file-key`.
-
-What that gives up: on those two versions the hardware does not refuse
-these two keysets while the phone is locked. This matters only against
-someone who breaks Android itself on a phone that was unlocked at least
-once since it started. A compromised operating system is out of scope.
-Before the first unlock, and against a thief who cannot break Android,
-nothing changes. With the app lock on, file keys are behind the prompt
-on every version.
-
-When a phone is updated to Android 15, the app makes an Unlocked key at
-its next start. It moves under it each keyset that the Background key
-holds in its place: `backup`, `file-key-old` if it exists, and `file-key`
-if the app lock is off. If the phone is locked at that start, the
-Unlocked key cannot be used yet, and the move waits for a later start.
+The minimum is Android 15
+([ADR 0040](../adr/0040-minimum-android-15.md)). So the Unlocked key is
+safe on every supported phone, and there is one key layout. The code does
+not check the Android version itself: Android refuses to install an app
+on a version below its minimum.
 
 ### Keysets
 
@@ -483,9 +472,9 @@ pair:
 | Keyset | Background key | Unlocked key | Lock key | Recovery guard |
 |---|---|---|---|---|
 | `record` | Yes | No | No | No |
-| `backup` | Yes: on Android 13 and 14, and on Android 15 until the keyset is moved | Yes | No | No |
-| `file-key` | As `backup`, while the app lock is off | Yes, while the app lock is off | Yes, while the app lock is on | No |
-| `file-key-old` | As `backup` | Yes | No | No |
+| `backup` | No | Yes | No | No |
+| `file-key` | No | Yes, while the app lock is off | Yes, while the app lock is on | No |
+| `file-key-old` | No | Yes | No | No |
 | `recovery` | No | No | No | Yes |
 
 ### The recovery key and its key ID
@@ -580,7 +569,7 @@ What protects a file key on the phone:
 
 | App lock | The file key is sealed by | which is wrapped by | which needs |
 |---|---|---|---|
-| Off | `file-key` keyset | Unlocked key (Background key on Android 13 and 14) | An unlocked phone (on Android 13 and 14: a phone unlocked once since it started) |
+| Off | `file-key` keyset | Unlocked key | An unlocked phone |
 | On | `file-key` keyset | Lock key | The system prompt |
 
 #### The file-key keyset without a recovery key
@@ -672,8 +661,8 @@ When the app gets its recovery-key-derived keys:
    being read or written at that moment may finish. Nothing new starts.
    - An app that waits in the background with the app lock on and a
      timer keeps `file-key` in memory until it comes back or locks.
-     Android 14 and later hold the screen-off broadcast back while such
-     an app waits, and work after a screen stopped is not sure to run.
+     Android holds the screen-off broadcast back while such an app
+     waits, and work after a screen stopped is not sure to run.
      `ACTION_SCREEN_OFF` cannot be declared in a manifest. So such an app
      may not learn in time that the screen was off.
    - A screen-off broadcast that arrives after the screen is on again is
@@ -1015,9 +1004,8 @@ Turn on:
    kept recovery key, so it is one prompt of the Recovery guard, and
    then four words. In an app that does not keep the key, it is all 24
    words and no prompt.
-2. Make a new key of the kind that wraps `file-key` now (the Unlocked
-   key, or the Background key on Android 13 and 14). Move the other
-   keysets of the old one to it. `file-key` stays under the old key for
+2. Make a new key of the kind that wraps `file-key` now, the Unlocked
+   key. Move the other keysets of the old one to it. `file-key` stays under the old key for
    now.
 3. Make a new Lock key.
 4. Show the system prompt for an encrypt operation with that key.
@@ -1059,9 +1047,8 @@ prompt.
 
 Turn off, while unlocked:
 
-1. Wrap the `file-key` keyset with the Unlocked key (Background key on
-   Android 13 and 14). Open the new blob again to check it. Replace the
-   keyset file.
+1. Wrap the `file-key` keyset with the Unlocked key. Open the new blob
+   again to check it. Replace the keyset file.
 2. Delete the Lock key.
 
 If the app finds the Lock key gone while the `file-key` keyset is still
@@ -1257,9 +1244,8 @@ That text fits the QR alphanumeric mode and is at most 228 characters.
    windows while a screen shows. A tap under another app's window does
    nothing
    ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
-7. On Android 14 and later, only accessibility services that declare
-   themselves accessibility tools, such as TalkBack, can read these
-   screens or act on them. Android 13 has no way to say this.
+7. Only accessibility services that declare themselves accessibility
+   tools, such as TalkBack, can read these screens or act on them.
 
 How `core/security` does this is in
 [security-screens.md](../architecture/security-screens.md):
@@ -1274,9 +1260,8 @@ How `core/security` does this is in
   at once is refused, so a paste never lands, also not through TalkBack.
 - Suggestions are drawn in the screen, never in a popup window.
 - The window hides other apps' windows (`setHideOverlayWindows`), drops
-  a tap under another app's window (`filterTouchesWhenObscured`), and on
-  Android 14 and later is marked `accessibilityDataSensitive`. Its
-  dialogs take the same.
+  a tap under another app's window (`filterTouchesWhenObscured`), and is
+  marked `accessibilityDataSensitive`. Its dialogs take the same.
 - The recovery key lives in the screen's ViewModel, never in a saved
   state. It ends with the screen. The shown words leave memory when the
   screen stops.
@@ -1415,8 +1400,7 @@ it opens is not a keyset of the right kind. There are two ways out.
    prompt opens it. The app remembers that in memory, for as long as it
    runs. Then:
    - `file-key` under a Lock key is stored again under a key that needs
-     no prompt: the Unlocked key, or the Background key on Android 13
-     and 14. The Lock key is deleted, and the app lock is off. The app
+     no prompt: the Unlocked key. The Lock key is deleted, and the app lock is off. The app
      lock screens tell the user.
    - A kept recovery key is replaced when the user keeps the words again.
      The damaged file is copied aside first. Just before, the file is
@@ -1457,7 +1441,6 @@ What happens to every key, and what the user does.
 | Screen lock removed, or reset by a device administrator | Stays | Stays | Deleted | Deleted |
 | Fingerprint added or removed | Stays | Stays | Stays | Stays |
 | Phone restarted | Stays | Stays | Stays | Stays |
-| Phone updated from Android 14 to 15 | Stays | Made now | Stays | Stays |
 | App data cleared, or app uninstalled | Deleted | Deleted | Deleted | Deleted |
 | New phone, or factory reset | None | None | None | None |
 
@@ -1492,7 +1475,7 @@ The owner's rule. How the design keeps it:
 
 1. With the app lock off, the `file-key` keyset is under a hardware key
    that no screen lock change and no fingerprint change removes. This
-   holds with or without a recovery key, on Android 13 and later.
+   holds with or without a recovery key.
 2. With the app lock on, the keyset is under the Lock key, which a
    removed screen lock deletes. The app lock is allowed only when the
    keyset derives from the recovery key, so the words bring it back.
@@ -1542,8 +1525,7 @@ There is no rotation by calendar. Keys change on these events.
 | Key | Changes when | How |
 |---|---|---|
 | Lock key | The app lock is turned on. A new key each time. | See "Turning it on". It is deleted when the lock is turned off. |
-| Background or Unlocked key | The app lock is turned on, so that the old no-prompt copy of `file-key` can never be opened | Make the key with the next number. Wrap its other keysets with it. Replace their files. Delete the old key last, after `file-key` is under the Lock key. A stop in the middle leaves the old key in use, or named by no file and deleted at the next start. See "Turning it on". |
-| Unlocked key | The phone moves to Android 15 | A first Unlocked key is made. `backup`, and `file-key` if the app lock is off, move to it. The Background key stays and keeps `record`. |
+| Unlocked key | The app lock is turned on, so that the old no-prompt copy of `file-key` can never be opened | Make the key with the next number. Wrap its other keysets with it. Replace their files. Delete the old key last, after `file-key` is under the Lock key. A stop in the middle leaves the old key in use, or named by no file and deleted at the next start. See "Turning it on". |
 | Any hardware key | It was lost | A new key with the next number. There is nothing to wrap again: the keysets it held are gone and are derived again from the words, or handed over again. See "When things change". |
 | File key | The file's content changes | A new key and a new stream. The old stream and key are dropped with the old content. |
 | Random `file-key` key | The app gets a recovery key | See "The file-key keyset without a recovery key" |
@@ -1832,7 +1814,7 @@ constructor, and the tests pass a software one with the same byte layout.
 8. The provider check, and a check that no module but `core/crypto`
    imports Tink, `javax.crypto`, `java.security.KeyStore` or
    `android.security.keystore`.
-9. Emulator tests in GitHub Actions on Android 13, 14, 15 and the
+9. Emulator tests in GitHub Actions on Android 15, the minimum, and the
    newest. Each hardware key kind is made and used. After the screen
    lock is changed, removed and set again, each key is there or gone as
    the table in "When things change" says. The tests are in
@@ -1841,8 +1823,7 @@ constructor, and the tests pass a software one with the same byte layout.
    [emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check).
 10. Start over. Stopped before each change, then
     started over with the same words and with other words; files added
-    in between; Android 13 and 14, and the move to Android 15 between
-    two tries. `file-key-old` only grows. A key ID that would stand for
+    in between. `file-key-old` only grows. A key ID that would stand for
     two keys is refused. In `StartOverTest`.
 11. A damaged keyset file. Repaired with proven
     words; refused without proof, with other words, and with a proof
@@ -1897,12 +1878,12 @@ owner. Each one is a place to object.
     in the reference of `KeyGenParameterSpec.Builder`. The binding of a
     prompt key to the device credential, and the deletion of an app's
     keys when its data is cleared, were also read in Android 16's source.
-    - The emulator tests, on AOSP emulators with Android 13, 14, 15 and
-      17, confirmed it for the screen lock. A key that needs the prompt stays when the PIN is
+    - The emulator tests, on AOSP emulators with Android 15 and 17,
+      confirmed it for the screen lock. A key that needs the prompt stays when the PIN is
       changed, and still works after it. It is deleted at once when the
       screen lock is removed, and does not come back when a lock is set
-      again. A key that needs no prompt stays through all of it. From
-      Android 15 the Unlocked key is made and used with no screen lock,
+      again. A key that needs no prompt stays through all of it. The
+      Unlocked key is made and used with no screen lock,
       stays when the lock is removed, and is refused while the emulator
       is locked.
     - Not confirmed, because an emulator cannot check them: a
@@ -1911,15 +1892,16 @@ owner. Each one is a place to object.
       ([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
 12. A key that accepts fingerprint and device credential can be made with
     no fingerprint enrolled. Read in Android 16's source. The emulator
-    tests confirmed it on emulators with Android 13, 14, 15 and 17: they have no
+    tests confirmed it on emulators with Android 15 and 17: they have no
     fingerprint, and the Lock key and the Recovery guard were made. With
     no screen lock, making them fails, as the page says.
 13. `setInvalidatedByBiometricEnrollment(false)` is set although the
     device credential already makes it unnecessary. It makes the intent
     plain.
 14. The prompt keys do not also set `setUnlockedDeviceRequired`.
-15. After an update to Android 15 the app moves `backup` and, with the app
-    lock off, `file-key` under a new Unlocked key by itself.
+15. Android refuses to install an app on a version below its minimum,
+    Android 15. So no app runs where the Unlocked key would be deleted
+    with the screen lock, and the code does not check the version.
 16. `GmsCore_OpenSSL` exists only if an app installs it. Read in Tink's
     source at tag `v1.24.0`.
 17. Tink keeps its key and ciphertext formats stable across releases, as
@@ -1936,18 +1918,17 @@ owner. Each one is a place to object.
     phone: no backup and no file record goes out while `file-key-old`
     exists.
 23. Android's own `BiometricPrompt` takes a cipher together with
-    fingerprint or device credential on Android 13 and later, also when
-    no fingerprint is enrolled. Read in the source of Android 13 and
+    fingerprint or device credential, also when no fingerprint is
+    enrolled. Read in the source of Android 13 and
     Android 16. The emulator tests confirmed it on emulators with
-    Android 13, 14, 15 and 17: the prompt took the cipher of a Lock key and of a Recovery
+    Android 15 and 17: the prompt took the cipher of a Lock key and of a Recovery
     guard and was answered with the PIN, to encrypt and to decrypt. A
     fingerprint as the answer, and a key in StrongBox, are not confirmed,
     because an emulator cannot check them.
 24. For a key that needs the prompt, the cipher can be started before the
     prompt, and associated data must wait until after it. An encrypt
     operation gives its IV when it is done. Read in Android's source. The
-    emulator tests confirmed it on emulators with Android 13, 14, 15 and
-    17:
+    emulator tests confirmed it on emulators with Android 15 and 17:
     - In the page's order every step works, and the IV read after
       encrypting is 12 bytes.
     - Without the prompt, the last step fails and nothing is stored. One
@@ -1965,7 +1946,7 @@ owner. Each one is a place to object.
 28. `KeyStore.getKey` on the Android Keystore answers "no key" only for
     "not found", and throws for every other failure. Read in the source
     of Android 13 and 14. The emulator tests confirmed the first half on
-    emulators with Android 13, 14, 15 and 17: "no key" for an alias that was
+    emulators with Android 15 and 17: "no key" for an alias that was
     never made, that was deleted, and that Android deleted with the
     screen lock. The second half cannot be tested: a test cannot make
     the real Keystore fail.
@@ -1978,12 +1959,12 @@ owner. Each one is a place to object.
     When a key is loaded, Android reports the same state as a key that
     cannot be recovered, which the code counts as "not usable now". Read
     in Android's source. The emulator tests could not confirm it: no test met
-    this state. On emulators with Android 13, 14, 15 and 17, a key that Android
+    this state. On emulators with Android 15 and 17, a key that Android
     deleted with the screen lock is simply "not found", which the code
     counts as gone. Starting a cipher for it also answers "gone".
 31. A folder can be flushed to storage through a `FileChannel` opened on
     it. That is how the code flushes `shk-keys/`. The emulator tests confirmed on
-    emulators with Android 13, 14, 15 and 17 that the call works on Android's
+    emulators with Android 15 and 17 that the call works on Android's
     file system: every keyset file in the tests is replaced this way.
     That the file survives a loss of power (assumption 27) cannot be
     tested.
@@ -1991,7 +1972,7 @@ owner. Each one is a place to object.
     JVM test runs. A JVM test never runs the Android path, because Tink
     tells Android from a desktop by Java's vendor name. The emulator tests ran
     every vector of this page and the published ones on emulators with
-    Android 13, 14, 15 and 17. All pass. Android's own provider is there, and no
+    Android 15 and 17. All pass. Android's own provider is there, and no
     Play services provider.
 33. After a prompt that succeeded, the Keystore answers a blob whose tag
     is wrong with `AEADBadTagException`, and an operation the user did
@@ -2039,7 +2020,7 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 | A keeper app that cannot read its kept recovery key | It asks for all 24 words instead: the same check as an app that does not keep the key. |
 | The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words. A turn of the phone does not count. The prompt asks again on the way back. |
 | When the app locks | When it leaves the screen (the default), or after 1, 5 or 15 minutes or 1 hour away. Time away is counted with a clock the user cannot change. The app always locks when the screen turns off with the app on it, and after Android stopped it. |
-| What a waiting app learns of a screen that turned off | Nothing sure. The screen-off broadcast is held back on Android 14 and later, and a late one is ignored. "Keys in memory", point 5, says what happens; the user guide says it plainly. |
+| What a waiting app learns of a screen that turned off | Nothing sure. Android holds the screen-off broadcast back, and a late one is ignored. "Keys in memory", point 5, says what happens; the user guide says it plainly. |
 | What a notification shows while the app lock is on | Only its channel's name and a fixed text, unless the user turns on "Show the text in notifications". Turning the app lock on posts the shown notifications again in that form. If the state cannot be read, the text is hidden. |
 | The app lock screen | It asks for the system prompt each time it opens while the app lock is on, before it shows anything. Closing the prompt closes the screen. |
 
@@ -2058,8 +2039,7 @@ Where the page was silent, the owner approved these readings of it:
    back.
 6. What "a keyset is made" means in rule 3. Rule 2 has three exceptions
    ([Rules for making, replacing and losing a hardware key](#rules-for-making-replacing-and-losing-a-hardware-key)).
-7. `file-key-old` moves to the Unlocked key too, and the move waits
-   while the phone is locked.
+7. `file-key-old` is wrapped by the Unlocked key, as `backup` is.
 8. The three states of the app lock.
 9. How typed words are read, and the three results for entered words
    ([Entering it](#entering-it)).

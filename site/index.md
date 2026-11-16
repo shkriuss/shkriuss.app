@@ -14,7 +14,7 @@ shows how far each one is.
 - **No network in data apps.** A separate Sync app does all networking.
 - **Optional sync.** End-to-end encrypted sync through a server that you
   run in your own Cloudflare account. The server only sees encrypted data.
-- **GrapheneOS first.** Other Android systems come second. Android 13 or
+- **GrapheneOS first.** Other Android systems come second. Android 15 or
   newer.
 
 ## Get the apps
