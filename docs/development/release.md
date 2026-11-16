@@ -405,10 +405,12 @@ The rehearsal tries all of them.
 1. Do all of [Before the first release](#before-the-first-release).
 2. Start a run with a wrong version, `0.1`. **Build** must fail within a
    minute with "The version must look like 1.0.0".
-3. Start a run with app `catalog` and version `0.1.0`
-   ([Run a release](#run-a-release)). Approve **Sign**.
+3. Start a run with app `catalog` and the version in Catalog's
+   `build.gradle.kts` ([Run a release](#run-a-release)). That version
+   must have no release yet. If it has one, raise it first, as
+   [Run a release](#run-a-release) says. Approve **Sign**.
 4. On the run's summary page, check:
-   - **Build** shows the package `app.shkriuss.catalog` and version `0.1.0`.
+   - **Build** shows the package `app.shkriuss.catalog` and that version.
    - **Rebuild** says the second build made the same files.
    - **Sign** shows the certificate SHA-256 from fingerprints.md.
 5. Open the draft and check it as in
@@ -417,7 +419,7 @@ The rehearsal tries all of them.
 6. Tap the attestation link in the notes. The page must name
    `.github/workflows/release.yml` and the commit from the notes.
 7. Open `github.com/shkriuss/shkriuss.app/tags`. There must be no tag
-   `catalog-v0.1.0`.
+   `catalog-v` with that version.
 8. Optional: tap the APK in the draft to download it, install it, and check
    it with AppVerifier against fingerprints.md.
 9. Delete the draft: on the Releases page, tap the bin next to it, then
@@ -426,19 +428,20 @@ The rehearsal tries all of them.
 
 ### Part B: the Phase 0 gate
 
-This makes a real, permanent release. The tag `catalog-v0.1.0` can never be
-used again, even if the release is deleted. Catalog 0.1.0 is published as
-`catalog-v0.1.0`, so these steps cannot be run again with that version.
+This makes a real, permanent release of the version of Part A. Its tag
+can never be used again, even if the release is deleted.
 
-1. Start a run with app `catalog` and version `0.1.0`. Approve **Sign**.
+1. Start a run with app `catalog` and the same version as in Part A.
+   Approve **Sign**.
 2. Check and publish the draft
    ([Check and publish the draft](#check-and-publish-the-draft)).
-3. Open `github.com/shkriuss/shkriuss.app/tags`. The tag `catalog-v0.1.0`
-   is there, on the commit from the notes.
+3. Open `github.com/shkriuss/shkriuss.app/tags`. The tag `catalog-v` with
+   that version is there, on the commit from the notes.
 4. In Obtainium, add the app with the URL
-   `https://github.com/shkriuss/shkriuss.app`. In its settings, filter
-   release titles with the regular expression `^catalog-v`, so that other
-   apps' releases from this repository are ignored. Install it.
+   `https://github.com/shkriuss/shkriuss.app`, or open it if you have it
+   already. In its settings, filter release titles with the regular
+   expression `^catalog-v`, so that other apps' releases from this
+   repository are ignored. Install or update it.
 5. Check the installed app with AppVerifier against
    [fingerprints.md](../security/fingerprints.md).
 

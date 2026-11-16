@@ -79,8 +79,11 @@ The same lines go to Android's log under the tag `InstrumentedTests`.
 
 `core/crypto` has unit tests on the JVM. No Android Keystore exists
 there, so those tests use a software stand-in for the hardware keys. The
-class that talks to the real Keystore, `AndroidHardwareKeys`, is tested
-only in the tests below. They are item 9 of
+class that talks to the real Keystore, `AndroidHardwareKeys`, meets a
+real Keystore only in the tests below. On the JVM, `ShkCryptoTest`
+checks what it does where no Keystore answers, and which Android
+versions allow which keys ([build.md](build.md#unit-tests)). The tests
+below are item 9 of
 "What the tests must cover" in
 [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover).
 
@@ -247,9 +250,9 @@ Android behaves the same on every version.
 | Exact alarms with `USE_EXACT_ALARM` | `AlarmManager.canScheduleExactAlarms` is true. The user is not asked. |
 | The receivers, which are not exported | Android reaches both: the alarm's own broadcast, `TIME_SET` and `TIMEZONE_CHANGED`. |
 | An alarm fires | The app's handler runs, never before the alarm's time, and the notification is shown with the alarm's time. |
-| **How exact an alarm is** | An alarm set 7 seconds ahead reaches the app's handler 2 to 3 milliseconds after its time, on all four versions, while the emulator is awake. |
-| **The shortest wait** | Android fires no alarm sooner than 5 seconds after it was set. On Android 13, 14 and 15, an alarm set 3 seconds ahead fires 2.0 seconds after its time, and an alarm whose time has passed fires 5.0 seconds after it was set. This is Android's own limit for every app. |
-| **Two alarms that are due together** | They arrive in either order. Two alarms one second apart, both inside the 5 seconds, come together; on Android 13 and 15 the later one can come first. The handler runs once for each. Two alarms two seconds apart, both more than 5 seconds ahead, come in their order. |
+| **How exact an alarm is** | An alarm set 7 seconds ahead reaches the app's handler at its time or later, never before, within the test's wait of 30 seconds. The test writes the delay into the log. |
+| **The shortest wait** | Android fires no alarm sooner than 5 seconds after it was set. This is Android's own limit for every app. An alarm whose time has passed fires within the test's wait, and the test writes into the log how long after it was set. |
+| **Two alarms that are due together** | They can arrive in either order. The handler runs once for each. The test writes into the log when they came in the other order. |
 | An alarm that is no longer wanted | Does not fire. |
 | The clock is set eleven minutes ahead | `cmd alarm set-time` sets it. Android fires the alarm that is now due and sends `TIME_SET`. The app is asked for its alarms once for each. |
 | The time zone is changed | `cmd alarm set-timezone` sets it. Android sends `TIMEZONE_CHANGED`, and the app is asked for its alarms again. |
