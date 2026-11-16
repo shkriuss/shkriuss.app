@@ -118,9 +118,13 @@ An alarm is an id and a time: `Alarm(AlarmId, atMillis)`.
    stops in the middle, it runs again for the same alarm later.
 3. It shows notifications through the `Notifications` it is given.
 4. If it fails, `core/notify` shows a notice in place of the reminder
-   ([How alarms are kept right](#how-alarms-are-kept-right)). So write
-   down first whatever keeps the alarm from being named again, before
-   anything that can fail.
+   ([How alarms are kept right](#how-alarms-are-kept-right)). So
+   whatever keeps the alarm from being named again is written in any
+   case, also when the handler fails: before showing, as Water does
+   ([spec.md](../apps/water/spec.md#how-water-uses-corenotify)), or
+   after showing, as Reminders does
+   ([spec.md](../apps/reminders/spec.md#the-rule)). The error then still
+   reaches `core/notify`.
 
 ## The parts
 
