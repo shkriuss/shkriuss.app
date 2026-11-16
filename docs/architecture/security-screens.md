@@ -6,13 +6,11 @@ them. They build on `core/crypto` and follow
 [crypto-design.md](../security/crypto-design.md), "The recovery key" and
 "The app lock".
 
-Built in Phase 1, step 7: the recovery key screens in session A, the
-app lock in session B ([The app lock](#the-app-lock)). Step 1.10 added
-the protection against other apps
-([Overlays and accessibility services](#overlays-and-accessibility-services)).
-Phase 2, step 2.5 added the dialog for the moment the key is first
-needed ([The recovery key when first needed](#the-recovery-key-when-first-needed)),
-with Water, the first app that uses the module.
+The module also holds the protection against other apps
+([Overlays and accessibility services](#overlays-and-accessibility-services))
+and the dialog for the moment the key is first needed
+([The recovery key when first needed](#the-recovery-key-when-first-needed)).
+Water is the first app that uses the module.
 
 ## What an app does
 
@@ -75,7 +73,7 @@ An app opens on its main screen with no setup. The recovery key comes
 when a backup, a restore or the app lock is first asked for
 ([ADR 0035](../adr/0035-recovery-key-when-first-needed.md)). The dialog,
 its words and the "go on after" are built once, in `FirstNeed.kt`, so
-every app shows the same. Built in step 2.5.
+every app shows the same.
 
 What an app does:
 
@@ -128,7 +126,7 @@ More:
   is, and `FirstNeedBehindTheAppLockTest` checks that it goes when the
   app locks.
 - The three buttons of the first form use the third button of
-  `ShkDialog`, added to `core/design` in the same step
+  `ShkDialog` in `core/design`
   ([design-system.md](../development/design-system.md#added-in-step-25)).
 
 ## What protects the words
@@ -186,7 +184,7 @@ More:
 
 ## Overlays and accessibility services
 
-Decided by the owner in step 1.10, on 2026-11-13
+Decided by the owner
 ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
 The ADR says what Android 13 to 17 offers, and why these choices.
 
@@ -227,8 +225,8 @@ How it is built, in `WindowShield.kt`:
    rest. Two checks make sure the permission is there:
    - `ManifestTest` checks the module's manifest;
    - the APK rules check fails the build of an app that has a screen of
-     this module and does not request both permissions. Built in step
-     2.5 ([build.md](../development/build.md#apk-rules-check)).
+     this module and does not request both permissions
+     ([build.md](../development/build.md#apk-rules-check)).
 
 What the user sees:
 
@@ -246,10 +244,9 @@ What the user sees:
     cannot read these screens.
   - A harmful service can falsely claim to be a tool
     ([threat model](../security/threat-model.md#out-of-scope)).
-  - TalkBack must keep reading them. The owner checked on 2026-11-13:
-    on the Pixel 9 Pro, with the Catalog preview of pull request 35 and
-    the switch **Protect this page, as in an app** on, TalkBack read
-    everything in the steps of that pull request.
+  - TalkBack must keep reading them, and it does: on the Pixel 9 Pro,
+    with Catalog's switch **Protect this page, as in an app** on,
+    TalkBack reads everything on the shielded pages.
 - Android 13 has no way to keep a window from accessibility services that
   are not tools. There, every accessibility service the user turned on
   can read these screens.
@@ -389,9 +386,7 @@ reachable while the app cannot be unlocked.
 ### Every screen is behind the gate
 
 The gate protects only the screens that put their content in it. A
-check makes sure every screen does. Built in step 2.2, before Water's
-first screen
-([PROMPTS.md](../development/PROMPTS.md#2-build)).
+check makes sure every screen does.
 
 What it does, for each app, as a unit test that runs in `check`:
 
@@ -415,8 +410,7 @@ What it does, for each app, as a unit test that runs in `check`:
    pass by checking nothing.
 
 A screen that starts locked never draws its content, so the check above
-never sees a sheet or a dialog. A second part checks them, added in step
-2.3 with Water's screens:
+never sees a sheet or a dialog. A second part checks them:
 
 1. The app class of the test, `AppLockOnForTests` of `core/testing`,
    turns the app lock on but keeps the app open, as after the system
@@ -687,8 +681,8 @@ file says that.
   the app locks.
 - `AppLockGateTest` and `AppLockActivitiesTest` wait for the state they
   read. The lock screen and the app lock screen work on a background
-  thread, and Compose's `waitForIdle` does not wait for it. Before step
-  2.5 a slow thread made such a test fail now and then
+  thread, and Compose's `waitForIdle` does not wait for it. Without the
+  wait, a slow thread makes such a test fail now and then
   ([build.md](../development/build.md#tests-that-wait-for-a-background-thread)).
 - Water's `EveryScreenIsBehindTheAppLockTest`: every screen of Water's
   merged manifest, locked, and every sheet and dialog of Water, with
@@ -708,9 +702,8 @@ a picker is open, and how a real phone delivers the screen-off
 broadcast. Also: that Android really hides other apps' windows and drops
 a covered tap, and which accessibility services it lets read a screen.
 They are checked on the owner's devices with Water ([emulator-tests.md](../development/emulator-tests.md#what-an-emulator-cannot-check)).
-TalkBack on the shielded screens was checked already: the owner's check
-with Catalog passed on 2026-11-13
-([Overlays and accessibility services](#overlays-and-accessibility-services)).
+How TalkBack reads the shielded screens is in
+[Overlays and accessibility services](#overlays-and-accessibility-services).
 
 ## Open
 
@@ -719,20 +712,21 @@ with Catalog passed on 2026-11-13
   [specification](../apps/water/spec.md#settings-screen): "Recovery key"
   and "App lock" in the Security section of Settings, and the dialog of
   [ADR 0035](../adr/0035-recovery-key-when-first-needed.md) when the key
-  is first needed. Built in step 2.5. Not open any more.
+  is first needed. Closed.
 - "The recovery key is kept in Water" for an app that is not a keeper.
-  It needs the handover between apps (step 3.0).
+  It needs the handover between apps.
 - How an app shows files that were given up (open question 13 of
   crypto-design.md).
 - The check that every app that uses these screens requests
-  `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Built in step 2.5, in the
-  APK rules check, with Water's allow list
+  `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. It is part of the APK
+  rules check, with Water's allow list
   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
-  point 5). Not open any more. Water is the first app with these
+  point 5). Closed. Water is the first app with these
   screens. Catalog removes both the screens and the permissions
   ([permissions.md](../security/permissions.md#water-appshkriusswater)).
 - The lock screen and the app lock screen take their background thread
   from `Dispatchers.IO` themselves. They could take it from
   `AppLockWatcher`, which tests already replace, so that a test would
   not have to wait for it. That changes which thread unlocks in a real
-  app, so it is the owner's call. Step 2.5 fixed the tests only.
+  app, so it is the owner's call. For now, the tests wait for the
+  thread ([Tests](#tests)).

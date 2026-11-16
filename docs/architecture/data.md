@@ -3,7 +3,6 @@
 How the apps store their records: Room on the system SQLite, the fields
 every record has, how every write stamps them, the change number and the
 "changed since" query, and how schemas and migrations are kept and tested.
-Built in Phase 1, step 3.
 
 The code is in `android/core/data`. The test helpers are in
 `android/core/testing`.
@@ -55,7 +54,7 @@ fields and the change number are stored and stamped).
    `fallbackToDestructiveMigration`: it deletes every record.
 7. Write transactions work with `AndroidSQLiteDriver`. DAO calls inside
    `withWriteTransaction` run in that transaction, and a failure rolls all
-   of them back. `RecordWriterTest` checks this. It was open in ADR 0004.
+   of them back. `RecordWriterTest` checks this.
 
 ## Record fields
 
@@ -219,7 +218,8 @@ newest edit wins.
 ## Reading changes ("changed since")
 
 The pattern that sync can use later to find what changed. It is not the
-sync design, which comes in Phase 5 ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
+sync design, which is still to come
+([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
 
 1. `changedSince(afterChangeNumber, limit)` returns up to `limit` records
    whose change number is above `afterChangeNumber`, lowest first.
@@ -283,7 +283,7 @@ interface IntakeDao : RecordDao<IntakeEntity> {
    needs a write, stop and ask the owner. Restoring a backup has its own
    `RecordWriter` function, `takeFromBackup`
    ([Records from a backup](#records-from-a-backup)). Importing from sync
-   will get its own in its step.
+   will get its own, with the sync design.
 6. Reads that show records to the user filter out deleted ones with
    `deletedAt IS NULL`.
 
