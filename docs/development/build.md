@@ -376,10 +376,11 @@ second build must write the same mapping file, or the release stops. See
   - `LargeFileTest` proves that a file is never held in memory. One file
     of a little over 2 GiB, longer than all the memory the test JVM may
     use, goes into a backup and through the check, with nothing stored.
-    It takes about 3 seconds in the cloud environment. In CI the whole
-    test task of `core/backup` ends about 29 seconds after its code is
-    compiled. Two more tests watch that writing and restoring a file of
-    64 MiB never run more than 4 MiB ahead of what they have passed on.
+    It is kept while it takes less than about a minute in CI, the
+    owner's limit
+    ([backup-format.md](../architecture/backup-format.md#decided-by-the-owner)).
+    Two more tests watch that writing and restoring a file of 64 MiB
+    never run more than 4 MiB ahead of what they have passed on.
   - `ExampleFileTest` reads the example file of the page as a backup.
     `BackupExampleFileTest` in `core/crypto` builds the same bytes a
     second time with `ReferenceStream`. It is there because only
@@ -669,11 +670,9 @@ can be slower than the test, and such a test fails now and then.
 1. The fix is in the tests. Each waits, up to five seconds, for the
    state it reads: the prompt is open, the lock screen is gone, the
    settings show.
-2. A delay of 400 ms in the lock screen's background work shows the
-   fault. Without the waits, four of the seven tests of
-   `AppLockGateTest` fail with it, and `AppLockActivitiesTest` fails
-   too. With the waits, all pass, with the delay and in runs without
-   the daemon.
+2. A delay put into the lock screen's background work shows the fault:
+   without the waits, tests of `AppLockGateTest` and
+   `AppLockActivitiesTest` fail. With the waits, they pass.
 3. A new test of a screen does the same: it waits for what it expects
    (`compose.waitUntil`), and does not only call `waitForIdle`. Water's
    screen tests have `waitFor` for it.
@@ -993,15 +992,14 @@ them.
 | `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). Water's five permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 | `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The six screens with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the six screens alone needs both, and so does a new screen of the module. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
-The tests catch a weaker check. With the checks weakened on purpose,
-all at once, seven tests fail: `allowBackup` true let through, `WebView`
-allowed, `Runtime.exec` taken off the list, and `dumpStack` taken off
-the list. With rule 10 asking for only one of the two permissions, six
-tests of `SecurityScreensRuleTest` fail.
+The tests catch a weaker check. They fail when `allowBackup` true is
+let through, when `WebView` is allowed, when `Runtime.exec` or
+`dumpStack` is taken off its list, and when rule 10 asks for only one
+of the two permissions.
 
 The other checks (Room schemas, DAO rules, the instrumented test suite,
 the graphics path, and APK rules 1 to 5) have no unit tests, except the
-allow list of rule 2. They were tested by hand, as their sections say.
+allow list of rule 2. Their sections say what each catches.
 
 ## Lint
 
@@ -1222,9 +1220,7 @@ a copy without `.git`.
 The release workflow repeats this check for every release: its job
 "Rebuild and compare" builds again on a new runner, in another folder, in
 UTC+14 and with the mask `077`, and fails unless the APK and the mapping
-file match ([release.md](release.md)). The workflow's own steps, run in
-the cloud environment on two such builds of Catalog, find the unsigned
-APK and the mapping file the same.
+file match ([release.md](release.md)).
 
 ### What it does not cover
 
@@ -1670,8 +1666,7 @@ every `assemble` task, and the `debug` one also runs in `check`.
    stop and ask the owner. Never add the library back, change the check, or
    work around it to make a build pass.
 
-The report is written to `build/reports/graphics-path-use/`. For each
-Catalog variant it checks more than 11,000 classes.
+The report is written to `build/reports/graphics-path-use/`.
 
 CI runs `checkReleaseGraphicsPathUse` by name for every app, and checks
 that its report was written, as for the APK rules check
