@@ -402,7 +402,10 @@ What limits it:
 4. Every new dependency needs a decision record (hard rule 5 in
    [CLAUDE.md](../../CLAUDE.md)). Tink is the only cryptography library.
 5. The APK rules check fails an APK with native libraries, with classes
-   of Google Play services, or with a permission that is not allowed
+   of Google Play services, or with a permission that is not allowed. It
+   also fails an APK that ships if its code names a WebView class or a
+   class loader that reads code, or calls a method that loads native
+   code from a path or starts a program
    ([build.md](../development/build.md#apk-rules-check)).
 
 #### A harmful download or action in the build
@@ -682,9 +685,13 @@ What stops it:
 4. Owner-only paths ([CODEOWNERS](../../.github/CODEOWNERS)), and the
    [protected-paths flag](protected-paths.md), which marks a pull request
    that changes one.
-5. Owner-only build checks enforce hard rules 2, 3 and 4 (the APK rules
-   check), the record rules (the schema and DAO checks), and that every
-   instrumented test runs ([build.md](../development/build.md)).
+5. Owner-only build checks ([build.md](../development/build.md)):
+   - The APK rules check and the graphics-path check enforce hard rules
+     1, 2, 3 and 4, and that Android's own backup and device transfer
+     are off.
+   - The logging check enforces hard rule 10.
+   - The schema and DAO checks enforce the record rules.
+   - The suite check makes sure that every instrumented test runs.
 6. Dependency verification fails a build that downloads a file it does
    not know.
 7. Preview builds use a throwaway key and their own application ID, so
@@ -698,13 +705,21 @@ What does not:
 1. The flag gives notice only. It never blocks a merge, and it lists ten
    limits of its own
    ([protected-paths.md](protected-paths.md#what-it-does-not-protect-against)).
-2. Code outside the owner-only paths is not flagged: app code,
-   `build.gradle.kts` files, the version catalog, `tools/`, `site/` and
-   `docs/`.
-3. Some hard rules are kept by review only. No build check refuses a
-   WebView or runtime code loading (hard rule 1), checks that an app
-   turns Android's own backup off, or finds logging of user content
-   outside `core/crypto`.
+2. Code outside the owner-only paths is not flagged: app code, the
+   `build.gradle.kts` files outside `build-logic`, the other convention
+   plugins of `build-logic`, the version catalog, `tools/`, `site/` and
+   the rest of `docs/`.
+3. The build checks do not cover everything. Review keeps the rest:
+   - Hard rule 1: rules 7 to 9 of the APK rules check run only on the
+     APKs that ship. They do not see a class name put together at run
+     time
+     ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
+   - Hard rule 3: the APK rules check finds Google Play services and the
+     emoji font loader. It does not look for other analytics, ads,
+     trackers or crash reporters.
+   - Hard rule 10: the logging check reads the text of the project's own
+     code. It does not see a call made through reflection
+     ([build.md](../development/build.md#logging-check)).
 4. A pull request's own copy of `ci.yml` and `pr-preview.yml` runs before
    anyone reviews it, without secrets
    ([ci.md](../development/ci.md#what-a-pull-request-can-do-in-these-workflows)).
