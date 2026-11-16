@@ -443,8 +443,9 @@ What stops it:
 What does not:
 
 1. Trust on first use. The checksums and keys were taken from what the
-   servers gave when each file was first added. Except for one key,
-   nothing was checked by hand
+   servers gave when each file was first added. Except for two keys,
+   the signer of one parent POM and the key of Tink, nothing was checked
+   by hand
    ([build.md](../development/build.md#where-trust-comes-from)).
 2. Gradle trusts a key for a whole Maven group where it can. A new
    version in that group, signed by the same key, is then trusted
@@ -1396,9 +1397,10 @@ Status: **Partly met.**
   - Every app that uses `core/notify` gets all three of its permissions,
     also an app that needs only notifications (notifications.md, open
     question 3).
-  - Open: the screen that asks for the notification permission
-    ([notifications.md](../architecture/notifications.md#open), open
-    question 1).
+  - The app asks for the notification permission on a screen of its
+    own: it explains first, then Android asks. Water's is the first
+    ([spec.md](../apps/water/spec.md#asking-for-notifications),
+    [notifications.md](../architecture/notifications.md#the-permission-and-the-states)).
 - MASWE-0073, declared data: met for what is built. See PRIVACY-3.
 
 **MASVS-PRIVACY-2: The app prevents identification of the user.**
