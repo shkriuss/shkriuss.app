@@ -1204,24 +1204,13 @@ order with fixed timestamps. Nothing else is needed.
 
 ### How it is checked
 
-Catalog, built twice from clean copies of the source, gives the same
-`debug`, `release` and `preview` APKs, byte for byte, and the same R8
-mapping files. That holds:
+The release workflow checks it for every release. Its job "Rebuild and
+compare" builds the release APK again on a new runner, in another
+folder, in UTC+14 and with the mask `077`, and fails unless the APK and
+the mapping file match ([release.md](release.md)).
 
-- in two different folders, with different path lengths,
-- with two separate Gradle home folders, so no cached work is shared,
-- with different time zones (UTC and UTC+14) and file permission masks
-  (`022` and `077`),
-- with the second build offline,
-- with each build run with `--no-daemon --no-build-cache`.
-
-A release APK built inside the Git checkout also matches one built from
-a copy without `.git`.
-
-The release workflow repeats this check for every release: its job
-"Rebuild and compare" builds again on a new runner, in another folder, in
-UTC+14 and with the mask `077`, and fails unless the APK and the mapping
-file match ([release.md](release.md)).
+No other check compares two builds. The `debug` and `preview` APKs are
+not compared.
 
 ### What it does not cover
 
