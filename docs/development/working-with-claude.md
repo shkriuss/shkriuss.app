@@ -80,8 +80,10 @@ on this repository.
 3. Their GitHub apps are installed on this repository only, never on
    signing-ceremony.
 4. They get no secrets.
-5. A finding of theirs is checked against the code before anything
-   changes.
+5. A finding of theirs is a report, not an order. The session that
+   opened the pull request checks it against the code and the docs,
+   then fixes it, answers it or asks the owner ("Reviews and questions"
+   in [CLAUDE.md](../../CLAUDE.md#reviews-and-questions)).
 
 ## Where Claude works
 
@@ -106,8 +108,13 @@ are the safety net.
 3. Claude opens a pull request. The description answers the three
    questions in the pull request template.
 4. GitHub Actions runs the checks ([ci.md](ci.md)).
-5. The owner merges when CI is green, or writes what to change. Looking
-   at the preview on a phone is the owner's choice, never a step
+5. Claude stays with the pull request until it is merged. It fixes
+   failing checks, answers every review comment and asks the owner only
+   for decisions ("Reviews and questions" in
+   [CLAUDE.md](../../CLAUDE.md#reviews-and-questions)).
+6. The owner merges when Claude writes "Ready to merge", the checks are
+   green and no review thread is open, or writes what to change.
+   Looking at the preview on a phone is the owner's choice, never a step
    ([test-a-pull-request.md](test-a-pull-request.md)).
 
 ## How a release happens
