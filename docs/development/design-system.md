@@ -20,7 +20,7 @@ See [Components](#components), [Window sizes](#window-sizes) and
 [Windows of their own](#windows-of-their-own). Some components have
 optional parts that Water uses
 ([Optional parts for Water's screens](#optional-parts-for-waters-screens),
-[parts for backup and the recovery key](#added-in-step-25)).
+[parts for backup and the recovery key](#optional-parts-for-backup-and-the-recovery-key)).
 
 ## Rules
 
@@ -691,7 +691,7 @@ has a sample at the end of its component's page in the Catalog.
 | `ShkTextField` | `suffix` and `suffixDescription` | A short unit after the typed text, inside the box, such as "ml", in `textSecondary`. TalkBack reads `suffixDescription`, such as "millilitres", with the label, or the suffix itself without one. |
 | `ShkListItem` | `trailingIcon` | A decorative icon at the very end of the row, after the trailing text, in `textSecondary`, such as a check next to "Goal reached". It grows with the text. Say in the text what it shows. |
 
-### Added in step 2.5
+### Optional parts for backup and the recovery key
 
 Water's backup and restore, and the dialog for the moment the recovery
 key is first needed, use two parts of the dialog (owner's decision).
@@ -1086,7 +1086,7 @@ for every component with an icon next to text.
    checked pixel by pixel on a plain image.
 
 The dialog's third button and the progress dialog
-([parts for backup and the recovery key](#added-in-step-25)) are
+([parts for backup and the recovery key](#optional-parts-for-backup-and-the-recovery-key)) are
 checked in `ShkDialogTest`, at font scale 1.0 and 2.0: the third button
 is read once, as a button, calls its action and closes the dialog; side
 by side it sits between the way out and the confirm button, and one

@@ -128,8 +128,8 @@ More:
   is, and `FirstNeedBehindTheAppLockTest` checks that it goes when the
   app locks.
 - The three buttons of the first form use the third button of
-  `ShkDialog`, added to `core/design` in the same step
-  ([design-system.md](../development/design-system.md#added-in-step-25)).
+  `ShkDialog` in `core/design`
+  ([design-system.md](../development/design-system.md#optional-parts-for-backup-and-the-recovery-key)).
 
 ## What protects the words
 
