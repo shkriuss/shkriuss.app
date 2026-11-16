@@ -424,7 +424,7 @@ That page also lists what no emulator can check.
    [ADR 0034](../adr/0034-notification-buttons.md)).
 3. A notification that is not a reminder, for example progress in the
    Sync app. Today every app that uses `core/notify` gets all three
-   permissions and both receivers.
+   permissions and all three receivers.
 4. A GrapheneOS device: after a reboot, in a secondary profile and in
    Private Space. Closed. Water's reminders behave as
    [Limits of Android](#limits-of-android) says:
