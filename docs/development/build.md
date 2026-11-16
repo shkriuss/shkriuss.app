@@ -2,7 +2,7 @@
 
 How the Gradle project in `android/` is set up, and why. Builds run in
 GitHub Actions and in the Claude Code cloud environment. There is no local
-build. Set up in Phase 0, step 3.
+build.
 
 ## At a glance
 
@@ -54,8 +54,8 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   tests only ([Shared test helpers](#shared-test-helpers)).
 - `android/feature/water/`: the data and logic of Water: its database,
   with the committed schemas in `schemas/`, its rules, its ViewModels
-  and its backup content, and from step 2.3 its screens, in the package
-  `ui`. See [apps/water/spec.md](../apps/water/spec.md).
+  and its backup content, and its screens, in the package `ui`. See
+  [apps/water/spec.md](../apps/water/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
 - `android/app/water/`: the Water app, `app.shkriuss.water`.
@@ -73,16 +73,16 @@ Owner-only ([CODEOWNERS](../../.github/CODEOWNERS)):
 - `AndroidApplicationConventionPlugin.kt`, which connects both checks to
   the build and runs the tests of the build checks in `check`,
 - `r8/app-rules.pro`, the R8 rules every app shares, which the APK rules
-  check depends on (owner's decision on pull request 25),
+  check depends on (owner's decision),
 - the two checks of the record rules, `CheckRoomSchemasTask.kt` and
   `CheckDaoRulesTask.kt`, and `AndroidRoomConventionPlugin.kt`, which
-  connects them to the build (owner's decision on pull request 21),
+  connects them to the build (owner's decision),
 - `AndroidCommon.kt`, the settings every module shares, which refuse the
-  bundled SQLite driver (owner's decision on pull request 21), register
-  the logging check and refuse `core/testing` outside tests,
+  bundled SQLite driver (owner's decision), register the logging check
+  and refuse `core/testing` outside tests,
 - the logging check, `CheckNoLoggingTask.kt`, the tests of the build
   checks in `build-logic/src/test/`, and `build-logic/build.gradle.kts`,
-  which sets those tests up (owner's decisions in step 1.9).
+  which sets those tests up (owner's decisions).
 
 ## Commands
 
@@ -207,8 +207,7 @@ and resources, and it optimises the code that is left.
 
 ### The decision
 
-The owner decided on
-[pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5):
+The owner decided:
 
 1. Keep shrinking and optimisation.
 2. Turn class and member renaming off (`-dontobfuscate`).
@@ -223,14 +222,14 @@ Reasons:
 
 The rules are in `android/build-logic/r8/app-rules.pro`.
 
-The file has two more rules since Phase 1, step 5: classes of Google
-Play services, and classes of the test fixtures of `core/crypto`, are
+The file has three more rules: classes of Google Play services, and
+classes of the test fixtures of `core/crypto` and of `core/notify`, are
 kept as they are. They exist only so that the APK rules check can find
 such a class in a `release` or `preview` APK. No app holds one, so the
 rules match nothing
 ([The Play services class rule](#the-play-services-class-rule),
 [The test fixtures rule](#the-test-fixtures-rule)). The file is
-owner-only since then.
+owner-only.
 
 ### What a stack trace shows
 
@@ -245,12 +244,13 @@ owner-only since then.
 
 ### Size
 
-Catalog's unsigned release APK, from the same source, on 2026-11-10:
+The sizes the decision rests on, for Catalog's unsigned release APK,
+built from the same source with each setting:
 
 | R8 setting | APK size | `classes.dex` |
 |---|---|---|
-| Renaming on (before) | 1,204,979 bytes | 1,083,532 bytes |
-| Renaming off (now) | 1,365,890 bytes | 1,245,284 bytes |
+| Renaming on (R8's default) | 1,204,979 bytes | 1,083,532 bytes |
+| Renaming off (chosen) | 1,365,890 bytes | 1,245,284 bytes |
 | Renaming and optimisation off (rejected) | 2,755,308 bytes | 2,620,676 bytes |
 
 Turning renaming off adds 160,911 bytes, about 13 percent.
@@ -263,7 +263,7 @@ turns a pasted stack trace back into exact files and lines. Two clean builds
 write the same mapping file, byte for byte.
 
 The release workflow attaches it to every release, next to the APK, as
-`<app>-v<version>-mapping.txt` (owner decision on pull request 5). Its
+`<app>-v<version>-mapping.txt` (owner's decision). Its
 second build must write the same mapping file, or the release stops. See
 [release.md](release.md#the-mapping-file).
 
@@ -308,9 +308,8 @@ second build must write the same mapping file, or the release stops. See
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
   (`BackupExampleFileTest`, see `core/backup` below). `StartOverTest` and
-  `RepairTest` came with step 1.7, session A: starting over after a setup
-  that stopped, a damaged keyset file, and giving file keys up.
-  `WordsProofTest` came with step 1.7, session B: the checks of the
+  `RepairTest` check starting over after a setup that stopped, a damaged
+  keyset file, and giving file keys up. `WordsProofTest` checks the
   recovery words before the app lock is turned on.
   - No Android Keystore exists on the JVM. So the tests pass a software
     stand-in for the hardware keys, `SoftwareHardwareKeys`, with the same
@@ -339,13 +338,13 @@ second build must write the same mapping file, or the release stops. See
       not know that this test reads other modules. In a cloud session it
       may skip the test when only another module changed. CI starts from
       a clean checkout and always runs it.
-    - How it was tested: with a temporary `import javax.crypto.Cipher`
-      in `core/data`, the test failed and named the file.
+    - An `import javax.crypto.Cipher` in `core/data`, for example, fails
+      the test, which names the file.
   - `NoSecretsTest` runs every flow with its failures, collects every
     text form, every error with its stack trace, Android's log and the
     standard output, and searches all of it for the keys, the recovery
-    words and the plaintext. With a temporary `toString` that showed two
-    recovery words, it failed.
+    words and the plaintext. A `toString` that shows two recovery words
+    makes it fail.
   - `ShkCryptoTest` builds the module the way an app does, with the real
     `AndroidHardwareKeys`. Robolectric has no Android Keystore, so it
     checks the other half: where the Keystore gives no answer, nothing is
@@ -378,10 +377,11 @@ second build must write the same mapping file, or the release stops. See
   - `LargeFileTest` proves that a file is never held in memory. One file
     of a little over 2 GiB, longer than all the memory the test JVM may
     use, goes into a backup and through the check, with nothing stored.
-    It takes about 3 seconds in the cloud environment. In CI the whole
-    test task of `core/backup` ended 29 seconds after its code was
-    compiled. Two more tests watch that writing and restoring a file of
-    64 MiB never run more than 4 MiB ahead of what they have passed on.
+    It is kept while it takes less than about a minute in CI, the
+    owner's limit
+    ([backup-format.md](../architecture/backup-format.md#decided-by-the-owner)).
+    Two more tests watch that writing and restoring a file of 64 MiB
+    never run more than 4 MiB ahead of what they have passed on.
   - `ExampleFileTest` reads the example file of the page as a backup.
     `BackupExampleFileTest` in `core/crypto` builds the same bytes a
     second time with `ReferenceStream`. It is there because only
@@ -395,9 +395,9 @@ second build must write the same mapping file, or the release stops. See
   - No test opens the picker itself. That is checked by hand with the
     first app, Water
     ([emulator-tests.md](emulator-tests.md#what-an-emulator-cannot-check)).
-  - From step 2.5, `RoundTripTest` also checks the counts of records
-    that are not deleted, per type name: the same when a backup is
-    written and when it is checked.
+  - `RoundTripTest` also checks the counts of records that are not
+    deleted, per type name: the same when a backup is written and when
+    it is checked.
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,
@@ -465,8 +465,8 @@ second build must write the same mapping file, or the release stops. See
     library has no merged manifest of an app, so each test names the
     activities it would hold. `AppLockCheckWithoutALockedAppTest` uses
     an app class whose app lock is off.
-  - `FirstNeedTest.kt`, from step 2.5, holds three classes for the
-    dialog that shows when the recovery key is first needed.
+  - `FirstNeedTest.kt` holds three classes for the dialog that shows
+    when the recovery key is first needed.
     `FirstNeedFormTest` is plain code. `FirstNeedTest` draws the dialog
     on a sample screen in an app with no recovery key, with a setup that
     stopped, and with a key, reads which screen each button starts from
@@ -482,10 +482,9 @@ second build must write the same mapping file, or the release stops. See
   (`WaterDatabaseTest`), the repository, the backup content and the
   ViewModels on a database in memory (`WaterRepositoryTest`,
   `WaterBackupContentTest`, `ViewModelsTest`), how numbers are shown
-  (`WaterFormatTest`), from step 2.4 the reminders
-  (`WaterRemindersTest`, `ReminderBookTest`, `RemindersViewModelTest`),
-  and from step 2.5 backup and restore and the licences
-  (`BackupViewModelTest`, `LicencesTest`).
+  (`WaterFormatTest`), the reminders (`WaterRemindersTest`,
+  `ReminderBookTest`, `RemindersViewModelTest`), and backup and restore
+  and the licences (`BackupViewModelTest`, `LicencesTest`).
   - The tests of the reminders build a real `Notify` on Robolectric's
     Android, as the app class does, with a worker that runs each piece at
     once (`RemindersSetup`), and call the handler and the buttons as
@@ -498,7 +497,7 @@ second build must write the same mapping file, or the release stops. See
     of `core/backup`, to a document behind `TestDocuments` of
     `core/testing`, and restores it on a second app with the same
     recovery key.
-  - From step 2.5: `BackupViewModelTest` runs a backup and a restore
+  - `BackupViewModelTest` runs a backup and a restore
     through `BackupViewModel`, with real keys from `SoftwareKeysApp` and
     documents behind `TestDocuments`. It checks the rows of Settings
     with no key, a setup that stopped and a key; the count of drinks,
@@ -511,41 +510,40 @@ second build must write the same mapping file, or the release stops. See
     `afterRestore`. `LicencesTest` checks that every part has a name, a
     notice and a licence text, and that each licence text has the
     SHA-256 that [third-party.md](third-party.md) records.
-- `app/water` has seven test classes with 371 tests, most of them
-  screenshots. It has `EveryScreenIsBehindTheAppLockTest`, which also locks
-  the app over each sheet and dialog, `WaterManifestTest`, which names
-  everything Water's merged manifest lets another app reach,
-  `WaterRemindersTest`, the reminders from end to end through
-  Robolectric's `AlarmManager`, the receivers of the merged manifest and
-  the buttons' pending intents (step 2.4),
-  `WaterScreensTest`, what the screens do and what TalkBack hears, and
-  `WaterScreenshotTest`, the screenshots of every screen, sheet and
-  dialog. From step 2.5:
+- `app/water` has seven test classes. Most of their tests are
+  screenshots.
+  - `EveryScreenIsBehindTheAppLockTest` also locks the app over each
+    sheet and dialog, with the dialogs of backup and restore and the
+    progress dialog, held open by the test. It covers the Licences list
+    and a notice too.
+  - `WaterManifestTest` names everything Water's merged manifest lets
+    another app reach: five permissions, Water's screen and the six of
+    `core/security`, none of the six exported, and Water's screen the
+    only exported part.
+  - `WaterRemindersTest`: the reminders from end to end through
+    Robolectric's `AlarmManager`, the receivers of the merged manifest
+    and the buttons' pending intents. After a restore the alarm moves,
+    and a reminder that no longer fits is removed.
+  - `WaterRemindersWithTheAppLockTest`: with the app lock on, a reminder
+    shows in its hidden form, without buttons. Its app class has the app
+    lock on.
+  - `WaterScreensTest`: what the screens do and what TalkBack hears.
   - `WaterBackupScreensTest`: the rows of Backup and Security and what
     each opens, the first-need dialog and "go on after", a backup and a
     restore on the screen through `TestDocuments`, the answers, the
     Licences screen, TalkBack labels and touch targets. It reads the
     intent of the file picker from Robolectric and hands the result
     back as the picker would.
-  - `WaterRemindersTest`: after a restore the alarm moves, and a
-    reminder that no longer fits is removed.
-  - `WaterRemindersWithTheAppLockTest`: with the app lock on, a reminder
-    shows in its hidden form, without buttons. Its app class has the app
-    lock on.
-  - `EveryScreenIsBehindTheAppLockTest`: also the dialogs of backup and
-    restore, the progress dialog, held open by the test, and the
-    Licences list and a notice.
-  - `WaterManifestTest`: five permissions, Water's screen and the six of
-    `core/security`, none of the six exported, and Water's screen still
-    the only exported part.
+  - `WaterScreenshotTest`: the screenshots of every screen, sheet and
+    dialog.
 
 ### Instrumented tests
 
 Tests that need a real Android run on an emulator, in the job "Emulator"
 of CI. Today those are the tests of the hardware keys in `core/crypto`
-and the tests of the alarms in `core/notify`. They cannot run in a cloud session, which has no emulator. What they
-are, how they run and what they found is in
-[emulator-tests.md](emulator-tests.md).
+and the tests of the alarms in `core/notify`. They cannot run in a cloud
+session, which has no emulator. What they are, how they run and what
+they found is in [emulator-tests.md](emulator-tests.md).
 
 ### Test fixtures
 
@@ -581,24 +579,24 @@ Test helpers that the tests of other modules may use
    alarm and notification classes, also in tests (`NotifyBoundaryTest`),
    so the tests of an app with reminders use it. It needs Robolectric,
    which it takes as compile only: the tests that use it bring
-   Robolectric themselves. Added in step 2.4. Nothing new was downloaded.
+   Robolectric themselves. It needs nothing that the build does not
+   already download.
 5. Fixtures are never part of an app. For those of `core/crypto` and
    `core/notify`, the APK rules check makes sure
    ([The test fixtures rule](#the-test-fixtures-rule)). A module that adds
    fixtures later needs the same care: a rule of its own in the APK rules
-   check, decided with the owner, as for `core/notify` in step 2.4. The
+   check, decided with the owner, as for `core/notify`. The
    [logging check](#logging-check) reads every module's fixtures as main
    code, for the case that an app wrongly depends on them (owner's
-   decision on [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
-6. Android Gradle Plugin 9.5.1 still marks test fixtures as incubating.
-   What this project needs was checked on 2026-11-12 in the cloud
-   environment:
+   decision).
+6. Android Gradle Plugin 9.5.1 marks test fixtures as incubating. What
+   this project needs works with it:
    - Kotlin code in `src/testFixtures/` compiles with no experimental
      flag.
    - The visibility of point 2 holds, for the unit tests and for the
      emulator tests.
-   - Nothing new is downloaded, so the dependency verification file did
-     not change.
+   - Nothing new is downloaded, so test fixtures need no entry in the
+     dependency verification file.
 
 ### Shared test helpers
 
@@ -607,8 +605,8 @@ The build refuses it anywhere but in a test
 ([Logging check](#logging-check)), so nothing in it reaches an app. It
 holds the migration test helpers and the fakes of
 [architecture/data.md](../architecture/data.md#migration-tests), the
-runner of the tests on an emulator, and, from step 2.2, the check that
-every screen of an app is behind the app lock
+runner of the tests on an emulator, and the check that every screen of
+an app is behind the app lock
 ([security-screens.md](../architecture/security-screens.md#every-screen-is-behind-the-gate)).
 
 The app lock check is three parts:
@@ -619,8 +617,8 @@ The app lock check is three parts:
 2. `LockedAppForTests` is the app class of that test: real keys on the
    stand-in for the Keystore, with the app lock on and locked before any
    screen starts. `UnlockedAppForTests` is the same with the app lock
-   off, for screenshots. Step 2.5 added two more, both with the app lock
-   off: `NewAppForTests` has no recovery key, as right after the app was
+   off, for screenshots. Two more have the app lock off too:
+   `NewAppForTests` has no recovery key, as right after the app was
    installed, and `StoppedSetupAppForTests` has a setup of the recovery
    key that stopped half way.
 3. `MergedManifest` reads the activities of the app's merged manifest,
@@ -630,7 +628,7 @@ The app lock check is three parts:
    not do: it also lists the screens of the test libraries, such as
    those of `androidx.test`.
 
-Why the helper lives in `core/testing`, decided in step 2.2:
+Why the helper lives in `core/testing`:
 
 - It must never reach an app. `core/testing` is already kept out of
   apps by the build. Test fixtures of `core/security` would need a rule
@@ -644,18 +642,18 @@ Why the helper lives in `core/testing`, decided in step 2.2:
 - Activity Compose comes before the Compose test library in its build
   file on purpose. In the other order Gradle reads the metadata of old
   AndroidX versions that `androidx.test:core` 1.5.0 asks for, which no
-  build read before, and dependency verification refuses them. For the
+  other build reads, and dependency verification refuses them. For the
   same reason it holds Espresso at 3.7.0, as the Compose convention
   plugin does for tests: lint of `core/testing` would otherwise read the
-  metadata of Espresso 3.5.0. No file was downloaded that the
+  metadata of Espresso 3.5.0. So it downloads no file that the
   verification file does not already list.
 
 Every app has one test that calls the check: Water's
 `EveryScreenIsBehindTheAppLockTest`, which every later app copies, with
 its own locked app class.
 
-`TestDocuments`, from step 2.5, stands for the documents of the system
-file picker in unit tests. It is a content provider that keeps each
+`TestDocuments` stands for the documents of the system file picker in
+unit tests. It is a content provider that keeps each
 document as a file in a folder of the test. A test sets it up with
 Robolectric, gets a `content:` URI for a name, and can make the next
 open fail, to try a storage app that refuses. The tests of
@@ -667,20 +665,16 @@ Some screens work on a background thread: the lock screen and the app
 lock screen of `core/security` on `Dispatchers.IO`, and Room on a thread
 of its own. Compose's `waitForIdle` does not wait for such a thread. A
 test that reads a state right after it can run before the thread is
-done.
+done. On a cold JVM, as in a run without the Gradle daemon, the thread
+can be slower than the test, and such a test fails now and then.
 
-1. In step 2.4, `AppLockGateTest` failed once in a run without the
-   Gradle daemon and passed afterwards. That was this: on a cold JVM the
-   background thread was slower than the test.
-2. It was shown in step 2.5: with a delay of 400 ms put into the lock
-   screen's background work, four of the seven tests of `AppLockGateTest`
-   failed with the same messages, and `AppLockActivitiesTest` failed
-   too. The delay was not committed.
-3. The fix is in the tests. Each waits, up to five seconds, for the
+1. The fix is in the tests. Each waits, up to five seconds, for the
    state it reads: the prompt is open, the lock screen is gone, the
-   settings show. With the delay still in, all passed. Without it, three
-   runs without the daemon passed.
-4. A new test of a screen does the same: it waits for what it expects
+   settings show.
+2. A delay put into the lock screen's background work shows the fault:
+   without the waits, tests of `AppLockGateTest` and
+   `AppLockActivitiesTest` fail. With the waits, they pass.
+3. A new test of a screen does the same: it waits for what it expects
    (`compose.waitUntil`), and does not only call `waitForIdle`. Water's
    screen tests have `waitFor` for it.
 
@@ -707,9 +701,9 @@ Roborazzi takes screenshots on the JVM, through Robolectric.
    images. Commit them with the change.
 
 The test starts the real activity, so the images show the window theme and
-the system bars' space too. An earlier version drew the screen on its own,
-and under heavy load it once captured an empty image. Starting the activity
-through the Compose test rule waits until drawing is done.
+the system bars' space too. Starting the activity through the Compose test
+rule waits until drawing is done. A test that draws the screen on its own
+can capture an empty image under heavy load.
 
 At font scale 2.0 the title grows by about 1.5 times, not 2 times. Android
 14 and later scale large text less than small text. That is correct.
@@ -724,9 +718,9 @@ At font scale 2.0 the title grows by about 1.5 times, not 2 times. Android
 - On JDK 21, Robolectric 4.17 needs one test JVM flag:
   `--add-exports=java.base/jdk.internal.access=ALL-UNNAMED`. Without it
   every test fails with "Failed to interact with raw FileDescriptor
-  internals". The flag `--add-opens=java.base/java.io=ALL-UNNAMED` from the
-  earlier test build is no longer needed. Robolectric 4.18 is still a beta
-  (`4.18-beta-1`), so it was not tried.
+  internals". The flag `--add-opens=java.base/java.io=ALL-UNNAMED` is not
+  needed. Robolectric's beta `4.18-beta-1` is not used: updates skip
+  pre-releases (prompt R5 in [PROMPTS.md](PROMPTS.md)).
 - Compose UI tests ask for Espresso 3.5. Espresso 3.5 fails on the Android
   17 image (it calls `InputManager.getInstance()`, which Android 17
   removed). A version constraint lifts it to 3.7.0, which works. Espresso
@@ -754,10 +748,11 @@ that holds the database. The decision is in
 The steps for a schema change are in
 [architecture/data.md](../architecture/data.md#how-to-change-a-schema).
 
-How it was tested in Phase 1, step 3: with version 2 of the example
-database not yet recorded, `checkRoomSchemas` failed and named
-`2.json`. A changed `NOT NULL` in the committed `2.json` failed it too.
-A change of spaces only did not, because the schema is the same.
+What it catches: a new database version whose schema file is not
+recorded fails `checkRoomSchemas`, which names the file, such as
+`2.json`. A committed file that differs from the schema fails it too,
+for example a changed `NOT NULL`. A change of spaces only passes,
+because the schema is the same.
 
 ## DAO rules check
 
@@ -792,7 +787,7 @@ runs in `check` for every module with the `shkriuss.android.room` plugin.
    its query is `DELETE FROM <table> WHERE deletedAt IS NOT NULL`,
    optionally followed by `AND` and more conditions, with no `OR`. A class
    may have only one. A marked function that is anything else fails.
-   There is no other exception (owner's decision on pull request 21).
+   There is no other exception (owner's decision).
 6. The failure message lists each problem, and says to stop and ask the
    owner. Never change the check to make a build pass.
 
@@ -806,26 +801,24 @@ What it cannot see:
 - Calls to `rawInsert` or `rawUpdate` from modules without the Room
   plugin, such as app modules.
 
-How it was tested in Phase 1, step 3, with a temporary file in the tests
-of `core/data`:
+What it catches, shown with a sample file in the tests of `core/data`:
 
-1. First round. In DAOs and in one base interface without `@Dao`, the
-   file declared `@Delete`, `@Upsert`, `@Insert` and `@Update` with
-   `REPLACE`, `DELETE` and lower-case `update` queries, `INSERT OR
-   REPLACE`, `REPLACE INTO`, a `DELETE` built from two joined constants, a
-   marked purge with `OR`, a marked read, and two marked purges in one
-   DAO. `checkDaoRules` failed and named all 13.
-2. Second round, after the owner's answers on pull request 21. The same
-   file also declared a plain `@Insert` and a plain `@Update` in a feature
-   DAO, an `INSERT` query, a repository that calls `rawInsert`, and a
-   function reference to `rawUpdate`. The check failed and named 20
-   problems: the 13, the `@Insert` and `@Update` of the two `REPLACE`
-   functions, and the 5 new ones.
-3. In both rounds a marked purge with quoted names and `AND`, a read with
+1. In DAOs and in one base interface without `@Dao`, the sample
+   declares `@Delete`, `@Upsert`, `@Insert` and `@Update` with
+   `REPLACE`, a plain `@Insert` and a plain `@Update` in a feature DAO,
+   `DELETE`, `INSERT` and lower-case `update` queries, `INSERT OR
+   REPLACE`, `REPLACE INTO`, a `DELETE` built from two joined constants,
+   a marked purge with `OR`, a marked read, and two marked purges in one
+   DAO. It also has a repository that calls `rawInsert`, and a function
+   reference to `rawUpdate`.
+2. `checkDaoRules` fails and names every one, 20 problems in all. The
+   `@Insert` and `@Update` with `REPLACE` count twice: once for
+   `REPLACE`, and once for being outside `RecordDao`.
+3. These pass: a marked purge with quoted names and `AND`, a read with
    `update`, `delete` and `insert` inside quotes and a comment, and a
-   repository that only calls `find` and `changedSince` passed.
-4. With the file removed, the check passed on the 108 classes of
-   `core/data`, including Room's generated DAO implementations.
+   repository that only calls `find` and `changedSince`.
+4. Without the sample, the check passes on every class of `core/data`,
+   including Room's generated DAO implementations.
 
 ## Instrumented test suite check
 
@@ -835,8 +828,7 @@ The emulator runs one class of a module: the JUnit suite
 A test class that the suite does not list is compiled and never runs,
 and no red check would say so. The task `checkInstrumentedTestSuite`
 fails the build for it. It runs in `check` for every module with the
-`shkriuss.android.instrumented-test` plugin. The owner asked for it on
-[pull request 24](https://github.com/shkriuss/shkriuss.app/pull/24).
+`shkriuss.android.instrumented-test` plugin. The owner asked for it.
 
 What it compares:
 
@@ -869,27 +861,24 @@ How it works, and its limits:
 The check is `CheckInstrumentedTestSuiteTask.kt` in `build-logic`. It is an
 owner-only file, as are the runner and the plugin that connects them.
 
-How it was tested, on 2026-11-12, in `core/crypto`:
+What it catches, shown in `core/crypto`:
 
-1. `TinkOnAndroidTest` taken out of the suite: the check failed and named
-   it.
-2. A new file `ForgottenTest.kt` with one `@Test`, in `src/sharedTest/`
-   and not in the suite: the check failed and named it.
-3. `DeviceApp`, a class with no test, added to the suite: the check
-   failed and named it.
-4. The suite's file taken away: the check failed and said that none of
-   the tests would run.
-5. A `@Test` written only in a line comment, in a block comment and
-   inside quotes: the check passed.
-6. With all of that undone, the check passed on the 19 files of
-   `core/crypto`.
+1. A test class taken out of the suite, such as `TinkOnAndroidTest`: the
+   check fails and names it.
+2. A new file with one `@Test` in `src/sharedTest/` that is not in the
+   suite: the check fails and names it.
+3. A class with no test, such as `DeviceApp`, added to the suite: the
+   check fails and names it.
+4. No suite file: the check fails and says that none of the tests would
+   run.
+5. A `@Test` written only in a line comment, in a block comment or
+   inside quotes: the check passes.
 
 ## Logging check
 
 Hard rule 10: user content must never reach a log. So main code never
 logs or prints. The task `checkNoLogging` fails the build when it does.
-It runs in `check` for every Android module. The owner asked for it in
-step 1.9
+It runs in `check` for every Android module. The owner asked for it
 ([threat model](../security/threat-model.md#found-while-writing-this-page),
 point 3). It replaced the test `theModuleNeverLogsOrPrints` in
 `core/crypto`, which checked that one module only.
@@ -929,8 +918,7 @@ How it treats each kind of code:
   `NoSecretsTest` in `core/crypto`.
 - **Test fixtures** are checked as main code. They are meant for tests
   only, but an app that wrongly depends on them would ship them (owner's
-  decision on [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
-  See the limit in [Test fixtures](#test-fixtures), point 5.
+  decision). See the limit in [Test fixtures](#test-fixtures), point 5.
 - **Catalog** is checked like every app. It ships to users.
 - **`core/testing`** is not checked. It is a module of test helpers, and
   its test runner logs on purpose, so that the emulator job's log holds
@@ -938,13 +926,12 @@ How it treats each kind of code:
   test code: if any module declares `core/testing` in a configuration
   whose name does not start with `test` or `androidTest`, every Gradle
   command fails and names the module and the configuration. So
-  `core/testing` can never reach an app (owner's decision in step 1.9).
+  `core/testing` can never reach an app (owner's decision).
 - **Test fixtures** may not declare `core/testing` either, so a
   configuration whose name starts with `testFixtures` fails the rule too.
   An app that wrongly depends on a module's test fixtures would take
-  `core/testing` with them (owner's decision on
-  [pull request 34](https://github.com/shkriuss/shkriuss.app/pull/34)).
-  No module declares it there.
+  `core/testing` with them (owner's decision). No module declares it
+  there.
 - **`build-logic`** is not checked. It is the build's own code and never
   part of an app.
 
@@ -952,44 +939,37 @@ Only Android modules are checked. `AndroidCommon.kt` registers the check,
 and only the application and library plugins call it. A module that is
 not an Android module, such as a plain Kotlin module, would not be
 checked. Such a module must not be added without covering it by this
-check first (owner's decision in step 1.9).
+check first (owner's decision).
 
 Its limit: it reads text. A call written so that it shows none of the
 forms, for example through reflection, is not seen. Review keeps that.
 
-How it was tested, on 2026-11-13 in the cloud environment:
+What it catches:
 
-1. Before the change, the forms appeared in main code in one place only:
-   the test runner in `core/testing`.
-2. With the check in place, all seven checked modules passed. They read
-   9 to 29 files each, 29 in `core/crypto`: its 27 main files and its
-   two test fixtures. The fixtures held none of the forms, so they did not
-   change.
-3. A line `android.util.Log.d("probe", title)` added to a main file of
-   `core/design` failed the check, which named the file, the line and
-   the forms `android.util.Log` and `Log.`.
-4. The same line in a test file of `core/design` passed.
-5. `implementation(project(":core:testing"))` in Catalog's build file
-   failed every Gradle command, naming `:app:catalog` and
+1. A line such as `android.util.Log.d("probe", title)` in a main file
+   fails the check, which names the file, the line and the forms
+   `android.util.Log` and `Log.`.
+2. The same line in a test file passes.
+3. `implementation(project(":core:testing"))` in Catalog's build file
+   fails every Gradle command, which names `:app:catalog` and
    `implementation`.
-6. `CoreTestingGuardTest` failed when the rule was put back to let
-   `testFixtures` configurations declare `core/testing`, and passed with
-   the rule as it is.
-7. `NoLoggingCheckTest` failed in four tests when the check was put back
-   to leave `testFixtures` folders out, and passed with the check as it
-   is.
+4. `CoreTestingGuardTest` fails if the rule lets `testFixtures`
+   configurations declare `core/testing`.
+5. `NoLoggingCheckTest` fails in four tests if the check leaves
+   `testFixtures` folders out.
 
 ## Tests of the build checks
 
-Each build check added in step 1.9 has unit tests. They show that it
-fails on a sample that breaks its rule, and passes on one that does not.
-The owner asked for them in step 1.9.
+The logging check, the rule that keeps `core/testing` in tests, the
+reader of binary resources, APK rules 6 to 10 and the allow list of
+rule 2 have unit tests. They show that a check fails on a sample that
+breaks its rule, and passes on one that does not. The owner asked for
+them.
 
 1. They are in `build-logic/src/test/kotlin/`, and run on the JVM with
    JUnit 4. `build-logic/build.gradle.kts` sets them up. JUnit 4.13.2 is
-   the version every module's tests use. It was already in the version
-   catalog and in the dependency verification, so nothing new is
-   downloaded.
+   the version every module's tests use. It is in the version catalog
+   and in the dependency verification, so nothing new is downloaded.
 2. `build-logic` is a build of its own, so the main build's `check`
    would not run them. The application plugin makes every app's `check`
    depend on `:build-logic:test`. So CI's `check` runs them on every pull
@@ -1010,22 +990,17 @@ The owner asked for them in step 1.9.
 | `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. |
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. |
-| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (step 2.4, owner's request; five permissions since step 2.5). Water's five permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
-| `SecurityScreensRuleTest` | Rule 10 of the APK rules check (step 2.5, owner's request). The six screens with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the six screens alone needs both, and so does a new screen of the module. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
+| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). Water's five permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
+| `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The six screens with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the six screens alone needs both, and so does a new screen of the module. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
-How the tests were checked: on 2026-11-13, the checks were weakened on
-purpose, all at once: `allowBackup` true let through, `WebView` allowed,
-`Runtime.exec` taken off the list, and `dumpStack` taken off the list.
-Seven tests failed. With the checks restored, all passed. On 2026-11-14
-rule 10 was weakened the same way: it asked for one of the two
-permissions only. Six tests of `SecurityScreensRuleTest` failed. With the
-rule restored, all passed.
+The tests catch a weaker check. They fail when `allowBackup` true is
+let through, when `WebView` is allowed, when `Runtime.exec` or
+`dumpStack` is taken off its list, and when rule 10 asks for only one
+of the two permissions.
 
-The older checks (Room schemas, DAO rules, the instrumented test suite,
-the graphics path, and APK rules 1 to 5) were tested by hand, as their
-sections say. They have no unit tests yet, except the allow list of rule
-2, which has `PermissionAllowListTest` since step 2.4. Rule 10 has
-`SecurityScreensRuleTest` from the start.
+The other checks (Room schemas, DAO rules, the instrumented test suite,
+the graphics path, and APK rules 1 to 5) have no unit tests, except the
+allow list of rule 2. Their sections say what each catches.
 
 ## Lint
 
@@ -1052,14 +1027,13 @@ sections say. They have no unit tests yet, except the allow list of rule
    `NewerVersionAvailable` and `AndroidGradlePluginVersion`.
    - Why: they look up the newest versions online while lint runs. Their
      result depends on the date and the network, not on the code, so the
-     same commit could pass today and fail tomorrow. In Phase 0, step 3,
-     one of them asked `repo.gradle.org` for the newest Gradle release, which
+     same commit could pass today and fail tomorrow. One of them, for
+     example, asks `repo.gradle.org` for the newest Gradle release, which
      the cloud environment blocks but GitHub Actions does not.
    - Updates are handled by prompt R5 in [PROMPTS.md](PROMPTS.md) instead.
-   - This is the owner's decision on
-     [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5). It is
-     not a precedent. Every other lint check stays on, and turning off
-     another one needs the owner's decision too (hard rule 9).
+   - This is the owner's decision. It is not a precedent. Every other lint
+     check stays on, and turning off another one needs the owner's
+     decision too (hard rule 9).
    - The setting, with the same reason, is in `build-logic`,
      `AndroidCommon.kt`.
 
@@ -1081,30 +1055,28 @@ The decision is recorded in
 
 ### Where trust comes from
 
-- The keys and checksums were recorded on 2026-11-10 from the first
-  download. Gradle fetched the public keys from `keys.openpgp.org` and
-  `keyserver.ubuntu.com`. Nothing was checked by hand. That is trust on
-  first use.
-- Room, KSP and what they need were added on 2026-11-12, in Phase 1,
-  step 3, the same way. Gradle could not fetch one key,
-  `3288B8BE8512D6C0CA185268C51E6CBC7FF46F0B` (Ron Shapiro, Google), from
-  any key server, in two tries. It signs one parent POM,
+- Each key and checksum was recorded from the first download of its
+  file. Gradle fetched the public keys from `keys.openpgp.org` and
+  `keyserver.ubuntu.com`. Nothing was checked by hand, apart from the
+  two keys of the next two points. That is trust on first use.
+- Room, KSP and what they need were added the same way. Gradle could
+  not fetch one key, `3288B8BE8512D6C0CA185268C51E6CBC7FF46F0B` (Ron
+  Shapiro, Google), from any key server. It signs one parent POM,
   `com.google.auto:auto-parent:7`. Claude fetched the key from
   `keyserver.ubuntu.com`, checked with `gpg` that it made the POM's
   signature, and added it to the keyring. Gradle then recorded the
   signature itself.
-- Tink was added on 2026-11-12, in Phase 1, step 4, session B, the same
-  way. It needed one new key,
+- Tink was added the same way. It needed one new key,
   `73976C9C39C1479B84E2641A5A68A2249128E2C6`, "Tink Developers (Signing
   key for Maven artifacts)". It is trusted for `tink-android` 1.24.0
   only. Claude checked with `gpg` that the key in the keyring made the
   signatures of the jar and of the POM. The four libraries Tink brings
-  needed no new entry: Gson and Error Prone are signed by keys that were
-  already trusted for their groups, the key of JSR-305 3.0.2 was already
-  trusted for exactly that version, and Google's key covers
-  `androidx.annotation`. The file already trusted another key for `tink`
-  1.7.0, an older artifact that the Android Gradle Plugin uses. That
-  entry was not touched.
+  need no entry of their own: Gson and Error Prone are signed by keys
+  trusted for their groups, the key of JSR-305 3.0.2 is trusted for
+  exactly that version, and Google's key covers `androidx.annotation`.
+  The file trusts another key for `tink` 1.7.0, an older artifact that
+  the Android Gradle Plugin uses. That entry is separate from the one
+  for `tink-android`.
 - 60 keys are trusted. Google signs most AndroidX and AGP files, Room 3
   and `androidx.sqlite` included, so those are checked by signature.
 - 64 components are listed one by one. 48 are checked by checksum only,
@@ -1134,7 +1106,7 @@ Claude does this in the same pull request as the change to
 4. Search the file for `ignored-key`. An ignored key means Gradle could not
    fetch it. Run step 2 again with `--refresh-keys`; Gradle remembers a
    failed key lookup for 24 hours. In the cloud environment, key lookups
-   failed now and then in Phase 0 and Phase 1.
+   fail now and then.
    - If a key still fails, fetch it from `keyserver.ubuntu.com`, check with
      `gpg --verify` that it made the signature of the files it signs, and
      add it to `verification-keyring.keys`. Remove the `ignored-key` entry
@@ -1148,9 +1120,8 @@ Claude does this in the same pull request as the change to
 
 Gradle adds entries but never removes them. To drop old ones, put back
 the files from `main` (or delete them and add the `key-servers` line
-back), then run steps 1 and 2. In Phase 1, step 3, both files were
-started again from `main`, so the pull request held only the entries the
-new dependencies need.
+back), then run steps 1 and 2. Starting both files again from `main`
+keeps a pull request to only the entries its new dependencies need.
 
 ### When verification fails
 
@@ -1188,8 +1159,7 @@ The report lists each file that failed, and what was wrong with it:
 This holds for a single diagnostic command too, such as
 `./gradlew dependencies` with `--dependency-verification=off` to see
 where a version comes from. A Claude session asks the owner before it
-runs one (owner's decision on pull request 40, after a session ran such
-a command without asking).
+runs one (owner's decision).
 
 ## Gradle wrapper
 
@@ -1197,7 +1167,7 @@ a command without asking).
   Gradle 9.6.0.
 - `distributionSha256Sum` pins the download. The value comes from Gradle's
   version list at `https://services.gradle.org/versions/all`, which is also
-  what Gradle's own wrapper check uses. The download was checked against it.
+  what Gradle's own wrapper check uses. The download matches it.
 - `gradle-wrapper.jar` was made by Gradle 9.6.1 itself, and matches the
   published checksum `497c8c2a…a194a9c7`.
 - The cloud environment blocks `downloads.gradle.org`, where the
@@ -1230,39 +1200,23 @@ a command without asking).
    ([release.md](release.md)).
 
 Gradle, AGP, R8 and the Kotlin compiler already write files in a fixed
-order with fixed timestamps. Nothing else was needed.
+order with fixed timestamps. Nothing else is needed.
 
-### How it was checked
+### How it is checked
 
-On 2026-11-10, in the cloud environment, Catalog was built twice from clean
-copies of the source:
+The release workflow checks it for every release. Its job "Rebuild and
+compare" builds the release APK again on a new runner, in another
+folder, in UTC+14 and with the mask `077`, and fails unless the APK and
+the mapping file match ([release.md](release.md)).
 
-- in two different folders, with different path lengths,
-- with two separate Gradle home folders, so no cached work was shared,
-- with different time zones (UTC and UTC+14) and file permission masks
-  (`022` and `077`),
-- the second build offline,
-- each with `--no-daemon --no-build-cache`.
-
-The `debug`, `release` and `preview` APKs were byte for byte the same, and
-so were the R8 mapping files. A release APK built inside the Git checkout
-also matched one built from a copy without `.git`. The check was repeated
-after each change to the build in pull request 5, last with R8 renaming
-turned off.
-
-The release workflow repeats this check for every release: its job
-"Rebuild and compare" builds again on a new runner, in another folder, in
-UTC+14 and with the mask `077`, and fails unless the APK and the mapping
-file match ([release.md](release.md)). On 2026-11-11 the workflow's own
-steps were run in the cloud environment on two such builds of Catalog.
-The unsigned APK (1,365,890 bytes) and the mapping file (18,200,713 bytes)
-were the same.
+No other check compares two builds. The `debug` and `preview` APKs are
+not compared.
 
 ### What it does not cover
 
 - Debug APKs are signed with the machine's own debug key. They only match
   when built on the same machine.
-- Builds were compared on Linux only. CI also runs on Linux.
+- Builds are compared on Linux only. CI also runs on Linux.
 
 ## APK rules check
 
@@ -1273,9 +1227,9 @@ and fails the build if:
 2. its manifest declares any permission, or requests one that is not on
    the app's allow list (hard rule 4). The list is per app, by module
    name, the same for every build type. Water's list holds five: the
-   three permissions of `core/notify` since step 2.4, and the two of
-   `core/security`, `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`, since
-   step 2.5. Every other app's list is empty.
+   three permissions of `core/notify`, and the two of `core/security`,
+   `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. Every other app's list is
+   empty.
    Only the owner changes it ([permissions.md](../security/permissions.md)).
    The report of a build that passes names the allowed permissions,
 3. its manifest still starts the emoji font loader (hard rule 3, see below),
@@ -1286,7 +1240,7 @@ and fails the build if:
    `app.shkriuss.core.crypto.fixtures`, the test fixtures of
    `core/crypto` ([ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md),
    see below), or under `app.shkriuss.core.notify.fixtures`, the test
-   fixtures of `core/notify` (owner's decision in step 2.4),
+   fixtures of `core/notify` (owner's decision),
 6. Android's own backup or device transfer is not off
    ([The backup rule](#the-backup-rule)),
 7. in an APK that ships, its code names a WebView class,
@@ -1307,7 +1261,7 @@ of these without anyone noticing. The check makes sure someone does.
 
 ### The security screens rule
 
-The owner asked for rule 10 in step 2.5
+The owner asked for rule 10
 ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
 point 5).
 
@@ -1328,16 +1282,15 @@ other app's window. Without `USE_BIOMETRIC` the system prompt cannot
 open. An app's manifest can remove a permission that a library brings,
 and nothing else would notice.
 
-How it was checked, on 2026-11-14: one removal of a permission was put
-back into Water's manifest. `:app:water:checkDebugApkRules` failed and
-named the permission and ADR 0033. The removal was taken out again, and
-the check passed. Its tests are in
+What it catches: if Water's manifest removes one of the two
+permissions, `:app:water:checkDebugApkRules` fails and names the
+permission and ADR 0033. Its tests are in
 [Tests of the build checks](#tests-of-the-build-checks).
 
 ### The Play services class rule
 
-The owner asked for rule 4 in Phase 1, step 4, session B. Tink would use
-a security provider of Play services if an app had one
+The owner asked for rule 4. Tink would use a security provider of Play
+services if an app had one
 ([crypto-design.md](../security/crypto-design.md#no-play-services-provider)).
 An app has one only if it holds Play services code.
 
@@ -1360,10 +1313,9 @@ How it still finds a class after R8:
    only refers to always keeps its name.
 3. One R8 rule keeps every class of that package as it is:
    `-keep class com.google.android.gms.** { *; }` in
-   `build-logic/r8/app-rules.pro`. The owner asked for it on pull
-   request 25. Without it R8 can fold such a class into another one:
-   the name is gone and the code stays. That is what the second test
-   below showed.
+   `build-logic/r8/app-rules.pro`. The owner asked for it. Without it R8
+   can fold such a class into another one: the name is gone and the
+   code stays. "What it catches" below shows this.
 4. The same rule runs on the preview APK of every pull request, and on a
    debug APK whenever one is built. R8 never touches a debug APK. CI
    itself builds only `release` and `preview`.
@@ -1376,39 +1328,28 @@ Its limits:
   instead, as the [graphics-path check](#the-graphics-path-check) does.
   That needs `AndroidApplicationConventionPlugin.kt`, which is
   owner-only.
-- Before the R8 rule, a Play services library that was added but never
-  called left no class in a release APK, because R8 removes code that
-  nothing uses. With the R8 rule its classes are kept, so the release
-  APK fails too. A Play services library in an app is always a mistake,
+- Without the R8 rule, a Play services library that is added but never
+  called would leave no class in a release APK, because R8 removes code
+  that nothing uses. The R8 rule keeps its classes, so the release APK
+  fails too. A Play services library in an app is always a mistake,
   called or not.
 
-How it was tested, on 2026-11-12 in the cloud environment:
+What it catches, shown with a temporary class
+`com.google.android.gms.Probe` in Catalog, used by its activity:
 
-1. Catalog got a temporary class `com.google.android.gms.Probe`, used by
-   its activity.
-2. `assembleDebug`, `assembleRelease` and `assemblePreview` each failed in
-   their APK rules check and named the class: in `classes4.dex` and
-   `classes5.dex` of the debug APK, and in `classes.dex` of the release
-   and the preview APK, which R8 had shrunk.
-3. With the class removed, all three passed.
-
-That first probe happened to be a class that R8 left as it was. The
-second test, on the same day for pull request 25, used one that R8 folds
-away:
-
-1. Catalog got a temporary class `com.google.android.gms.Probe` with one
-   small function, and its activity used the result.
-2. Without the R8 rule: `assembleDebug` failed in its APK rules check
-   and named the class. `assembleRelease` and `assemblePreview`
-   **passed**. R8 had folded the class into the activity, so no class of
-   that package was named in the APK any more.
-3. With the R8 rule: `assembleDebug`, `assembleRelease` and
-   `assemblePreview` each failed in their APK rules check and named the
-   class: in `classes6.dex` and `classes7.dex` of the debug APK, and in
-   `classes.dex` of the release and the preview APK.
+1. `assembleDebug`, `assembleRelease` and `assemblePreview` each fail in
+   their APK rules check and name the class and the dex file that holds
+   it: `classes.dex` in the release and the preview APK, which R8 has
+   shrunk.
+2. That holds for a class that R8 leaves as it is, and for a class with
+   one small function, which R8 would fold into the activity.
+3. Without the R8 rule, the small class is found only in the debug APK.
+   `assembleRelease` and `assemblePreview` **pass**: R8 folds the class
+   into the activity, so no class of that package is named in the APK
+   any more.
 4. With the use removed and only the class left, `assembleRelease` still
-   failed and named the class.
-5. With the class removed, all three passed.
+   fails and names the class.
+5. Without the probe, all three pass.
 6. The release APK of Catalog is the same, byte for byte, with and
    without the R8 rule (SHA-256 compared). In an app with no Play
    services class the rule matches nothing.
@@ -1419,10 +1360,10 @@ off, fails CI ([ci.md](ci.md#job-check)).
 
 ### The test fixtures rule
 
-The owner asked for rule 5 in Phase 1, step 5. The test fixtures of
-`core/crypto` hold a stand-in for the Android Keystore that keeps keys in
-memory ([Test fixtures](#test-fixtures)). It is for tests only and must
-never be in an app.
+The owner asked for rule 5. The test fixtures of `core/crypto` hold a
+stand-in for the Android Keystore that keeps keys in memory
+([Test fixtures](#test-fixtures)). It is for tests only and must never
+be in an app.
 
 1. The rule searches the bytes of every dex file for
    `Lapp/shkriuss/core/crypto/fixtures/` and names each class it finds,
@@ -1430,11 +1371,11 @@ never be in an app.
 2. One R8 rule goes with it, in `build-logic/r8/app-rules.pro`:
    `-keep class app.shkriuss.core.crypto.fixtures.** { *; }`. It makes
    sure such a class keeps its name in a `release` and a `preview` APK,
-   so that the check can see it. Why it is needed is in "How it was
-   tested".
+   so that the check can see it. Why it is needed is in "What it
+   catches" below.
 3. In an app with no fixtures, the R8 rule matches nothing. The release
    APK of Catalog is the same, byte for byte, with and without it
-   (SHA-256 compared on 2026-11-12).
+   (SHA-256 compared).
 4. An app that only depends on the fixtures and never calls them fails
    too. The R8 rule keeps the classes, where R8 would have dropped them.
    A dependency on the fixtures outside tests is always a mistake.
@@ -1443,54 +1384,49 @@ never be in an app.
    JVM and on the emulator uses it. Only CI installs that APK, on an
    emulator. The owner decided to leave that as it is.
 
-How it was tested, on 2026-11-12 in the cloud environment:
+What it catches, shown with a temporary dependency of Catalog on the
+fixtures, `implementation(testFixtures(project(":core:crypto")))`, and
+one call to them in its activity:
 
-1. Catalog got a temporary dependency on the fixtures,
-   `implementation(testFixtures(project(":core:crypto")))`, and one call
-   to them in its activity.
-2. First try, without the R8 rule. `assembleDebug` failed in its APK
-   rules check and named `SoftwareHardwareKeys` and `SoftwareKeysApp`.
-   `assembleRelease` and `assemblePreview` **passed**. R8 had folded the
-   two classes into other classes. No class of the fixtures package was
-   named in the APK any more, but the code of the stand-in was in it:
-   its own error messages were in the dex file.
-3. Second try, with the R8 rule. `assembleDebug`, `assembleRelease` and
-   `assemblePreview` each failed in their APK rules check and named the
-   two classes: in `classes2.dex` and `classes6.dex` of the debug APK,
-   and in `classes.dex` of the release and the preview APK.
-4. With the call removed and only the dependency left, `assembleRelease`
-   still failed and named the two classes.
-5. With the probe removed, all three passed.
+1. Without the R8 rule, `assembleDebug` fails in its APK rules check
+   and names `SoftwareHardwareKeys` and `SoftwareKeysApp`.
+   `assembleRelease` and `assemblePreview` **pass**. R8 folds the two
+   classes into other classes. No class of the fixtures package is
+   named in the APK any more, but the code of the stand-in is in it:
+   its own error messages are in the dex file.
+2. With the R8 rule, `assembleDebug`, `assembleRelease` and
+   `assemblePreview` each fail in their APK rules check and name the two
+   classes, in the debug APK and in `classes.dex` of the release and the
+   preview APK.
+3. With the call removed and only the dependency left, `assembleRelease`
+   still fails and names the two classes.
+4. Without the probe, all three pass.
 
-What step 2 showed is true for every rule that finds classes by name:
+What point 1 shows is true for every rule that finds classes by name:
 "never rename" is not enough. R8 can fold a class into another one, and
 then the name of the first is gone. The Play services class rule reads
-names the same way. So the owner decided on pull request 25 that it gets
-an R8 rule of its own
-([The Play services class rule](#the-play-services-class-rule)).
+names the same way. So the owner decided that it gets an R8 rule of its
+own ([The Play services class rule](#the-play-services-class-rule)).
 
-The fixtures of `core/notify` got the same rule in step 2.4, when they
-were added (owner's decision): rule 5 also searches for
-`Lapp/shkriuss/core/notify/fixtures/`, and one more R8 rule,
-`-keep class app.shkriuss.core.notify.fixtures.** { *; }`, keeps their
-names. How it was tested, on 2026-11-14 in the cloud environment:
+The fixtures of `core/notify` have the same rule (owner's decision):
+rule 5 also searches for `Lapp/shkriuss/core/notify/fixtures/`, and one
+more R8 rule, `-keep class app.shkriuss.core.notify.fixtures.** { *; }`,
+keeps their names. What it catches, shown with a temporary dependency of
+Catalog on them, `implementation(testFixtures(project(":core:notify")))`,
+and one call to `NotifyTestDevice` in its activity:
 
-1. Catalog got a temporary dependency on the fixtures,
-   `implementation(testFixtures(project(":core:notify")))`, and one call
-   to `NotifyTestDevice` in its activity.
-2. `assembleDebug` failed in its APK rules check and named
+1. `assembleDebug` fails in its APK rules check and names
    `NotifyTestDevice`, `ShownNotification` and `SeenChannel`.
-3. `assembleRelease` failed earlier, in R8: the fixtures name classes of
+2. `assembleRelease` fails earlier, in R8: the fixtures name classes of
    Robolectric, which no app has ("Missing class
    org.robolectric.Shadows"). So a release cannot even be built with
    them. The R8 rule is there for the day that changes.
-4. With the probe removed, Catalog was as before.
 
 ### The backup rule
 
 Rule 6. [crypto-design.md](../security/crypto-design.md) asks every app
 to turn Android's own backup and device transfer off ("Where keys are
-stored", point 1). The owner asked for this check in step 1.9
+stored", point 1). The owner asked for this check
 ([threat model](../security/threat-model.md#found-while-writing-this-page),
 point 1). It reads what ships: the APK itself, not the source files.
 
@@ -1537,24 +1473,21 @@ Android 11 and older, and the minimum is Android 13.
 The rule runs on every APK, `debug` too. Catalog passes: its manifest and
 `res/xml/data_extraction_rules.xml` turn everything off.
 
-How it was tested, on 2026-11-13 in the cloud environment. Each of these
-temporary changes to Catalog failed the check, which named the app and
-the attribute or the file. With each change undone, all three variants
-passed.
+What it catches. Each of these changes to Catalog fails the check, which
+names the app and the attribute or the file:
 
 1. `android:allowBackup="true"`. The release and the debug check each
-   said "android:allowBackup is true. It must be false".
+   say "android:allowBackup is true. It must be false".
 2. `android:allowBackup` removed.
 3. `android:dataExtractionRules` removed.
 4. The `<exclude>` of the domain `external` removed from
    `<device-transfer>`.
 5. A `<cross-platform-transfer platform="ios">` section added.
 6. A second copy in `res/xml-v35/` with an `<include>`. The debug check
-   named `res/xml-v35/data_extraction_rules.xml`. The release check
-   named `res/L6.xml`, the short name of the same file in the release
-   APK. Lint also refused that file in a release build. For this one
-   probe, the release check ran with lint left out, to see the check
-   itself.
+   names `res/xml-v35/data_extraction_rules.xml`. The release check
+   names the short name of the same file in the release APK, such as
+   `res/L6.xml`. Lint also refuses that file in a release build, so the
+   release check shows it only when lint is left out.
 7. `android:backupAgent` set.
 
 The [tests of the build checks](#tests-of-the-build-checks) cover each
@@ -1564,14 +1497,14 @@ of these, and more, on every pull request.
 
 Rules 7, 8 and 9. Hard rule 1 and
 [ADR 0019](../adr/0019-no-webview-no-runtime-code-loading.md): no
-WebView, no code loaded at run time. The owner asked for them in step 1.9
+WebView, no code loaded at run time. The owner asked for them
 ([threat model](../security/threat-model.md#found-while-writing-this-page),
 point 2).
 
 1. Rule 7, WebView: every class of `android.webkit`, of `androidx.webkit`
    (AndroidX WebKit) and of `org.mozilla.geckoview` (GeckoView, another
    web engine). Two classes of `android.webkit` are allowed, by the
-   owner's decision in step 1.9: `MimeTypeMap` and `URLUtil`. They only
+   owner's decision: `MimeTypeMap` and `URLUtil`. They only
    turn text into text and need no WebView. `FileProvider` in
    `androidx.core` uses `MimeTypeMap`.
 2. Rule 8, class loaders that read code from a file, from memory or from
@@ -1583,7 +1516,7 @@ point 2).
 3. Rule 9, calls that load native code from any path, or run a program:
    `System.load`, `Runtime.load`, `Runtime.exec` and
    `ProcessBuilder.start`. `loadLibrary` is not on the list, by the
-   owner's decision in step 1.9. It loads only from the APK's own library
+   owner's decision. It loads only from the APK's own library
    folder, which rule 2 keeps empty. Compose's graphics-path library
    calls it (see "What today's APKs hold" below).
 
@@ -1606,19 +1539,18 @@ How rule 9 searches: `DexMethodReferences.kt` reads the dex file's table
 of method references. A method that code calls is always in that table,
 so the table decides pass or fail. The reader reads nothing else. To name
 the class that makes the call, it would have to read the instructions of
-every method, so it leaves the caller out (owner's decision in step 1.9).
+every method, so it leaves the caller out (owner's decision).
 The failure message says how to find it: in a cloud session, run the
 SDK's `dexdump -d` on that dex file and search for the method. A dex file
 the reader cannot read, such as a newer format, fails the check.
 
 Where they run: only on the APKs that ship, every build type but
-`debug`, so `release` and `preview` today (owner's decision in step
-1.9). R8 has shrunk those APKs, so they hold only code an app can run. A
-`debug` APK holds every class of every library, used or not.
+`debug`, so `release` and `preview` today (owner's decision). R8 has
+shrunk those APKs, so they hold only code an app can run. A `debug` APK
+holds every class of every library, used or not.
 
-What today's APKs hold. Before the rules were written, Catalog's three
-APKs were searched on 2026-11-13 with the SDK's `dexdump` and a search of
-the dex bytes:
+What today's APKs hold. Catalog's three APKs, searched with the SDK's
+`dexdump` and a search of the dex bytes, hold these:
 
 | APK | WebView and class loaders | Calls that load or run code |
 |---|---|---|
@@ -1626,7 +1558,7 @@ the dex bytes:
 | preview | None | The same |
 | debug | `android.webkit.WebView`, in `androidx.core.text.util.LinkifyCompat.findAddress` (`androidx.core`). `android.webkit.MimeTypeMap`, in `androidx.core.content.FileProvider`. `dalvik.system.ZipPathValidator$Callback`, a stub that D8 adds by itself for a class of Android 14. It is no class loader. | `System.loadLibrary` in the static block of `androidx.graphics.path.PathIteratorImpl` |
 
-No APK called `System.load`, `Runtime.load`, `Runtime.loadLibrary`,
+No APK calls `System.load`, `Runtime.load`, `Runtime.loadLibrary`,
 `Runtime.exec` or `ProcessBuilder.start`. The graphics-path library is
 left out of every APK, and the graphics-path check fails the build if any
 code can reach it ([Native code from Compose](#native-code-from-compose)).
@@ -1640,19 +1572,17 @@ Limits:
 - A class name put together from pieces at run time is not text in the
   dex file.
 
-How it was tested, on 2026-11-13 in the cloud environment:
+What they catch, shown with a temporary file in Catalog with one
+function, called from its activity, that makes a `WebView`, makes a
+`DexClassLoader`, loads `dalvik.system.InMemoryDexClassLoader` by its
+name with `Class.forName`, and calls `Runtime.exec`:
 
-1. Catalog got a temporary file with one function, called from its
-   activity, that made a `WebView`, made a `DexClassLoader`, loaded
-   `dalvik.system.InMemoryDexClassLoader` by its name with
-   `Class.forName`, and called `Runtime.exec`.
-2. The release and the preview check each failed and named all four:
-   the class `android.webkit.WebView` (rule 7), the class
+1. The release and the preview check each fail and name all four: the
+   class `android.webkit.WebView` (rule 7), the class
    `dalvik.system.DexClassLoader` (rule 8), the name
    `dalvik.system.InMemoryDexClassLoader` as text (rule 8), and a call to
    `java.lang.Runtime.exec` (rule 9).
-3. The debug check passed, as decided.
-4. With the file removed, all three passed.
+2. The debug check passes, as decided.
 
 ## Native code from Compose
 
@@ -1662,9 +1592,8 @@ allows no native code outside Grammar.
 
 ### The decision
 
-The owner decided on
-[pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5) to leave
-the JNI library out, with no second exception. Reasons:
+The owner decided to leave the JNI library out, with no second
+exception. Reasons:
 
 - The plan allows no C or C++.
 - GrapheneOS turns memory tagging on by default only for user-installed
@@ -1722,26 +1651,23 @@ every `assemble` task, and the `debug` one also runs in `check`.
    Code that calls one of those five still names `PathIterator` or
    `PathHitTester` in its own class file, because a JVM method reference
    carries its return type. So that code is still caught. The owner
-   confirmed this list on
-   [pull request 5](https://github.com/shkriuss/shkriuss.app/pull/5).
+   confirmed this list.
 3. The failure message lists each class and what it refers to, and says to
    stop and ask the owner. Never add the library back, change the check, or
    work around it to make a build pass.
 
-The report is written to `build/reports/graphics-path-use/`. In Phase 0 it
-checked 11,630 classes for each Catalog variant.
+The report is written to `build/reports/graphics-path-use/`.
 
 CI runs `checkReleaseGraphicsPathUse` by name for every app, and checks
 that its report was written, as for the APK rules check
 ([ci.md](ci.md#job-check)).
 
-How it was tested:
+What it catches:
 
-1. A temporary file in Catalog walked through a `Path` and built a
-   `PathEasing`. `assembleDebug` failed and named both uses.
-2. A temporary file in `core/design` built a `PathHitTester`.
-   `assembleRelease` failed and named it.
-3. With both files removed, all three variants passed.
+1. A file in Catalog that walks through a `Path` and builds a
+   `PathEasing` fails `assembleDebug`, which names both uses.
+2. A file in `core/design` that builds a `PathHitTester` fails
+   `assembleRelease`, which names it.
 
 ## Entries removed from library manifests
 
@@ -1758,12 +1684,12 @@ two:
    their own emoji font.
 
 Every new app must remove the same two. The APK rules check fails until it
-does. Water removes them too. Until step 2.5 it also removed the two
-permissions and the six screens of `core/security`. Now it has them
+does. Water removes them too. It keeps the two permissions and the six
+screens of `core/security`, which Catalog removes
 ([permissions.md](../security/permissions.md#water-appshkriusswater)).
 Water also removes the receiver of `androidx.profileinstaller`, which is
 exported to developer tools. Catalog still has it, until its next change
-(owner's decision on pull request 40).
+(owner's decision).
 
 ## Known messages in the build log
 
@@ -1776,10 +1702,7 @@ exported to developer tools. Catalog still has it, until its next change
 
 ## Open
 
-Done: attaching the R8 mapping file to every release, in Phase 0,
-step 6 ([The mapping file](#the-mapping-file)).
-
-Open, found in step 2.6 on 2026-11-15. No step decides them yet:
+Nothing decides these yet:
 
 1. **No APK rule checks `directBootAware`.** Nothing fails the build of
    an app whose merged manifest has a part with `directBootAware`, or
