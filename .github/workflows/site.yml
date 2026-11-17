@@ -183,6 +183,7 @@ jobs:
           FORBIDDEN_TAGS = ("script", "style", "iframe", "frame", "object", "embed", "form", "base", "foreignobject")
           FORBIDDEN_ATTRIBUTES = ("style", "src", "srcset", "data", "action", "formaction", "poster")
           LINK_TARGET = re.compile(r"(https://|#|/$|/[^/])")
+          SITE_TARGET = re.compile(r"(#|/$|/[^/])")
           SITE_FILE = re.compile(r"/(?!/)[a-z0-9./-]+")
           ENDS = "".join(map(chr, range(0x21)))
 
@@ -210,6 +211,10 @@ jobs:
                           problems.append(f"the attribute {attribute} on <{name}>: a style sheet or the icon loads something")
                       elif not LINK_TARGET.match(address(value)):
                           problems.append(f"the link {ascii(value)} on <{name}>, which is not https://..., /... or #...")
+                      elif name != "a" and not SITE_TARGET.match(address(value)):
+                          # Only <a> navigates. Any other element with an href, such
+                          # as an SVG <image>, loads what it names.
+                          problems.append(f"the address {ascii(value)} on <{name}>, which leaves the site. Only <a> may link to another site")
               if name == "meta" and any("http-equiv" in f"{attribute}={value or ''}".lower() for attribute, value in attributes):
                   problems.append("a <meta http-equiv>, which the site does not allow")
               if name == "link":
@@ -278,20 +283,22 @@ jobs:
               return problems
 
 
-          # A style sheet with its CSS escapes decoded, as in u\72l( for url(. Only
+          # A style sheet with its CSS escapes decoded, as in u\72l( for url(. As in
+          # CSS, CR LF, CR and a form feed are first read as one line break. Only
           # what the raw text does not show already is reported.
-          CSS_ESCAPE = re.compile(r"\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\(.)", re.S)
+          CSS_ESCAPE = re.compile(r"\\([0-9a-fA-F]{1,6})[ \t\n]?|\\(.)", re.S)
 
 
           def css_character(match):
               if match.group(1):
                   code = int(match.group(1), 16)
                   return chr(code) if 0 < code <= 0x10FFFF and not 0xD800 <= code <= 0xDFFF else "�"
-              return "" if match.group(2) in "\n\r\f" else match.group(2)
+              return "" if match.group(2) == "\n" else match.group(2)
 
 
           def style_problems(path, text):
-              if LOADS.search(CSS_ESCAPE.sub(css_character, text)) and not LOADS.search(text):
+              lines = re.sub(r"\r\n|[\r\f]", "\n", text)
+              if LOADS.search(CSS_ESCAPE.sub(css_character, lines)) and not LOADS.search(text):
                   return ["a style sheet that loads something, written with CSS escapes"]
               return []
 
@@ -395,7 +402,8 @@ jobs:
               html_sample("an http:// link", APPS, 'href="http://example.invalid/"',
                           [RAW_LINK, "the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
               html_sample("a style sheet from another site", 'href="/style.css"', 'href="https://example.invalid/x.css"',
-                          [RAW_LINK_TAG, "the <link> to 'https://example.invalid/x.css', which is not a file of this site"]),
+                          [RAW_LINK_TAG, "the address 'https://example.invalid/x.css' on <link>, which leaves the site. Only <a> may link to another site",
+                           "the <link> to 'https://example.invalid/x.css', which is not a file of this site"]),
               html_sample("a <link> with no address", 'href="/style.css"', "", [RAW_LINK_TAG, "a <link> with no address"]),
               # Faults that only the parser finds.
               html_sample("a meta refresh behind a quoted >", HEAD,
@@ -414,6 +422,8 @@ jobs:
                           "title='href=\"/style.css\"' href=//example.invalid/x.css",
                           ["the link '//example.invalid/x.css' on <link>, which is not https://..., /... or #...",
                            "the <link> to '//example.invalid/x.css', which is not a file of this site"]),
+              html_sample("an SVG image from another site", BODY, '<svg><image href="https://example.invalid/x.png"/></svg>' + BODY,
+                          ["the address 'https://example.invalid/x.png' on <image>, which leaves the site. Only <a> may link to another site"]),
               icon_sample("a script with a prefix in the icon", RECT, "<svg:script>x</svg:script><rect",
                           ["the tag <script>, which the site does not allow"]),
               icon_sample("an event handler with a prefix in the icon", RECT, '<rect xlink:onload="x"',
@@ -462,7 +472,8 @@ jobs:
               style_sample(f"{written} with a CSS escape in the style sheet", f"body {{ color: #000; }}\n{css}\n",
                            ["a style sheet that loads something, written with CSS escapes"])
               for written, css in (("url()", "a { background: u\\72l(/x.png); }"), ("@import", '@\\69mport "/x.css";'),
-                                   ("expression()", "a { width: e\\78pression(1); }"), ("href", "a { content: '\\68ref'; }"))
+                                   ("expression()", "a { width: e\\78pression(1); }"), ("href", "a { content: '\\68ref'; }"),
+                                   ("url() after CR LF", "a { background: u\\72\r\nl(/x.png); }"), ("@import after CR LF", '@\\69\r\nmport "/x.css";'))
           ]
 
 

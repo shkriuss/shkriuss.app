@@ -86,8 +86,10 @@ What they check:
    refresh. No event handler such as `onclick`, no `style` or `src`
    attribute, no `javascript:` address.
 3. Links go to `https://...`, to the site itself (`/...`) or to a heading
-   (`#...`). The style sheet and the icon come from the site itself, and
-   load nothing themselves.
+   (`#...`). Only `<a>` may link to another site. Any other `href`, such
+   as on a `<link>` or on an SVG `<image>` in a page, loads what it names,
+   so it must stay on the site. The style sheet and the icon come from
+   the site itself, and load nothing themselves.
 
 How they read the files:
 
@@ -105,7 +107,9 @@ How they read the files:
 4. The icon is parsed as XML. It may have no DOCTYPE, so no entities, no
    processing instruction, such as `<?xml-stylesheet?>`, and no comment.
 5. The style sheet is checked as written, and again with its CSS escapes
-   decoded, so `u\72l(` counts as `url(`.
+   decoded, so `u\72l(` counts as `url(`. As in CSS, CR LF, CR and a
+   form feed are first read as one line break, so an escape followed by
+   CR LF is decoded as a browser decodes it.
 
 ### The self-test
 
