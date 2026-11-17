@@ -1079,6 +1079,11 @@ The decision is recorded in
   for `tink-android`.
 - 60 keys are trusted. Google signs most AndroidX and AGP files, Room 3
   and `androidx.sqlite` included, so those are checked by signature.
+- No key is trusted for every group under `com.google`. Such a key would
+  also pass files of Play services or Firebase, which no app may use
+  (hard rule 3 in CLAUDE.md). A key that signs files in several
+  `com.google` groups is trusted for each of them by name. Three keys do
+  this, for the groups of Guava, J2ObjC, Jimfs, Auto, AutoValue and Gson.
 - 66 components are listed one by one. 48 are checked by checksum only,
   because they are not signed: mostly older AndroidX releases, and parent
   POM files. 16 are checked by a key trusted for that one file. Two, the
@@ -1089,6 +1094,10 @@ The decision is recorded in
 - The keyring holds 68 keys.
 - Gradle groups a trusted key by Maven group where it can. A new version in
   that group, signed by the same key, is then trusted without a new entry.
+- When one key signs new files in several groups that start the same way,
+  Gradle can write a pattern instead, such as `^com[.]google($|([.].*))`.
+  It trusts the key for every group that starts that way. Step 6 below
+  takes it out again for `com.google`.
 
 ### After a dependency change
 
@@ -1119,7 +1128,15 @@ Claude does this in the same pull request as the change to
      was and how it was checked.
 5. Read the diff of both files. Every new key and checksum must belong to
    the new dependency. Say in the pull request where it comes from.
-6. Gradle also writes `verification-keyring.gpg`. It is ignored by Git.
+6. Search the file for `^com[.]google`. If it is there, replace it:
+   1. Take the pattern out of its key, and keep the key's other lines.
+   2. Run the command of step 2 without `--write-verification-metadata`
+      and `--export-keys`. A file that only the pattern covered fails
+      with **Key isn't trusted**. The report names its group (see
+      [When verification fails](#when-verification-fails)).
+   3. Add `<trusting group="..."/>` under that key, for that group only.
+   4. Run the command again, until it passes.
+7. Gradle also writes `verification-keyring.gpg`. It is ignored by Git.
    Only the `.keys` file is committed.
 
 Gradle adds entries but never removes them. To drop old ones, put back
