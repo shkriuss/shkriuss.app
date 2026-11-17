@@ -239,6 +239,55 @@ class WebViewAndCodeLoadingRulesTest {
         )
     }
 
+    // Rule 7 in the resource table. An attribute can name a class through a
+    // string resource, and then the name is only in resources.arsc.
+
+    /** A resource table with one string resource, 0x7f020001, holding each value in its own configuration. */
+    private fun table(vararg values: String): ByteArray = BinaryResourceWriter.table(
+        values.map { listOf(BinaryResourceWriter.Entry(1, "name", ApkResourceReader.TYPE_STRING, string = it)) },
+    )
+
+    @Test
+    fun aResourceValueThatNamesARefusedClassFails() {
+        webViewClasses.forEach { name ->
+            assertEquals(
+                listOf("the class name $name in a value (rule 7, hard rule 1: no WebView)"),
+                CheckApkRulesTask.resourceTableWebViewProblems(table("res/Ab.xml", name)),
+            )
+        }
+    }
+
+    @Test
+    fun resourceValuesWithoutARefusedClassPass() =
+        assertEquals(
+            emptyList<String>(),
+            CheckApkRulesTask.resourceTableWebViewProblems(table("res/Ab.xml", "WebView", "android.webkit.MimeTypeMap", "Open it in a browser")),
+        )
+
+    @Test
+    fun aFragmentNamedThroughAStringResourceFails() {
+        val fragment = BinaryResourceWriter.Element(
+            "fragment",
+            listOf(BinaryResourceWriter.android("name", nameId, ApkResourceReader.TYPE_REFERENCE, 0x7f020001)),
+        )
+        val layout = layout(fragment)
+        // The layout holds only the reference, so it alone names no class.
+        assertEquals(emptyList<String>(), xmlProblems(layout))
+        val apk = apk("classes.dex" to clean, "res/4j.xml" to layout, "resources.arsc" to table("android.webkit.WebViewFragment"))
+        assertEquals(
+            listOf("the class name android.webkit.WebViewFragment in a value (rule 7, hard rule 1: no WebView), in resources.arsc of app-release-unsigned.apk"),
+            CheckApkRulesTask.apkShippedCodeProblems(apk),
+        )
+    }
+
+    @Test
+    fun aResourceTableThatCannotBeReadFails() {
+        val whole = table("res/Ab.xml")
+        val problems = CheckApkRulesTask.apkShippedCodeProblems(apk("classes.dex" to clean, "resources.arsc" to whole.copyOf(whole.size - 40)))
+        assertEquals(problems.toString(), 1, problems.size)
+        assertTrue(problems.single(), problems.single().startsWith("resources.arsc of app-release-unsigned.apk cannot be read"))
+    }
+
     @Test
     fun aCompiledXmlFileThatCannotBeReadFails() {
         val cut = cleanLayout.copyOf(cleanLayout.size - 12)

@@ -990,9 +990,9 @@ does not. The owner asked for them.
 |---|---|
 | `NoLoggingCheckTest` | Each of the 13 forms fails in main code, also in a comment or in quotes. The ten forms of the replaced test are all there. `main`, `debug`, `release`, `preview`, `testFixtures` and a new folder are main code, and logging in the fixtures fails. The test folders are not checked. A module with no main code is found. |
 | `CoreTestingGuardTest` | `core/testing` in `implementation`, `api`, `debugImplementation`, `testFixturesImplementation` or `testFixturesApi` fails. In `testImplementation` and `androidTestImplementation` it passes. |
-| `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. A compiled XML file is known by its first bytes, and a resource table, a dex file or a text file is not one. |
+| `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. A compiled XML file is known by its first bytes, and a resource table, a dex file or a text file is not one. Every string value of a table is read, with UTF-8 and UTF-16 strings. |
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
-| `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. In a compiled XML file, an element named `WebView` or after each WebView class fails, so does a `class` attribute with such a name, and an `android:name` with one. A layout without them passes. Every compiled XML file of an APK is found by its content, also under a short name, and one the reader cannot read fails. |
+| `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. In a compiled XML file, an element named `WebView` or after each WebView class fails, so does a `class` attribute with such a name, and an `android:name` with one. A layout without them passes. Every compiled XML file of an APK is found by its content, also under a short name, and one the reader cannot read fails. Each WebView class as a value in `resources.arsc` fails, and so does a `<fragment>` that names `android.webkit.WebViewFragment` through a string resource. Values without one pass. A resource table the reader cannot read fails. |
 | `DaoRulesSqlTest` | The DAO rules check reads comments and quoted text in one pass. A marked purge whose `OR` hides behind `--` or `/*` inside `'...'`, `"..."`, `` `...` `` or `[...]` fails, and so does one behind a quote inside a comment, or behind an escaped quote. A `DELETE` behind `'--'` in a read fails. A purge of deleted rows passes, with quoted names, comments and text. |
 | `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). Water's five permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 | `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The six screens with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the six screens alone needs both, and so does a new screen of the module. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
@@ -1253,8 +1253,8 @@ and fails the build if:
    fixtures of `core/notify` (owner's decision),
 6. Android's own backup or device transfer is not off
    ([The backup rule](#the-backup-rule)),
-7. in an APK that ships, its code or one of its compiled XML files, such
-   as a layout, names a WebView class,
+7. in an APK that ships, its code, one of its compiled XML files, such
+   as a layout, or a value of its resource table names a WebView class,
 8. in an APK that ships, its code names a class loader that reads code,
 9. in an APK that ships, its code calls `System.load`, `Runtime.load`,
    `Runtime.exec` or `ProcessBuilder.start`
@@ -1565,7 +1565,15 @@ WebView class needs to be in a dex file.
 4. Any other attribute fails if its text names a class that rule 7
    refuses, such as `android:name` of a `<fragment>`. The search is the
    one for dotted text in a dex file.
-5. A compiled XML file the reader cannot read fails the check.
+5. An attribute can also name a class through a resource, such as
+   `<fragment android:name="@string/name">` or a theme attribute. The
+   compiled file then holds only a reference, and the name is a value in
+   `resources.arsc`. So every string value of `resources.arsc`, in every
+   configuration and in styles, fails if it names a class that rule 7
+   refuses. That can fail a build that need not fail, but it never passes
+   one that must.
+6. A compiled XML file or a resource table that the reader cannot read
+   fails the check.
 
 How rule 9 searches: `DexMethodReferences.kt` reads the dex file's table
 of method references. A method that code calls is always in that table,
@@ -1624,8 +1632,12 @@ What rule 7 catches in a layout, shown with a temporary layout in
 Catalog that holds `<WebView>` and `<view class="android.webkit.WebView">`,
 kept in the release APK with `tools:keep` and used by no code: the
 release check fails and names both, in `res/1N.xml`, the short name of
-the layout. The release APKs of Catalog and Water pass: none of their
-compiled XML files names a WebView. Each layout form is also shown by the
+the layout. A temporary layout with
+`<fragment android:name="@string/probe_fragment">`, whose string is
+`android.webkit.WebViewFragment`: the release check fails and names the
+value in `resources.arsc`. The release APKs of Catalog and Water pass:
+none of their compiled XML files and none of their resource values names
+a WebView. Each form is also shown by the
 [tests of the build checks](#tests-of-the-build-checks), on every pull
 request.
 

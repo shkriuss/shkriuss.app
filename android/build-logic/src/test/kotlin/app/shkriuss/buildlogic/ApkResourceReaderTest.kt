@@ -109,6 +109,17 @@ class ApkResourceReaderTest {
     }
 
     @Test
+    fun readsEveryStringValueOfATable() {
+        for (utf8 in listOf(true, false)) {
+            val table = BinaryResourceWriter.table(listOf(entries, v35), utf8 = utf8)
+            assertEquals("utf8 $utf8", listOf("res/other.xml", "res/Ab.xml", "res/Cd.xml"), ApkResourceReader.tableStrings(table))
+        }
+        assertRefused { ApkResourceReader.tableStrings(BinaryResourceWriter.xml(manifest)) }
+        val table = BinaryResourceWriter.table(listOf(entries))
+        assertRefused { ApkResourceReader.tableStrings(table.copyOf(table.size - 40)) }
+    }
+
+    @Test
     fun aCompiledXmlFileIsKnownByItsFirstBytes() {
         assertTrue(ApkResourceReader.isCompiledXml(BinaryResourceWriter.xml(manifest, utf8 = true)))
         assertTrue(ApkResourceReader.isCompiledXml(BinaryResourceWriter.xml(manifest, utf8 = false)))

@@ -6,8 +6,9 @@ import java.nio.ByteOrder
 /**
  * Reads what the backup rule and the WebView rule of [CheckApkRulesTask]
  * need from an APK, as it ships: the compiled manifest, any compiled XML
- * file, and the values of one resource in `resources.arsc`. An APK holds
- * these as binary XML and a binary resource table, not as text.
+ * file, the values of one resource in `resources.arsc`, and every string
+ * value of it. An APK holds these as binary XML and a binary resource
+ * table, not as text.
  *
  * It follows the formats in AOSP's `ResourceTypes.h` (frameworks/base,
  * libs/androidfw) and needs no library, as [ClassFileReader] does for class
@@ -152,6 +153,27 @@ internal object ApkResourceReader {
         return values
     }
 
+    /**
+     * Every string of the global string pool of a binary resource table:
+     * the values of all string resources, in every configuration, and of
+     * the items of styles. Fails if the table has no such pool.
+     */
+    fun tableStrings(table: ByteArray): List<String> {
+        val buffer = ByteBuffer.wrap(table).order(ByteOrder.LITTLE_ENDIAN)
+        val file = buffer.chunkAt(0, table.size)
+        require(file.type == TABLE) { "not a resource table" }
+        var offset = file.start + file.headerSize
+        while (offset < file.end) {
+            val chunk = buffer.chunkAt(offset, file.end)
+            if (chunk.type == STRING_POOL) {
+                val pool = buffer.stringPool(chunk)
+                return List(pool.size) { pool[it] }
+            }
+            offset = chunk.end
+        }
+        throw IllegalArgumentException("no string pool in the resource table")
+    }
+
     private fun ByteBuffer.packageValues(chunk: Chunk, resourceId: Int, globalStrings: StringPool): List<ResourceValue> {
         val typeId = (resourceId ushr 16) and 0xff
         val entryIndex = resourceId and 0xffff
@@ -251,6 +273,9 @@ internal object ApkResourceReader {
         private val count = buffer.getInt(chunk.start + 8)
         private val utf8 = buffer.getInt(chunk.start + 16) and UTF8_FLAG != 0
         private val stringsStart = chunk.start + buffer.getInt(chunk.start + 20)
+
+        /** How many strings the pool holds. */
+        val size: Int get() = count
 
         operator fun get(index: Int): String {
             require(index in 0 until count) { "string $index is not in a pool of $count" }

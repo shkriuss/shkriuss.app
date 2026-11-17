@@ -45,10 +45,11 @@ import org.w3c.dom.Element
  *   "Where keys are stored", point 1; MASVS-STORAGE-2). Read from the APK's
  *   compiled manifest and resources, as they ship ([backupProblems]).
  * - Rule 1, in the APKs that ship (every build type but `debug`): no
- *   WebView, in the code or in a compiled XML file such as a layout, no
- *   class loader that reads code from a file, memory or the network, and
- *   no call that loads or runs code from a file path
- *   ([shippedCodeProblems], [compiledXmlWebViewProblems]).
+ *   WebView, in the code, in a compiled XML file such as a layout, or in a
+ *   value of the resource table, no class loader that reads code from a
+ *   file, memory or the network, and no call that loads or runs code from
+ *   a file path ([shippedCodeProblems], [compiledXmlWebViewProblems],
+ *   [resourceTableWebViewProblems]).
  *
  * It runs every time an APK is assembled. Apps that are allowed an
  * exception get an explicit allow list here, decided in their ADR: Water
@@ -113,7 +114,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 ", no native libraries, no emoji font loader, no Play services classes, " +
                 "no test fixtures of core/crypto or core/notify. Android backup and device transfer are off. " +
                 if (shipped.get()) {
-                    "No WebView in the code or in a compiled XML file, no class loader that reads code, " +
+                    "No WebView in the code, in a compiled XML file or in the resource table, no class loader that reads code, " +
                         "no call that loads or runs code from a file path.\n"
                 } else {
                     "Rules 7 to 9 (WebView and code loading) run only on the APKs that ship, not on debug.\n"
@@ -301,8 +302,9 @@ abstract class CheckApkRulesTask : DefaultTask() {
 
         /**
          * Rules 7 to 9 for every dex file of one APK file, and rule 7 for
-         * every compiled XML file of it ([compiledXmlWebViewProblems]). A
-         * file it cannot read is a problem, never a pass.
+         * every compiled XML file of it ([compiledXmlWebViewProblems]) and
+         * for its resource table ([resourceTableWebViewProblems]). A file it
+         * cannot read is a problem, never a pass.
          */
         fun apkShippedCodeProblems(apk: File): List<String> = ZipFile(apk).use { zip ->
             val entries = zip.entries().asSequence().filter { !it.isDirectory }.toList()
@@ -331,8 +333,28 @@ abstract class CheckApkRulesTask : DefaultTask() {
                     listOf("the compiled XML file ${entry.name} of ${apk.name} cannot be read: ${unreadable.message} ($WEBVIEW_RULE)")
                 }
             }
-            dexProblems + xmlProblems
+            val tableProblems = zip.getEntry(APK_RESOURCES)?.let { entry ->
+                val bytes = zip.getInputStream(entry).use { it.readBytes() }
+                try {
+                    resourceTableWebViewProblems(bytes).map { "$it, in $APK_RESOURCES of ${apk.name}" }
+                } catch (unreadable: RuntimeException) {
+                    listOf("$APK_RESOURCES of ${apk.name} cannot be read: ${unreadable.message} ($WEBVIEW_RULE)")
+                }
+            }.orEmpty()
+            dexProblems + xmlProblems + tableProblems
         }
+
+        /**
+         * Rule 7 for the resource table: every string value in it fails if it
+         * names a class rule 7 refuses ([webViewClassesIn]). An attribute can
+         * name a class through a resource, such as
+         * `<fragment android:name="@string/name">` or a theme attribute. The
+         * compiled XML then holds only a reference, and the name is only in
+         * the table.
+         */
+        fun resourceTableWebViewProblems(table: ByteArray): List<String> =
+            ApkResourceReader.tableStrings(table).flatMap(::webViewClassesIn).distinct().sorted()
+                .map { "the class name $it in a value ($WEBVIEW_RULE)" }
 
         /**
          * The name that `LayoutInflater` turns into `android.webkit.WebView`.
