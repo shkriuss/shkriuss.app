@@ -108,6 +108,31 @@ class ApkResourceReaderTest {
         assertRefused { ApkResourceReader.readXml(ByteArray(64)) }
     }
 
+    @Test
+    fun readsEveryStringValueOfATable() {
+        for (utf8 in listOf(true, false)) {
+            val table = BinaryResourceWriter.table(listOf(entries, v35), utf8 = utf8)
+            assertEquals("utf8 $utf8", listOf("res/other.xml", "res/Ab.xml", "res/Cd.xml"), ApkResourceReader.tableStrings(table))
+        }
+        assertRefused { ApkResourceReader.tableStrings(BinaryResourceWriter.xml(manifest)) }
+        val table = BinaryResourceWriter.table(listOf(entries))
+        assertRefused { ApkResourceReader.tableStrings(table.copyOf(table.size - 40)) }
+    }
+
+    @Test
+    fun aCompiledXmlFileIsKnownByItsFirstBytes() {
+        assertTrue(ApkResourceReader.isCompiledXml(BinaryResourceWriter.xml(manifest, utf8 = true)))
+        assertTrue(ApkResourceReader.isCompiledXml(BinaryResourceWriter.xml(manifest, utf8 = false)))
+        assertTrue(ApkResourceReader.isCompiledXml(byteArrayOf(0x03, 0x00, 0x08, 0x00)))
+        listOf(
+            BinaryResourceWriter.table(listOf(entries)),
+            DexWriter.dex(),
+            "<manifest/>".toByteArray(),
+            byteArrayOf(0x03, 0x00, 0x08),
+            ByteArray(0),
+        ).forEach { assertTrue(!ApkResourceReader.isCompiledXml(it)) }
+    }
+
     private fun assertRefused(read: () -> Unit) {
         val failure = try {
             read()

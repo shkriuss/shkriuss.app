@@ -84,27 +84,30 @@
    - All four files live in `.github/`, so they are owner-only.
 8. Wrangler runs on the Node.js of GitHub's runner. Image 20261101 has
    22.23.4. Wrangler 4.156.2 needs 22.0.0 or newer.
-9. The workflow [`site.yml`](../../.github/workflows/site.yml) has three
+9. The workflow [`site.yml`](../../.github/workflows/site.yml) has four
    jobs:
 
    | Job | Runs on | Secrets | Project code |
    |---|---|---|---|
    | Build | Pull requests that change the site, every push to `main` | None | Runs the generator and its tests |
-   | Deploy tool | Pull requests only | None | None. Installs the pinned Wrangler and tries the deploy with the built site, without uploading |
+   | Check the site | After Build | None | None. Checks out nothing |
+   | Deploy tool | Pull requests only | None | None. Installs the pinned Wrangler and tries the deploy with the checked site, without uploading |
    | Deploy | `main` only, environment `cloudflare` | `CLOUDFLARE_API_TOKEN`, in one step | None |
 
-10. Build checks what the generator wrote, without trusting it: only
-    `.html`, `.css` and `.svg` files; no script, frame, form, plugin, event
-    handler or inline style; nothing loaded from another site; links only
-    to `https://`, the site itself or a heading. Then it adds the security
-    headers and records a SHA-256 for every file.
+10. Check the site checks what the generator wrote, without trusting it,
+    on a runner where the generator never ran: only `.html`, `.css` and
+    `.svg` files; no script, frame, form, plugin, event handler or inline
+    style; nothing loaded from another site; links only to `https://`,
+    the site itself or a heading. It parses the files with Python's
+    standard library, with the checks written in `site.yml`. Then it adds
+    the security headers and records a SHA-256 for every file.
 11. The security headers are written in `site.yml`, which is owner-only.
-    Build puts them in the file `_headers`, which Cloudflare reads for the
-    Worker's static assets.
+    Check the site puts them in the file `_headers`, which Cloudflare
+    reads for the Worker's static assets.
 12. Deploy:
     1. stops unless its commit is still the newest on `main`, so an older
        run never replaces a newer site,
-    2. checks the files against Build's SHA-256 values,
+    2. checks the files against the SHA-256 values of Check the site,
     3. installs the pinned Wrangler,
     4. checks that the Worker exists, and notes its tag,
     5. runs `wrangler deploy` with `wrangler.jsonc` only,

@@ -28,6 +28,10 @@ internal object BinaryResourceWriter {
     /** A plain attribute with text, such as `domain="root"`. Its typed value points to the same string. */
     fun plain(name: String, text: String) = Attribute(null, name, null, ApkResourceReader.TYPE_STRING, -1, text)
 
+    /** An attribute in Android's namespace with text, such as `android:name="..."`, as aapt2 writes it. */
+    fun androidText(name: String, resourceId: Int, text: String) =
+        Attribute(ApkResourceReader.ANDROID_NAMESPACE, name, resourceId, ApkResourceReader.TYPE_STRING, -1, text)
+
     /** How a type chunk stores the offsets of its entries. */
     enum class Offsets { PLAIN_32, OFFSET_16, SPARSE }
 

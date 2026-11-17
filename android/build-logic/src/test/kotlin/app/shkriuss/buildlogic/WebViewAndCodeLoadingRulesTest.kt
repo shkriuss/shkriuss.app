@@ -164,4 +164,135 @@ class WebViewAndCodeLoadingRulesTest {
         assertTrue(CheckApkRulesTask.apkShippedCodeProblems(apk()).single().startsWith("no dex file"))
         assertTrue(CheckApkRulesTask.apkShippedCodeProblems(apk("classes.dex" to DexWriter.dex(version = "041"))).single().contains("cannot be read"))
     }
+
+    // Rule 7 in compiled XML files. A layout makes its views from the names
+    // in the file, so a WebView in a layout needs no WebView class in a dex.
+
+    /** Android's resource IDs of `android:name` and `android:contentDescription` (`android.R.attr`). */
+    private val nameId = 0x01010003
+    private val contentDescriptionId = 0x01010273
+
+    private fun layout(vararg children: BinaryResourceWriter.Element): ByteArray =
+        BinaryResourceWriter.xml(BinaryResourceWriter.Element("LinearLayout", children = children.toList()))
+
+    private fun xmlProblems(xml: ByteArray) = CheckApkRulesTask.compiledXmlWebViewProblems(ApkResourceReader.readXml(xml))
+
+    /** What a layout may hold: views, a `<view class>` and a fragment that are no WebView, and the word WebView as text. */
+    private val cleanLayout = layout(
+        BinaryResourceWriter.Element("TextView", listOf(BinaryResourceWriter.androidText("contentDescription", contentDescriptionId, "WebView"))),
+        BinaryResourceWriter.Element("view", listOf(BinaryResourceWriter.plain("class", "android.widget.TextView"))),
+        BinaryResourceWriter.Element("fragment", listOf(BinaryResourceWriter.androidText("name", nameId, "app.shkriuss.sample.SampleFragment"))),
+        BinaryResourceWriter.Element("androidx.compose.ui.platform.ComposeView"),
+        BinaryResourceWriter.Element("ImageView", listOf(BinaryResourceWriter.plain("note", "android.webkit.MimeTypeMap"))),
+    )
+
+    @Test
+    fun aLayoutWithoutAWebViewPasses() = assertEquals(emptyList<String>(), xmlProblems(cleanLayout))
+
+    @Test
+    fun anElementNamedWebViewFails() =
+        assertEquals(
+            listOf("the element <WebView> (rule 7, hard rule 1: no WebView)"),
+            xmlProblems(layout(BinaryResourceWriter.Element("TextView"), BinaryResourceWriter.Element("WebView"))),
+        )
+
+    @Test
+    fun anElementNamedAfterARefusedClassFails() {
+        webViewClasses.forEach { name ->
+            assertEquals(listOf("the element <$name> (rule 7, hard rule 1: no WebView)"), xmlProblems(layout(BinaryResourceWriter.Element(name))))
+        }
+    }
+
+    @Test
+    fun aClassAttributeWithAWebViewFails() {
+        (webViewClasses + "WebView").forEach { name ->
+            val view = BinaryResourceWriter.Element("view", listOf(BinaryResourceWriter.plain("class", name)))
+            assertEquals(listOf("<view class=\"$name\"> (rule 7, hard rule 1: no WebView)"), xmlProblems(layout(view)))
+        }
+    }
+
+    @Test
+    fun anyOtherAttributeThatNamesARefusedClassFails() =
+        assertEquals(
+            listOf("the class name android.webkit.WebViewFragment in the attribute name of <fragment> (rule 7, hard rule 1: no WebView)"),
+            xmlProblems(layout(BinaryResourceWriter.Element("fragment", listOf(BinaryResourceWriter.androidText("name", nameId, "android.webkit.WebViewFragment"))))),
+        )
+
+    @Test
+    fun everyCompiledXmlFileOfAnApkIsReadByItsContent() {
+        val webView = layout(BinaryResourceWriter.Element("WebView"))
+        val apk = apk(
+            "classes.dex" to clean,
+            "AndroidManifest.xml" to BinaryResourceWriter.xml(BinaryResourceWriter.Element("manifest")),
+            "res/Ab.xml" to cleanLayout,
+            "res/4j.xml" to webView,
+            "res/Q" to webView,
+            // A text file is not compiled XML. Android cannot inflate it.
+            "res/raw/notes.xml" to "<WebView/>".toByteArray(),
+        )
+        assertEquals(
+            listOf(
+                "the element <WebView> (rule 7, hard rule 1: no WebView), in res/4j.xml of app-release-unsigned.apk",
+                "the element <WebView> (rule 7, hard rule 1: no WebView), in res/Q of app-release-unsigned.apk",
+            ),
+            CheckApkRulesTask.apkShippedCodeProblems(apk).sorted(),
+        )
+    }
+
+    // Rule 7 in the resource table. An attribute can name a class through a
+    // string resource, and then the name is only in resources.arsc.
+
+    /** A resource table with one string resource, 0x7f020001, holding each value in its own configuration. */
+    private fun table(vararg values: String): ByteArray = BinaryResourceWriter.table(
+        values.map { listOf(BinaryResourceWriter.Entry(1, "name", ApkResourceReader.TYPE_STRING, string = it)) },
+    )
+
+    @Test
+    fun aResourceValueThatNamesARefusedClassFails() {
+        webViewClasses.forEach { name ->
+            assertEquals(
+                listOf("the class name $name in a value (rule 7, hard rule 1: no WebView)"),
+                CheckApkRulesTask.resourceTableWebViewProblems(table("res/Ab.xml", name)),
+            )
+        }
+    }
+
+    @Test
+    fun resourceValuesWithoutARefusedClassPass() =
+        assertEquals(
+            emptyList<String>(),
+            CheckApkRulesTask.resourceTableWebViewProblems(table("res/Ab.xml", "WebView", "android.webkit.MimeTypeMap", "Open it in a browser")),
+        )
+
+    @Test
+    fun aFragmentNamedThroughAStringResourceFails() {
+        val fragment = BinaryResourceWriter.Element(
+            "fragment",
+            listOf(BinaryResourceWriter.android("name", nameId, ApkResourceReader.TYPE_REFERENCE, 0x7f020001)),
+        )
+        val layout = layout(fragment)
+        // The layout holds only the reference, so it alone names no class.
+        assertEquals(emptyList<String>(), xmlProblems(layout))
+        val apk = apk("classes.dex" to clean, "res/4j.xml" to layout, "resources.arsc" to table("android.webkit.WebViewFragment"))
+        assertEquals(
+            listOf("the class name android.webkit.WebViewFragment in a value (rule 7, hard rule 1: no WebView), in resources.arsc of app-release-unsigned.apk"),
+            CheckApkRulesTask.apkShippedCodeProblems(apk),
+        )
+    }
+
+    @Test
+    fun aResourceTableThatCannotBeReadFails() {
+        val whole = table("res/Ab.xml")
+        val problems = CheckApkRulesTask.apkShippedCodeProblems(apk("classes.dex" to clean, "resources.arsc" to whole.copyOf(whole.size - 40)))
+        assertEquals(problems.toString(), 1, problems.size)
+        assertTrue(problems.single(), problems.single().startsWith("resources.arsc of app-release-unsigned.apk cannot be read"))
+    }
+
+    @Test
+    fun aCompiledXmlFileThatCannotBeReadFails() {
+        val cut = cleanLayout.copyOf(cleanLayout.size - 12)
+        val problems = CheckApkRulesTask.apkShippedCodeProblems(apk("classes.dex" to clean, "res/4j.xml" to cut))
+        assertEquals(problems.toString(), 1, problems.size)
+        assertTrue(problems.single(), problems.single().startsWith("the compiled XML file res/4j.xml of app-release-unsigned.apk cannot be read"))
+    }
 }

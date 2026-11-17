@@ -49,28 +49,109 @@ the repository goes to that file on GitHub.
 
 | Job | When | What it does | Secrets |
 |---|---|---|---|
-| Build | Pull requests that change `docs/`, `site/`, `tools/site/` or the site's workflow files, and every push to `main` | Runs the generator's tests. Builds the site. Checks the built files. Adds the security headers. Records a SHA-256 for every file. Uploads the site as the artifact `site`. | None |
-| Deploy tool | Pull requests only | Installs the pinned Wrangler and tries the deploy with the built site, without uploading. So a broken pin or Worker configuration fails the pull request, not `main`. | None |
-| Deploy | Pushes to `main`, and runs started by hand on `main` | Stops if a newer commit is on `main`. Checks the files against Build's SHA-256 values. Installs the pinned Wrangler. Stops unless the Worker exists. Deploys a new version of it. Checks that the live site serves exactly the uploaded files, with every security header: on the `workers.dev` address, and on your own domain if `SITE_DOMAIN` is set. | `CLOUDFLARE_API_TOKEN`, in one step |
+| Build | Pull requests that change `docs/`, `site/`, `tools/site/` or the site's workflow files, and every push to `main` | Runs the generator's tests. Builds the site. Uploads what the generator wrote, hidden files included, as the artifact `site-unchecked`, kept for one day. | None |
+| Check the site | After Build | Starts on a new runner and checks out nothing. Downloads `site-unchecked`. Tests its own checks first, then checks the built files. Adds the security headers. Records a SHA-256 for every file. Uploads the site as the artifact `site`. | None |
+| Deploy tool | Pull requests only | Installs the pinned Wrangler and tries the deploy with the checked site, without uploading. So a broken pin or Worker configuration fails the pull request, not `main`. | None |
+| Deploy | Pushes to `main`, and runs started by hand on `main` | Stops if a newer commit is on `main`. Checks the files against the SHA-256 values of Check the site. Installs the pinned Wrangler. Stops unless the Worker exists. Deploys a new version of it. Checks that the live site serves exactly the uploaded files, with every security header: on the `workers.dev` address, and on your own domain if `SITE_DOMAIN` is set. | `CLOUDFLARE_API_TOKEN`, in one step |
 
-Pull requests are never deployed. "Site / Build" is not a required check.
-It runs only when a pull request changes the site.
+Pull requests are never deployed. "Site / Build" and "Site / Check the
+site" are not required checks. They run only when a pull request changes
+the site.
 
 `CLOUDFLARE_API_TOKEN` never appears on a command line or in the log.
 
-### What Build checks
+### What Check the site checks
 
-The checks do not trust the generator. They look at what it wrote:
+The checks do not trust the generator. They look at what it wrote, on a
+runner where it never ran:
+
+- The generator runs in Build. Code that runs there can change what the
+  later steps of that job do, for example by writing to `$GITHUB_ENV`.
+  So Build checks nothing that Deploy relies on.
+- Check the site checks out nothing. Nothing from the repository or from
+  Build runs in it: the built site comes in as files to read, and the
+  checks are written in `site.yml`.
+- They read each file whole and parse it, with the standard library of
+  the runner's Python, started with `-I` so that it ignores the
+  environment and the files it reads.
+- The check tests itself first ([The self-test](#the-self-test)).
+
+What they check:
 
 1. Only plain files, with lower-case names ending in `.html`, `.css` or
    `.svg`. So no Cloudflare control file such as `_redirects`, and no
-   script file, can reach Cloudflare.
+   script file, can reach Cloudflare. A folder that cannot be listed
+   fails, and so does a file that is not UTF-8.
 2. No `<script>`, `<style>`, frame, form, plugin, `<base>` or meta
    refresh. No event handler such as `onclick`, no `style` or `src`
    attribute, no `javascript:` address.
 3. Links go to `https://...`, to the site itself (`/...`) or to a heading
-   (`#...`). The style sheet and the icon come from the site itself, and
-   load nothing themselves.
+   (`#...`). Only `<a>` may link to another site. Any other `href`, such
+   as on a `<link>` or on an SVG `<image>` in a page, loads what it names,
+   so it must stay on the site. The style sheet and the icon come from
+   the site itself, and load nothing themselves.
+4. A page holds only the elements that the generator writes, and each
+   element only the attributes that the generator gives it. For example,
+   `class` is allowed on `<a>`, `<div>`, `<th>` and `<td>`, and nowhere
+   else. Anything else fails, such as `<span>`, or the old attribute
+   `background`, which loads an image. So a way to load something that no
+   rule above names fails too. The list is in `site.yml`, next to the
+   checks. When the generator starts to write a new element or attribute,
+   the same pull request adds it to the list.
+
+How they read the files:
+
+1. The rules above run on the raw text of each file, read whole, not
+   line by line. So a tag broken over two lines is still one tag.
+2. Each page is parsed with Python's HTML parser. Every element and
+   attribute is checked as the parser reads it: with any quotes or none,
+   and with character references such as `&#x73;` decoded. An address is
+   read as a browser reads it: tabs and line breaks dropped, spaces at
+   either end dropped, and `\` read as `/`.
+3. A page fails if it holds anything that a browser might read in
+   another way than the parser: a comment, a CDATA section, a processing
+   instruction, a declaration other than `<!doctype html>`, or a `<` that
+   is not a tag. The generator writes none of them.
+4. The icon is parsed as XML. It may have no DOCTYPE, so no entities, no
+   processing instruction, such as `<?xml-stylesheet?>`, and no comment.
+5. The style sheet is checked as written, and again with its CSS escapes
+   decoded, so `u\72l(` counts as `url(`. As in CSS, CR LF, CR and a
+   form feed are first read as one line break, so an escape followed by
+   CR LF is decoded as a browser decodes it.
+
+### The self-test
+
+The check tests itself before it checks the built site. The checks and
+the self-test are one script in `site.yml`, so the self-test runs the
+same functions that then check the site, not a copy of them.
+
+1. The step "Test the site checker" runs the checks on a small good
+   site: two pages, a style sheet and an icon, written in the script. It
+   must have no problem.
+2. Then it runs them on samples. Each sample is that good site with one
+   fault, so the fault is the only reason it can fail.
+3. Each sample names every message its fault must cause. The self-test
+   fails if a named message is missing, or if any other message appears.
+   So a sample that is refused for another reason does not count.
+4. Every rule has at least one sample: the file rules, each rule on the
+   raw text, each rule on the parsed elements and attributes, the
+   parser's own cases (a stray `<`, a comment, a declaration, a
+   processing instruction, a CDATA section), the icon's XML rules, the
+   CSS escapes and a file that is not UTF-8. Each tag and each attribute
+   that the site does not allow has its own sample. Their names are
+   written out in the self-test, not taken from the rules, so a shorter
+   list in a rule fails it.
+5. Where both the raw text and the parser catch a fault, another sample
+   holds a fault that only the parser catches. Examples: a meta refresh
+   behind a quoted `>`, an event handler after a `/`, a link without
+   quotes, and a `javascript:` address written with `&#x73;` or a tab.
+   An `href` in the icon is the one fault with no such sample: the raw
+   text always shows the word.
+6. Only when the self-test passes does the step "Check the built site"
+   run.
+
+To add a rule: add a sample for it, and one for each fault that only
+the new rule catches.
 
 ## Security headers
 
@@ -280,7 +361,7 @@ Tap the failed step to see the message.
 | ... answered HTTP ..., not 200 with the uploaded file. | The new version did not appear within two minutes. Run the workflow again. If it happens again, ask Claude. |
 | The variable SITE_DOMAIN of the cloudflare environment must be a plain domain name ... | Set it to the domain alone, for example `shkriuss.app`, with no `https://` and no slash ([Your domain](#6-your-domain), step 5). |
 | ... does not send the header ... exactly as in _headers. | Cloudflare changed or added a header. The site is online, but not as strict as intended. If only your own domain fails, a zone setting adds the header ([Your domain](#6-your-domain)). Otherwise ask Claude, with the message. |
-| The downloaded site is not the one the job Build made and checked. | Nothing was deployed. Run the workflow again. If it happens again, ask Claude. |
+| The downloaded site is not the one the job Check the site checked. | Nothing was deployed. Run the workflow again. If it happens again, ask Claude. |
 | A newer commit is on main. | Not an error. The newer commit's run deploys. |
 
 To stop the site at once, open the Worker in the Cloudflare dashboard. In
@@ -334,7 +415,8 @@ heading.
    out `nav` for a page that other pages link to but the menu does not
    show.
 3. Link to other pages by their relative path, as everywhere in `docs/`.
-4. Open a pull request. The job **Build** builds and checks the site.
+4. Open a pull request. The job **Build** builds the site, and **Check
+   the site** checks it.
 
 A new app is added to `docs/user/apps.md`. When it is signed with the
 suite key, the owner adds it to the table in `fingerprints.md`, and the
