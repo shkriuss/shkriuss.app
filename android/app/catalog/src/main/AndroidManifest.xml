@@ -9,8 +9,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        androidx.core adds this permission for Android 12 and older only.
-        The minimum is Android 15, so it is never used. Remove it.
+        androidx.core adds this permission for Android 12 and older only,
+        below the minimum. Remove it.
     -->
     <permission
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"

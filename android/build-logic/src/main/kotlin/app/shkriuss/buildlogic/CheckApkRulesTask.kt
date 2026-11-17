@@ -334,7 +334,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
          * path, or null. In the compiled manifest's `<application>`:
          *
          * - `android:allowBackup` is the literal false. Android's default is
-         *   true. On Android 12 and later it stops cloud backup only.
+         *   true. It stops cloud backup only.
          * - `android:backupAgent` is not set.
          * - `android:dataExtractionRules` names an XML resource. Every
          *   configuration of it in `resources.arsc` (such as `xml` and
@@ -344,7 +344,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
          *   [RULES_DOMAINS] with `path="."` and holds nothing but `<exclude>`.
          *
          * `fullBackupContent` is not read: Android uses it only on Android 11
-         * and older, and the minimum is Android 15.
+         * and older.
          */
         fun backupProblems(entries: (String) -> ByteArray?): List<String> {
             val manifest = ApkResourceReader.readXml(entries(APK_MANIFEST) ?: return listOf("no $APK_MANIFEST"))
@@ -365,7 +365,7 @@ abstract class CheckApkRulesTask : DefaultTask() {
             val rules = application.androidAttribute(DATA_EXTRACTION_RULES_ID, "dataExtractionRules")
             problems += when {
                 rules == null -> listOf(
-                    "android:dataExtractionRules is not set. On Android 12 and later only these rules turn device-to-device transfer off",
+                    "android:dataExtractionRules is not set. Only these rules turn device-to-device transfer off",
                 )
                 rules.type != ApkResourceReader.TYPE_REFERENCE && rules.type != ApkResourceReader.TYPE_DYNAMIC_REFERENCE ->
                     listOf("android:dataExtractionRules does not name an XML resource")

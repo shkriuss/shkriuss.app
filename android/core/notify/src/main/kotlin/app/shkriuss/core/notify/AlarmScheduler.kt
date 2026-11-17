@@ -41,7 +41,7 @@ internal class AlarmManagerScheduler(private val context: Context) : AlarmSchedu
     // Plugin 9.5.1, knows only SCHEDULE_EXACT_ALARM as the permission for
     // an exact alarm. It reports MissingPermission here although the
     // module's manifest declares USE_EXACT_ALARM, which Android accepts
-    // from version 13 and which ADR 0010 chose. ManifestTest checks that
+    // and which ADR 0010 chose. ManifestTest checks that
     // the permission is declared, and AlarmsOnAndroidTest that Android
     // allows and fires the alarm. This is the owner's decision (ADR
     // 0030). After an update of the Android Gradle Plugin, try

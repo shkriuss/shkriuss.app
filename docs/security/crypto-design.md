@@ -210,7 +210,7 @@ emulator tests check it, through the real prompt
 #### Asking which keys exist
 
 The owner decided this. Tink's `hasKey` is not used. In the
-source of Android 13 and 14 it also answers "no" when the Keystore only
+source of Android 15 and 16 it also answers "no" when the Keystore only
 failed for a moment. A living key would then count as gone, and its
 keyset file could be written over.
 
@@ -218,7 +218,8 @@ keyset file could be written over.
    alias. Only "not found" means no. If `getKey` throws, the answer is
    "the Keystore cannot say", and the key counts as not usable now.
 2. The list from `KeyStore.aliases` has the same weakness as `hasKey`:
-   in Android 14's source it comes back empty when the Keystore fails.
+   in the source of Android 15 and 16 it comes back empty when the
+   Keystore fails.
    So an empty or short list is never proof that a key is gone.
 3. The list is used for two things only: to pick the next number of a
    new key (rule 4 below), and to find keys that no keyset file names
@@ -248,8 +249,8 @@ owner decided this.
 
 1. Android's own prompt does everything the design needs: a
    `CryptoObject` that holds a cipher, and a prompt that takes a
-   fingerprint or the device credential for it. Read in the
-   source of Android 13 and Android 16.
+   fingerprint or the device credential for it. Read in Android 16's
+   source.
 2. The AndroidX library exists to support older Android versions and to
    carry a prompt through a screen rotation. The first is not needed.
    The second is simple here: when the screen goes away the app cancels
@@ -435,11 +436,9 @@ destroying it.
 
 #### The Unlocked key needs Android 15
 
-Android's reference for `setUnlockedDeviceRequired` warns about Android
-12 to 14: such keys cannot be made or used on a phone with no screen
-lock, and they are all deleted when the screen lock is removed. Android
-15 fixed this. Google's advice is to use the setting only on Android 15
-and later.
+Android's reference for `setUnlockedDeviceRequired` advises it only on
+Android 15 and later, where such a key works without a screen lock and
+stays when the screen lock is removed.
 
 The minimum is Android 15
 ([ADR 0040](../adr/0040-minimum-android-15.md)). So the Unlocked key is
@@ -1919,12 +1918,11 @@ owner. Each one is a place to object.
     exists.
 23. Android's own `BiometricPrompt` takes a cipher together with
     fingerprint or device credential, also when no fingerprint is
-    enrolled. Read in the source of Android 13 and
-    Android 16. The emulator tests confirmed it on emulators with
-    Android 15 and 17: the prompt took the cipher of a Lock key and of a Recovery
-    guard and was answered with the PIN, to encrypt and to decrypt. A
-    fingerprint as the answer, and a key in StrongBox, are not confirmed,
-    because an emulator cannot check them.
+    enrolled. Read in Android 16's source. The emulator tests confirmed
+    it on emulators with Android 15 and 17: the prompt took the cipher of
+    a Lock key and of a Recovery guard and was answered with the PIN, to
+    encrypt and to decrypt. A fingerprint as the answer, and a key in
+    StrongBox, are not confirmed, because an emulator cannot check them.
 24. For a key that needs the prompt, the cipher can be started before the
     prompt, and associated data must wait until after it. An encrypt
     operation gives its IV when it is done. Read in Android's source. The
@@ -1945,16 +1943,16 @@ owner. Each one is a place to object.
     to survive a power loss on the supported phones.
 28. `KeyStore.getKey` on the Android Keystore answers "no key" only for
     "not found", and throws for every other failure. Read in the source
-    of Android 13 and 14. The emulator tests confirmed the first half on
+    of Android 15 and 16. The emulator tests confirmed the first half on
     emulators with Android 15 and 17: "no key" for an alias that was
     never made, that was deleted, and that Android deleted with the
     screen lock. The second half cannot be tested: a test cannot make
     the real Keystore fail.
 29. `KeyStore.aliases` comes back empty or short when the Keystore
-    fails. Read in Android 14's source. The code never depends on the
-    list being complete. The emulator tests confirmed that the list
-    shows each key from when it is made until it is gone. A list from a
-    failing Keystore cannot be tested.
+    fails. Read in the source of Android 15 and 16. The code never
+    depends on the list being complete. The emulator tests confirmed that
+    the list shows each key from when it is made until it is gone. A list
+    from a failing Keystore cannot be tested.
 30. `KeyPermanentlyInvalidatedException` reaches the app from the cipher.
     When a key is loaded, Android reports the same state as a key that
     cannot be recovered, which the code counts as "not usable now". Read
