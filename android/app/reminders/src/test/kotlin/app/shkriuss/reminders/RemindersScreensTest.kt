@@ -8,11 +8,14 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performTextInput
@@ -221,6 +224,41 @@ class RemindersScreensTest {
         compose.field(words(DesignR.string.shk_hour)).performTextReplacement("11")
         compose.tap(DesignR.string.shk_ok)
         compose.waitForText("Next: Mon, Nov 16, 11:15")
+    }
+
+    /**
+     * A date before today cannot be chosen again, so the date picker opens
+     * on this month with no date chosen, and OK stays off until one is.
+     * The stored date stays until then. On the tablet the form is a pane,
+     * so the only Cancel in a dialog is the picker's.
+     */
+    @Test
+    @Config(qualifiers = TABLET)
+    fun theDatePickerOfADateBeforeTodayOpensOnThisMonthWithNoDateChosen() {
+        seed {
+            // Earlier this year: Material would open on it, chosen, though it cannot be chosen.
+            addSaved("Dentist", Schedule(Repeat.ONCE, TODAY.minusDays(3), 10 * 60))
+            // An earlier year: Material leaves it out of its years, and opens on the real today's month.
+            addSaved("Rent", Schedule(Repeat.MONTHLY, LocalDate.of(2025, 10, 31), 10 * 60))
+        }
+        start(ready = "Rent")
+
+        compose.tap(R.string.reminders_past)
+        compose.tap("Dentist")
+        pickerOnThisMonthWithNoDateChosen(stored = "Fri, Nov 13, 2026")
+
+        compose.tap(R.string.reminders_upcoming)
+        compose.tap("Rent")
+        pickerOnThisMonthWithNoDateChosen(stored = "Fri, Oct 31, 2025")
+    }
+
+    /** Opens the date picker of the open form, checks that it shows this month with OK off, cancels it, and checks the form still shows [stored]. */
+    private fun pickerOnThisMonthWithNoDateChosen(stored: String) {
+        compose.tap(R.string.reminders_date)
+        compose.waitForText("November 2026", substring = true)
+        compose.onNode(hasText(words(DesignR.string.shk_ok)) and hasClickAction()).assertIsNotEnabled()
+        compose.tap(hasText(words(DesignR.string.shk_cancel)) and hasAnyAncestor(isDialog()))
+        compose.onNode(hasText(words(R.string.reminders_date)) and hasText(stored)).assertExists()
     }
 
     @Test

@@ -203,7 +203,10 @@ private fun FormFields(form: ReminderForm, next: LocalDateTime?, model: Reminder
             title = stringResource(R.string.reminders_date),
             onDateChosen = model::onDateChange,
             onDismissRequest = close,
-            selectedDate = form.date,
+            // A date before today, of a past reminder or of a repeat that started
+            // earlier, cannot be chosen again. The picker then opens on this month
+            // with no date chosen, and the form keeps its date until one is.
+            selectedDate = form.date.takeIf { it in today..ReminderLimits.LAST_PICKER_DATE },
             earliestDate = today,
             latestDate = ReminderLimits.LAST_PICKER_DATE,
         )
