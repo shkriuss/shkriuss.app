@@ -738,8 +738,12 @@ that holds the database. The decision is in
 2. Room's Gradle plugin would copy that file over the committed one in
    every build. The `shkriuss.android.room` plugin turns the copy off.
 3. `checkRoomSchemas`, part of `check`, fails if Room wrote any file that
-   is not committed exactly as written. So CI fails when a schema changes
-   without a new version, or a new schema file is not committed.
+   is not committed exactly as written: a new schema file that is not
+   committed, or a committed file that differs from the schema the code
+   produces. CI also fails when a schema file of a released version is
+   changed or deleted
+   ([ci.md, "Released schemas"](ci.md#released-schemas)). A schema file
+   of a version that is not released yet may still be recorded again.
 4. `recordRoomSchemas` copies the files Room wrote into `schemas/`. Commit
    them.
 5. Unit tests read the committed files as assets, for the migration tests
@@ -751,8 +755,12 @@ The steps for a schema change are in
 What it catches: a new database version whose schema file is not
 recorded fails `checkRoomSchemas`, which names the file, such as
 `2.json`. A committed file that differs from the schema fails it too,
-for example a changed `NOT NULL`. A change of spaces only passes,
-because the schema is the same.
+for example a changed `NOT NULL`. A change of spaces only passes
+`checkRoomSchemas`, because the schema is the same. A schema file of a
+released version that is changed, Water's `1.json` for example, fails
+CI's step "Check that no released schema changed", which names the file
+and its release tag. That step compares the file itself, so in a
+released file a change of spaces fails it too.
 
 ## DAO rules check
 
