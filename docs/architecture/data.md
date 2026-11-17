@@ -308,12 +308,22 @@ interface IntakeDao : RecordDao<IntakeEntity> {
    database. These files are committed.
 2. `checkRoomSchemas` runs in `check`. It fails if the code produces a
    schema that is not committed exactly as it is: a new version whose file
-   is missing, or a change to a database without a new version.
-3. `recordRoomSchemas` writes the files the code produces into `schemas/`.
-4. Room's own Gradle plugin would copy new schema files over the
+   is missing, or a change to a database whose file was not recorded
+   again.
+3. CI fails if a schema file that a release shipped is changed or
+   deleted. A release tag, `<app>-v<version>`, holds the schema files of
+   that release. The job "Check" compares each of them, at every release
+   tag, with the commit under test
+   ([ci.md](../development/ci.md#job-check)). So once a version is
+   released, recording its file again fails. A schema change then needs
+   a new version and a migration. A version that no release shipped yet
+   may still be recorded again. The example schemas of `core/data` are
+   in the release tags too, so the same holds for them.
+4. `recordRoomSchemas` writes the files the code produces into `schemas/`.
+5. Room's own Gradle plugin would copy new schema files over the
    committed ones during every build. That copy is turned off, so a
    forgotten file cannot pass CI ([ADR 0026](../adr/0026-room-build-tools.md)).
-5. Unit tests read the committed schema files, so a migration test always
+6. Unit tests read the committed schema files, so a migration test always
    starts from what was really committed.
 
 ### How to change a schema
@@ -332,7 +342,8 @@ change ("Changing formats" in [CLAUDE.md](../../CLAUDE.md)):
 5. Run `./gradlew check`.
 6. Commit the new schema file with the change.
 
-Never change the schema file of a version that was released. A migration
+Never change the schema file of a version that was released. CI fails on
+such a change (point 3 above). A migration
 changes tables, not records: it leaves the record fields, the change
 numbers and the counter as they are. A new record table starts with the
 `changeNumber` column and its index.

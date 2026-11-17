@@ -775,7 +775,10 @@ runs in `check` for every module with the `shkriuss.android.room` plugin.
      `OnConflictStrategy.REPLACE`, even in `RecordDao`,
    - a function is annotated `@Query` with SQL that contains `INSERT`,
      `DELETE`, `UPDATE`, `REPLACE INTO` or `OR REPLACE`. Comments and text
-     in quotes are not counted,
+     in single quotes are not counted. The check reads them in one pass,
+     from the start, as SQLite does: a comment marker inside quotes is
+     text, and a quote inside a comment is comment. This holds for `'...'`,
+     `"..."`, `` `...` `` and `[...]`. Words in a quoted name still count,
    - a class other than `RecordWriter` and its nested classes calls
      `rawInsert` or `rawUpdate`, directly or as a function reference.
 3. It checks every class, not only those marked `@Dao`, so a forbidden
@@ -961,10 +964,10 @@ What it catches:
 ## Tests of the build checks
 
 The logging check, the rule that keeps `core/testing` in tests, the
-reader of binary resources, APK rules 6 to 10 and the allow list of
-rule 2 have unit tests. They show that a check fails on a sample that
-breaks its rule, and passes on one that does not. The owner asked for
-them.
+reader of binary resources, APK rules 6 to 10, the allow list of rule 2
+and how the DAO rules check reads SQL have unit tests. They show that a
+check fails on a sample that breaks its rule, and passes on one that
+does not. The owner asked for them.
 
 1. They are in `build-logic/src/test/kotlin/`, and run on the JVM with
    JUnit 4. `build-logic/build.gradle.kts` sets them up. JUnit 4.13.2 is
@@ -987,20 +990,23 @@ them.
 |---|---|
 | `NoLoggingCheckTest` | Each of the 13 forms fails in main code, also in a comment or in quotes. The ten forms of the replaced test are all there. `main`, `debug`, `release`, `preview`, `testFixtures` and a new folder are main code, and logging in the fixtures fails. The test folders are not checked. A module with no main code is found. |
 | `CoreTestingGuardTest` | `core/testing` in `implementation`, `api`, `debugImplementation`, `testFixturesImplementation` or `testFixturesApi` fails. In `testImplementation` and `androidTestImplementation` it passes. |
-| `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. |
+| `ApkResourceReaderTest` | The reader reads binary XML and every resource table layout it claims to read. A cut-off or wrong file is refused. A compiled XML file is known by its first bytes, and a resource table, a dex file or a text file is not one. |
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
-| `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. |
+| `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. In a compiled XML file, an element named `WebView` or after each WebView class fails, so does a `class` attribute with such a name, and an `android:name` with one. A layout without them passes. Every compiled XML file of an APK is found by its content, also under a short name, and one the reader cannot read fails. |
+| `DaoRulesSqlTest` | The DAO rules check reads comments and quoted text in one pass. A marked purge whose `OR` hides behind `--` or `/*` inside `'...'`, `"..."`, `` `...` `` or `[...]` fails, and so does one behind a quote inside a comment, or behind an escaped quote. A `DELETE` behind `'--'` in a read fails. A purge of deleted rows passes, with quoted names, comments and text. |
 | `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). Water's five permissions pass. `INTERNET` and any other permission fail in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 | `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The six screens with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the six screens alone needs both, and so does a new screen of the module. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
 The tests catch a weaker check. They fail when `allowBackup` true is
 let through, when `WebView` is allowed, when `Runtime.exec` or
-`dumpStack` is taken off its list, and when rule 10 asks for only one
-of the two permissions.
+`dumpStack` is taken off its list, when rule 10 asks for only one
+of the two permissions, and when the DAO rules check removes comments
+before it reads quoted text.
 
-The other checks (Room schemas, DAO rules, the instrumented test suite,
-the graphics path, and APK rules 1 to 5) have no unit tests, except the
-allow list of rule 2. Their sections say what each catches.
+The other checks (Room schemas, the rest of the DAO rules, the
+instrumented test suite, the graphics path, and APK rules 1 to 5) have
+no unit tests, except the allow list of rule 2. Their sections say what
+each catches.
 
 ## Lint
 
@@ -1247,7 +1253,8 @@ and fails the build if:
    fixtures of `core/notify` (owner's decision),
 6. Android's own backup or device transfer is not off
    ([The backup rule](#the-backup-rule)),
-7. in an APK that ships, its code names a WebView class,
+7. in an APK that ships, its code or one of its compiled XML files, such
+   as a layout, names a WebView class,
 8. in an APK that ships, its code names a class loader that reads code,
 9. in an APK that ships, its code calls `System.load`, `Runtime.load`,
    `Runtime.exec` or `ProcessBuilder.start`
@@ -1539,6 +1546,27 @@ two forms.
 All these classes belong to Android or Java and are never inside an APK.
 R8 cannot rename them or fold them away, so no R8 rule is needed.
 
+How rule 7 also reads compiled XML files: a layout can hold a WebView,
+and Android's inflater makes the view from the name in the file. Then no
+WebView class needs to be in a dex file.
+
+1. Every file of the APK that starts as binary XML is read with
+   `ApkResourceReader.kt`: the manifest, the layouts and every other
+   compiled resource. It goes by the first bytes of a file, not by its
+   folder, because a release APK gives resource files short names, such
+   as `res/4j.xml`.
+2. An element fails if its name is `WebView`, or names a class that rule
+   7 refuses in a dex file, such as `android.webkit.WebView` or
+   `org.mozilla.geckoview.GeckoView`. The inflater looks for a name
+   without a dot in `android.widget`, `android.webkit`, `android.app` and
+   `android.view`, and finds `WebView` only in `android.webkit`.
+3. A `class` attribute fails with the same names. That is the
+   `<view class="...">` form.
+4. Any other attribute fails if its text names a class that rule 7
+   refuses, such as `android:name` of a `<fragment>`. The search is the
+   one for dotted text in a dex file.
+5. A compiled XML file the reader cannot read fails the check.
+
 How rule 9 searches: `DexMethodReferences.kt` reads the dex file's table
 of method references. A method that code calls is always in that table,
 so the table decides pass or fail. The reader reads nothing else. To name
@@ -1575,6 +1603,10 @@ Limits:
 - `ClassLoader.defineClass` cannot load code on Android. It throws there.
 - A class name put together from pieces at run time is not text in the
   dex file.
+- A file that is not compiled XML, such as a text file in `res/raw/` or
+  in `assets/`, is not read. Android's inflater cannot make views from
+  it. A name that code reads from such a file and then loads is the case
+  above: it is not text in the dex file.
 
 What they catch, shown with a temporary file in Catalog with one
 function, called from its activity, that makes a `WebView`, makes a
@@ -1587,6 +1619,15 @@ name with `Class.forName`, and calls `Runtime.exec`:
    `dalvik.system.InMemoryDexClassLoader` as text (rule 8), and a call to
    `java.lang.Runtime.exec` (rule 9).
 2. The debug check passes, as decided.
+
+What rule 7 catches in a layout, shown with a temporary layout in
+Catalog that holds `<WebView>` and `<view class="android.webkit.WebView">`,
+kept in the release APK with `tools:keep` and used by no code: the
+release check fails and names both, in `res/1N.xml`, the short name of
+the layout. The release APKs of Catalog and Water pass: none of their
+compiled XML files names a WebView. Each layout form is also shown by the
+[tests of the build checks](#tests-of-the-build-checks), on every pull
+request.
 
 ## Native code from Compose
 
