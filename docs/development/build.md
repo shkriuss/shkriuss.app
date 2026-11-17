@@ -567,7 +567,8 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersScreensTest`: what the screens do and what TalkBack hears,
     on a phone and on a tablet.
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
-    and dialog, except the date picker, which marks the real today.
+    and dialog. The date picker shows June 2100, because Material's
+    picker marks the real today in the month it shows.
 
 ### Instrumented tests
 

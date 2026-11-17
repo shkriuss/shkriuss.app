@@ -37,11 +37,9 @@ import app.shkriuss.core.design.R as DesignR
  * of the spec's examples.
  *
  * A screen that scrolls is captured to its end, in parts, and so is the
- * form. On the phone the form is a sheet over the list. A dialog is
- * captured with the screen dimmed behind it, and a snackbar over the
- * screen, once. On the tablet the form is a
- * pane beside the list. The date picker has no screenshot: it marks the
- * real today, which changes from one run to the next.
+ * form. On the phone the form is a sheet over the list. On the tablet it
+ * is a pane beside the list. A dialog is captured with the screen dimmed
+ * behind it, and a snackbar over the screen, once.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(application = UnlockedRemindersApp::class)
@@ -136,6 +134,22 @@ class RemindersScreenshotTest(private val config: ScreenshotConfig) {
         compose.tap(DesignR.string.shk_ok)
         compose.waitForText(words(R.string.reminders_time_passed))
         captureWindows("TimePassed")
+    }
+
+    /**
+     * The date picker of the form. Material's picker marks the real today,
+     * which the test's clock does not set, in the month it shows. So it
+     * shows a reminder in June 2100, a month that is never today when the
+     * tests run, and the image is the same on every day.
+     */
+    @Test
+    fun theDatePicker() {
+        seed { addSaved("Open the time capsule", Schedule(Repeat.ONCE, LocalDate.of(2100, 6, 15), 12 * 60)) }
+        start(ready = "Open the time capsule")
+        compose.tap("Open the time capsule")
+        compose.tap(R.string.reminders_date)
+        compose.waitFor(hasText(words(DesignR.string.shk_ok)) and hasClickAction())
+        captureWindows("DatePicker")
     }
 
     // Past.

@@ -6,7 +6,9 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -17,6 +19,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ActivityScenario
 import app.shkriuss.feature.reminders.R
+import app.shkriuss.feature.reminders.ReminderLimits
 import app.shkriuss.feature.reminders.Repeat
 import app.shkriuss.feature.reminders.Schedule
 import app.shkriuss.feature.reminders.Weekdays
@@ -174,6 +177,21 @@ class RemindersScreensTest {
     }
 
     @Test
+    fun withFiveHundredRemindersSaveSaysWhyAndTheFormStays() {
+        seed { repeat(ReminderLimits.MOST_REMINDERS) { addSaved("Reminder ${it + 1}", Schedule(Repeat.DAILY, TODAY, 12 * 60)) } }
+        start(ready = "Reminder 1")
+        compose.tap(R.string.reminders_add)
+        compose.field(words(R.string.reminders_title)).performTextInput("One more")
+        compose.tap(R.string.reminders_save)
+
+        compose.waitForText("Reminders keeps 500 reminders. Delete one to add another.")
+        compose.onNode(hasText("Reminders keeps 500 reminders. Delete one to add another.")).assertIsDisplayed()
+        compose.onNode(hasText(words(R.string.reminders_new_reminder))).assertIsDisplayed()
+        compose.field(words(R.string.reminders_title)).assert(hasText("One more"))
+        assertEquals(ReminderLimits.MOST_REMINDERS, storedReminders().size)
+    }
+
+    @Test
     fun everyWeekChoosesTheDayOfTheDateAndNeedsAtLeastOneDay() {
         start()
         compose.tap(R.string.reminders_add)
@@ -212,7 +230,8 @@ class RemindersScreensTest {
         compose.tap("Pills")
 
         compose.waitForText(words(R.string.reminders_edit_reminder))
-        compose.field(words(R.string.reminders_title)).assert(hasText("Pills"))
+        // The form of an existing reminder opens without the keyboard.
+        compose.field(words(R.string.reminders_title)).assert(hasText("Pills")).assertIsNotFocused()
         radio(R.string.reminders_every_day).assertIsSelected()
         compose.tap(R.string.reminders_delete)
 
