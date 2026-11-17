@@ -112,28 +112,30 @@ checked. Then:
 1. It checks that no released schema changed (see
    [Released schemas](#released-schemas) below).
 2. It uses the JDK 21 that GitHub's Ubuntu runners come with.
-3. It installs the SDK packages the build pins: `platforms;android-37.0`
+3. It checks that no trust pattern covers `com.google`
+   ([see below](#trust-patterns)).
+4. It installs the SDK packages the build pins: `platforms;android-37.0`
    and `build-tools;36.0.0`. Keep them in step with `ShkBuild.kt` and the
    cloud setup script ([cloud-environment.md](cloud-environment.md)).
-4. It restores Gradle's downloads (see [The download cache](#the-download-cache)).
-5. It finds every app: a folder in `android/app/` with a build file.
-6. It runs one Gradle command:
+5. It restores Gradle's downloads (see [The download cache](#the-download-cache)).
+6. It finds every app: a folder in `android/app/` with a build file.
+7. It runs one Gradle command:
    `./gradlew check verifyRoborazziDebug`, plus, for every app,
    `:app:<name>:checkReleaseApkRules` and
    `:app:<name>:checkReleaseGraphicsPathUse`. Which build check runs
    inside `check` and which by name is below and in
    [build.md](build.md#which-check-runs-where).
-7. It checks that both release checks wrote their report for every app.
-8. It checks every app's version: the `versionCode` must follow from the
+8. It checks that both release checks wrote their report for every app.
+9. It checks every app's version: the `versionCode` must follow from the
    `versionName` by the rule in
    [ADR 0021](../adr/0021-version-names-and-version-codes.md). It reads
    both from the release APK's `output-metadata.json` and runs
    `.github/scripts/check-version-code.sh`, the same script that Release
    runs. So a wrong code fails the pull request, not the release.
-9. If anything failed, it uploads the screenshot differences, if there
+10. If anything failed, it uploads the screenshot differences, if there
    are any, and Gradle's dependency verification report, if Gradle wrote
    one.
-10. On `main`, it saves the downloads for later runs.
+11. On `main`, it saves the downloads for later runs.
 
 Which build check runs where:
 
@@ -158,7 +160,7 @@ Why the release checks are named one by one:
   graphics-path check.
 - Named by task, a check that is removed from the build makes Gradle fail
   with "task not found". A check that is turned off writes no report, and
-  step 7 fails. Removing `registerApkRulesCheck()`, for example, makes
+  step 8 fails. Removing `registerApkRulesCheck()`, for example, makes
   Gradle fail with "Cannot locate tasks that match
   ':app:catalog:checkReleaseApkRules'".
 - Naming the task builds the release APK, so R8 runs on every pull request
@@ -191,6 +193,36 @@ It runs before Gradle and runs no project code: only `git`. It is part
 of "Check", a required check, so it needs no rule of its own. A changed
 schema needs a new version and a migration
 ([data.md](../architecture/data.md#how-to-change-a-schema)).
+
+#### Trust patterns
+
+Gradle can trust a key for a pattern of group names (`regex="true"` in
+`verification-metadata.xml`), such as `^com[.]google($|([.].*))`. That
+one would trust the key for Play services and Firebase too. A strict
+build still passes with it, because it only widens what is trusted. So
+the step "Check that no trust pattern covers com.google" fails when:
+
+1. a group pattern matches `com.google`, `com.google.android.gms` or
+   `com.google.firebase`, in a trusted key, in its `trusting` lines or in
+   `trusted-artifacts`;
+2. a pattern has no group, so it covers every group;
+3. an entry has no group. With a `name`, `version` or `file`, such as a
+   key with only a `name`, Gradle trusts it for that name in every group,
+   `com.google` included. With none of them, Gradle trusts nothing for a
+   key such as `<trusted-key id="…"/>`, and refuses such an entry of
+   `trusted-artifacts`. The step refuses both, so that the file says what
+   it means. A key whose groups are all in its `trusting` lines is read
+   by those lines;
+4. a group pattern is not in the form Gradle writes, such as
+   `^com[.]sun($|([.].*))`, with lower-case names. Python and Java read
+   that form the same way. Other syntax, such as `[a-z&&[c]]`, they may
+   not;
+5. the file has no trusted keys, so the step read the wrong layout.
+
+It runs no project code. Python's standard library reads the file, and
+matches each pattern against the whole name, as Gradle does. How to
+replace such a pattern is in
+[build.md](build.md#after-a-dependency-change), step 6.
 
 The job takes about ten minutes.
 
