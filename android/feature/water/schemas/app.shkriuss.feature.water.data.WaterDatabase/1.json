@@ -12,7 +12,7 @@
             "fieldPath": "changeNumber",
             "columnName": "changeNumber",
             "affinity": "INTEGER",
-            "notNull": true
+            "notNull": false
           },
           {
             "fieldPath": "amountMl",
