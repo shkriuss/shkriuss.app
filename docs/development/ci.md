@@ -112,7 +112,7 @@ checked. Then:
 1. It checks that no released schema changed (see
    [Released schemas](#released-schemas) below).
 2. It uses the JDK 21 that GitHub's Ubuntu runners come with.
-3. It checks that no trust pattern covers `com.google`
+3. It checks that no trust uses a pattern
    ([see below](#trust-patterns)).
 4. It installs the SDK packages the build pins: `platforms;android-37.0`
    and `build-tools;36.0.0`. Keep them in step with `ShkBuild.kt` and the
@@ -199,29 +199,23 @@ schema needs a new version and a migration
 Gradle can trust a key for a pattern of group names (`regex="true"` in
 `verification-metadata.xml`), such as `^com[.]google($|([.].*))`. That
 one would trust the key for Play services and Firebase too. A strict
-build still passes with it, because it only widens what is trusted. So
-the step "Check that no trust pattern covers com.google" fails when:
+build still passes with a pattern, because it only widens what is
+trusted. So the file names each group, and the step "Check that no trust
+uses a pattern" fails when:
 
-1. a group pattern matches `com.google`, `com.google.android.gms` or
-   `com.google.firebase`, in a trusted key, in its `trusting` lines or in
-   `trusted-artifacts`;
-2. a pattern has no group, so it covers every group;
-3. an entry has no group. With a `name`, `version` or `file`, such as a
+1. any entry has `regex="true"`: a trusted key, one of its `trusting`
+   lines, or an entry of `trusted-artifacts`;
+2. an entry has no group. With a `name`, `version` or `file`, such as a
    key with only a `name`, Gradle trusts it for that name in every group,
    `com.google` included. With none of them, Gradle trusts nothing for a
    key such as `<trusted-key id="…"/>`, and refuses such an entry of
    `trusted-artifacts`. The step refuses both, so that the file says what
    it means. A key whose groups are all in its `trusting` lines is read
    by those lines;
-4. a group pattern is not in the form Gradle writes, such as
-   `^com[.]sun($|([.].*))`, with lower-case names. Python and Java read
-   that form the same way. Other syntax, such as `[a-z&&[c]]`, they may
-   not;
-5. the file has no trusted keys, so the step read the wrong layout.
+3. the file has no trusted keys, so the step read the wrong layout.
 
-It runs no project code. Python's standard library reads the file, and
-matches each pattern against the whole name, as Gradle does. How to
-replace such a pattern is in
+It runs no project code: Python's standard library reads the file. How
+to replace a pattern is in
 [build.md](build.md#after-a-dependency-change), step 6.
 
 The job takes about ten minutes.
