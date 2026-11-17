@@ -229,30 +229,24 @@ jobs:
 
       # Runs no project code. Gradle writes a pattern such as
       # ^com[.]google($|([.].*)) when one key signs files in several groups.
-      # It would trust that key for Play services and Firebase too, and a
-      # strict build still passes with it. See docs/development/build.md,
-      # "After a dependency change", step 6. An entry with a name, version or
-      # file but no group matches every group, so it fails too. So does an
-      # entry with none of them: Gradle trusts nothing for such a key, and
-      # refuses such an entry of trusted-artifacts.
-      - name: Check that no trust pattern covers com.google
+      # It trusts the key for every group that starts that way, Play services
+      # and Firebase too for that one, and a strict build still passes with
+      # it. So the file names each group, and any pattern fails here. See
+      # docs/development/build.md, "After a dependency change", step 6. An
+      # entry with a name, version or file but no group matches every group,
+      # so it fails too. So does an entry with none of them: Gradle trusts
+      # nothing for such a key, and refuses such an entry of trusted-artifacts.
+      - name: Check that no trust uses a pattern
         env:
           METADATA: android/gradle/verification-metadata.xml
         run: |
           set -u
           python3 -I -B - <<'PYTHON'
           import os
-          import re
           import sys
           import xml.etree.ElementTree as ElementTree
 
           path = os.environ["METADATA"]
-          # Gradle matches the whole group name against the pattern.
-          PROBES = ("com.google", "com.google.android.gms", "com.google.firebase")
-          # The only form of group pattern this step reads: the one Gradle
-          # writes, such as ^com[.]sun($|([.].*)). Java and Python read it the
-          # same way. Other syntax, such as [a-z&&[c]], they may not.
-          GRADLE_FORM = r"\^[a-z0-9_-]+(\[\.\][a-z0-9_-]+)*\(\$\|\(\[\.\]\.\*\)\)"
           ENTRIES = ("trusted-key", "trusting", "trust")
           COORDINATES = ("group", "name", "version", "file")
 
@@ -267,46 +261,39 @@ jobs:
               sys.exit(1)
 
           problems = []
-          patterns = 0
           for element in root.iter():
               kind = local(element.tag)
               is_pattern = (element.get("regex") or "").strip().lower() == "true"
               if kind not in ENTRIES and not is_pattern:
                   continue
-              # A key with no coordinates of its own is trusted for what its
-              # trusting lines name. Those lines are read on their own.
-              if kind == "trusted-key" and not any(element.get(name) is not None for name in COORDINATES):
-                  if any(local(child.tag) == "trusting" for child in element):
-                      continue
               owner = parents.get(element) if kind == "trusting" else element
               if kind == "trust":
                   who = "An entry of trusted-artifacts"
               else:
                   who = f"The key {owner.get('id') if owner is not None else '(no id)'}"
               group = element.get("group")
+              if is_pattern:
+                  if group is None:
+                      problems.append(f"{who}: a pattern (regex=\"true\") with no group, which can match every group.")
+                  else:
+                      problems.append(f"{who}: the group pattern {group!r} (regex=\"true\"), which trusts every group it matches.")
+                  continue
+              # A key with no coordinates of its own is trusted for what its
+              # trusting lines name. Those lines are read on their own.
+              if kind == "trusted-key" and not any(element.get(name) is not None for name in COORDINATES):
+                  if any(local(child.tag) == "trusting" for child in element):
+                      continue
               if group is None:
                   if not any(element.get(name) is not None for name in COORDINATES):
                       problems.append(f"{who}: an entry with no group, name, version or file, so it does not say what it trusts.")
-                  elif is_pattern:
-                      problems.append(f"{who}: a pattern with no group, which covers every group under com.google.")
                   else:
                       problems.append(f"{who}: an entry with no group, which matches every group, com.google included.")
-                  continue
-              if not is_pattern:
-                  continue
-              patterns += 1
-              if not re.fullmatch(GRADLE_FORM, group):
-                  problems.append(f"{who}: the group pattern {group!r} is not in the form Gradle writes, such as ^com[.]sun($|([.].*)).")
-                  continue
-              covered = [probe for probe in PROBES if re.fullmatch(group, probe)]
-              if covered:
-                  problems.append(f"{who}: the group pattern {group!r} covers {', '.join(covered)}.")
 
           for problem in problems:
               print(f"::error file={path}::{problem} Name each group instead. See build.md, After a dependency change, step 6.")
           if problems:
               sys.exit(1)
-          print(f"{len(keys)} trusted keys and {patterns} group patterns read. Every entry has a group, and no pattern covers com.google.")
+          print(f"{len(keys)} trusted keys read. No trust uses a pattern, and every entry has a group.")
           PYTHON
 
       # Keep these in step with build-logic (ShkBuild.kt) and the cloud setup
