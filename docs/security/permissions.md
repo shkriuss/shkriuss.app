@@ -14,9 +14,10 @@ and has its own decision record ([CLAUDE.md](../../CLAUDE.md)).
   permission it is not allowed. Each app has an allow list in the APK
   rules check. Only the owner changes it, after the app's ADR and its
   entry on this page. The sentence the owner uses for it is in
-  [PROMPTS.md](../development/PROMPTS.md#2-build). Today only Water is
-  allowed any: the three of `core/notify` and the two of `core/security`.
-  An app that is not on the list may request none, and no app may
+  [PROMPTS.md](../development/PROMPTS.md#2-build). Today Water and
+  Reminders are allowed the same five: the three of `core/notify` and
+  the two of `core/security`. An app that is not on the list may request
+  none, and no app may
   declare a permission of its own. The check is described in
   [build.md](../development/build.md#apk-rules-check).
 
@@ -127,6 +128,60 @@ Water stores its data in its own database and backs it up only into the
 backup file of the suite, so Android backup and device-to-device transfer
 are turned off.
 
+### Reminders (`app.shkriuss.reminders`)
+
+Two permissions, from `core/security`, for the recovery key screens and
+the app lock.
+
+| Permission | From | Why |
+|---|---|---|
+| `android.permission.USE_BIOMETRIC` | `core/security` | To show Android's system prompt: for the recovery key that the phone keeps, and for the app lock ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). Granted at install. |
+| `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | To hide other apps' windows while a screen of the recovery key or the lock screen shows ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Granted at install. |
+
+- Reminders' allow list in the APK rules check has five permissions,
+  the same as Water's, which its
+  [specification](../apps/reminders/spec.md#as-in-water) names: these
+  two, and the three of `core/notify`, `POST_NOTIFICATIONS`,
+  `USE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`. The owner asked for
+  all five. A build of Reminders with any other permission fails.
+- Reminders does not use `core/notify` yet, so it does not hold the
+  three. They come with the module, for the reminders. Their reasons are
+  those of Water, above.
+- Reminders asks the user for none of the two. Android grants both at
+  install.
+
+Reminders' manifest removes one permission that a library asks for:
+
+| Permission | Added by | What happens to it |
+|---|---|---|
+| `app.shkriuss.reminders.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Reminders' manifest, for good, as in Water. `androidx.core` uses it only on Android 12 and older. |
+
+Other components that libraries add, none of them a permission:
+
+- The six screens of `core/security`, none exported
+  ([Screens](#screens)). Reminders has no Settings yet, so nothing opens
+  them, and the app lock cannot be turned on. A screen of the module
+  needs both permissions, and the APK rules check fails a build of
+  Reminders without them. `RemindersManifestTest` checks that Reminders'
+  screens are its own and these six, that none of the six is exported,
+  and that none has an intent filter.
+- `androidx.room3.MultiInstanceInvalidationService`: added by Room, not
+  exported. Reminders does not use multi-instance invalidation.
+- `androidx.startup.InitializationProvider`: not exported. The emoji
+  font loader is removed from it, as in Water.
+- `androidx.profileinstaller.ProfileInstallReceiver`: removed in
+  Reminders' manifest, as in Water.
+- The app lock's screen-off receiver, registered while the app runs,
+  not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
+  Reminders starts its `AppLockWatcher`.
+- No receiver in the manifest. `RemindersManifestTest` checks that there
+  is none, and fails unless `RemindersActivity` is the only exported
+  part of Reminders' merged manifest.
+
+Reminders stores its data in its own database and backs it up only into
+the backup file of the suite, so Android backup and device-to-device
+transfer are turned off.
+
 ## Apps that use `core/notify`
 
 `core/notify` sets the alarms and shows the notifications of an app with
@@ -199,9 +254,10 @@ intent filter on the receiver of alarms or of buttons.
 `core/security` holds the recovery key screens, the security screen and
 the app lock ([security-screens.md](../architecture/security-screens.md)).
 Its manifest declares two permissions and six screens. Every app that
-uses the module gets them when the app is built. Water is the first app
-that has them ([Water](#water-appshkriusswater)). Catalog removes them
-for good.
+uses the module gets them when the app is built. Water and Reminders
+have them ([Water](#water-appshkriusswater),
+[Reminders](#reminders-appshkriussreminders)). Catalog removes them for
+good.
 
 An app does not get the permissions unnoticed. The APK rules check fails
 the app until the owner allows them for that app, and this page then

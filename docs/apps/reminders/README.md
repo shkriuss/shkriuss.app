@@ -12,7 +12,10 @@ Pages:
 
 Code:
 
-- Not built yet. The data, logic and screens go in
-  `android/feature/reminders`, the app in `android/app/reminders`.
+- `android/feature/reminders`: the data and logic. The screens are not
+  built yet. They go there too.
+- `android/app/reminders`: the app. Until the screens come, it shows
+  one line in their place.
+- What changed: [CHANGELOG.md](../../../android/app/reminders/CHANGELOG.md).
 - How the modules fit together:
   [modules.md](../../architecture/modules.md).

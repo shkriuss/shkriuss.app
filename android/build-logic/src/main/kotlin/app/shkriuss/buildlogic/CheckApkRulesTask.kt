@@ -641,6 +641,15 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 "android.permission.USE_BIOMETRIC",
                 "android.permission.HIDE_OVERLAY_WINDOWS",
             ),
+            // The same five as Water: the three of core/notify and the two of core/security
+            // (docs/apps/reminders/spec.md, "Permissions"). Owner's request.
+            "reminders" to setOf(
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.USE_EXACT_ALARM",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
+                "android.permission.USE_BIOMETRIC",
+                "android.permission.HIDE_OVERLAY_WINDOWS",
+            ),
         )
 
         /**

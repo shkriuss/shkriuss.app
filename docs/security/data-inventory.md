@@ -3,8 +3,8 @@
 What each app stores on the phone, where, whether it is in a backup, and
 what leaves the phone and how.
 
-- Status: covers Catalog and Water. It is written from the code, not
-  from other pages. The file names and keys below are the ones in the
+- Status: covers Catalog, Water and Reminders. It is written from the
+  code, not from other pages. The file names and keys below are the ones in the
   code.
 - Each later app adds its section before its first release.
 - The same, in plain words for users: [privacy.md](../user/privacy.md).
@@ -141,3 +141,40 @@ private storage. This page did not check them in the code:
   Water does the same.
 - Backup files stay where you put them. Delete them there.
 - Without the recovery words, nobody can open those backups.
+
+## Reminders (`app.shkriuss.reminders`)
+
+Reminders is being built. Its code stores reminders and what this
+phone remembers of them, as below. Its screens are not built yet: the
+app shows one line and writes none of it. It has no backup, shows no
+reminder and cannot set up the recovery key.
+
+### On the phone
+
+Everything is in Reminders' private storage.
+
+| What | Where | What it holds | In a backup |
+|---|---|---|---|
+| The database `reminders.db` | Reminders' database folder | One record table, `reminder`, one row per reminder: its title, its date, its time, its repeat and its days of the week ([spec.md](../apps/reminders/spec.md#table-reminder)). Each row also has its random ID, its times and its deletion marker. A deleted reminder keeps its title. The table `change_counter` holds one number. **Text: the titles.** | `reminder`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
+| The preferences file `app.shkriuss.reminders` | Reminders' preferences folder | For each reminder, by its random ID: its mark (`mark.<id>`, a local date and minute), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`) ([spec.md](../apps/reminders/spec.md#on-this-phone-only)). IDs and times only. Never a title. | No |
+
+- No key files and no hardware keys: the recovery key cannot be set up
+  in Reminders yet.
+- No preferences file of `core/security`: the settings of the app lock
+  cannot be changed in Reminders yet.
+- Android's SQLite keeps the write-ahead files `reminders.db-wal` and
+  `reminders.db-shm` next to the database. They can hold rows of it,
+  titles too, until SQLite writes them into `reminders.db`.
+
+### What leaves the phone, and how
+
+Nothing. Reminders has no network permission and shows no notification.
+Android backup and device transfer are off. It writes no file outside
+its storage, shares nothing with other apps, uses no clipboard and
+writes no log.
+
+### How to delete it
+
+In Android's Settings, open **Apps**, then **Reminders**, **Storage**,
+and tap **Clear storage**. Everything above goes. Uninstalling Reminders
+does the same.

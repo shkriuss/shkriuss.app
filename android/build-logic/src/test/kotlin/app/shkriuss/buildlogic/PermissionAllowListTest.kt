@@ -28,6 +28,9 @@ class PermissionAllowListTest {
         "android.permission.HIDE_OVERLAY_WINDOWS",
     )
 
+    /** Reminders' allow list: the same five as Water's (docs/apps/reminders/spec.md, "Permissions"). */
+    private val reminders = water
+
     /** A merged manifest with one element per entry of [tags]: the tag and its `android:name`. */
     private fun manifest(vararg tags: Pair<String, String>): Document {
         val body = tags.joinToString("\n") { (tag, name) -> """    <$tag android:name="$name" />""" }
@@ -53,14 +56,25 @@ class PermissionAllowListTest {
     }
 
     @Test
-    fun theCheckKnowsWatersAllowListAndNoOther() {
-        assertEquals(mapOf("water" to water.toSet()), CheckApkRulesTask.ALLOWED_PERMISSIONS)
+    fun theCheckKnowsTheAllowListsOfWaterAndRemindersAndNoOther() {
+        assertEquals(mapOf("water" to water.toSet(), "reminders" to reminders.toSet()), CheckApkRulesTask.ALLOWED_PERMISSIONS)
     }
 
     @Test
     fun watersFivePermissionsPass() {
         assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "water"))
     }
+
+    @Test
+    fun remindersFivePermissionsPass() {
+        assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(requests(*reminders.toTypedArray()), "reminders"))
+    }
+
+    @Test
+    fun theNetworkPermissionFailsInReminders() = assertOneProblem(
+        "android.permission.INTERNET in the manifest (rule 4: not on the allow list of reminders)",
+        CheckApkRulesTask.permissionProblems(requests(*(reminders + "android.permission.INTERNET").toTypedArray()), "reminders"),
+    )
 
     @Test
     fun aManifestWithNoPermissionPassesForEveryApp() {
@@ -95,7 +109,7 @@ class PermissionAllowListTest {
 
     @Test
     fun watersPermissionsAreNotAllowedInAnotherApp() {
-        val problems = CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "reminders")
+        val problems = CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "tasks")
         assertEquals(water.map { "<uses-permission> $it in the manifest (rule 4: no permissions)" }, problems)
     }
 
