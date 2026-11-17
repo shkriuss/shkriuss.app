@@ -12,12 +12,15 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ActivityScenario
@@ -36,6 +39,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import app.shkriuss.core.design.R as DesignR
@@ -392,6 +396,32 @@ class RemindersScreensTest {
         compose.tap(R.string.reminders_cancel)
         compose.waitForText(words(R.string.reminders_choose_a_reminder))
     }
+
+    /**
+     * **Add a reminder** stays beside a new form. Tapped again, it starts
+     * a new form: empty, at its top, with the keyboard on the title, though
+     * the form before was scrolled down. At font scale 2.0 the form scrolls.
+     */
+    @Test
+    @Config(qualifiers = TABLET)
+    fun addBesideANewFormStartsANewOneAtItsTop() {
+        RuntimeEnvironment.setFontScale(2f)
+        start()
+        compose.tap(R.string.reminders_add)
+        compose.field(words(R.string.reminders_title)).performTextInput("Call the bank")
+        val form = hasScrollAction() and hasAnyDescendant(hasText(words(R.string.reminders_save)))
+        compose.onNode(form).performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, 10_000f) }
+        assertTrue("the form is scrolled down", scrolled(form) > 0f)
+
+        compose.tap(R.string.reminders_add)
+        compose.waitForGone(hasText("Call the bank"))
+        assertEquals(0f, scrolled(form))
+        compose.field(words(R.string.reminders_title)).assertIsFocused()
+    }
+
+    /** How far the scrolling [node] is scrolled down. */
+    private fun scrolled(node: SemanticsMatcher): Float =
+        compose.onNode(node).fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
 
     @Test
     @Config(qualifiers = TABLET)

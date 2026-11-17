@@ -95,7 +95,7 @@ internal fun ListAndForm(
     if (!twoPanes) FormSheet(screen, form, format, today)
 }
 
-/** The form beside the list, from 840dp, or "Choose a reminder." Each reminder opens at its top. */
+/** The form beside the list, from 840dp, or "Choose a reminder." Each form opens at its top, also a new one opened beside a new one. */
 @Composable
 private fun FormPane(screen: FormScreen, model: ReminderFormViewModel, format: RemindersFormat, today: LocalDate, onBack: (() -> Unit)?) {
     val open = screen.form
@@ -103,7 +103,7 @@ private fun FormPane(screen: FormScreen, model: ReminderFormViewModel, format: R
         ShkScreen { ShkEmptyState(title = stringResource(R.string.reminders_choose_a_reminder), modifier = Modifier.weight(1f)) }
         return
     }
-    key(open.reminderId) {
+    key(screen.opening) {
         ShkScreen(topBar = { ShkTopBar(title = formTitle(open), onBack = onBack) }, scrollable = true) {
             FormFields(open, screen.next, model, format, today)
         }
@@ -115,15 +115,15 @@ private fun FormPane(screen: FormScreen, model: ReminderFormViewModel, format: R
 private fun FormSheet(screen: FormScreen, model: ReminderFormViewModel, format: RemindersFormat, today: LocalDate) {
     val open = screen.form
     // The sheet slides down after it closes. Until then it shows what it showed.
-    var shown by remember { mutableStateOf(open) }
-    if (open != null) shown = open
-    val form = shown
+    var shown by remember { mutableStateOf(screen) }
+    if (open != null) shown = screen
+    val form = shown.form
     ShkBottomSheet(
         visible = open != null,
         onDismissRequest = model::dismissSheet,
         title = form?.let { formTitle(it) },
     ) {
-        if (form != null) key(form.reminderId) { FormFields(form, screen.next, model, format, today) }
+        if (form != null) key(shown.opening) { FormFields(form, screen.next, model, format, today) }
     }
 }
 

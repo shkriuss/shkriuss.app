@@ -546,25 +546,41 @@ class ViewModelsTest {
 
     /**
      * The sheet swiped away while Save writes is gone from the screen, so
-     * its form closes when the save ends, also when the 500 limit refuses
-     * the save: no refused form is left open behind a sheet that is gone.
+     * its form closes at once, and the save goes on. A form opened then
+     * opens a sheet of its own, and stays when the save ends.
      */
     @Test
-    fun aSheetDismissedWhileSaveWritesClosesWhenTheSaveEndsAlsoWhenRefused() {
-        repeat(ReminderLimits.MOST_REMINDERS) { add("Reminder ${it + 1}", pills()) }
+    fun aSheetDismissedWhileSaveWritesClosesAtOnceAndTheSaveGoesOn() {
         holdingTheDatabase { release ->
             val model = form()
             model.openNew()
-            model.onTitleChange("One more")
+            model.onTitleChange("Call the bank")
             model.save()
             model.state.await { it.form?.saving == true }
 
             model.dismissSheet()
+            model.state.await { it.form == null }
+            model.openNew()
+            model.onTitleChange("Water the plants")
             release()
 
-            model.state.await { it.form == null }
-            assertEquals(ReminderLimits.MOST_REMINDERS, live().size)
+            val screen = model.state.await { it.snackbar is FormSnackbar.Saved }
+            assertEquals("Water the plants", screen.form?.title)
+            assertEquals(listOf("Call the bank"), live().map { it.title })
         }
+    }
+
+    /** Each form opened is counted, so the screen starts it afresh, also a new form opened over a new form. */
+    @Test
+    fun eachFormOpenedIsCounted() {
+        val pills = add("Pills", pills())
+        val model = form()
+        model.openNew()
+        model.state.await { it.opening == 1 && it.form != null }
+        model.openNew()
+        model.state.await { it.opening == 2 }
+        model.openEdit(pills)
+        model.state.await { it.opening == 3 && it.form?.reminderId == pills.id }
     }
 
     /** Runs [test] while another thread holds the database's write lock, so that a save waits until [test] calls its release. */

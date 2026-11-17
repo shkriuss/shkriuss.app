@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 
@@ -71,6 +72,12 @@ data class FormScreen(
     val next: LocalDateTime? = null,
     /** The snackbar after a Save or a Delete, while it shows. */
     val snackbar: FormSnackbar? = null,
+    /**
+     * Counts the forms opened. The screen starts each form afresh by it:
+     * at its top, with the keyboard on the title of a new reminder, also
+     * when **Add a reminder** is tapped beside a new form.
+     */
+    val opening: Int = 0,
 )
 
 /** The snackbars of the form. */
@@ -189,23 +196,23 @@ class ReminderFormViewModel(
 ) : ViewModel() {
     private val form = MutableStateFlow<ReminderForm?>(null)
     private val snackbar = MutableStateFlow<FormSnackbar?>(null)
-
-    /** The form being saved whose sheet was dismissed while it wrote. It closes when the save ends, also when the save is refused. */
-    private var dismissedWhileSaving: ReminderForm? = null
+    private val opened = MutableStateFlow(0)
 
     /** What the form shows. The line "Next" follows the clock. */
-    val state: StateFlow<FormScreen> = combine(form, snackbar, now.reading) { open, shown, reading ->
-        FormScreen(form = open, next = open?.let { FormRules.nextOf(it, reading) }, snackbar = shown)
+    val state: StateFlow<FormScreen> = combine(form, snackbar, now.reading, opened) { open, shown, reading, opening ->
+        FormScreen(form = open, next = open?.let { FormRules.nextOf(it, reading) }, snackbar = shown, opening = opening)
     }.stateIn(viewModelScope + work, SharingStarted.Eagerly, FormScreen())
 
     /** **Add a reminder**: an empty form, Once, today, at the next full hour. */
     fun openNew() {
         form.value = FormRules.newForm(time.reading())
+        opened.update { it + 1 }
     }
 
     /** A tap on a row: the form of [reminder]. */
     fun openEdit(reminder: Reminder) {
         form.value = FormRules.editForm(reminder, time.reading().today)
+        opened.update { it + 1 }
     }
 
     /** The user typed in the title field. It has one line. A shown error follows what is typed. */
@@ -280,11 +287,8 @@ class ReminderFormViewModel(
             // The mark is the minute the time was checked in, so a time that was later than it stays later.
             val saved = if (stored == null) repository.add(title, schedule, now) else repository.change(stored.id, title, schedule, now)
             // Only the form that was saved closes, or says it was refused. A form opened, or one closed, while it wrote stays as it is.
-            // A refused form whose sheet was dismissed meanwhile closes too: the sheet is gone.
-            val dismissed = dismissedWhileSaving == writing
-            dismissedWhileSaving = null
             if (saved == null && stored == null) {
-                form.compareAndSet(writing, if (dismissed) null else checked.copy(limitError = true))
+                form.compareAndSet(writing, checked.copy(limitError = true))
                 return@launch
             }
             form.compareAndSet(writing, null)
@@ -303,13 +307,13 @@ class ReminderFormViewModel(
 
     /**
      * The sheet of the form was swiped away, or closed with Back or by a
-     * tap above it. As Cancel, except while Save writes: the sheet is gone
-     * from the screen then, so the form closes when the save ends, also
-     * when the 500 limit refuses it.
+     * tap above it. The sheet is gone from the screen, so the form closes
+     * at once, also while Save writes: that save goes on, and its snackbar
+     * says when the reminder shows. So a form opened next opens a sheet
+     * of its own.
      */
     fun dismissSheet() {
-        val open = form.value ?: return
-        if (open.saving) dismissedWhileSaving = open else cancel()
+        form.value = null
     }
 
     /**
