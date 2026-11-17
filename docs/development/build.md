@@ -1130,8 +1130,10 @@ Claude does this in the same pull request as the change to
      was and how it was checked.
 5. Read the diff of both files. Every new key and checksum must belong to
    the new dependency. Say in the pull request where it comes from.
-6. Search the file for `^com[.]google`. CI fails while it is there
-   ([ci.md](ci.md#trust-patterns)). Replace it:
+6. Search the file for `^com[.]google`. CI fails when such a pattern
+   covers `com.google`, `com.google.android.gms` or `com.google.firebase`
+   ([ci.md](ci.md#trust-patterns)). A narrower one, such as
+   `^com[.]google[.]code($|([.].*))`, passes CI. Replace it all the same:
    1. Take the pattern out of its key, and keep the key's other lines.
    2. Run the command of step 2 without `--write-verification-metadata`
       and `--export-keys`. A file that only the pattern covered fails

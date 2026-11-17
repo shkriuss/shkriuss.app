@@ -136,8 +136,10 @@ jobs:
       # ^com[.]google($|([.].*)) when one key signs files in several groups.
       # It would trust that key for Play services and Firebase too, and a
       # strict build still passes with it. See docs/development/build.md,
-      # "After a dependency change", step 6. An entry with no group, such as
-      # <trusted-key id="..."/>, covers every group, so it fails too.
+      # "After a dependency change", step 6. An entry with a name, version or
+      # file but no group matches every group, so it fails too. So does an
+      # entry with none of them: Gradle trusts nothing for such a key, and
+      # refuses such an entry of trusted-artifacts.
       - name: Check that no trust pattern covers com.google
         env:
           METADATA: android/gradle/verification-metadata.xml
@@ -184,10 +186,12 @@ jobs:
                   who = f"The key {owner.get('id') if owner is not None else '(no id)'}"
               group = element.get("group")
               if group is None:
-                  if is_pattern:
+                  if not any(element.get(name) is not None for name in COORDINATES):
+                      problems.append(f"{who}: an entry with no group, name, version or file, so it does not say what it trusts.")
+                  elif is_pattern:
                       problems.append(f"{who}: a pattern with no group, which covers every group under com.google.")
                   else:
-                      problems.append(f"{who}: an entry with no group, which covers every group, com.google included.")
+                      problems.append(f"{who}: an entry with no group, which matches every group, com.google included.")
                   continue
               if not is_pattern:
                   continue
