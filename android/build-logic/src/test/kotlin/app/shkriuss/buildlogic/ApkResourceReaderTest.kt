@@ -108,6 +108,20 @@ class ApkResourceReaderTest {
         assertRefused { ApkResourceReader.readXml(ByteArray(64)) }
     }
 
+    @Test
+    fun aCompiledXmlFileIsKnownByItsFirstBytes() {
+        assertTrue(ApkResourceReader.isCompiledXml(BinaryResourceWriter.xml(manifest, utf8 = true)))
+        assertTrue(ApkResourceReader.isCompiledXml(BinaryResourceWriter.xml(manifest, utf8 = false)))
+        assertTrue(ApkResourceReader.isCompiledXml(byteArrayOf(0x03, 0x00, 0x08, 0x00)))
+        listOf(
+            BinaryResourceWriter.table(listOf(entries)),
+            DexWriter.dex(),
+            "<manifest/>".toByteArray(),
+            byteArrayOf(0x03, 0x00, 0x08),
+            ByteArray(0),
+        ).forEach { assertTrue(!ApkResourceReader.isCompiledXml(it)) }
+    }
+
     private fun assertRefused(read: () -> Unit) {
         val failure = try {
             read()

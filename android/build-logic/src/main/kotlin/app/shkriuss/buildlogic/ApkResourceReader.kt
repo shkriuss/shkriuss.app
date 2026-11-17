@@ -4,10 +4,10 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Reads what the backup rule of [CheckApkRulesTask] needs from an APK, as it
- * ships: the compiled manifest, a compiled XML file, and the values of one
- * resource in `resources.arsc`. An APK holds these as binary XML and a
- * binary resource table, not as text.
+ * Reads what the backup rule and the WebView rule of [CheckApkRulesTask]
+ * need from an APK, as it ships: the compiled manifest, any compiled XML
+ * file, and the values of one resource in `resources.arsc`. An APK holds
+ * these as binary XML and a binary resource table, not as text.
  *
  * It follows the formats in AOSP's `ResourceTypes.h` (frameworks/base,
  * libs/androidfw) and needs no library, as [ClassFileReader] does for class
@@ -73,6 +73,18 @@ internal object ApkResourceReader {
 
     /** Bytes from the start of a package chunk to its key string pool offset. */
     private const val PACKAGE_KEY_STRINGS = 276
+
+    /**
+     * How every binary XML file starts: the chunk type 0x0003 and the header
+     * size 8, both little-endian. A release APK gives its resource files
+     * short names, such as `res/4j.xml`, so a compiled XML file is known by
+     * these bytes, not by its folder.
+     */
+    val XML_FILE_START: List<Byte> = listOf(0x03, 0x00, 0x08, 0x00)
+
+    /** True if [bytes] start as a binary XML file does. */
+    fun isCompiledXml(bytes: ByteArray): Boolean =
+        bytes.size >= XML_FILE_START.size && XML_FILE_START.indices.all { bytes[it] == XML_FILE_START[it] }
 
     /** Reads a binary XML file and returns its root element. */
     fun readXml(bytes: ByteArray): XmlElement {

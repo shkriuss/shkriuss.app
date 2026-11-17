@@ -45,9 +45,10 @@ import org.w3c.dom.Element
  *   "Where keys are stored", point 1; MASVS-STORAGE-2). Read from the APK's
  *   compiled manifest and resources, as they ship ([backupProblems]).
  * - Rule 1, in the APKs that ship (every build type but `debug`): no
- *   WebView, no class loader that reads code from a file, memory or the
- *   network, and no call that loads or runs code from a file path
- *   ([shippedCodeProblems]).
+ *   WebView, in the code or in a compiled XML file such as a layout, no
+ *   class loader that reads code from a file, memory or the network, and
+ *   no call that loads or runs code from a file path
+ *   ([shippedCodeProblems], [compiledXmlWebViewProblems]).
  *
  * It runs every time an APK is assembled. Apps that are allowed an
  * exception get an explicit allow list here, decided in their ADR: Water
@@ -112,7 +113,8 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 ", no native libraries, no emoji font loader, no Play services classes, " +
                 "no test fixtures of core/crypto or core/notify. Android backup and device transfer are off. " +
                 if (shipped.get()) {
-                    "No WebView, no class loader that reads code, no call that loads or runs code from a file path.\n"
+                    "No WebView in the code or in a compiled XML file, no class loader that reads code, " +
+                        "no call that loads or runs code from a file path.\n"
                 } else {
                     "Rules 7 to 9 (WebView and code loading) run only on the APKs that ship, not on debug.\n"
                 },
@@ -297,18 +299,92 @@ abstract class CheckApkRulesTask : DefaultTask() {
             }
         }
 
-        /** Rules 7 to 9 for every dex file of one APK file. A dex file it cannot read is a problem, never a pass. */
+        /**
+         * Rules 7 to 9 for every dex file of one APK file, and rule 7 for
+         * every compiled XML file of it ([compiledXmlWebViewProblems]). A
+         * file it cannot read is a problem, never a pass.
+         */
         fun apkShippedCodeProblems(apk: File): List<String> = ZipFile(apk).use { zip ->
-            val dexFiles = zip.entries().asSequence().filter { it.name.endsWith(".dex") }.toList()
-            if (dexFiles.isEmpty()) return@use listOf("no dex file in ${apk.name}, so its code cannot be checked ($CALL_RULE)")
-            dexFiles.flatMap { dexFile ->
-                val bytes = zip.getInputStream(dexFile).use { it.readBytes() }
-                try {
-                    shippedCodeProblems(bytes).map { "$it, in ${dexFile.name} of ${apk.name}" }
-                } catch (unreadable: RuntimeException) {
-                    listOf("${dexFile.name} of ${apk.name} cannot be read: ${unreadable.message} ($CALL_RULE)")
+            val entries = zip.entries().asSequence().filter { !it.isDirectory }.toList()
+            val dexFiles = entries.filter { it.name.endsWith(".dex") }
+            val dexProblems = if (dexFiles.isEmpty()) {
+                listOf("no dex file in ${apk.name}, so its code cannot be checked ($CALL_RULE)")
+            } else {
+                dexFiles.flatMap { dexFile ->
+                    val bytes = zip.getInputStream(dexFile).use { it.readBytes() }
+                    try {
+                        shippedCodeProblems(bytes).map { "$it, in ${dexFile.name} of ${apk.name}" }
+                    } catch (unreadable: RuntimeException) {
+                        listOf("${dexFile.name} of ${apk.name} cannot be read: ${unreadable.message} ($CALL_RULE)")
+                    }
                 }
             }
+            val xmlProblems = entries.flatMap { entry ->
+                val bytes = zip.getInputStream(entry).use { input ->
+                    val start = input.readNBytes(ApkResourceReader.XML_FILE_START.size)
+                    if (ApkResourceReader.isCompiledXml(start)) start + input.readBytes() else null
+                }
+                if (bytes == null) return@flatMap emptyList()
+                try {
+                    compiledXmlWebViewProblems(ApkResourceReader.readXml(bytes)).map { "$it, in ${entry.name} of ${apk.name}" }
+                } catch (unreadable: RuntimeException) {
+                    listOf("the compiled XML file ${entry.name} of ${apk.name} cannot be read: ${unreadable.message} ($WEBVIEW_RULE)")
+                }
+            }
+            dexProblems + xmlProblems
+        }
+
+        /**
+         * The name that `LayoutInflater` turns into `android.webkit.WebView`.
+         * Android looks for a name without a dot in `android.widget`,
+         * `android.webkit`, `android.app` and `android.view`, in that order,
+         * and `WebView` is only in `android.webkit`.
+         */
+        const val WEBVIEW_ELEMENT = "WebView"
+
+        /**
+         * Rule 7 for one compiled XML file, such as a layout. Android's
+         * inflater makes a view from the name in the file, so no WebView
+         * class needs to be in a dex file. Every element fails if:
+         *
+         * - its name is [WEBVIEW_ELEMENT] or names a class rule 7 refuses,
+         * - its `class` attribute does, the `<view class="...">` form,
+         * - the text of any other attribute names a class rule 7 refuses,
+         *   such as `android:name` of a `<fragment>`.
+         *
+         * A refused class is found in a name as in a dex file
+         * ([webViewClassesIn]).
+         */
+        fun compiledXmlWebViewProblems(root: ApkResourceReader.XmlElement): List<String> {
+            val problems = mutableListOf<String>()
+            fun check(element: ApkResourceReader.XmlElement) {
+                if (element.name == WEBVIEW_ELEMENT || webViewClassesIn(element.name).isNotEmpty()) {
+                    problems += "the element <${element.name}> ($WEBVIEW_RULE)"
+                }
+                element.attributes.forEach { attribute ->
+                    val text = attribute.text ?: return@forEach
+                    val classes = webViewClassesIn(text)
+                    if (attribute.name == "class") {
+                        if (text.trim() == WEBVIEW_ELEMENT || classes.isNotEmpty()) {
+                            problems += "<${element.name} class=\"$text\"> ($WEBVIEW_RULE)"
+                        }
+                    } else {
+                        classes.forEach { name ->
+                            problems += "the class name $name in the attribute ${attribute.name} of <${element.name}> ($WEBVIEW_RULE)"
+                        }
+                    }
+                }
+                element.children.forEach(::check)
+            }
+            check(root)
+            return problems.distinct()
+        }
+
+        /** The classes rule 7 refuses that [text] names in dotted form, found as in a dex file ([dottedNamesUnder]). */
+        private fun webViewClassesIn(text: String): List<String> {
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            return WEBVIEW_PACKAGES.flatMap { dottedNamesUnder("$it.", bytes) }
+                .filter { it.substringBefore('$') !in WEBVIEW_HELPERS }
         }
 
         /** The names of rule 6, as failure messages cite it. */
