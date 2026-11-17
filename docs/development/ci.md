@@ -8,7 +8,7 @@ the authoritative build (section 13 of the [plan](../plan/PLAN.md),
 
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
-| CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper. Runs unit tests, lint, screenshot verification and the release rules checks. Runs the instrumented tests on emulators with Android 15 and 17. |
+| CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper, and that no released schema changed. Runs unit tests, lint, screenshot verification and the release rules checks. Runs the instrumented tests on emulators with Android 15 and 17. |
 | PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
@@ -68,8 +68,9 @@ that is one: `check-version-code.sh`, used by CI and Release.
 Site has two more files outside its workflow file:
 
 - The generator, `tools/site/build.py`. It is not owner-only. It runs only
-  in the job "Build", which has no secrets, and the workflow checks what it
-  writes before anything is deployed.
+  in the job "Build", which has no secrets. The job "Check the site"
+  checks what it writes, on a runner of its own, before anything is
+  deployed.
 - The deploy tool's pin, its install script and the Worker's
   configuration, in `.github/site-deploy/`. They are owner-only, like the
   workflow.
@@ -108,31 +109,33 @@ wrapper task a second time, so the jar comes from the new version
 It waits for "Gradle wrapper", so it never runs a wrapper that was not
 checked. Then:
 
-1. It uses the JDK 21 that GitHub's Ubuntu runners come with.
-2. It checks that no trust pattern covers `com.google`
+1. It checks that no released schema changed (see
+   [Released schemas](#released-schemas) below).
+2. It uses the JDK 21 that GitHub's Ubuntu runners come with.
+3. It checks that no trust pattern covers `com.google`
    ([see below](#trust-patterns)).
-3. It installs the SDK packages the build pins: `platforms;android-37.0`
+4. It installs the SDK packages the build pins: `platforms;android-37.0`
    and `build-tools;36.0.0`. Keep them in step with `ShkBuild.kt` and the
    cloud setup script ([cloud-environment.md](cloud-environment.md)).
-4. It restores Gradle's downloads (see [The download cache](#the-download-cache)).
-5. It finds every app: a folder in `android/app/` with a build file.
-6. It runs one Gradle command:
+5. It restores Gradle's downloads (see [The download cache](#the-download-cache)).
+6. It finds every app: a folder in `android/app/` with a build file.
+7. It runs one Gradle command:
    `./gradlew check verifyRoborazziDebug`, plus, for every app,
    `:app:<name>:checkReleaseApkRules` and
    `:app:<name>:checkReleaseGraphicsPathUse`. Which build check runs
    inside `check` and which by name is below and in
    [build.md](build.md#which-check-runs-where).
-7. It checks that both release checks wrote their report for every app.
-8. It checks every app's version: the `versionCode` must follow from the
+8. It checks that both release checks wrote their report for every app.
+9. It checks every app's version: the `versionCode` must follow from the
    `versionName` by the rule in
    [ADR 0021](../adr/0021-version-names-and-version-codes.md). It reads
    both from the release APK's `output-metadata.json` and runs
    `.github/scripts/check-version-code.sh`, the same script that Release
    runs. So a wrong code fails the pull request, not the release.
-9. If anything failed, it uploads the screenshot differences, if there
+10. If anything failed, it uploads the screenshot differences, if there
    are any, and Gradle's dependency verification report, if Gradle wrote
    one.
-10. On `main`, it saves the downloads for later runs.
+11. On `main`, it saves the downloads for later runs.
 
 Which build check runs where:
 
@@ -157,11 +160,39 @@ Why the release checks are named one by one:
   graphics-path check.
 - Named by task, a check that is removed from the build makes Gradle fail
   with "task not found". A check that is turned off writes no report, and
-  step 7 fails. Removing `registerApkRulesCheck()`, for example, makes
+  step 8 fails. Removing `registerApkRulesCheck()`, for example, makes
   Gradle fail with "Cannot locate tasks that match
   ':app:catalog:checkReleaseApkRules'".
 - Naming the task builds the release APK, so R8 runs on every pull request
   too.
+
+#### Released schemas
+
+A schema file that a release shipped never changes, and is never
+deleted. Otherwise an installed app could no longer open its database.
+`checkRoomSchemas` cannot see this: it compares Room's output with the
+files of the same commit, so a changed entity with its file recorded
+again passes it
+([data.md](../architecture/data.md#where-schemas-are-kept)). The step
+"Check that no released schema changed" fails instead:
+
+1. It fetches the commit and the tree of every tag from the repository,
+   without file contents and without a token, into a copy of its own.
+2. Release tags are the tags `<app>-v<version>`, such as `water-v1.0.1`,
+   that a published release creates ([release.md](release.md)). Other
+   tags are left out.
+3. A schema file is a `.json` file in a `schemas/` folder under
+   `android/`.
+4. For each schema file of each release tag, the commit under test must
+   have the same file, with the same object ID. The check names each
+   file that is changed or deleted, and the tag it was released in.
+5. It fails if it finds no schema file in any release tag, so it never
+   passes by reading nothing.
+
+It runs before Gradle and runs no project code: only `git`. It is part
+of "Check", a required check, so it needs no rule of its own. A changed
+schema needs a new version and a migration
+([data.md](../architecture/data.md#how-to-change-a-schema)).
 
 #### Trust patterns
 
@@ -386,9 +417,10 @@ phone, is in [release.md](release.md). Why it works this way is in
 
 ## Site
 
-Three jobs: "Build", "Deploy tool" and "Deploy". Pull requests run only
-"Build" and "Deploy tool", with no secrets. "Deploy" runs only on `main`,
-in the `cloudflare` environment, and runs no project code. Its token may
+Four jobs: "Build", "Check the site", "Deploy tool" and "Deploy". Pull
+requests run all but "Deploy", with no secrets. "Check the site" checks
+out nothing and runs no project code. "Deploy" runs only on `main`, in
+the `cloudflare` environment, and runs no project code. Its token may
 only edit the one Worker of the site. What each job
 does, the security headers, and how to set up Cloudflare from a phone are
 in [site.md](site.md). Why it works this way is in
@@ -550,8 +582,8 @@ Not used, and why:
    environment lets only `main` use its secrets. So a change to
    `release.yml` reaches the key only after the owner merges it.
 4. Site deploys only from `main`. A pull request runs its own copy of
-   `site.yml`, but only the jobs "Build" and "Deploy tool", which have no
-   secrets. The `cloudflare` environment lets only `main` use its token. So
+   `site.yml`, but only the jobs "Build", "Check the site" and "Deploy
+   tool", which have no secrets. The `cloudflare` environment lets only `main` use its token. So
    a change to `site.yml`, to the generator or to the deploy tool reaches
    the token only after the owner merges it.
 5. In CI and PR preview, pull requests from forks get a read-only token

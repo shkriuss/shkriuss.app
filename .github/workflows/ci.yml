@@ -123,6 +123,101 @@ jobs:
         with:
           persist-credentials: false
 
+      # A schema file that a release shipped never changes, and is never
+      # deleted: an installed app could no longer open its database. A
+      # changed schema needs a new version and a migration
+      # (docs/architecture/data.md, "Schemas and migrations"). Release tags
+      # are <app>-v<version>, as Release names them. Runs before Gradle and
+      # runs no project code. It reads no file contents, only the trees of
+      # the tags, and compares the object IDs of the files.
+      - name: Check that no released schema changed
+        env:
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+          # Never download a file's contents on demand.
+          GIT_NO_LAZY_FETCH: "1"
+        run: |
+          set -u
+          schema_pattern='^android/(.+/)?schemas/.+\.json$'
+          plain_path='^[A-Za-z0-9._/-]+$'
+          release_tag='^[a-z][a-z0-9]*-v[0-9]'
+          plain_tag='^[a-z][a-z0-9]*-v[0-9][0-9a-z.-]*$'
+
+          # 1. The commit and the tree of every tag, without file contents,
+          #    in a copy of its own. The repository is public, so this needs
+          #    no token, and the checkout stays as it is.
+          tags="$RUNNER_TEMP/release-tags.git"
+          git init --quiet --bare "$tags"
+          git -C "$tags" remote add origin "$REPOSITORY_URL"
+          fetched=false
+          for attempt in 1 2 3; do
+            if git -C "$tags" fetch --quiet --no-tags --depth=1 --filter=blob:none origin '+refs/tags/*:refs/tags/*'; then
+              fetched=true
+              break
+            fi
+            sleep $((attempt * 10))
+          done
+          if [ "$fetched" != true ]; then
+            echo "::error::Could not fetch the tags of $REPOSITORY_URL."
+            exit 1
+          fi
+
+          # 2. The schema files of the commit under test: each path with its
+          #    mode, type and object ID.
+          listing="$RUNNER_TEMP/tree.txt"
+          declare -A current
+          git ls-tree -r -z HEAD -- android > "$listing"
+          while IFS= read -r -d '' entry; do
+            path="${entry#*$'\t'}"
+            if [[ "$path" =~ $schema_pattern ]]; then current["$path"]="${entry%%$'\t'*}"; fi
+          done < "$listing"
+
+          # 3. Every schema file of every release tag must be there, the
+          #    same object.
+          git -C "$tags" for-each-ref --format='%(refname:strip=2)' refs/tags > "$RUNNER_TEMP/tags.txt"
+          declare -A reported
+          release_tags=0
+          checked=0
+          failed=0
+          while IFS= read -r tag; do
+            if ! [[ "$tag" =~ $release_tag ]]; then continue; fi
+            if ! [[ "$tag" =~ $plain_tag ]]; then
+              echo "::error::A release tag has an unexpected name: $(printf '%q' "$tag")"
+              exit 1
+            fi
+            release_tags=$((release_tags + 1))
+            git -C "$tags" ls-tree -r -z "refs/tags/$tag^{tree}" -- android > "$listing"
+            while IFS= read -r -d '' entry; do
+              path="${entry#*$'\t'}"
+              if ! [[ "$path" =~ $schema_pattern ]]; then continue; fi
+              if ! [[ "$path" =~ $plain_path ]]; then
+                echo "::error::A schema file of $tag has an unexpected name: $(printf '%q' "$path")"
+                exit 1
+              fi
+              checked=$((checked + 1))
+              if [ -n "${reported[$path]+set}" ]; then continue; fi
+              if [ -z "${current[$path]+set}" ]; then
+                echo "::error file=$path::$path was released in $tag and is deleted here."
+                reported["$path"]=1
+                failed=1
+              elif [ "${current[$path]}" != "${entry%%$'\t'*}" ]; then
+                echo "::error file=$path::$path was released in $tag and is changed here."
+                reported["$path"]=1
+                failed=1
+              fi
+            done < "$listing"
+          done < "$RUNNER_TEMP/tags.txt"
+
+          # 4. Never pass by reading nothing.
+          if [ "$checked" -eq 0 ]; then
+            echo "::error::Found $release_tags release tags and no schema file in them, so nothing was checked."
+            exit 1
+          fi
+          if [ "$failed" -ne 0 ]; then
+            echo "A released schema never changes. Restore the file. Then change the entities, raise the version in @Database, add a migration and its test, and record the new schema file (docs/architecture/data.md, \"How to change a schema\")."
+            exit 1
+          fi
+          echo "$checked schema files of $release_tags release tags are unchanged."
+
       - name: Use JDK 21
         run: |
           # GitHub's Ubuntu runners come with JDK 21 installed.

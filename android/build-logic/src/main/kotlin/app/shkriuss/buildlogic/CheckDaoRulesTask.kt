@@ -159,15 +159,83 @@ abstract class CheckDaoRulesTask : DefaultTask() {
                 !WRITE_WORDS.containsMatchIn(more)
         }
 
-        /** The SQL without comments and string literals, with single spaces. */
-        fun plainSql(sql: String): String =
-            sql.replace(Regex("""--[^\n]*"""), " ")
-                .replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), " ")
-                .replace(Regex("""'(?:[^']|'')*'"""), "''")
+        /**
+         * The SQL without comments and string literals, with single spaces.
+         *
+         * It reads the SQL once, from the start, as SQLite's tokenizer does.
+         * So a comment marker inside quotes is text, and a quote inside a
+         * comment is comment:
+         *
+         * - A line comment, from `--` to the end of the line, and a block
+         *   comment become a space. A block comment that never ends runs to
+         *   the end of the SQL, as in SQLite.
+         * - A string literal, `'...'` with `''` for a quote inside it,
+         *   becomes `''`.
+         * - A quoted name, `"..."`, `` `...` `` or `[...]`, stays as it is,
+         *   so a purge may quote its table and `deletedAt`. The rules still
+         *   see the words inside it.
+         * - A quote that never ends stays as it is, with the rest of the
+         *   SQL. SQLite does not run such a query.
+         */
+        fun plainSql(sql: String): String {
+            val plain = StringBuilder()
+            var at = 0
+            while (at < sql.length) {
+                val char = sql[at]
+                val next = sql.getOrNull(at + 1)
+                when {
+                    char == '-' && next == '-' -> {
+                        plain.append(' ')
+                        at = sql.indexOf('\n', at + 2).let { if (it < 0) sql.length else it }
+                    }
+                    char == '/' && next == '*' -> {
+                        plain.append(' ')
+                        at = sql.indexOf("*/", at + 2).let { if (it < 0) sql.length else it + 2 }
+                    }
+                    char in QUOTES -> {
+                        val end = quoteEnd(sql, at)
+                        if (end < 0) {
+                            plain.append(sql, at, sql.length)
+                            at = sql.length
+                        } else {
+                            if (char == '\'') plain.append("''") else plain.append(sql, at, end)
+                            at = end
+                        }
+                    }
+                    else -> {
+                        plain.append(char)
+                        at++
+                    }
+                }
+            }
+            return plain.toString()
                 .replace(Regex("""\s+"""), " ")
                 .trim()
                 .removeSuffix(";")
                 .trim()
+        }
+
+        /** What starts quoted text in SQLite: a string literal (`'`) or a quoted name. */
+        private val QUOTES = setOf('\'', '"', '`', '[')
+
+        /**
+         * Where the quoted text that starts at [start] ends, just past its
+         * closing quote, or -1 if it never ends. Inside `'...'`, `"..."` and
+         * `` `...` `` a doubled quote is one quote of the text. `[...]` ends
+         * at the first `]`.
+         */
+        private fun quoteEnd(sql: String, start: Int): Int {
+            val close = if (sql[start] == '[') ']' else sql[start]
+            var at = start + 1
+            while (at < sql.length) {
+                if (sql[at] == close) {
+                    if (close != ']' && sql.getOrNull(at + 1) == close) at += 2 else return at + 1
+                } else {
+                    at++
+                }
+            }
+            return -1
+        }
     }
 }
 

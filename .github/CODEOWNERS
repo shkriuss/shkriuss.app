@@ -38,6 +38,7 @@
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/SecurityScreensRuleTest.kt             @shkriuss
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/BinaryResourceWriter.kt                @shkriuss
 /android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/DexWriter.kt                           @shkriuss
+/android/build-logic/src/test/kotlin/app/shkriuss/buildlogic/DaoRulesSqlTest.kt                     @shkriuss
 
 # The R8 rules every app shares. The APK rules check depends on them: they
 # keep the names of classes, and they keep classes of Google Play services

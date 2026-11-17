@@ -35,6 +35,10 @@ defaults:
     shell: bash
 
 jobs:
+  # Runs the generator, which is not owner-only. It checks nothing that
+  # Deploy relies on: code that runs here can change what this job's later
+  # steps do, for example through $GITHUB_ENV. So it only uploads what the
+  # generator wrote, and "Check the site" checks it on a runner of its own.
   build:
     name: Build
     runs-on: ubuntu-24.04
@@ -42,8 +46,6 @@ jobs:
     concurrency:
       group: site-build-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-    outputs:
-      files_sha256: ${{ steps.sums.outputs.files_sha256 }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,56 +62,550 @@ jobs:
       - name: Build the site
         run: python3 -B -I tools/site/build.py --commit "$GITHUB_SHA" "$RUNNER_TEMP/site"
 
+      # Hidden files too, so that "Check the site" sees every file the
+      # generator wrote.
+      - name: Upload the built site
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-unchecked
+          path: ${{ runner.temp }}/site/
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  # A fresh runner. It checks out nothing, and nothing from the repository
+  # or from Build runs here: the built site comes in as files to read, and
+  # the checks are written in this file. Only this job's site, with its
+  # checksum, reaches Deploy tool and Deploy.
+  check:
+    name: Check the site
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: site-check-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    outputs:
+      files_sha256: ${{ steps.sums.outputs.files_sha256 }}
+    steps:
+      - name: Download the built site
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-unchecked
+          path: ${{ runner.temp }}/site
+
       # These checks do not trust the generator. They look at what it wrote.
       # A script, a Cloudflare control file such as _redirects, or anything
-      # loaded from another site stops the run.
-      - name: Check the built site
-        working-directory: ${{ runner.temp }}/site
+      # loaded from another site stops the run. They read each file whole
+      # and parse it, with the standard library of the runner's Python,
+      # isolated (-I) from the environment and from the files it reads
+      # (docs/development/site.md#what-check-the-site-checks). The same
+      # file holds the checks and their self-test, so the self-test runs
+      # the very functions that then check the built site.
+      - name: Write the site checker
         run: |
-          set -u
-          fail() {
-            echo "::error::$1"
-            exit 1
+          mkdir "$RUNNER_TEMP/checker"
+          cat > "$RUNNER_TEMP/checker/check_site.py" <<'PYTHON'
+          import html.parser
+          import os
+          import re
+          import stat
+          import sys
+          import tempfile
+          import xml.parsers.expat
+
+          # 1. The file rules: plain files only, with simple names, of three kinds.
+          #    A name that does not fit is shown escaped.
+          NAME = re.compile(r"([a-z0-9-]+/)*[a-z0-9-]+\.(html|css|svg)")
+          REQUIRED = ("index.html", "404.html", "style.css")
+
+
+          def site_files(site):
+              """The files of the site that pass the file rules, and the problems."""
+              files = []
+              problems = []
+
+              def unlisted(error):
+                  problems.append(f"{ascii(os.path.relpath(error.filename, site))}: a folder that cannot be listed")
+
+              for folder, folders, names in os.walk(site, onerror=unlisted):
+                  for name in folders + names:
+                      full = os.path.join(folder, name)
+                      relative = os.path.relpath(full, site)
+                      mode = os.lstat(full).st_mode
+                      if stat.S_ISDIR(mode):
+                          continue
+                      if not stat.S_ISREG(mode):
+                          problems.append(f"{ascii(relative)}: the built site may hold only plain files and folders")
+                      elif not NAME.fullmatch(relative):
+                          problems.append(f"{ascii(relative)}: the built site may hold only .html, .css and .svg files with lower-case names")
+                      else:
+                          files.append(relative)
+              for required in REQUIRED:
+                  if required not in files:
+                      problems.append(f"{required}: the built site has no such file")
+              return sorted(files), problems
+
+
+          # 2. The rules on the raw text of each file, read whole, not line by line.
+          #    So a tag broken over two lines is still one tag.
+          TAG = re.compile(r"<(script|style|iframe|frame|object|embed|form|base|foreignobject)\b|<meta[^>]*http-equiv", re.I)
+          ATTRIBUTE = re.compile(r"<[^>]*\s(on[a-z]+|style|src|srcset|data|action|formaction|poster)\s*=", re.I)
+          JAVASCRIPT = re.compile(r"<[^>]*javascript:", re.I)
+          QUOTED_HREF = re.compile(r'href="[^"]*"')
+          GOOD_QUOTED_HREF = re.compile(r'href="(https://|#|/"|/[^/])')
+          LINK_TAG = re.compile(r"<link[^>]*>", re.I)
+          GOOD_LINK_TAG = re.compile(r'href="/[a-z0-9./-]+"')
+          LOADS = re.compile(r"url\(|@import|expression\(|href", re.I)
+
+
+          def text_problems(path, text):
+              problems = []
+              if TAG.search(text):
+                  problems.append("a tag that the site does not allow")
+              if ATTRIBUTE.search(text):
+                  problems.append("an attribute that the site does not allow")
+              if JAVASCRIPT.search(text):
+                  problems.append("a javascript: address")
+              if path.endswith(".html"):
+                  if any(not GOOD_QUOTED_HREF.match(href) for href in QUOTED_HREF.findall(text)):
+                      problems.append("a link that is not https://..., /... or #...")
+                  if any(not GOOD_LINK_TAG.search(link) for link in LINK_TAG.findall(text)):
+                      problems.append("a <link> that points outside the site")
+              elif LOADS.search(text):
+                  problems.append("a style sheet or the icon loads something")
+              return problems
+
+
+          # 3. The same rules on every element and attribute, as a parser reads
+          #    them: with any quotes or none, and with character references decoded.
+          FORBIDDEN_TAGS = ("script", "style", "iframe", "frame", "object", "embed", "form", "base", "foreignobject")
+          FORBIDDEN_ATTRIBUTES = ("style", "src", "srcset", "data", "action", "formaction", "poster")
+          LINK_TARGET = re.compile(r"(https://|#|/$|/[^/])")
+          SITE_TARGET = re.compile(r"(#|/$|/[^/])")
+          SITE_FILE = re.compile(r"/(?!/)[a-z0-9./-]+")
+
+          # 4. In a page, only the elements the generator writes, each with only the
+          #    attributes the generator gives it. Anything else fails, also a way to
+          #    load something that the rules above do not name, such as the old
+          #    attribute background.
+          ALLOWED = {
+              "html": {"lang"},
+              "head": set(),
+              "meta": {"charset", "name", "content", "media"},
+              "title": set(),
+              "link": {"rel", "href", "type"},
+              "body": set(),
+              "a": {"href", "class", "aria-current"},
+              "header": set(),
+              "div": {"class"},
+              "nav": {"aria-label"},
+              "main": {"id"},
+              "footer": set(),
+              "p": set(),
+              **{f"h{level}": {"id"} for level in range(1, 7)},
+              "ul": set(),
+              "ol": {"start"},
+              "li": set(),
+              "pre": set(),
+              "code": set(),
+              "strong": set(),
+              "em": set(),
+              "hr": set(),
+              "wbr": set(),
+              "table": set(),
+              "thead": set(),
+              "tbody": set(),
+              "tr": set(),
+              "th": {"class"},
+              "td": {"class"},
           }
+          ENDS = "".join(map(chr, range(0x21)))
 
-          # 1. Plain files only, with simple names, of three kinds.
-          if [ -n "$(find . ! -type f ! -type d -print -quit)" ]; then
-            fail "The built site may hold only plain files and folders."
-          fi
-          while IFS= read -r -d '' file; do
-            if ! [[ "${file#./}" =~ ^([a-z0-9-]+/)*[a-z0-9-]+\.(html|css|svg)$ ]]; then
-              fail "The built site may hold only .html, .css and .svg files with lower-case names."
-            fi
-          done < <(find . -type f -print0)
-          for required in index.html 404.html style.css; do
-            [ -f "$required" ] || fail "The built site has no $required."
-          done
 
-          # 2. No scripts, styles in the page, frames, forms or plugins.
-          #    Text in a page is escaped, so these match only real tags.
-          if grep -rliE '<(script|style|iframe|frame|object|embed|form|base|foreignobject)\b|<meta[^>]*http-equiv' .; then
-            fail "These files have a tag that the site does not allow."
-          fi
-          if grep -rliE '<[^>]*[[:space:]](on[a-z]+|style|src|srcset|data|action|formaction|poster)[[:space:]]*=' .; then
-            fail "These files have an attribute that the site does not allow."
-          fi
-          if grep -rliE '<[^>]*javascript:' .; then
-            fail "These files have a javascript: address."
-          fi
+          def address(value):
+              """An address as a browser reads it: no tab or line break, no space or control character at either end, \\ as /."""
+              return re.sub(r"[\t\n\r]", "", value).strip(ENDS).replace("\\", "/")
 
-          # 3. Links go to https://, to this site or to a heading. Style
-          #    sheets and the icon come from this site only. Nothing else is
-          #    loaded.
-          if grep -rhoE 'href="[^"]*"' --include='*.html' . | grep -vE '^href="(https://|#|/"|/[^/])'; then
-            fail "A link that is not https://..., /... or #... was found."
-          fi
-          if grep -rhoiE '<link[^>]*>' --include='*.html' . | grep -vE 'href="/[a-z0-9./-]+"'; then
-            fail "A <link> that points outside the site was found."
-          fi
-          if grep -rliE 'url\(|@import|expression\(|href' --include='*.css' --include='*.svg' .; then
-            fail "A style sheet or the icon loads something."
-          fi
-          echo "The built site passed every check."
+
+          def element_problems(path, tag, attributes):
+              problems = []
+              page = path.endswith(".html")
+              name = tag.lower().rsplit(":", 1)[-1]
+              if name in FORBIDDEN_TAGS:
+                  problems.append(f"the tag <{name}>, which the site does not allow")
+              elif page and tag.lower() not in ALLOWED:
+                  problems.append(f"the element <{tag.lower()}>, which the generator does not write")
+              allowed = ALLOWED.get(tag.lower())
+              for attribute, value in attributes:
+                  attribute = attribute.lower()
+                  value = value or ""
+                  local = attribute.rsplit(":", 1)[-1]
+                  if local.startswith("on") or local in FORBIDDEN_ATTRIBUTES:
+                      problems.append(f"the attribute {attribute} on <{name}>, which the site does not allow")
+                  elif page and allowed is not None and attribute not in allowed:
+                      problems.append(f"the attribute {attribute} on <{name}>, which the generator does not write there")
+                  if "javascript:" in re.sub(r"[\x00-\x20\x7f]", "", value).lower():
+                      problems.append(f"a javascript: address on <{name}>")
+                  if attribute.endswith("href"):
+                      if not path.endswith(".html"):
+                          problems.append(f"the attribute {attribute} on <{name}>: a style sheet or the icon loads something")
+                      elif not LINK_TARGET.match(address(value)):
+                          problems.append(f"the link {ascii(value)} on <{name}>, which is not https://..., /... or #...")
+                      elif name != "a" and not SITE_TARGET.match(address(value)):
+                          # Only <a> navigates. Any other element with an href, such
+                          # as an SVG <image>, loads what it names.
+                          problems.append(f"the address {ascii(value)} on <{name}>, which leaves the site. Only <a> may link to another site")
+              if name == "meta" and any("http-equiv" in f"{attribute}={value or ''}".lower() for attribute, value in attributes):
+                  problems.append("a <meta http-equiv>, which the site does not allow")
+              if name == "link":
+                  hrefs = [value or "" for attribute, value in attributes if attribute.lower() == "href"]
+                  if not hrefs:
+                      problems.append("a <link> with no address")
+                  for href in hrefs:
+                      if not SITE_FILE.fullmatch(href):
+                          problems.append(f"the <link> to {ascii(href)}, which is not a file of this site")
+              return problems
+
+
+          class Page(html.parser.HTMLParser):
+              """One page. What a browser might read otherwise than this parser fails."""
+
+              def __init__(self, path):
+                  super().__init__(convert_charrefs=False)
+                  self.path = path
+                  self.problems = []
+
+              def handle_starttag(self, tag, attrs):
+                  self.problems += element_problems(self.path, tag, attrs)
+
+              def handle_startendtag(self, tag, attrs):
+                  self.problems += element_problems(self.path, tag, attrs)
+
+              def handle_data(self, data):
+                  if "<" in data:
+                      self.problems.append("a < that the parser did not read as a tag. The generator escapes every < in text")
+
+              def handle_decl(self, decl):
+                  if decl.lower() != "doctype html":
+                      self.problems.append(f"the declaration {ascii(decl)}. Only <!doctype html> is allowed")
+
+              def handle_comment(self, data):
+                  self.problems.append("a comment. Browsers and this parser can disagree on where one ends")
+
+              def handle_pi(self, data):
+                  self.problems.append("a processing instruction")
+
+              def unknown_decl(self, data):
+                  self.problems.append("a CDATA section or another declaration")
+
+
+          def page_problems(path, text):
+              page = Page(path)
+              page.feed(text)
+              page.close()
+              return page.problems
+
+
+          def icon_problems(path, data):
+              """The icon is XML. No DOCTYPE, so no entities, no processing instruction, such as <?xml-stylesheet?>, and no comment."""
+              problems = []
+              parser = xml.parsers.expat.ParserCreate()
+              parser.SetParamEntityParsing(xml.parsers.expat.XML_PARAM_ENTITY_PARSING_NEVER)
+              parser.StartElementHandler = lambda tag, attributes: problems.extend(element_problems(path, tag, list(attributes.items())))
+              parser.StartDoctypeDeclHandler = lambda *args: problems.append("a DOCTYPE")
+              parser.EntityDeclHandler = lambda *args: problems.append("an entity declaration")
+              parser.ProcessingInstructionHandler = lambda *args: problems.append("a processing instruction")
+              parser.CommentHandler = lambda data: problems.append("a comment")
+              try:
+                  parser.Parse(data, True)
+              except xml.parsers.expat.ExpatError as error:
+                  problems.append(f"cannot be read as XML: {error}")
+              return problems
+
+
+          # A style sheet with its CSS escapes decoded, as in u\72l( for url(. As in
+          # CSS, CR LF, CR and a form feed are first read as one line break. Only
+          # what the raw text does not show already is reported.
+          CSS_ESCAPE = re.compile(r"\\([0-9a-fA-F]{1,6})[ \t\n]?|\\(.)", re.S)
+
+
+          def css_character(match):
+              if match.group(1):
+                  code = int(match.group(1), 16)
+                  return chr(code) if 0 < code <= 0x10FFFF and not 0xD800 <= code <= 0xDFFF else "�"
+              return "" if match.group(2) == "\n" else match.group(2)
+
+
+          def style_problems(path, text):
+              lines = re.sub(r"\r\n|[\r\f]", "\n", text)
+              if LOADS.search(CSS_ESCAPE.sub(css_character, lines)) and not LOADS.search(text):
+                  return ["a style sheet that loads something, written with CSS escapes"]
+              return []
+
+
+          def site_problems(site):
+              """Every problem of the site in the folder [site], as "file: what". A file that cannot be read fails."""
+              files, problems = site_files(site)
+              for path in files:
+                  with open(os.path.join(site, path), "rb") as file:
+                      data = file.read()
+                  try:
+                      text = data.decode("utf-8")
+                  except UnicodeDecodeError as error:
+                      problems.append(f"{path}: cannot be read as UTF-8: {error}")
+                      continue
+                  found = text_problems(path, text)
+                  if path.endswith(".html"):
+                      found += page_problems(path, text)
+                  elif path.endswith(".svg"):
+                      found += icon_problems(path, data)
+                  else:
+                      found += style_problems(path, text)
+                  problems += [f"{path}: {problem}" for problem in found]
+              return problems
+
+
+          # The self-test. It runs site_problems, the function that checks the built
+          # site, on a small good site, which must have no problem, and then on that
+          # site with one fault in each sample. Each sample names every message the
+          # fault must cause. A missing message or any other message fails the test.
+          PAGE = """<!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <title>Sample</title>
+          <link rel="stylesheet" href="/style.css">
+          <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+          </head>
+          <body>
+          <p><a href="/apps/">Apps</a>, <a href="https://example.org/">a site</a>, <a href="#top">top</a>, 1 &lt; 2.</p>
+          </body>
+          </html>
+          """
+          ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#00695C"/></svg>\n'
+          GOOD = {"index.html": PAGE, "404.html": PAGE, "style.css": "body { color: #000; }\n", "favicon.svg": ICON}
+          LINK = "a symbolic link"
+          UNLISTED = "a folder that cannot be listed"
+
+
+          class Starts(str):
+              """An expected message whose end depends on the parser, such as its error."""
+
+
+          def of(path, messages):
+              """The messages as site_problems names them for [path], each still a Starts if it was one."""
+              return [type(message)(f"{path}: {message}") for message in messages]
+
+
+          def html_sample(what, old, new, messages):
+              return (what, {"index.html": PAGE.replace(old, new, 1)}, of("index.html", messages))
+
+
+          def icon_sample(what, old, new, messages):
+              return (what, {"favicon.svg": ICON.replace(old, new, 1)}, of("favicon.svg", messages))
+
+
+          def style_sample(what, css, messages):
+              return (what, {"style.css": css}, of("style.css", messages))
+
+
+          HEAD = "</head>"
+          BODY = "<p>"
+          APPS = 'href="/apps/"'
+          RECT = "<rect"
+          RAW_TAG = "a tag that the site does not allow"
+          RAW_ATTRIBUTE = "an attribute that the site does not allow"
+          RAW_JAVASCRIPT = "a javascript: address"
+          RAW_LINK = "a link that is not https://..., /... or #..."
+          RAW_LINK_TAG = "a <link> that points outside the site"
+          RAW_LOADS = "a style sheet or the icon loads something"
+          META = "a <meta http-equiv>, which the site does not allow"
+
+          SAMPLES = [
+              # The file rules.
+              ("a Cloudflare control file", {"_redirects": "/* https://example.invalid/ 301\n"},
+               ["'_redirects': the built site may hold only .html, .css and .svg files with lower-case names"]),
+              ("a file name in capitals", {"Index.html": PAGE},
+               ["'Index.html': the built site may hold only .html, .css and .svg files with lower-case names"]),
+              ("a symbolic link", {"link.html": LINK}, ["'link.html': the built site may hold only plain files and folders"]),
+              ("a folder that cannot be listed", {"hidden": UNLISTED}, ["'hidden': a folder that cannot be listed"]),
+              ("no index.html", {"index.html": None}, ["index.html: the built site has no such file"]),
+              ("no 404.html", {"404.html": None}, ["404.html: the built site has no such file"]),
+              ("no style.css", {"style.css": None}, ["style.css: the built site has no such file"]),
+              ("a page that is not UTF-8", {"index.html": PAGE.encode() + b"\xff"}, [Starts("index.html: cannot be read as UTF-8:")]),
+              # The rules on the raw text, and the same faults as the parser reads them.
+              html_sample("a meta refresh broken over two lines", HEAD,
+                          '<meta\nhttp-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [RAW_TAG, META, "the attribute http-equiv on <meta>, which the generator does not write there"]),
+              html_sample("an event handler on a second line", BODY, '<p\nonclick="x">', [RAW_ATTRIBUTE, "the attribute onclick on <p>, which the site does not allow"]),
+              html_sample("a javascript: address in an attribute", BODY, '<p title="javascript:x">',
+                          [RAW_JAVASCRIPT, "a javascript: address on <p>", "the attribute title on <p>, which the generator does not write there"]),
+              html_sample("an http:// link", APPS, 'href="http://example.invalid/"',
+                          [RAW_LINK, "the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("a style sheet from another site", 'href="/style.css"', 'href="https://example.invalid/x.css"',
+                          [RAW_LINK_TAG, "the address 'https://example.invalid/x.css' on <link>, which leaves the site. Only <a> may link to another site",
+                           "the <link> to 'https://example.invalid/x.css', which is not a file of this site"]),
+              html_sample("a <link> with no address", 'href="/style.css"', "", [RAW_LINK_TAG, "a <link> with no address"]),
+              # Faults that only the parser finds.
+              html_sample("a meta refresh behind a quoted >", HEAD,
+                          '<meta name="a>b" http-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [META, "the attribute http-equiv on <meta>, which the generator does not write there"]),
+              html_sample("an event handler behind a quoted >", BODY, '<p title="a>b" onclick="x">',
+                          ["the attribute onclick on <p>, which the site does not allow", "the attribute title on <p>, which the generator does not write there"]),
+              html_sample("an event handler after a /", BODY, '<p/onclick="x">', ["the attribute onclick on <p>, which the site does not allow"]),
+              html_sample("a javascript: address with a character reference", BODY, '<p title="java&#x73;cript:x">',
+                          ["a javascript: address on <p>", "the attribute title on <p>, which the generator does not write there"]),
+              html_sample("an http:// link without quotes", APPS, "href=http://example.invalid/",
+                          ["the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("an http:// link in single quotes", APPS, "href='http://example.invalid/'",
+                          ["the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("a link that starts with /\\", APPS, 'href="/\\example.invalid/"',
+                          ["the link '/\\\\example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("a style sheet from another site behind a quoted address", 'href="/style.css"',
+                          "title='href=\"/style.css\"' href=//example.invalid/x.css",
+                          ["the link '//example.invalid/x.css' on <link>, which is not https://..., /... or #...",
+                           "the attribute title on <link>, which the generator does not write there",
+                           "the <link> to '//example.invalid/x.css', which is not a file of this site"]),
+              html_sample("an SVG image from another site", BODY, '<svg><image href="https://example.invalid/x.png"/></svg>' + BODY,
+                          ["the element <svg>, which the generator does not write", "the element <image>, which the generator does not write",
+                           "the address 'https://example.invalid/x.png' on <image>, which leaves the site. Only <a> may link to another site"]),
+              # The allow-list: what no other rule names.
+              html_sample("the old attribute background", "<body>", '<body background="https://example.invalid/x.png">',
+                          ["the attribute background on <body>, which the generator does not write there"]),
+              html_sample("an element the generator does not write", BODY, "<span>x</span>" + BODY,
+                          ["the element <span>, which the generator does not write"]),
+              html_sample("an attribute the generator does not write", BODY, '<p title="x">',
+                          ["the attribute title on <p>, which the generator does not write there"]),
+              html_sample("an attribute on an element the generator does not give it", BODY, '<p class="x">',
+                          ["the attribute class on <p>, which the generator does not write there"]),
+              html_sample("an attribute that leaks a click to another site", APPS, APPS + ' ping="https://example.invalid/"',
+                          ["the attribute ping on <a>, which the generator does not write there"]),
+              icon_sample("a script with a prefix in the icon", RECT, "<svg:script>x</svg:script><rect",
+                          ["the tag <script>, which the site does not allow"]),
+              icon_sample("an event handler with a prefix in the icon", RECT, '<rect xlink:onload="x"',
+                          ["the attribute xlink:onload on <rect>, which the site does not allow"]),
+              # What the page parser itself refuses.
+              html_sample("a < that is not a tag", "1 &lt; 2", "1 <3",
+                          ["a < that the parser did not read as a tag. The generator escapes every < in text"]),
+              html_sample("a comment", HEAD, "<!-- x -->\n" + HEAD, ["a comment. Browsers and this parser can disagree on where one ends"]),
+              html_sample("another declaration", "<!doctype html>", "<!doctype other>",
+                          ["the declaration 'doctype other'. Only <!doctype html> is allowed"]),
+              html_sample("a processing instruction", HEAD, "<?x-trial?>\n" + HEAD, ["a processing instruction"]),
+              html_sample("a CDATA section", HEAD, "<![CDATA[x]]>\n" + HEAD, ["a CDATA section or another declaration"]),
+              # The icon's XML rules.
+              icon_sample("a DOCTYPE in the icon", "<svg", "<!DOCTYPE svg>\n<svg", ["a DOCTYPE"]),
+              icon_sample("an entity in the icon", "<svg", '<!DOCTYPE svg [<!ENTITY a "b">]>\n<svg', ["a DOCTYPE", "an entity declaration"]),
+              icon_sample("a processing instruction in the icon", "<svg", "<?x-trial?>\n<svg", ["a processing instruction"]),
+              icon_sample("a comment in the icon", RECT, "<!-- x --><rect", ["a comment"]),
+              icon_sample("an icon that is not XML", "</svg>", "", [Starts("cannot be read as XML:")]),
+              icon_sample("an href in the icon", RECT, '<image href="/x.png"/><rect',
+                          [RAW_LOADS, "the attribute href on <image>: a style sheet or the icon loads something"]),
+              icon_sample("url() in the icon", 'fill="#00695C"', 'fill="url(#a)"', [RAW_LOADS]),
+              icon_sample("an event handler in the icon", RECT, '<rect onload="x"', [RAW_ATTRIBUTE, "the attribute onload on <rect>, which the site does not allow"]),
+          ]
+          SAMPLES += [
+              html_sample("a javascript: address with a tab inside", BODY, '<p title="java\tscript:x">', ["a javascript: address on <p>", "the attribute title on <p>, which the generator does not write there"]),
+          ]
+          # Every tag and every attribute the site does not allow, on its own. The
+          # names are written out here, not taken from the rules, so a shorter list
+          # in a rule fails the self-test.
+          SAMPLES += [
+              html_sample(f"the tag <{tag}>", BODY, f"<{tag}>x</{tag}>" + BODY, [RAW_TAG, f"the tag <{tag}>, which the site does not allow"])
+              for tag in ("script", "style", "iframe", "frame", "object", "embed", "form", "base", "foreignobject")
+          ]
+          SAMPLES += [
+              html_sample(f"the attribute {attribute}", BODY, f'<p {attribute}="x">',
+                          [RAW_ATTRIBUTE, f"the attribute {attribute} on <p>, which the site does not allow"])
+              for attribute in ("style", "src", "srcset", "data", "action", "formaction", "poster", "onclick", "onload")
+          ]
+          # The style sheet: each way to load something, as written and with CSS escapes.
+          SAMPLES += [
+              style_sample(f"{written} in the style sheet", f"body {{ color: #000; }}\n{css}\n", [RAW_LOADS])
+              for written, css in (("url()", "a { background: url(/x.png); }"), ("@import", '@import "/x.css";'),
+                                   ("expression()", "a { width: expression(1); }"), ("href", "a { content: 'href'; }"))
+          ]
+          SAMPLES += [
+              style_sample(f"{written} with a CSS escape in the style sheet", f"body {{ color: #000; }}\n{css}\n",
+                           ["a style sheet that loads something, written with CSS escapes"])
+              for written, css in (("url()", "a { background: u\\72l(/x.png); }"), ("@import", '@\\69mport "/x.css";'),
+                                   ("expression()", "a { width: e\\78pression(1); }"), ("href", "a { content: '\\68ref'; }"),
+                                   ("url() after CR LF", "a { background: u\\72\r\nl(/x.png); }"), ("@import after CR LF", '@\\69\r\nmport "/x.css";'))
+          ]
+
+
+          def write_site(folder, files):
+              for name, content in files.items():
+                  path = os.path.join(folder, name)
+                  if content is None:
+                      continue
+                  if content == LINK:
+                      os.symlink("/etc/hostname", path)
+                  elif content == UNLISTED:
+                      os.mkdir(path)
+                      os.chmod(path, 0)
+                  else:
+                      with open(path, "wb") as file:
+                          file.write(content if isinstance(content, bytes) else content.encode())
+
+
+          def matches(problem, expected):
+              return problem.startswith(expected) if isinstance(expected, Starts) else problem == expected
+
+
+          def self_test():
+              """0 if the checks find no problem in the good site and exactly the named ones in each sample, else 1."""
+              failed = False
+              for what, change, expected in [("the good site", {}, [])] + SAMPLES:
+                  files = dict(GOOD)
+                  files.update(change)
+                  with tempfile.TemporaryDirectory() as folder:
+                      write_site(folder, files)
+                      try:
+                          problems = site_problems(folder)
+                      finally:
+                          for name, content in change.items():
+                              if content == UNLISTED:
+                                  os.chmod(os.path.join(folder, name), 0o700)
+                  missing = [message for message in expected if not any(matches(problem, message) for problem in problems)]
+                  other = [problem for problem in problems if not any(matches(problem, message) for message in expected)]
+                  if missing or other:
+                      failed = True
+                      print(f"::error::The self-test of the site check fails on {what}.")
+                      for message in missing:
+                          print(f"  Missing: {message}")
+                      for problem in other:
+                          print(f"  Not expected: {problem}")
+                  else:
+                      print(f"As it must be: {what}.")
+              if failed:
+                  return 1
+              print(f"The site check passes its self-test: the good site and {len(SAMPLES)} samples.")
+              return 0
+
+
+          if __name__ == "__main__":
+              if sys.argv[1:] == ["--self-test"]:
+                  sys.exit(self_test())
+              problems = site_problems(os.environ["SITE"])
+              for problem in problems:
+                  print(f"::error::{problem}")
+              if problems:
+                  sys.exit(1)
+              print("The built site passed every check.")
+          PYTHON
+
+      # The self-test first: a small good site must have no problem, and
+      # each sample, that site with one fault, must cause exactly the
+      # messages it names.
+      - name: Test the site checker
+        run: |
+          python3 --version
+          python3 -I -B "$RUNNER_TEMP/checker/check_site.py" --self-test
+
+      - name: Check the built site
+        env:
+          SITE: ${{ runner.temp }}/site
+        run: python3 -I -B "$RUNNER_TEMP/checker/check_site.py"
 
       # Cloudflare sends these headers with every file of the Worker's static
       # assets (docs/development/site.md#security-headers). They live here,
@@ -172,10 +668,10 @@ jobs:
   deploy-tool:
     name: Deploy tool
     # Main installs the tool in Deploy. A pull request installs it here and
-    # tries the deploy with the built site, without uploading anything. So
-    # a broken pin or Worker configuration fails the pull request, not
+    # tries the deploy with the checked site, without uploading anything.
+    # So a broken pin or Worker configuration fails the pull request, not
     # main. No secrets.
-    needs: build
+    needs: check
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -207,7 +703,7 @@ jobs:
 
   deploy:
     name: Deploy
-    needs: build
+    needs: check
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -263,15 +759,15 @@ jobs:
         if: steps.newest.outputs.newest == 'true'
         working-directory: ${{ runner.temp }}/site
         env:
-          FILES_SHA256: ${{ needs.build.outputs.files_sha256 }}
+          FILES_SHA256: ${{ needs.check.outputs.files_sha256 }}
         run: |
           set -u
           actual="$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)"
           if ! [[ "$FILES_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$actual" != "$FILES_SHA256" ]; then
-            echo "::error::The downloaded site is not the one the job Build made and checked."
+            echo "::error::The downloaded site is not the one the job Check the site checked."
             exit 1
           fi
-          echo "The site is the one the job Build made and checked."
+          echo "The site is the one the job Check the site checked."
 
       - name: Install the pinned deploy tool
         if: steps.newest.outputs.newest == 'true'
