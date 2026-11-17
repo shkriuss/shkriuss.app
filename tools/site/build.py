@@ -739,6 +739,10 @@ def main(argv: list[str] | None = None) -> int:
             raise BuildError(CONFIG, 1, f"Not a valid site configuration: {error!r}") from error
         files = site.build(args.commit)
         write_site(files, args.output)
+        # Trial only, undone in the next commit: a meta refresh broken over two lines.
+        index = args.output / "index.html"
+        page = index.read_text(encoding="utf-8")
+        index.write_text(page.replace("</head>", '<meta\nhttp-equiv="refresh" content="0;url=https://example.invalid/">\n</head>', 1), encoding="utf-8")
     except BuildError as error:
         print(annotation(error) if os.environ.get("GITHUB_ACTIONS") else f"error: {error}", file=sys.stderr)
         return 1
