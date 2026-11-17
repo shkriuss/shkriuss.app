@@ -154,6 +154,10 @@ jobs:
           path = os.environ["METADATA"]
           # Gradle matches the whole group name against the pattern.
           PROBES = ("com.google", "com.google.android.gms", "com.google.firebase")
+          # The only form of group pattern this step reads: the one Gradle
+          # writes, such as ^com[.]sun($|([.].*)). Java and Python read it the
+          # same way. Other syntax, such as [a-z&&[c]], they may not.
+          GRADLE_FORM = r"\^[a-z0-9_-]+(\[\.\][a-z0-9_-]+)*\(\$\|\(\[\.\]\.\*\)\)"
           ENTRIES = ("trusted-key", "trusting", "trust")
           COORDINATES = ("group", "name", "version", "file")
 
@@ -196,11 +200,10 @@ jobs:
               if not is_pattern:
                   continue
               patterns += 1
-              try:
-                  covered = [probe for probe in PROBES if re.fullmatch(group, probe)]
-              except re.error:
-                  problems.append(f"{who}: the group pattern {group!r}, which this step cannot read.")
+              if not re.fullmatch(GRADLE_FORM, group):
+                  problems.append(f"{who}: the group pattern {group!r} is not in the form Gradle writes, such as ^com[.]sun($|([.].*)).")
                   continue
+              covered = [probe for probe in PROBES if re.fullmatch(group, probe)]
               if covered:
                   problems.append(f"{who}: the group pattern {group!r} covers {', '.join(covered)}.")
 

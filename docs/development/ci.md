@@ -182,7 +182,10 @@ the step "Check that no trust pattern covers com.google" fails when:
    `trusted-artifacts`. The step refuses both, so that the file says what
    it means. A key whose groups are all in its `trusting` lines is read
    by those lines;
-4. Python cannot read a pattern;
+4. a group pattern is not in the form Gradle writes, such as
+   `^com[.]sun($|([.].*))`, with lower-case names. Python and Java read
+   that form the same way. Other syntax, such as `[a-z&&[c]]`, they may
+   not;
 5. the file has no trusted keys, so the step read the wrong layout.
 
 It runs no project code. Python's standard library reads the file, and
