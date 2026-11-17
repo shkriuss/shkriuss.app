@@ -120,8 +120,7 @@ The Jetpack libraries of the Android Open Source Project.
 
 - **Source:** <https://github.com/androidx/androidx>, the public copy of
   `https://android.googlesource.com/platform/frameworks/support`. The
-  cloud environment cannot reach `android.googlesource.com`, so the
-  licence and the file headers are read at GitHub.
+  cloud environment can reach both, and both hold the same `LICENSE.txt`.
 - **Licence:** Apache-2.0. The repository's `LICENSE.txt` is the Apache
   text without its appendix.
 - **Notice:** the repository has no `NOTICE` file. Its files carry lines

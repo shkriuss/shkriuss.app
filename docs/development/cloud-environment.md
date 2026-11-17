@@ -10,13 +10,13 @@ section 13 of the [plan](../plan/PLAN.md).
 | Setting | Value |
 |---|---|
 | Name | `android` |
-| Network access | Custom: `dl.google.com`, `keys.openpgp.org` and `pgp.mit.edu`, plus the default list |
+| Network access | Custom: the ten hosts listed below, plus the default list |
 | Environment variables | See below |
 | Setup script | See below |
 | Secrets | None |
 
 Newer versions of the Claude app call the Custom level **Limited**. There,
-the three hosts go under **Allowed domains**, with **Allow package managers**
+the ten hosts go under **Allowed domains**, with **Allow package managers**
 ticked.
 
 Why each allowed domain is there:
@@ -26,6 +26,13 @@ Why each allowed domain is there:
   and `keyserver.ubuntu.com`, when it writes PGP verification metadata.
   `keyserver.ubuntu.com` is reachable without being listed. Key server
   lookups fail now and then. A second run with `--refresh-keys` works.
+- `android.googlesource.com`: Android's source.
+- `source.android.com`: Android's platform docs.
+- `grapheneos.org`: the docs of GrapheneOS.
+- `docs.gradle.org`: Gradle's docs and release notes.
+- `developers.cloudflare.com`: the docs of Workers, D1 and R2, for Sync.
+- `docs.rs`: the docs of Rust crates, for Grammar.
+- `dns.google`: to check DNS records over public DNS.
 
 Two hosts are blocked, and the build does not need them:
 
