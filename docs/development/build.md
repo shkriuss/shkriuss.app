@@ -706,7 +706,7 @@ rule waits until drawing is done. A test that draws the screen on its own
 can capture an empty image under heavy load.
 
 At font scale 2.0 the title grows by about 1.5 times, not 2 times. Android
-14 and later scale large text less than small text. That is correct.
+scales large text less than small text. That is correct.
 
 ### Robolectric settings
 
@@ -1438,11 +1438,11 @@ What it reads, from each APK:
 1. The compiled `AndroidManifest.xml`. In `<application>`:
    - `android:allowBackup` must be the literal `false`. If it is
      missing, the rule fails: Android's default is `true`. A value taken
-     from a resource fails too. On Android 12 and later this attribute
-     stops cloud backup only, not a transfer to a new device.
+     from a resource fails too. This attribute stops cloud backup only,
+     not a transfer to a new device.
    - `android:backupAgent` must not be set.
-   - `android:dataExtractionRules` must name an XML resource. On
-     Android 12 and later only these rules turn device transfer off.
+   - `android:dataExtractionRules` must name an XML resource. Only these
+     rules turn device transfer off.
 2. `resources.arsc`, the resource table. It lists every copy of that
    resource, one for each configuration, such as `xml` and `xml-v35`,
    with the file's path in the APK. A release APK keeps its files under
@@ -1470,8 +1470,8 @@ XML, and the resource table in a binary format of its own.
 and needs no library. A file or a layout it cannot read fails the check
 with a message, so the rule never passes by reading nothing.
 
-It does not read `android:fullBackupContent`. Android uses it only on
-Android 11 and older, and the minimum is Android 15.
+It does not read `android:fullBackupContent`, which Android uses only on
+Android 11 and older.
 
 The rule runs on every APK, `debug` too. Catalog passes: its manifest and
 `res/xml/data_extraction_rules.xml` turn everything off.
@@ -1622,10 +1622,10 @@ UI, Foundation, Material 3 or Animation code calls these itself, and no
 module in this project does.
 
 If any code did, the app would crash with `UnsatisfiedLinkError` on every
-Android version. The library's loader runs all the same, although no
-supported Android version uses the library: Android 14 and later have
-their own path iterator. The graphics-path check turns that crash
-into a build failure.
+Android version. The library's loader runs all the same, although the
+library would never be used: every supported version has Android's own
+path iterator. The graphics-path check turns that crash into a build
+failure.
 
 ### The graphics-path check
 
@@ -1680,8 +1680,7 @@ two:
 
 1. **A permission from `androidx.core`**,
    `<app ID>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`. `androidx.core`
-   uses it only on Android 12 and older. The minimum is Android 15, so it is
-   never used.
+   uses it only on Android 12 and older, below the minimum.
 2. **The emoji font loader from `androidx.emoji2`**. At start-up it looks
    for a downloadable emoji font from a system font provider. On most
    phones that provider is Google Play services. Android has its own emoji

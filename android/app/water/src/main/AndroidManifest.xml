@@ -20,9 +20,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        androidx.core adds this permission for Android 12 and older only.
-        The minimum is Android 15, so it is never used. Removed for good
-        (docs/apps/water/spec.md, "Permissions", point 2).
+        androidx.core adds this permission for Android 12 and older only,
+        below the minimum. Removed for good (docs/apps/water/spec.md,
+        "Permissions", point 2).
     -->
     <permission
         android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"

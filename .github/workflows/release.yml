@@ -644,7 +644,7 @@ jobs:
           unsigned="$RUNNER_TEMP/unsigned/$TAG-unsigned.apk"
 
           # apksigner verify fails unless the signature is valid on every
-          # Android version the APK supports (min SDK 33).
+          # Android version the APK supports (min SDK 35).
           verification="$RUNNER_TEMP/apksigner-verify.txt"
           if ! "$build_tools/apksigner" verify --verbose --print-certs "$signed" > "$verification" 2>&1; then
             cat "$verification"

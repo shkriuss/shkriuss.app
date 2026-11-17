@@ -1221,15 +1221,14 @@ Status: **Partly met.**
   `core/security` and on the lock screen
   ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services),
   [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
-  - Android 12 and later block a tap through another app's window that
-    is more than 80% opaque. This holds for every app, on every version
-    the suite runs on.
+  - Android blocks a tap through another app's window that is more than
+    80% opaque. This holds for every app.
   - The six screens of `core/security` hide other apps' windows while
     they show. Every screen of an app hides them while the app is locked,
     so no fake system prompt can sit over the lock screen.
   - The six screens and their four dialogs ignore a tap under another
-    app's window. So does a see-through window that Android 12 lets
-    through.
+    app's window. This includes a see-through window, whose taps Android
+    lets through.
   - Without the permission `HIDE_OVERLAY_WINDOWS`, a screen still works,
     but hides nothing.
     - `ManifestTest` checks that `core/security` asks for it.
@@ -1279,7 +1278,8 @@ Status: **Met.**
   ([build.md](../development/build.md#at-a-glance)).
 - MASWE-0039, overlays, also falls under this control. Met. The minimum,
   Android 15, always has two things:
-  - Android 12's block of a tap through another app's window;
+  - Android's block of a tap through another app's window that is more
+    than 80% opaque;
   - the way to hide other apps' windows, which the security screens use.
 
   Where the screens do not use them, that is counted as a deviation under
