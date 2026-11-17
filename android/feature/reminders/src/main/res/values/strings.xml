@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Every word of Reminders' screens (docs/apps/reminders/spec.md,
+    "Screens"). Dates and times come already in the phone's format, such as
+    "Wed 18 Nov" and "18:30", and counts in its number format, such as
+    "1,250", so the plurals take them as text and the number as the
+    quantity.
+-->
+<resources>
+    <!-- The three destinations. -->
+    <string name="reminders_upcoming">Upcoming</string>
+    <string name="reminders_past">Past</string>
+    <string name="reminders_settings">Settings</string>
+
+    <!-- When a reminder shows: "Today, 09:00", "Tomorrow, 09:00", "Wed 18 Nov, 18:30". -->
+    <string name="reminders_today_at">Today, %1$s</string>
+    <string name="reminders_tomorrow_at">Tomorrow, %1$s</string>
+    <string name="reminders_date_at">%1$s, %2$s</string>
+    <!-- The same as TalkBack reads it: "today at 09:00", "Wednesday 18 November at 18:30". -->
+    <string name="reminders_today_at_spoken">today at %1$s</string>
+    <string name="reminders_tomorrow_at_spoken">tomorrow at %1$s</string>
+    <string name="reminders_date_at_spoken">%1$s at %2$s</string>
+
+    <!-- The repeats, as the form offers them and the rows show them. -->
+    <string name="reminders_once">Once</string>
+    <string name="reminders_every_day">Every day</string>
+    <string name="reminders_every_week">Every week</string>
+    <string name="reminders_every_month">Every month</string>
+    <string name="reminders_every_year">Every year</string>
+    <!-- The same as TalkBack reads them in a row: "Pills, tomorrow at 09:00, every day". -->
+    <string name="reminders_every_day_spoken">every day</string>
+    <string name="reminders_every_month_spoken">every month</string>
+    <string name="reminders_every_year_spoken">every year</string>
+    <!-- Days of the week in a row, one after the other: "Mon, Wed, Fri". -->
+    <string name="reminders_day_list">%1$s, %2$s</string>
+
+    <!-- Upcoming. One row: "Pills", then "Today, 09:00 · Every day". -->
+    <string name="reminders_when_and_repeat">%1$s · %2$s</string>
+    <string name="reminders_now">Now</string>
+    <string name="reminders_snoozed_until">Snoozed until %1$s</string>
+    <!-- One row as TalkBack reads it: "Pills, tomorrow at 09:00, every day", "Pills, snoozed until 09:12", "Call the bank, now". -->
+    <string name="reminders_row_spoken">%1$s, %2$s</string>
+    <string name="reminders_row_with_repeat_spoken">%1$s, %2$s, %3$s</string>
+    <string name="reminders_now_spoken">now</string>
+    <string name="reminders_snoozed_until_spoken">snoozed until %1$s</string>
+    <!-- What a tap on a row does, as TalkBack offers it. -->
+    <string name="reminders_edit">Edit</string>
+    <string name="reminders_add">Add a reminder</string>
+    <string name="reminders_upcoming_empty_title">No reminders yet.</string>
+    <string name="reminders_upcoming_empty_body">Tap Add a reminder to make one.</string>
+
+    <!-- Past. -->
+    <string name="reminders_past_empty_title">No past reminders.</string>
+    <string name="reminders_past_empty_body">A one-time reminder moves here after it shows.</string>
+    <string name="reminders_delete_all">Delete all</string>
+    <string name="reminders_delete_all_question">Delete all past reminders?</string>
+    <plurals name="reminders_delete_all_text">
+        <item quantity="one">This deletes %1$s reminder.</item>
+        <item quantity="other">This deletes %1$s reminders.</item>
+    </plurals>
+    <plurals name="reminders_all_deleted">
+        <item quantity="one">%1$s reminder deleted</item>
+        <item quantity="other">%1$s reminders deleted</item>
+    </plurals>
+
+    <!-- Both lists from 840dp, beside the list while no form is open. -->
+    <string name="reminders_choose_a_reminder">Choose a reminder.</string>
+
+    <!-- The reminder form. -->
+    <string name="reminders_new_reminder">New reminder</string>
+    <string name="reminders_edit_reminder">Edit reminder</string>
+    <string name="reminders_title">Title</string>
+    <string name="reminders_repeat">Repeat</string>
+    <string name="reminders_date">Date</string>
+    <string name="reminders_days">Days</string>
+    <string name="reminders_time">Time</string>
+    <!-- What the form gives: "Next: Wed 18 Nov, 18:30". -->
+    <string name="reminders_next">Next: %1$s</string>
+    <string name="reminders_save">Save</string>
+    <string name="reminders_cancel">Cancel</string>
+    <string name="reminders_delete">Delete</string>
+    <string name="reminders_title_empty">Enter a title.</string>
+    <plurals name="reminders_title_too_long">
+        <item quantity="one">A title has at most %1$s character.</item>
+        <item quantity="other">A title has at most %1$s characters.</item>
+    </plurals>
+    <string name="reminders_time_passed">That time has passed.</string>
+    <string name="reminders_choose_a_day">Choose at least one day.</string>
+    <plurals name="reminders_limit">
+        <item quantity="one">Reminders keeps %1$s reminder. Delete one to add another.</item>
+        <item quantity="other">Reminders keeps %1$s reminders. Delete one to add another.</item>
+    </plurals>
+
+    <!-- The snackbars after a Save and a Delete in the form. -->
+    <string name="reminders_saved">Reminder set for %1$s.</string>
+    <string name="reminders_deleted">Reminder deleted</string>
+    <string name="reminders_undo">Undo</string>
+
+    <!-- Settings. -->
+    <string name="reminders_section_about">About</string>
+    <string name="reminders_version">Version</string>
+</resources>

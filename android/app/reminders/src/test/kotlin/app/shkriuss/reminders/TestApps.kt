@@ -2,6 +2,7 @@ package app.shkriuss.reminders
 
 import android.app.Application
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.testing.AppLockOnForTests
 import app.shkriuss.core.testing.LockedAppForTests
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
@@ -49,6 +50,15 @@ interface RemindersTestApp : RemindersHost {
  * screens.
  */
 class LockedRemindersApp : LockedAppForTests(REMINDERS), RemindersTestApp {
+    override val test: TestReminders by lazy { TestReminders(this) }
+}
+
+/**
+ * Reminders' app class for the check that every sheet and dialog is behind
+ * the app lock: the app lock is on and the app is open, so a test can open
+ * a sheet or a dialog, then lock the app.
+ */
+class AppLockOnRemindersApp : AppLockOnForTests(REMINDERS), RemindersTestApp {
     override val test: TestReminders by lazy { TestReminders(this) }
 }
 
