@@ -252,6 +252,18 @@ class RemindersScreensTest {
         pickerOnThisMonthWithNoDateChosen(stored = "Fri, Oct 31, 2025")
     }
 
+    @Test
+    fun aDateChosenInThePickerReachesTheForm() {
+        start()
+        compose.tap(R.string.reminders_add)
+        compose.tap(R.string.reminders_date)
+        compose.tap("November 20, 2026", substring = true)
+        compose.tap(DesignR.string.shk_ok)
+
+        compose.waitFor(hasText(words(R.string.reminders_date)) and hasText("Fri, Nov 20, 2026"))
+        compose.waitForText("Next: Fri, Nov 20, 10:00")
+    }
+
     /** Opens the date picker of the open form, checks that it shows this month with OK off, cancels it, and checks the form still shows [stored]. */
     private fun pickerOnThisMonthWithNoDateChosen(stored: String) {
         compose.tap(R.string.reminders_date)
@@ -332,6 +344,23 @@ class RemindersScreensTest {
         compose.tap(R.string.reminders_undo)
         compose.waitForText("Dentist")
         assertEquals(setOf("Pills", "Dentist", "Call the bank"), storedReminders().map { it.title }.toSet())
+    }
+
+    @Test
+    @Config(qualifiers = TABLET)
+    fun deleteAllClosesAFormOpenBesideTheListOnAReminderItDeletes() {
+        seed { addSaved("Dentist", Schedule(Repeat.ONCE, TODAY.minusDays(3), 10 * 60)) }
+        start()
+        compose.tap(R.string.reminders_past)
+        compose.tap("Dentist")
+        compose.waitForText(words(R.string.reminders_edit_reminder))
+
+        compose.tap(R.string.reminders_delete_all)
+        // The question's Delete, not the form's: on the tablet the form is a pane, not a dialog.
+        compose.tap(hasText(words(R.string.reminders_delete)) and hasAnyAncestor(isDialog()))
+
+        compose.waitForText(words(R.string.reminders_choose_a_reminder))
+        compose.waitForGone(hasText(words(R.string.reminders_edit_reminder)))
     }
 
     @Test
