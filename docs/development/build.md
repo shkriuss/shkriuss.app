@@ -1141,6 +1141,9 @@ Claude does this in the same pull request as the change to
       [When verification fails](#when-verification-fails)).
    3. Add `<trusting group="..."/>` under that key, for that group only.
    4. Run the command again, until it passes.
+   5. If the key is left with no group, delete its line. Gradle trusts
+      nothing for a key with no group, and CI refuses it
+      ([ci.md](ci.md#trust-patterns)).
 7. Gradle also writes `verification-keyring.gpg`. It is ignored by Git.
    Only the `.keys` file is committed.
 
