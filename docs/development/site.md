@@ -50,7 +50,7 @@ the repository goes to that file on GitHub.
 | Job | When | What it does | Secrets |
 |---|---|---|---|
 | Build | Pull requests that change `docs/`, `site/`, `tools/site/` or the site's workflow files, and every push to `main` | Runs the generator's tests. Builds the site. Uploads what the generator wrote, hidden files included, as the artifact `site-unchecked`, kept for one day. | None |
-| Check the site | After Build | Starts on a new runner and checks out nothing. Downloads `site-unchecked`. Checks the built files. Adds the security headers. Records a SHA-256 for every file. Uploads the site as the artifact `site`. | None |
+| Check the site | After Build | Starts on a new runner and checks out nothing. Downloads `site-unchecked`. Tests its own checks first, then checks the built files. Adds the security headers. Records a SHA-256 for every file. Uploads the site as the artifact `site`. | None |
 | Deploy tool | Pull requests only | Installs the pinned Wrangler and tries the deploy with the checked site, without uploading. So a broken pin or Worker configuration fails the pull request, not `main`. | None |
 | Deploy | Pushes to `main`, and runs started by hand on `main` | Stops if a newer commit is on `main`. Checks the files against the SHA-256 values of Check the site. Installs the pinned Wrangler. Stops unless the Worker exists. Deploys a new version of it. Checks that the live site serves exactly the uploaded files, with every security header: on the `workers.dev` address, and on your own domain if `SITE_DOMAIN` is set. | `CLOUDFLARE_API_TOKEN`, in one step |
 
@@ -74,12 +74,14 @@ runner where it never ran:
 - They read each file whole and parse it, with the standard library of
   the runner's Python, started with `-I` so that it ignores the
   environment and the files it reads.
+- The check tests itself first ([The self-test](#the-self-test)).
 
 What they check:
 
 1. Only plain files, with lower-case names ending in `.html`, `.css` or
    `.svg`. So no Cloudflare control file such as `_redirects`, and no
-   script file, can reach Cloudflare. A file that is not UTF-8 fails.
+   script file, can reach Cloudflare. A folder that cannot be listed
+   fails, and so does a file that is not UTF-8.
 2. No `<script>`, `<style>`, frame, form, plugin, `<base>` or meta
    refresh. No event handler such as `onclick`, no `style` or `src`
    attribute, no `javascript:` address.
@@ -104,6 +106,40 @@ How they read the files:
    processing instruction, such as `<?xml-stylesheet?>`, and no comment.
 5. The style sheet is checked as written, and again with its CSS escapes
    decoded, so `u\72l(` counts as `url(`.
+
+### The self-test
+
+The check tests itself before it checks the built site. The checks and
+the self-test are one script in `site.yml`, so the self-test runs the
+same functions that then check the site, not a copy of them.
+
+1. The step "Test the site checker" runs the checks on a small good
+   site: two pages, a style sheet and an icon, written in the script. It
+   must have no problem.
+2. Then it runs them on samples. Each sample is that good site with one
+   fault, so the fault is the only reason it can fail.
+3. Each sample names every message its fault must cause. The self-test
+   fails if a named message is missing, or if any other message appears.
+   So a sample that is refused for another reason does not count.
+4. Every rule has at least one sample: the file rules, each rule on the
+   raw text, each rule on the parsed elements and attributes, the
+   parser's own cases (a stray `<`, a comment, a declaration, a
+   processing instruction, a CDATA section), the icon's XML rules, the
+   CSS escapes and a file that is not UTF-8. Each tag and each attribute
+   that the site does not allow has its own sample. Their names are
+   written out in the self-test, not taken from the rules, so a shorter
+   list in a rule fails it.
+5. Where both the raw text and the parser catch a fault, another sample
+   holds a fault that only the parser catches. Examples: a meta refresh
+   behind a quoted `>`, an event handler after a `/`, a link without
+   quotes, and a `javascript:` address written with `&#x73;` or a tab.
+   An `href` in the icon is the one fault with no such sample: the raw
+   text always shows the word.
+6. Only when the self-test passes does the step "Check the built site"
+   run.
+
+To add a rule: add a sample for it, and one for each fault that only
+the new rule catches.
 
 ## Security headers
 

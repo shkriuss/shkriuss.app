@@ -100,56 +100,56 @@ jobs:
       # loaded from another site stops the run. They read each file whole
       # and parse it, with the standard library of the runner's Python,
       # isolated (-I) from the environment and from the files it reads
-      # (docs/development/site.md#what-check-the-site-checks).
-      - name: Check the built site
-        env:
-          SITE: ${{ runner.temp }}/site
+      # (docs/development/site.md#what-check-the-site-checks). The same
+      # file holds the checks and their self-test, so the self-test runs
+      # the very functions that then check the built site.
+      - name: Write the site checker
         run: |
-          python3 --version
-          python3 -I -B - <<'PYTHON'
+          mkdir "$RUNNER_TEMP/checker"
+          cat > "$RUNNER_TEMP/checker/check_site.py" <<'PYTHON'
           import html.parser
           import os
           import re
           import stat
           import sys
+          import tempfile
           import xml.parsers.expat
 
-          site = os.environ["SITE"]
-          problems = []
-
-
-          def fail(path, message):
-              problems.append(f"{path}: {message}")
-
-
-          def stop(error):
-              raise error
-
-
-          # 1. Plain files only, with simple names, of three kinds. A name
-          #    that does not fit is shown escaped. A folder that cannot be
-          #    listed stops the check.
+          # 1. The file rules: plain files only, with simple names, of three kinds.
+          #    A name that does not fit is shown escaped.
           NAME = re.compile(r"([a-z0-9-]+/)*[a-z0-9-]+\.(html|css|svg)")
-          files = []
-          for folder, folders, names in os.walk(site, onerror=stop):
-              for name in folders + names:
-                  full = os.path.join(folder, name)
-                  relative = os.path.relpath(full, site)
-                  mode = os.lstat(full).st_mode
-                  if stat.S_ISDIR(mode):
-                      continue
-                  if not stat.S_ISREG(mode):
-                      fail(ascii(relative), "the built site may hold only plain files and folders")
-                  elif not NAME.fullmatch(relative):
-                      fail(ascii(relative), "the built site may hold only .html, .css and .svg files with lower-case names")
-                  else:
-                      files.append(relative)
-          for required in ("index.html", "404.html", "style.css"):
-              if required not in files:
-                  fail(required, "the built site has no such file")
+          REQUIRED = ("index.html", "404.html", "style.css")
 
-          # 2. The rules on the raw text of each file, read whole, not line
-          #    by line. So a tag broken over two lines is still one tag.
+
+          def site_files(site):
+              """The files of the site that pass the file rules, and the problems."""
+              files = []
+              problems = []
+
+              def unlisted(error):
+                  problems.append(f"{ascii(os.path.relpath(error.filename, site))}: a folder that cannot be listed")
+
+              for folder, folders, names in os.walk(site, onerror=unlisted):
+                  for name in folders + names:
+                      full = os.path.join(folder, name)
+                      relative = os.path.relpath(full, site)
+                      mode = os.lstat(full).st_mode
+                      if stat.S_ISDIR(mode):
+                          continue
+                      if not stat.S_ISREG(mode):
+                          problems.append(f"{ascii(relative)}: the built site may hold only plain files and folders")
+                      elif not NAME.fullmatch(relative):
+                          problems.append(f"{ascii(relative)}: the built site may hold only .html, .css and .svg files with lower-case names")
+                      else:
+                          files.append(relative)
+              for required in REQUIRED:
+                  if required not in files:
+                      problems.append(f"{required}: the built site has no such file")
+              return sorted(files), problems
+
+
+          # 2. The rules on the raw text of each file, read whole, not line by line.
+          #    So a tag broken over two lines is still one tag.
           TAG = re.compile(r"<(script|style|iframe|frame|object|embed|form|base|foreignobject)\b|<meta[^>]*http-equiv", re.I)
           ATTRIBUTE = re.compile(r"<[^>]*\s(on[a-z]+|style|src|srcset|data|action|formaction|poster)\s*=", re.I)
           JAVASCRIPT = re.compile(r"<[^>]*javascript:", re.I)
@@ -161,28 +161,29 @@ jobs:
 
 
           def text_problems(path, text):
+              problems = []
               if TAG.search(text):
-                  fail(path, "a tag that the site does not allow")
+                  problems.append("a tag that the site does not allow")
               if ATTRIBUTE.search(text):
-                  fail(path, "an attribute that the site does not allow")
+                  problems.append("an attribute that the site does not allow")
               if JAVASCRIPT.search(text):
-                  fail(path, "a javascript: address")
+                  problems.append("a javascript: address")
               if path.endswith(".html"):
                   if any(not GOOD_QUOTED_HREF.match(href) for href in QUOTED_HREF.findall(text)):
-                      fail(path, "a link that is not https://..., /... or #...")
+                      problems.append("a link that is not https://..., /... or #...")
                   if any(not GOOD_LINK_TAG.search(link) for link in LINK_TAG.findall(text)):
-                      fail(path, "a <link> that points outside the site")
+                      problems.append("a <link> that points outside the site")
               elif LOADS.search(text):
-                  fail(path, "a style sheet or the icon loads something")
+                  problems.append("a style sheet or the icon loads something")
+              return problems
 
 
-          # 3. The same rules on every element and attribute, as a parser
-          #    reads them: with any quotes or none, and with character
-          #    references decoded.
-          FORBIDDEN_TAGS = {"script", "style", "iframe", "frame", "object", "embed", "form", "base", "foreignobject"}
-          FORBIDDEN_ATTRIBUTES = {"style", "src", "srcset", "data", "action", "formaction", "poster"}
+          # 3. The same rules on every element and attribute, as a parser reads
+          #    them: with any quotes or none, and with character references decoded.
+          FORBIDDEN_TAGS = ("script", "style", "iframe", "frame", "object", "embed", "form", "base", "foreignobject")
+          FORBIDDEN_ATTRIBUTES = ("style", "src", "srcset", "data", "action", "formaction", "poster")
           LINK_TARGET = re.compile(r"(https://|#|/$|/[^/])")
-          SITE_FILE = re.compile(r"/[a-z0-9./-]+")
+          SITE_FILE = re.compile(r"/(?!/)[a-z0-9./-]+")
           ENDS = "".join(map(chr, range(0x21)))
 
 
@@ -192,28 +193,33 @@ jobs:
 
 
           def element_problems(path, tag, attributes):
+              problems = []
               name = tag.lower().rsplit(":", 1)[-1]
               if name in FORBIDDEN_TAGS:
-                  fail(path, f"the tag <{name}>, which the site does not allow")
+                  problems.append(f"the tag <{name}>, which the site does not allow")
               for attribute, value in attributes:
                   attribute = attribute.lower()
                   value = value or ""
                   local = attribute.rsplit(":", 1)[-1]
                   if local.startswith("on") or local in FORBIDDEN_ATTRIBUTES:
-                      fail(path, f"the attribute {attribute} on <{name}>, which the site does not allow")
+                      problems.append(f"the attribute {attribute} on <{name}>, which the site does not allow")
                   if "javascript:" in re.sub(r"[\x00-\x20\x7f]", "", value).lower():
-                      fail(path, f"a javascript: address on <{name}>")
+                      problems.append(f"a javascript: address on <{name}>")
                   if attribute.endswith("href"):
                       if not path.endswith(".html"):
-                          fail(path, f"the attribute {attribute} on <{name}>: a style sheet or the icon loads something")
+                          problems.append(f"the attribute {attribute} on <{name}>: a style sheet or the icon loads something")
                       elif not LINK_TARGET.match(address(value)):
-                          fail(path, f"the link {ascii(value)} on <{name}>, which is not https://..., /... or #...")
+                          problems.append(f"the link {ascii(value)} on <{name}>, which is not https://..., /... or #...")
               if name == "meta" and any("http-equiv" in f"{attribute}={value or ''}".lower() for attribute, value in attributes):
-                  fail(path, "a <meta http-equiv>, which the site does not allow")
+                  problems.append("a <meta http-equiv>, which the site does not allow")
               if name == "link":
                   hrefs = [value or "" for attribute, value in attributes if attribute.lower() == "href"]
-                  if not hrefs or not all(SITE_FILE.fullmatch(href) for href in hrefs):
-                      fail(path, "a <link> that points outside the site")
+                  if not hrefs:
+                      problems.append("a <link> with no address")
+                  for href in hrefs:
+                      if not SITE_FILE.fullmatch(href):
+                          problems.append(f"the <link> to {ascii(href)}, which is not a file of this site")
+              return problems
 
 
           class Page(html.parser.HTMLParser):
@@ -222,54 +228,58 @@ jobs:
               def __init__(self, path):
                   super().__init__(convert_charrefs=False)
                   self.path = path
+                  self.problems = []
 
               def handle_starttag(self, tag, attrs):
-                  element_problems(self.path, tag, attrs)
+                  self.problems += element_problems(self.path, tag, attrs)
 
               def handle_startendtag(self, tag, attrs):
-                  element_problems(self.path, tag, attrs)
+                  self.problems += element_problems(self.path, tag, attrs)
 
               def handle_data(self, data):
                   if "<" in data:
-                      fail(self.path, "a < that the parser did not read as a tag. The generator escapes every < in text")
+                      self.problems.append("a < that the parser did not read as a tag. The generator escapes every < in text")
 
               def handle_decl(self, decl):
                   if decl.lower() != "doctype html":
-                      fail(self.path, f"the declaration {ascii(decl)}. Only <!doctype html> is allowed")
+                      self.problems.append(f"the declaration {ascii(decl)}. Only <!doctype html> is allowed")
 
               def handle_comment(self, data):
-                  fail(self.path, "a comment. Browsers and this parser can disagree on where one ends")
+                  self.problems.append("a comment. Browsers and this parser can disagree on where one ends")
 
               def handle_pi(self, data):
-                  fail(self.path, "a processing instruction")
+                  self.problems.append("a processing instruction")
 
               def unknown_decl(self, data):
-                  fail(self.path, "a CDATA section or another declaration")
+                  self.problems.append("a CDATA section or another declaration")
 
 
           def page_problems(path, text):
               page = Page(path)
               page.feed(text)
               page.close()
+              return page.problems
 
 
-          # The icon is XML. No DOCTYPE, so no entities, and no processing
-          # instruction, such as <?xml-stylesheet?>.
           def icon_problems(path, data):
+              """The icon is XML. No DOCTYPE, so no entities, no processing instruction, such as <?xml-stylesheet?>, and no comment."""
+              problems = []
               parser = xml.parsers.expat.ParserCreate()
               parser.SetParamEntityParsing(xml.parsers.expat.XML_PARAM_ENTITY_PARSING_NEVER)
-              parser.StartElementHandler = lambda tag, attributes: element_problems(path, tag, list(attributes.items()))
-              parser.StartDoctypeDeclHandler = lambda *args: fail(path, "a DOCTYPE")
-              parser.EntityDeclHandler = lambda *args: fail(path, "an entity declaration")
-              parser.ProcessingInstructionHandler = lambda *args: fail(path, "a processing instruction")
-              parser.CommentHandler = lambda data: fail(path, "a comment")
+              parser.StartElementHandler = lambda tag, attributes: problems.extend(element_problems(path, tag, list(attributes.items())))
+              parser.StartDoctypeDeclHandler = lambda *args: problems.append("a DOCTYPE")
+              parser.EntityDeclHandler = lambda *args: problems.append("an entity declaration")
+              parser.ProcessingInstructionHandler = lambda *args: problems.append("a processing instruction")
+              parser.CommentHandler = lambda data: problems.append("a comment")
               try:
                   parser.Parse(data, True)
               except xml.parsers.expat.ExpatError as error:
-                  fail(path, f"cannot be read as XML: {error}")
+                  problems.append(f"cannot be read as XML: {error}")
+              return problems
 
 
-          # A style sheet, with its CSS escapes decoded, as in u\72l( for url(.
+          # A style sheet with its CSS escapes decoded, as in u\72l( for url(. Only
+          # what the raw text does not show already is reported.
           CSS_ESCAPE = re.compile(r"\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\(.)", re.S)
 
 
@@ -281,33 +291,254 @@ jobs:
 
 
           def style_problems(path, text):
-              if LOADS.search(CSS_ESCAPE.sub(css_character, text)):
-                  fail(path, "a style sheet that loads something, written with CSS escapes")
+              if LOADS.search(CSS_ESCAPE.sub(css_character, text)) and not LOADS.search(text):
+                  return ["a style sheet that loads something, written with CSS escapes"]
+              return []
 
 
-          # A file that cannot be read fails.
-          for path in sorted(files):
-              with open(os.path.join(site, path), "rb") as file:
-                  data = file.read()
-              try:
-                  text = data.decode("utf-8")
-              except UnicodeDecodeError as error:
-                  fail(path, f"cannot be read as UTF-8: {error}")
-                  continue
-              text_problems(path, text)
-              if path.endswith(".html"):
-                  page_problems(path, text)
-              elif path.endswith(".svg"):
-                  icon_problems(path, data)
-              else:
-                  style_problems(path, text)
+          def site_problems(site):
+              """Every problem of the site in the folder [site], as "file: what". A file that cannot be read fails."""
+              files, problems = site_files(site)
+              for path in files:
+                  with open(os.path.join(site, path), "rb") as file:
+                      data = file.read()
+                  try:
+                      text = data.decode("utf-8")
+                  except UnicodeDecodeError as error:
+                      problems.append(f"{path}: cannot be read as UTF-8: {error}")
+                      continue
+                  found = text_problems(path, text)
+                  if path.endswith(".html"):
+                      found += page_problems(path, text)
+                  elif path.endswith(".svg"):
+                      found += icon_problems(path, data)
+                  else:
+                      found += style_problems(path, text)
+                  problems += [f"{path}: {problem}" for problem in found]
+              return problems
 
-          for problem in problems:
-              print(f"::error::{problem}")
-          if problems:
-              sys.exit(1)
-          print(f"The built site passed every check: {len(files)} files.")
+
+          # The self-test. It runs site_problems, the function that checks the built
+          # site, on a small good site, which must have no problem, and then on that
+          # site with one fault in each sample. Each sample names every message the
+          # fault must cause. A missing message or any other message fails the test.
+          PAGE = """<!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <title>Sample</title>
+          <link rel="stylesheet" href="/style.css">
+          <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+          </head>
+          <body>
+          <p><a href="/apps/">Apps</a>, <a href="https://example.org/">a site</a>, <a href="#top">top</a>, 1 &lt; 2.</p>
+          </body>
+          </html>
+          """
+          ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#00695C"/></svg>\n'
+          GOOD = {"index.html": PAGE, "404.html": PAGE, "style.css": "body { color: #000; }\n", "favicon.svg": ICON}
+          LINK = "a symbolic link"
+          UNLISTED = "a folder that cannot be listed"
+
+
+          class Starts(str):
+              """An expected message whose end depends on the parser, such as its error."""
+
+
+          def of(path, messages):
+              """The messages as site_problems names them for [path], each still a Starts if it was one."""
+              return [type(message)(f"{path}: {message}") for message in messages]
+
+
+          def html_sample(what, old, new, messages):
+              return (what, {"index.html": PAGE.replace(old, new, 1)}, of("index.html", messages))
+
+
+          def icon_sample(what, old, new, messages):
+              return (what, {"favicon.svg": ICON.replace(old, new, 1)}, of("favicon.svg", messages))
+
+
+          def style_sample(what, css, messages):
+              return (what, {"style.css": css}, of("style.css", messages))
+
+
+          HEAD = "</head>"
+          BODY = "<p>"
+          APPS = 'href="/apps/"'
+          RECT = "<rect"
+          RAW_TAG = "a tag that the site does not allow"
+          RAW_ATTRIBUTE = "an attribute that the site does not allow"
+          RAW_JAVASCRIPT = "a javascript: address"
+          RAW_LINK = "a link that is not https://..., /... or #..."
+          RAW_LINK_TAG = "a <link> that points outside the site"
+          RAW_LOADS = "a style sheet or the icon loads something"
+          META = "a <meta http-equiv>, which the site does not allow"
+
+          SAMPLES = [
+              # The file rules.
+              ("a Cloudflare control file", {"_redirects": "/* https://example.invalid/ 301\n"},
+               ["'_redirects': the built site may hold only .html, .css and .svg files with lower-case names"]),
+              ("a file name in capitals", {"Index.html": PAGE},
+               ["'Index.html': the built site may hold only .html, .css and .svg files with lower-case names"]),
+              ("a symbolic link", {"link.html": LINK}, ["'link.html': the built site may hold only plain files and folders"]),
+              ("a folder that cannot be listed", {"hidden": UNLISTED}, ["'hidden': a folder that cannot be listed"]),
+              ("no index.html", {"index.html": None}, ["index.html: the built site has no such file"]),
+              ("no 404.html", {"404.html": None}, ["404.html: the built site has no such file"]),
+              ("no style.css", {"style.css": None}, ["style.css: the built site has no such file"]),
+              ("a page that is not UTF-8", {"index.html": PAGE.encode() + b"\xff"}, [Starts("index.html: cannot be read as UTF-8:")]),
+              # The rules on the raw text, and the same faults as the parser reads them.
+              html_sample("a meta refresh broken over two lines", HEAD,
+                          '<meta\nhttp-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [RAW_TAG, META]),
+              html_sample("an event handler on a second line", BODY, '<p\nonclick="x">', [RAW_ATTRIBUTE, "the attribute onclick on <p>, which the site does not allow"]),
+              html_sample("a javascript: address in an attribute", BODY, '<p title="javascript:x">',
+                          [RAW_JAVASCRIPT, "a javascript: address on <p>"]),
+              html_sample("an http:// link", APPS, 'href="http://example.invalid/"',
+                          [RAW_LINK, "the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("a style sheet from another site", 'href="/style.css"', 'href="https://example.invalid/x.css"',
+                          [RAW_LINK_TAG, "the <link> to 'https://example.invalid/x.css', which is not a file of this site"]),
+              html_sample("a <link> with no address", 'href="/style.css"', "", [RAW_LINK_TAG, "a <link> with no address"]),
+              # Faults that only the parser finds.
+              html_sample("a meta refresh behind a quoted >", HEAD,
+                          '<meta name="a>b" http-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [META]),
+              html_sample("an event handler behind a quoted >", BODY, '<p title="a>b" onclick="x">',
+                          ["the attribute onclick on <p>, which the site does not allow"]),
+              html_sample("an event handler after a /", BODY, '<p/onclick="x">', ["the attribute onclick on <p>, which the site does not allow"]),
+              html_sample("a javascript: address with a character reference", BODY, '<p title="java&#x73;cript:x">', ["a javascript: address on <p>"]),
+              html_sample("an http:// link without quotes", APPS, "href=http://example.invalid/",
+                          ["the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("an http:// link in single quotes", APPS, "href='http://example.invalid/'",
+                          ["the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("a link that starts with /\\", APPS, 'href="/\\example.invalid/"',
+                          ["the link '/\\\\example.invalid/' on <a>, which is not https://..., /... or #..."]),
+              html_sample("a style sheet from another site behind a quoted address", 'href="/style.css"',
+                          "title='href=\"/style.css\"' href=//example.invalid/x.css",
+                          ["the link '//example.invalid/x.css' on <link>, which is not https://..., /... or #...",
+                           "the <link> to '//example.invalid/x.css', which is not a file of this site"]),
+              icon_sample("a script with a prefix in the icon", RECT, "<svg:script>x</svg:script><rect",
+                          ["the tag <script>, which the site does not allow"]),
+              icon_sample("an event handler with a prefix in the icon", RECT, '<rect xlink:onload="x"',
+                          ["the attribute xlink:onload on <rect>, which the site does not allow"]),
+              # What the page parser itself refuses.
+              html_sample("a < that is not a tag", "1 &lt; 2", "1 <3",
+                          ["a < that the parser did not read as a tag. The generator escapes every < in text"]),
+              html_sample("a comment", HEAD, "<!-- x -->\n" + HEAD, ["a comment. Browsers and this parser can disagree on where one ends"]),
+              html_sample("another declaration", "<!doctype html>", "<!doctype other>",
+                          ["the declaration 'doctype other'. Only <!doctype html> is allowed"]),
+              html_sample("a processing instruction", HEAD, "<?x-trial?>\n" + HEAD, ["a processing instruction"]),
+              html_sample("a CDATA section", HEAD, "<![CDATA[x]]>\n" + HEAD, ["a CDATA section or another declaration"]),
+              # The icon's XML rules.
+              icon_sample("a DOCTYPE in the icon", "<svg", "<!DOCTYPE svg>\n<svg", ["a DOCTYPE"]),
+              icon_sample("an entity in the icon", "<svg", '<!DOCTYPE svg [<!ENTITY a "b">]>\n<svg', ["a DOCTYPE", "an entity declaration"]),
+              icon_sample("a processing instruction in the icon", "<svg", "<?x-trial?>\n<svg", ["a processing instruction"]),
+              icon_sample("a comment in the icon", RECT, "<!-- x --><rect", ["a comment"]),
+              icon_sample("an icon that is not XML", "</svg>", "", [Starts("cannot be read as XML:")]),
+              icon_sample("an href in the icon", RECT, '<image href="/x.png"/><rect',
+                          [RAW_LOADS, "the attribute href on <image>: a style sheet or the icon loads something"]),
+              icon_sample("url() in the icon", 'fill="#00695C"', 'fill="url(#a)"', [RAW_LOADS]),
+              icon_sample("an event handler in the icon", RECT, '<rect onload="x"', [RAW_ATTRIBUTE, "the attribute onload on <rect>, which the site does not allow"]),
+          ]
+          SAMPLES += [
+              html_sample("a javascript: address with a tab inside", BODY, '<p title="java\tscript:x">', ["a javascript: address on <p>"]),
+          ]
+          # Every tag and every attribute the site does not allow, on its own. The
+          # names are written out here, not taken from the rules, so a shorter list
+          # in a rule fails the self-test.
+          SAMPLES += [
+              html_sample(f"the tag <{tag}>", BODY, f"<{tag}>x</{tag}>" + BODY, [RAW_TAG, f"the tag <{tag}>, which the site does not allow"])
+              for tag in ("script", "style", "iframe", "frame", "object", "embed", "form", "base", "foreignobject")
+          ]
+          SAMPLES += [
+              html_sample(f"the attribute {attribute}", BODY, f'<p {attribute}="x">',
+                          [RAW_ATTRIBUTE, f"the attribute {attribute} on <p>, which the site does not allow"])
+              for attribute in ("style", "src", "srcset", "data", "action", "formaction", "poster", "onclick", "onload")
+          ]
+          # The style sheet: each way to load something, as written and with CSS escapes.
+          SAMPLES += [
+              style_sample(f"{written} in the style sheet", f"body {{ color: #000; }}\n{css}\n", [RAW_LOADS])
+              for written, css in (("url()", "a { background: url(/x.png); }"), ("@import", '@import "/x.css";'),
+                                   ("expression()", "a { width: expression(1); }"), ("href", "a { content: 'href'; }"))
+          ]
+          SAMPLES += [
+              style_sample(f"{written} with a CSS escape in the style sheet", f"body {{ color: #000; }}\n{css}\n",
+                           ["a style sheet that loads something, written with CSS escapes"])
+              for written, css in (("url()", "a { background: u\\72l(/x.png); }"), ("@import", '@\\69mport "/x.css";'),
+                                   ("expression()", "a { width: e\\78pression(1); }"), ("href", "a { content: '\\68ref'; }"))
+          ]
+
+
+          def write_site(folder, files):
+              for name, content in files.items():
+                  path = os.path.join(folder, name)
+                  if content is None:
+                      continue
+                  if content == LINK:
+                      os.symlink("/etc/hostname", path)
+                  elif content == UNLISTED:
+                      os.mkdir(path)
+                      os.chmod(path, 0)
+                  else:
+                      with open(path, "wb") as file:
+                          file.write(content if isinstance(content, bytes) else content.encode())
+
+
+          def matches(problem, expected):
+              return problem.startswith(expected) if isinstance(expected, Starts) else problem == expected
+
+
+          def self_test():
+              """0 if the checks find no problem in the good site and exactly the named ones in each sample, else 1."""
+              failed = False
+              for what, change, expected in [("the good site", {}, [])] + SAMPLES:
+                  files = dict(GOOD)
+                  files.update(change)
+                  with tempfile.TemporaryDirectory() as folder:
+                      write_site(folder, files)
+                      try:
+                          problems = site_problems(folder)
+                      finally:
+                          for name, content in change.items():
+                              if content == UNLISTED:
+                                  os.chmod(os.path.join(folder, name), 0o700)
+                  missing = [message for message in expected if not any(matches(problem, message) for problem in problems)]
+                  other = [problem for problem in problems if not any(matches(problem, message) for message in expected)]
+                  if missing or other:
+                      failed = True
+                      print(f"::error::The self-test of the site check fails on {what}.")
+                      for message in missing:
+                          print(f"  Missing: {message}")
+                      for problem in other:
+                          print(f"  Not expected: {problem}")
+                  else:
+                      print(f"As it must be: {what}.")
+              if failed:
+                  return 1
+              print(f"The site check passes its self-test: the good site and {len(SAMPLES)} samples.")
+              return 0
+
+
+          if __name__ == "__main__":
+              if sys.argv[1:] == ["--self-test"]:
+                  sys.exit(self_test())
+              problems = site_problems(os.environ["SITE"])
+              for problem in problems:
+                  print(f"::error::{problem}")
+              if problems:
+                  sys.exit(1)
+              print("The built site passed every check.")
           PYTHON
+
+      # The self-test first: a small good site must have no problem, and
+      # each sample, that site with one fault, must cause exactly the
+      # messages it names.
+      - name: Test the site checker
+        run: |
+          python3 --version
+          python3 -I -B "$RUNNER_TEMP/checker/check_site.py" --self-test
+
+      - name: Check the built site
+        env:
+          SITE: ${{ runner.temp }}/site
+        run: python3 -I -B "$RUNNER_TEMP/checker/check_site.py"
 
       # Cloudflare sends these headers with every file of the Worker's static
       # assets (docs/development/site.md#security-headers). They live here,
