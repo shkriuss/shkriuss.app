@@ -541,7 +541,7 @@ second build must write the same mapping file, or the release stops. See
     back as the picker would.
   - `WaterScreenshotTest`: the screenshots of every screen, sheet and
     dialog.
-- `feature/reminders` has 10 test classes with 109 tests: the occurrences
+- `feature/reminders` has 10 test classes with 110 tests: the occurrences
   of each repeat, the rule and the mark with the examples of the spec,
   in Tbilisi and Berlin, the limits, and when a time of the form has
   passed, also in the two hours of summer time, as plain code
