@@ -286,8 +286,12 @@ class ReminderFormViewModel(
         }
     }
 
-    /** Cancel: the form closes and nothing is written. */
+    /**
+     * Cancel: the form closes and nothing is written. While Save writes it
+     * does nothing: the write has begun, and the form closes when it ends.
+     */
     fun cancel() {
+        if (form.value?.saving == true) return
         form.value = null
     }
 

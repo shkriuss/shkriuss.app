@@ -487,6 +487,39 @@ class ViewModelsTest {
         assertEquals(setOf("Pills", "Call the bank"), live().map { it.title }.toSet())
     }
 
+    /**
+     * Cancel while Save writes does nothing: the write has begun, so
+     * closing the form then would say that nothing is written while it
+     * is. The form closes when the save ends, with its snackbar.
+     */
+    @Test
+    fun cancelWhileSaveWritesDoesNothing() {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        val model = form()
+        model.openNew()
+        model.onTitleChange("Call the bank")
+        model.save()
+        model.state.await { it.form?.saving == true }
+
+        model.cancel()
+        assertEquals(true, model.state.value.form?.saving)
+        release.countDown()
+        holder.join()
+
+        model.state.await { it.form == null && it.snackbar is FormSnackbar.Saved }
+        assertEquals(listOf("Call the bank"), live().map { it.title })
+    }
+
     @Test
     fun cancelWritesNothing() {
         val model = form()
