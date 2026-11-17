@@ -121,6 +121,7 @@
             <trusting group="org.junit.platform"/>
             <trusting group="org.opentest4j"/>
          </trusted-key>
+         <trusted-key id="694621A7227D8D5289699830ABE9F3126BB741C1"/>
       </trusted-keys>
    </configuration>
    <components>
