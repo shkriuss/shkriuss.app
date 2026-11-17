@@ -175,8 +175,11 @@ the step "Check that no trust pattern covers com.google" fails when:
    `com.google.firebase`, in a trusted key, in its `trusting` lines or in
    `trusted-artifacts`;
 2. a pattern has no group, so it covers every group;
-3. Python cannot read a pattern;
-4. the file has no trusted keys, so the step read the wrong layout.
+3. an entry without `regex` has no group, such as `<trusted-key id="…"/>`
+   or a key with only a `name`. Gradle trusts it for every group. A key
+   whose groups are all in its `trusting` lines is read by those lines;
+4. Python cannot read a pattern;
+5. the file has no trusted keys, so the step read the wrong layout.
 
 It runs no project code. Python's standard library reads the file, and
 matches each pattern against the whole name, as Gradle does. How to

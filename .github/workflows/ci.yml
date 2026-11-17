@@ -136,7 +136,8 @@ jobs:
       # ^com[.]google($|([.].*)) when one key signs files in several groups.
       # It would trust that key for Play services and Firebase too, and a
       # strict build still passes with it. See docs/development/build.md,
-      # "After a dependency change", step 6.
+      # "After a dependency change", step 6. An entry with no group, such as
+      # <trusted-key id="..."/>, covers every group, so it fails too.
       - name: Check that no trust pattern covers com.google
         env:
           METADATA: android/gradle/verification-metadata.xml
@@ -151,6 +152,8 @@ jobs:
           path = os.environ["METADATA"]
           # Gradle matches the whole group name against the pattern.
           PROBES = ("com.google", "com.google.android.gms", "com.google.firebase")
+          ENTRIES = ("trusted-key", "trusting", "trust")
+          COORDINATES = ("group", "name", "version", "file")
 
           def local(tag):
               return tag.rsplit("}", 1)[-1]
@@ -165,18 +168,30 @@ jobs:
           problems = []
           patterns = 0
           for element in root.iter():
-              if (element.get("regex") or "").strip().lower() != "true":
+              kind = local(element.tag)
+              is_pattern = (element.get("regex") or "").strip().lower() == "true"
+              if kind not in ENTRIES and not is_pattern:
                   continue
-              patterns += 1
-              owner = parents.get(element) if local(element.tag) == "trusting" else element
-              if local(element.tag) == "trust":
+              # A key with no coordinates of its own is trusted for what its
+              # trusting lines name. Those lines are read on their own.
+              if kind == "trusted-key" and not any(element.get(name) is not None for name in COORDINATES):
+                  if any(local(child.tag) == "trusting" for child in element):
+                      continue
+              owner = parents.get(element) if kind == "trusting" else element
+              if kind == "trust":
                   who = "An entry of trusted-artifacts"
               else:
                   who = f"The key {owner.get('id') if owner is not None else '(no id)'}"
               group = element.get("group")
               if group is None:
-                  problems.append(f"{who}: a pattern with no group, which covers every group under com.google.")
+                  if is_pattern:
+                      problems.append(f"{who}: a pattern with no group, which covers every group under com.google.")
+                  else:
+                      problems.append(f"{who}: an entry with no group, which covers every group, com.google included.")
                   continue
+              if not is_pattern:
+                  continue
+              patterns += 1
               try:
                   covered = [probe for probe in PROBES if re.fullmatch(group, probe)]
               except re.error:
@@ -189,7 +204,7 @@ jobs:
               print(f"::error file={path}::{problem} Name each group instead. See build.md, After a dependency change, step 6.")
           if problems:
               sys.exit(1)
-          print(f"{len(keys)} trusted keys and {patterns} group patterns read. No pattern covers com.google.")
+          print(f"{len(keys)} trusted keys and {patterns} group patterns read. Every entry has a group, and no pattern covers com.google.")
           PYTHON
 
       # Keep these in step with build-logic (ShkBuild.kt) and the cloud setup
