@@ -7,6 +7,10 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
+## 1.0.1 (2026-11-17)
+
+Released as `water-v1.0.1`.
+
 Changed:
 
 - **Water needs Android 15 or newer**

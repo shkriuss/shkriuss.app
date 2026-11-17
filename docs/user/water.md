@@ -264,7 +264,7 @@ Water's keys. A backup then opens only with your 24 words.
 
 ## Known problems
 
-Version 1.0.0 has these known problems and limits.
+Version 1.0.1 has these known problems and limits.
 
 Not checked on a phone yet:
 
@@ -282,7 +282,7 @@ Limits of reminders:
    access. Such an app can pass them on to a watch, and can press the
    buttons without the phone's unlock. Water does not
    mark its reminders "local only". Whether it should, or offers a
-   setting, is decided after this release.
+   setting, is not decided yet.
 6. With the app lock off, the lock screen shows a reminder's text if
    your phone's setting allows it.
 
@@ -309,7 +309,7 @@ Other:
 12. No accessibility checks run on an emulator for Water. A TalkBack
     pass on a phone stands in for them.
 
-Not in version 1.0.0:
+Not in version 1.0.1:
 
 - Kinds of drinks, such as coffee or tea, charts and statistics.
 - UK fluid ounces, litres or cups.
