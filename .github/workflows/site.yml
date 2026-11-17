@@ -35,6 +35,10 @@ defaults:
     shell: bash
 
 jobs:
+  # Runs the generator, which is not owner-only. It checks nothing that
+  # Deploy relies on: code that runs here can change what this job's later
+  # steps do, for example through $GITHUB_ENV. So it only uploads what the
+  # generator wrote, and "Check the site" checks it on a runner of its own.
   build:
     name: Build
     runs-on: ubuntu-24.04
@@ -42,8 +46,6 @@ jobs:
     concurrency:
       group: site-build-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-    outputs:
-      files_sha256: ${{ steps.sums.outputs.files_sha256 }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,56 +62,252 @@ jobs:
       - name: Build the site
         run: python3 -B -I tools/site/build.py --commit "$GITHUB_SHA" "$RUNNER_TEMP/site"
 
+      # Hidden files too, so that "Check the site" sees every file the
+      # generator wrote.
+      - name: Upload the built site
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-unchecked
+          path: ${{ runner.temp }}/site/
+          include-hidden-files: true
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  # A fresh runner. It checks out nothing, and nothing from the repository
+  # or from Build runs here: the built site comes in as files to read, and
+  # the checks are written in this file. Only this job's site, with its
+  # checksum, reaches Deploy tool and Deploy.
+  check:
+    name: Check the site
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: site-check-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    outputs:
+      files_sha256: ${{ steps.sums.outputs.files_sha256 }}
+    steps:
+      - name: Download the built site
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-unchecked
+          path: ${{ runner.temp }}/site
+
       # These checks do not trust the generator. They look at what it wrote.
       # A script, a Cloudflare control file such as _redirects, or anything
-      # loaded from another site stops the run.
+      # loaded from another site stops the run. They read each file whole
+      # and parse it, with the standard library of the runner's Python,
+      # isolated (-I) from the environment and from the files it reads
+      # (docs/development/site.md#what-check-the-site-checks).
       - name: Check the built site
-        working-directory: ${{ runner.temp }}/site
+        env:
+          SITE: ${{ runner.temp }}/site
         run: |
-          set -u
-          fail() {
-            echo "::error::$1"
-            exit 1
-          }
+          python3 --version
+          python3 -I -B - <<'PYTHON'
+          import html.parser
+          import os
+          import re
+          import stat
+          import sys
+          import xml.parsers.expat
 
-          # 1. Plain files only, with simple names, of three kinds.
-          if [ -n "$(find . ! -type f ! -type d -print -quit)" ]; then
-            fail "The built site may hold only plain files and folders."
-          fi
-          while IFS= read -r -d '' file; do
-            if ! [[ "${file#./}" =~ ^([a-z0-9-]+/)*[a-z0-9-]+\.(html|css|svg)$ ]]; then
-              fail "The built site may hold only .html, .css and .svg files with lower-case names."
-            fi
-          done < <(find . -type f -print0)
-          for required in index.html 404.html style.css; do
-            [ -f "$required" ] || fail "The built site has no $required."
-          done
+          site = os.environ["SITE"]
+          problems = []
 
-          # 2. No scripts, styles in the page, frames, forms or plugins.
-          #    Text in a page is escaped, so these match only real tags.
-          if grep -rliE '<(script|style|iframe|frame|object|embed|form|base|foreignobject)\b|<meta[^>]*http-equiv' .; then
-            fail "These files have a tag that the site does not allow."
-          fi
-          if grep -rliE '<[^>]*[[:space:]](on[a-z]+|style|src|srcset|data|action|formaction|poster)[[:space:]]*=' .; then
-            fail "These files have an attribute that the site does not allow."
-          fi
-          if grep -rliE '<[^>]*javascript:' .; then
-            fail "These files have a javascript: address."
-          fi
 
-          # 3. Links go to https://, to this site or to a heading. Style
-          #    sheets and the icon come from this site only. Nothing else is
-          #    loaded.
-          if grep -rhoE 'href="[^"]*"' --include='*.html' . | grep -vE '^href="(https://|#|/"|/[^/])'; then
-            fail "A link that is not https://..., /... or #... was found."
-          fi
-          if grep -rhoiE '<link[^>]*>' --include='*.html' . | grep -vE 'href="/[a-z0-9./-]+"'; then
-            fail "A <link> that points outside the site was found."
-          fi
-          if grep -rliE 'url\(|@import|expression\(|href' --include='*.css' --include='*.svg' .; then
-            fail "A style sheet or the icon loads something."
-          fi
-          echo "The built site passed every check."
+          def fail(path, message):
+              problems.append(f"{path}: {message}")
+
+
+          def stop(error):
+              raise error
+
+
+          # 1. Plain files only, with simple names, of three kinds. A name
+          #    that does not fit is shown escaped. A folder that cannot be
+          #    listed stops the check.
+          NAME = re.compile(r"([a-z0-9-]+/)*[a-z0-9-]+\.(html|css|svg)")
+          files = []
+          for folder, folders, names in os.walk(site, onerror=stop):
+              for name in folders + names:
+                  full = os.path.join(folder, name)
+                  relative = os.path.relpath(full, site)
+                  mode = os.lstat(full).st_mode
+                  if stat.S_ISDIR(mode):
+                      continue
+                  if not stat.S_ISREG(mode):
+                      fail(ascii(relative), "the built site may hold only plain files and folders")
+                  elif not NAME.fullmatch(relative):
+                      fail(ascii(relative), "the built site may hold only .html, .css and .svg files with lower-case names")
+                  else:
+                      files.append(relative)
+          for required in ("index.html", "404.html", "style.css"):
+              if required not in files:
+                  fail(required, "the built site has no such file")
+
+          # 2. The rules on the raw text of each file, read whole, not line
+          #    by line. So a tag broken over two lines is still one tag.
+          TAG = re.compile(r"<(script|style|iframe|frame|object|embed|form|base|foreignobject)\b|<meta[^>]*http-equiv", re.I)
+          ATTRIBUTE = re.compile(r"<[^>]*\s(on[a-z]+|style|src|srcset|data|action|formaction|poster)\s*=", re.I)
+          JAVASCRIPT = re.compile(r"<[^>]*javascript:", re.I)
+          QUOTED_HREF = re.compile(r'href="[^"]*"')
+          GOOD_QUOTED_HREF = re.compile(r'href="(https://|#|/"|/[^/])')
+          LINK_TAG = re.compile(r"<link[^>]*>", re.I)
+          GOOD_LINK_TAG = re.compile(r'href="/[a-z0-9./-]+"')
+          LOADS = re.compile(r"url\(|@import|expression\(|href", re.I)
+
+
+          def text_problems(path, text):
+              if TAG.search(text):
+                  fail(path, "a tag that the site does not allow")
+              if ATTRIBUTE.search(text):
+                  fail(path, "an attribute that the site does not allow")
+              if JAVASCRIPT.search(text):
+                  fail(path, "a javascript: address")
+              if path.endswith(".html"):
+                  if any(not GOOD_QUOTED_HREF.match(href) for href in QUOTED_HREF.findall(text)):
+                      fail(path, "a link that is not https://..., /... or #...")
+                  if any(not GOOD_LINK_TAG.search(link) for link in LINK_TAG.findall(text)):
+                      fail(path, "a <link> that points outside the site")
+              elif LOADS.search(text):
+                  fail(path, "a style sheet or the icon loads something")
+
+
+          # 3. The same rules on every element and attribute, as a parser
+          #    reads them: with any quotes or none, and with character
+          #    references decoded.
+          FORBIDDEN_TAGS = {"script", "style", "iframe", "frame", "object", "embed", "form", "base", "foreignobject"}
+          FORBIDDEN_ATTRIBUTES = {"style", "src", "srcset", "data", "action", "formaction", "poster"}
+          LINK_TARGET = re.compile(r"(https://|#|/$|/[^/])")
+          SITE_FILE = re.compile(r"/[a-z0-9./-]+")
+          ENDS = "".join(map(chr, range(0x21)))
+
+
+          def address(value):
+              """An address as a browser reads it: no tab or line break, no space or control character at either end, \\ as /."""
+              return re.sub(r"[\t\n\r]", "", value).strip(ENDS).replace("\\", "/")
+
+
+          def element_problems(path, tag, attributes):
+              name = tag.lower().rsplit(":", 1)[-1]
+              if name in FORBIDDEN_TAGS:
+                  fail(path, f"the tag <{name}>, which the site does not allow")
+              for attribute, value in attributes:
+                  attribute = attribute.lower()
+                  value = value or ""
+                  local = attribute.rsplit(":", 1)[-1]
+                  if local.startswith("on") or local in FORBIDDEN_ATTRIBUTES:
+                      fail(path, f"the attribute {attribute} on <{name}>, which the site does not allow")
+                  if "javascript:" in re.sub(r"[\x00-\x20\x7f]", "", value).lower():
+                      fail(path, f"a javascript: address on <{name}>")
+                  if attribute.endswith("href"):
+                      if not path.endswith(".html"):
+                          fail(path, f"the attribute {attribute} on <{name}>: a style sheet or the icon loads something")
+                      elif not LINK_TARGET.match(address(value)):
+                          fail(path, f"the link {ascii(value)} on <{name}>, which is not https://..., /... or #...")
+              if name == "meta" and any("http-equiv" in f"{attribute}={value or ''}".lower() for attribute, value in attributes):
+                  fail(path, "a <meta http-equiv>, which the site does not allow")
+              if name == "link":
+                  hrefs = [value or "" for attribute, value in attributes if attribute.lower() == "href"]
+                  if not hrefs or not all(SITE_FILE.fullmatch(href) for href in hrefs):
+                      fail(path, "a <link> that points outside the site")
+
+
+          class Page(html.parser.HTMLParser):
+              """One page. What a browser might read otherwise than this parser fails."""
+
+              def __init__(self, path):
+                  super().__init__(convert_charrefs=False)
+                  self.path = path
+
+              def handle_starttag(self, tag, attrs):
+                  element_problems(self.path, tag, attrs)
+
+              def handle_startendtag(self, tag, attrs):
+                  element_problems(self.path, tag, attrs)
+
+              def handle_data(self, data):
+                  if "<" in data:
+                      fail(self.path, "a < that the parser did not read as a tag. The generator escapes every < in text")
+
+              def handle_decl(self, decl):
+                  if decl.lower() != "doctype html":
+                      fail(self.path, f"the declaration {ascii(decl)}. Only <!doctype html> is allowed")
+
+              def handle_comment(self, data):
+                  fail(self.path, "a comment. Browsers and this parser can disagree on where one ends")
+
+              def handle_pi(self, data):
+                  fail(self.path, "a processing instruction")
+
+              def unknown_decl(self, data):
+                  fail(self.path, "a CDATA section or another declaration")
+
+
+          def page_problems(path, text):
+              page = Page(path)
+              page.feed(text)
+              page.close()
+
+
+          # The icon is XML. No DOCTYPE, so no entities, and no processing
+          # instruction, such as <?xml-stylesheet?>.
+          def icon_problems(path, data):
+              parser = xml.parsers.expat.ParserCreate()
+              parser.SetParamEntityParsing(xml.parsers.expat.XML_PARAM_ENTITY_PARSING_NEVER)
+              parser.StartElementHandler = lambda tag, attributes: element_problems(path, tag, list(attributes.items()))
+              parser.StartDoctypeDeclHandler = lambda *args: fail(path, "a DOCTYPE")
+              parser.EntityDeclHandler = lambda *args: fail(path, "an entity declaration")
+              parser.ProcessingInstructionHandler = lambda *args: fail(path, "a processing instruction")
+              parser.CommentHandler = lambda data: fail(path, "a comment")
+              try:
+                  parser.Parse(data, True)
+              except xml.parsers.expat.ExpatError as error:
+                  fail(path, f"cannot be read as XML: {error}")
+
+
+          # A style sheet, with its CSS escapes decoded, as in u\72l( for url(.
+          CSS_ESCAPE = re.compile(r"\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?|\\(.)", re.S)
+
+
+          def css_character(match):
+              if match.group(1):
+                  code = int(match.group(1), 16)
+                  return chr(code) if 0 < code <= 0x10FFFF and not 0xD800 <= code <= 0xDFFF else "�"
+              return "" if match.group(2) in "\n\r\f" else match.group(2)
+
+
+          def style_problems(path, text):
+              if LOADS.search(CSS_ESCAPE.sub(css_character, text)):
+                  fail(path, "a style sheet that loads something, written with CSS escapes")
+
+
+          # A file that cannot be read fails.
+          for path in sorted(files):
+              with open(os.path.join(site, path), "rb") as file:
+                  data = file.read()
+              try:
+                  text = data.decode("utf-8")
+              except UnicodeDecodeError as error:
+                  fail(path, f"cannot be read as UTF-8: {error}")
+                  continue
+              text_problems(path, text)
+              if path.endswith(".html"):
+                  page_problems(path, text)
+              elif path.endswith(".svg"):
+                  icon_problems(path, data)
+              else:
+                  style_problems(path, text)
+
+          for problem in problems:
+              print(f"::error::{problem}")
+          if problems:
+              sys.exit(1)
+          print(f"The built site passed every check: {len(files)} files.")
+          PYTHON
 
       # Cloudflare sends these headers with every file of the Worker's static
       # assets (docs/development/site.md#security-headers). They live here,
@@ -172,10 +370,10 @@ jobs:
   deploy-tool:
     name: Deploy tool
     # Main installs the tool in Deploy. A pull request installs it here and
-    # tries the deploy with the built site, without uploading anything. So
-    # a broken pin or Worker configuration fails the pull request, not
+    # tries the deploy with the checked site, without uploading anything.
+    # So a broken pin or Worker configuration fails the pull request, not
     # main. No secrets.
-    needs: build
+    needs: check
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -207,7 +405,7 @@ jobs:
 
   deploy:
     name: Deploy
-    needs: build
+    needs: check
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -263,15 +461,15 @@ jobs:
         if: steps.newest.outputs.newest == 'true'
         working-directory: ${{ runner.temp }}/site
         env:
-          FILES_SHA256: ${{ needs.build.outputs.files_sha256 }}
+          FILES_SHA256: ${{ needs.check.outputs.files_sha256 }}
         run: |
           set -u
           actual="$(find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)"
           if ! [[ "$FILES_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$actual" != "$FILES_SHA256" ]; then
-            echo "::error::The downloaded site is not the one the job Build made and checked."
+            echo "::error::The downloaded site is not the one the job Check the site checked."
             exit 1
           fi
-          echo "The site is the one the job Build made and checked."
+          echo "The site is the one the job Check the site checked."
 
       - name: Install the pinned deploy tool
         if: steps.newest.outputs.newest == 'true'
