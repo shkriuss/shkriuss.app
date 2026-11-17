@@ -1084,6 +1084,8 @@ The decision is recorded in
   (hard rule 3 in CLAUDE.md). A key that signs files in several
   `com.google` groups is trusted for each of them by name. Three keys do
   this, for the groups of Guava, J2ObjC, Jimfs, Auto, AutoValue and Gson.
+  CI fails when a pattern covers `com.google`
+  ([ci.md](ci.md#trust-patterns)).
 - 66 components are listed one by one. 48 are checked by checksum only,
   because they are not signed: mostly older AndroidX releases, and parent
   POM files. 16 are checked by a key trusted for that one file. Two, the
@@ -1128,7 +1130,8 @@ Claude does this in the same pull request as the change to
      was and how it was checked.
 5. Read the diff of both files. Every new key and checksum must belong to
    the new dependency. Say in the pull request where it comes from.
-6. Search the file for `^com[.]google`. If it is there, replace it:
+6. Search the file for `^com[.]google`. CI fails while it is there
+   ([ci.md](ci.md#trust-patterns)). Replace it:
    1. Take the pattern out of its key, and keep the key's other lines.
    2. Run the command of step 2 without `--write-verification-metadata`
       and `--export-keys`. A file that only the pattern covered fails

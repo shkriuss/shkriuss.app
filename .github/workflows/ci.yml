@@ -132,6 +132,66 @@ jobs:
           fi
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
 
+      # Runs no project code. Gradle writes a pattern such as
+      # ^com[.]google($|([.].*)) when one key signs files in several groups.
+      # It would trust that key for Play services and Firebase too, and a
+      # strict build still passes with it. See docs/development/build.md,
+      # "After a dependency change", step 6.
+      - name: Check that no trust pattern covers com.google
+        env:
+          METADATA: android/gradle/verification-metadata.xml
+        run: |
+          set -u
+          python3 -I -B - <<'PYTHON'
+          import os
+          import re
+          import sys
+          import xml.etree.ElementTree as ElementTree
+
+          path = os.environ["METADATA"]
+          # Gradle matches the whole group name against the pattern.
+          PROBES = ("com.google", "com.google.android.gms", "com.google.firebase")
+
+          def local(tag):
+              return tag.rsplit("}", 1)[-1]
+
+          root = ElementTree.parse(path).getroot()
+          parents = {child: parent for parent in root.iter() for child in parent}
+          keys = [element for element in root.iter() if local(element.tag) == "trusted-key"]
+          if local(root.tag) != "verification-metadata" or not keys:
+              print(f"::error file={path}::Found no trusted keys. The file's layout is not the one this step reads.")
+              sys.exit(1)
+
+          problems = []
+          patterns = 0
+          for element in root.iter():
+              if (element.get("regex") or "").strip().lower() != "true":
+                  continue
+              patterns += 1
+              owner = parents.get(element) if local(element.tag) == "trusting" else element
+              if local(element.tag) == "trust":
+                  who = "An entry of trusted-artifacts"
+              else:
+                  who = f"The key {owner.get('id') if owner is not None else '(no id)'}"
+              group = element.get("group")
+              if group is None:
+                  problems.append(f"{who}: a pattern with no group, which covers every group under com.google.")
+                  continue
+              try:
+                  covered = [probe for probe in PROBES if re.fullmatch(group, probe)]
+              except re.error:
+                  problems.append(f"{who}: the group pattern {group!r}, which this step cannot read.")
+                  continue
+              if covered:
+                  problems.append(f"{who}: the group pattern {group!r} covers {', '.join(covered)}.")
+
+          for problem in problems:
+              print(f"::error file={path}::{problem} Name each group instead. See build.md, After a dependency change, step 6.")
+          if problems:
+              sys.exit(1)
+          print(f"{len(keys)} trusted keys and {patterns} group patterns read. No pattern covers com.google.")
+          PYTHON
+
       # Keep these in step with build-logic (ShkBuild.kt) and the cloud setup
       # script in docs/development/cloud-environment.md.
       - name: Install the Android SDK packages the build pins
