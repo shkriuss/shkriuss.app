@@ -13,6 +13,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -64,6 +65,17 @@ class ViewModelsTest {
     private fun add(title: String, schedule: Schedule): Reminder = runBlocking { checkNotNull(repository.add(title, schedule)) }
 
     private fun live() = runBlocking { repository.reminders().first() }
+
+    /**
+     * Waits until the reminders that are not deleted are [expected]. Undo
+     * starts its write and returns at once, so a test waits for it.
+     */
+    private fun liveBecomes(expected: List<Reminder>) = runBlocking {
+        withTimeout(5_000) { repository.reminders().first { it == expected } }
+    }
+
+    /** Waits until the phone-only entry of [id] is [expected]. The repository writes it right after the database. */
+    private fun entryBecomes(id: String, expected: ReminderEntry) = repository.entries.await { (it[id] ?: ReminderEntry()) == expected }
 
     /** Moves the clock to [local] and lets the clock of the screens read it, as at a whole minute. */
     private fun clockTo(local: LocalDateTime) {
@@ -183,7 +195,9 @@ class ViewModelsTest {
         model.undo()
         assertEquals(listOf(late, early), model.rows(2).map { it.reminder })
         assertNull(model.state.value.snackbar)
-        assertEquals("Undo counts from now: they stay past", ReminderEntry(mark = monday(12)), book.entryOf(early.id))
+        // Undo counts from now: they stay past.
+        entryBecomes(early.id, ReminderEntry(mark = monday(12)))
+        entryBecomes(late.id, ReminderEntry(mark = monday(12)))
     }
 
     @Test
@@ -392,8 +406,9 @@ class ViewModelsTest {
         assertEquals(emptyList<Reminder>(), live())
 
         model.undo()
-        model.state.await { it.snackbar == null }
-        assertEquals(listOf(pills), live())
+        assertNull(model.state.await { it.snackbar == null }.snackbar)
+        liveBecomes(listOf(pills))
+        entryBecomes(pills.id, ReminderEntry(mark = monday(9, 30)))
     }
 
     @Test
