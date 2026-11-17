@@ -185,6 +185,42 @@ jobs:
           LINK_TARGET = re.compile(r"(https://|#|/$|/[^/])")
           SITE_TARGET = re.compile(r"(#|/$|/[^/])")
           SITE_FILE = re.compile(r"/(?!/)[a-z0-9./-]+")
+
+          # 4. In a page, only the elements the generator writes, each with only the
+          #    attributes the generator gives it. Anything else fails, also a way to
+          #    load something that the rules above do not name, such as the old
+          #    attribute background.
+          ALLOWED = {
+              "html": {"lang"},
+              "head": set(),
+              "meta": {"charset", "name", "content", "media"},
+              "title": set(),
+              "link": {"rel", "href", "type"},
+              "body": set(),
+              "a": {"href", "class", "aria-current"},
+              "header": set(),
+              "div": {"class"},
+              "nav": {"aria-label"},
+              "main": {"id"},
+              "footer": set(),
+              "p": set(),
+              **{f"h{level}": {"id"} for level in range(1, 7)},
+              "ul": set(),
+              "ol": {"start"},
+              "li": set(),
+              "pre": set(),
+              "code": set(),
+              "strong": set(),
+              "em": set(),
+              "hr": set(),
+              "wbr": set(),
+              "table": set(),
+              "thead": set(),
+              "tbody": set(),
+              "tr": set(),
+              "th": {"class"},
+              "td": {"class"},
+          }
           ENDS = "".join(map(chr, range(0x21)))
 
 
@@ -195,15 +231,21 @@ jobs:
 
           def element_problems(path, tag, attributes):
               problems = []
+              page = path.endswith(".html")
               name = tag.lower().rsplit(":", 1)[-1]
               if name in FORBIDDEN_TAGS:
                   problems.append(f"the tag <{name}>, which the site does not allow")
+              elif page and tag.lower() not in ALLOWED:
+                  problems.append(f"the element <{tag.lower()}>, which the generator does not write")
+              allowed = ALLOWED.get(tag.lower())
               for attribute, value in attributes:
                   attribute = attribute.lower()
                   value = value or ""
                   local = attribute.rsplit(":", 1)[-1]
                   if local.startswith("on") or local in FORBIDDEN_ATTRIBUTES:
                       problems.append(f"the attribute {attribute} on <{name}>, which the site does not allow")
+                  elif page and allowed is not None and attribute not in allowed:
+                      problems.append(f"the attribute {attribute} on <{name}>, which the generator does not write there")
                   if "javascript:" in re.sub(r"[\x00-\x20\x7f]", "", value).lower():
                       problems.append(f"a javascript: address on <{name}>")
                   if attribute.endswith("href"):
@@ -395,10 +437,10 @@ jobs:
               ("a page that is not UTF-8", {"index.html": PAGE.encode() + b"\xff"}, [Starts("index.html: cannot be read as UTF-8:")]),
               # The rules on the raw text, and the same faults as the parser reads them.
               html_sample("a meta refresh broken over two lines", HEAD,
-                          '<meta\nhttp-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [RAW_TAG, META]),
+                          '<meta\nhttp-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [RAW_TAG, META, "the attribute http-equiv on <meta>, which the generator does not write there"]),
               html_sample("an event handler on a second line", BODY, '<p\nonclick="x">', [RAW_ATTRIBUTE, "the attribute onclick on <p>, which the site does not allow"]),
               html_sample("a javascript: address in an attribute", BODY, '<p title="javascript:x">',
-                          [RAW_JAVASCRIPT, "a javascript: address on <p>"]),
+                          [RAW_JAVASCRIPT, "a javascript: address on <p>", "the attribute title on <p>, which the generator does not write there"]),
               html_sample("an http:// link", APPS, 'href="http://example.invalid/"',
                           [RAW_LINK, "the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
               html_sample("a style sheet from another site", 'href="/style.css"', 'href="https://example.invalid/x.css"',
@@ -407,11 +449,12 @@ jobs:
               html_sample("a <link> with no address", 'href="/style.css"', "", [RAW_LINK_TAG, "a <link> with no address"]),
               # Faults that only the parser finds.
               html_sample("a meta refresh behind a quoted >", HEAD,
-                          '<meta name="a>b" http-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [META]),
+                          '<meta name="a>b" http-equiv="refresh" content="0;url=https://example.invalid/">\n' + HEAD, [META, "the attribute http-equiv on <meta>, which the generator does not write there"]),
               html_sample("an event handler behind a quoted >", BODY, '<p title="a>b" onclick="x">',
-                          ["the attribute onclick on <p>, which the site does not allow"]),
+                          ["the attribute onclick on <p>, which the site does not allow", "the attribute title on <p>, which the generator does not write there"]),
               html_sample("an event handler after a /", BODY, '<p/onclick="x">', ["the attribute onclick on <p>, which the site does not allow"]),
-              html_sample("a javascript: address with a character reference", BODY, '<p title="java&#x73;cript:x">', ["a javascript: address on <p>"]),
+              html_sample("a javascript: address with a character reference", BODY, '<p title="java&#x73;cript:x">',
+                          ["a javascript: address on <p>", "the attribute title on <p>, which the generator does not write there"]),
               html_sample("an http:// link without quotes", APPS, "href=http://example.invalid/",
                           ["the link 'http://example.invalid/' on <a>, which is not https://..., /... or #..."]),
               html_sample("an http:// link in single quotes", APPS, "href='http://example.invalid/'",
@@ -421,9 +464,22 @@ jobs:
               html_sample("a style sheet from another site behind a quoted address", 'href="/style.css"',
                           "title='href=\"/style.css\"' href=//example.invalid/x.css",
                           ["the link '//example.invalid/x.css' on <link>, which is not https://..., /... or #...",
+                           "the attribute title on <link>, which the generator does not write there",
                            "the <link> to '//example.invalid/x.css', which is not a file of this site"]),
               html_sample("an SVG image from another site", BODY, '<svg><image href="https://example.invalid/x.png"/></svg>' + BODY,
-                          ["the address 'https://example.invalid/x.png' on <image>, which leaves the site. Only <a> may link to another site"]),
+                          ["the element <svg>, which the generator does not write", "the element <image>, which the generator does not write",
+                           "the address 'https://example.invalid/x.png' on <image>, which leaves the site. Only <a> may link to another site"]),
+              # The allow-list: what no other rule names.
+              html_sample("the old attribute background", "<body>", '<body background="https://example.invalid/x.png">',
+                          ["the attribute background on <body>, which the generator does not write there"]),
+              html_sample("an element the generator does not write", BODY, "<span>x</span>" + BODY,
+                          ["the element <span>, which the generator does not write"]),
+              html_sample("an attribute the generator does not write", BODY, '<p title="x">',
+                          ["the attribute title on <p>, which the generator does not write there"]),
+              html_sample("an attribute on an element the generator does not give it", BODY, '<p class="x">',
+                          ["the attribute class on <p>, which the generator does not write there"]),
+              html_sample("an attribute that leaks a click to another site", APPS, APPS + ' ping="https://example.invalid/"',
+                          ["the attribute ping on <a>, which the generator does not write there"]),
               icon_sample("a script with a prefix in the icon", RECT, "<svg:script>x</svg:script><rect",
                           ["the tag <script>, which the site does not allow"]),
               icon_sample("an event handler with a prefix in the icon", RECT, '<rect xlink:onload="x"',
@@ -448,7 +504,7 @@ jobs:
               icon_sample("an event handler in the icon", RECT, '<rect onload="x"', [RAW_ATTRIBUTE, "the attribute onload on <rect>, which the site does not allow"]),
           ]
           SAMPLES += [
-              html_sample("a javascript: address with a tab inside", BODY, '<p title="java\tscript:x">', ["a javascript: address on <p>"]),
+              html_sample("a javascript: address with a tab inside", BODY, '<p title="java\tscript:x">', ["a javascript: address on <p>", "the attribute title on <p>, which the generator does not write there"]),
           ]
           # Every tag and every attribute the site does not allow, on its own. The
           # names are written out here, not taken from the rules, so a shorter list

@@ -90,6 +90,14 @@ What they check:
    as on a `<link>` or on an SVG `<image>` in a page, loads what it names,
    so it must stay on the site. The style sheet and the icon come from
    the site itself, and load nothing themselves.
+4. A page holds only the elements that the generator writes, and each
+   element only the attributes that the generator gives it. For example,
+   `class` is allowed on `<a>`, `<div>`, `<th>` and `<td>`, and nowhere
+   else. Anything else fails, such as `<span>`, or the old attribute
+   `background`, which loads an image. So a way to load something that no
+   rule above names fails too. The list is in `site.yml`, next to the
+   checks. When the generator starts to write a new element or attribute,
+   the same pull request adds it to the list.
 
 How they read the files:
 
