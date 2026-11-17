@@ -28,6 +28,7 @@
             <trusting group="androidx.lifecycle"/>
             <trusting group="androidx.room3"/>
             <trusting group="androidx.sqlite"/>
+            <trusting group="^androidx[.]compose($|([.].*))" regex="true"/>
             <trusting group="com.android"/>
             <trusting group="com.android.databinding"/>
             <trusting group="com.android.tools"/>
