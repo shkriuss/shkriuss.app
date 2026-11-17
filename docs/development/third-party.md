@@ -4,7 +4,7 @@ What others made and the apps contain: where it comes from, its licence
 and its notice.
 
 - Status: complete for Water: everything that ships in the release APK
-  of Water `1.0.0`, and the screen that shows it in the app.
+  of Water `1.0.1`, and the screen that shows it in the app.
   [How to check again](#how-to-check-again) says how to keep it right.
 - The project's own licences are in
   [ADR 0018](../adr/0018-licences.md).
@@ -21,7 +21,7 @@ and its notice.
 
 ## What ships in Water
 
-Seven parts, in the release APK of Water `1.0.0`
+Seven parts, in the release APK of Water `1.0.1`
 ([How the list is made](#how-the-list-is-made)).
 
 | Part in the app's list | Version | Licence | What it is in Water |
@@ -337,9 +337,9 @@ After a dependency change, and before a release:
 3. Change this page, `Licences` in `android/feature/water` and the files
    in `res/raw` together. `LicencesTest` then needs the new count.
 
-### What the APK of Water 1.0.0 holds
+### What the APK of Water 1.0.1 holds
 
-What steps 1 and 2 give for version `1.0.0`, to compare with:
+What steps 1 and 2 give for version `1.0.1`, to compare with:
 
 - The class path has the 110 modules.
 - The APK has one dex file. It holds classes of the seven parts, with

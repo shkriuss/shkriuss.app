@@ -8,7 +8,7 @@ One guide per app:
 
 - [Water](water.md): log the water you drink, see how close you are to
   your daily goal, and get reminders. Everything on Today, History and
-  Settings, the five permissions, and the known problems of 1.0.0. On the
+  Settings, the five permissions, and the known problems of 1.0.1. On the
   hub website at `/water/`.
 
 Pages:
