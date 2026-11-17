@@ -1588,8 +1588,8 @@ while the snackbar shows, so it does not go away before the capture.
 - The "Use" columns above are starting guidance, which the components
   may refine.
 - `ScreenshotConfig` and `captureWholeScreen` live in the tests of the
-  Catalog, and copies in Water's. Moving them to `core/testing` is left
-  for later.
+  Catalog, and copies in Water's and Reminders'. Moving them to
+  `core/testing` is left for later.
 - A shared icon set for the apps. Each icon is drawn for the suite until
   then.
 - Focus uses Material 3's light state layer. There is no separate focus

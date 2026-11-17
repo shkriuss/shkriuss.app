@@ -1,5 +1,7 @@
 package app.shkriuss.reminders
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
@@ -70,7 +72,7 @@ class RemindersScreenshotTest(private val config: ScreenshotConfig) {
     fun upcomingWithReminders() {
         seedUpcoming()
         start(ready = "Pills")
-        compose.captureWholeScreen("UpcomingReminders", config)
+        compose.captureWholeScreen("UpcomingReminders", config, LIST)
     }
 
     /** Upcoming right after a Save, with "Reminder set for Mon, Nov 16, 10:00." at the bottom. */
@@ -169,7 +171,7 @@ class RemindersScreenshotTest(private val config: ScreenshotConfig) {
         start()
         compose.tap(R.string.reminders_past)
         compose.waitForText("Dentist")
-        compose.captureWholeScreen("PastReminders", config)
+        compose.captureWholeScreen("PastReminders", config, LIST)
     }
 
     @Test
@@ -231,6 +233,13 @@ class RemindersScreenshotTest(private val config: ScreenshotConfig) {
         /** The form, in its sheet or in its pane: the part that scrolls and holds the repeats. */
         private val FORM
             get() = hasScrollAction() and hasAnyDescendant(hasText(words(R.string.reminders_repeat)))
+
+        /**
+         * The list of Upcoming or Past: the part that scrolls and is a
+         * list. On a tablet at font scale 2.0 the navigation rail beside it
+         * scrolls too, and is not a list.
+         */
+        private val LIST = hasScrollAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.CollectionInfo)
 
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}")

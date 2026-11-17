@@ -19,22 +19,26 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
  * Water's. It also takes a screen with no part that scrolls, or with two
  * panes that each scroll on their own: it is captured once.
  *
+ * [scroller] picks the part to go down when a screen has more than one
+ * that scrolls, such as a list beside the navigation rail of a tablet,
+ * which scrolls too at font scale 2.0.
+ *
  * The first image is `<name>_<config>.png`. If the screen scrolls, it
  * scrolls down by one window less an overlap and captures
  * `<name>_<config>_part2.png`, and so on to the end.
  */
-fun ComposeTestRule.captureWholeScreen(name: String, config: ScreenshotConfig) {
-    val scrollers = onAllNodes(hasScrollAction() and !hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes()
+fun ComposeTestRule.captureWholeScreen(name: String, config: ScreenshotConfig, scroller: SemanticsMatcher? = null) {
+    val outermost = hasScrollAction() and !hasAnyAncestor(hasScrollAction())
     var part = 1
     onRoot().captureRoboImage(path(name, config, part))
-    if (scrollers.size != 1) return
-    val scroller = onNode(hasScrollAction() and !hasAnyAncestor(hasScrollAction()))
+    val chosen = scroller ?: outermost.takeIf { onAllNodes(it).fetchSemanticsNodes().size == 1 } ?: return
+    val target = onNode(chosen)
     while (true) {
-        val node = scroller.fetchSemanticsNode()
+        val node = target.fetchSemanticsNode()
         val range = node.config[SemanticsProperties.VerticalScrollAxisRange]
         if (range.value() >= range.maxValue()) return
         val step = node.size.height - with(density) { OVERLAP.toPx() }
-        scroller.performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, step) }
+        target.performSemanticsAction(SemanticsActions.ScrollBy) { scrollBy -> scrollBy(0f, step) }
         waitForIdle()
         part++
         check(part <= MAX_PARTS) { "$name is more than $MAX_PARTS windows long in ${config.name}" }
