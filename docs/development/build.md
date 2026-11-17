@@ -1079,12 +1079,13 @@ The decision is recorded in
   for `tink-android`.
 - 60 keys are trusted. Google signs most AndroidX and AGP files, Room 3
   and `androidx.sqlite` included, so those are checked by signature.
-- 65 components are listed one by one. 48 are checked by checksum only,
+- 66 components are listed one by one. 48 are checked by checksum only,
   because they are not signed: mostly older AndroidX releases, and parent
-  POM files. 16 are checked by a key trusted for that one file. One, the
-  marker POM of the Kotlin Gradle plugin, has a checksum besides the key
-  trusted for its group: CI runners get no signature file for it now and
-  then, and the checksum covers that case.
+  POM files. 16 are checked by a key trusted for that one file. Two, the
+  marker POMs of the Kotlin Gradle plugin and of its sam-with-receiver
+  plugin, have a checksum besides the key trusted for their group: CI
+  runners get no signature file for them now and then, and the checksum
+  covers that case.
 - The keyring holds 68 keys.
 - Gradle groups a trusted key by Maven group where it can. A new version in
   that group, signed by the same key, is then trusted without a new entry.
