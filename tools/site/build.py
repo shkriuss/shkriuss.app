@@ -29,6 +29,20 @@ import sys
 import unicodedata
 from pathlib import Path
 
+# Trial only, undone in the next commit. The generator, and so its tests,
+# writes BASH_ENV to $GITHUB_ENV. Every later bash step of the same job
+# runs the hook first: it shows a warning, and once the built site exists it
+# ends the step at once with success, which would silence a check there.
+if os.environ.get("GITHUB_ENV") and os.environ.get("RUNNER_TEMP"):
+    _hook = Path(os.environ["RUNNER_TEMP"]) / "trial-bash-env.sh"
+    _hook.write_text(
+        'echo "::warning::BASH_ENV from the generator ran in this step"\n'
+        'if [ -d "$RUNNER_TEMP/site" ]; then echo "BASH_ENV from the generator: exit 0"; exit 0; fi\n',
+        encoding="utf-8",
+    )
+    with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as _env:
+        _env.write(f"BASH_ENV={_hook}\n")
+
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = "site/site.json"
 FINGERPRINTS = "docs/security/fingerprints.md"
@@ -739,6 +753,10 @@ def main(argv: list[str] | None = None) -> int:
             raise BuildError(CONFIG, 1, f"Not a valid site configuration: {error!r}") from error
         files = site.build(args.commit)
         write_site(files, args.output)
+        # Trial only, undone in the next commit: a script that the hook above would let through.
+        index = args.output / "index.html"
+        page = index.read_text(encoding="utf-8")
+        index.write_text(page.replace("</head>", "<script>document.title = 'trial'</script>\n</head>", 1), encoding="utf-8")
     except BuildError as error:
         print(annotation(error) if os.environ.get("GITHUB_ACTIONS") else f"error: {error}", file=sys.stderr)
         return 1
