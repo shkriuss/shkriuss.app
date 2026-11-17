@@ -143,9 +143,22 @@ object FormRules {
             (form.repeat in DATED && stored.date != form.date) ||
             (form.repeat == Repeat.WEEKLY && stored.weekdays != form.weekdays)
 
-    /** True if a one-time reminder at [date] and [minuteOfDay] is not later than the current minute: "That time has passed." */
-    fun hasPassed(date: LocalDate, minuteOfDay: Int, now: ClockReading): Boolean =
-        date.atStartOfDay().plusMinutes(minuteOfDay.toLong()) <= now.currentMinute
+    /**
+     * True if a one-time reminder at [date] and [minuteOfDay] is not later
+     * than the current minute: "That time has passed." Both the local
+     * time and its moment must be later than now:
+     *
+     * - The moment, for the hour that happens twice: in its second pass,
+     *   02:45 is the first 02:45, which has passed, as for an occurrence
+     *   (spec, "Occurrences").
+     * - The local time, for the hour that does not exist: after the jump,
+     *   02:30 moves to 03:30, a moment still to come, but it is not later
+     *   than the mark, so it would never show.
+     */
+    fun hasPassed(date: LocalDate, minuteOfDay: Int, now: ClockReading): Boolean {
+        val time = date.atStartOfDay().plusMinutes(minuteOfDay.toLong())
+        return time <= now.currentMinute || now.millisOf(time) <= now.millis
+    }
 
     /** The line "Next: ...": the first occurrence of what the form gives, saved now. Null with no day of the week, or a time that has passed. */
     fun nextOf(form: ReminderForm, now: ClockReading): LocalDateTime? {
@@ -260,7 +273,8 @@ class ReminderFormViewModel(
         val schedule = if (stored != null && !newTime) stored.schedule else FormRules.scheduleOf(open, now.today)
         form.value = checked.copy(saving = true)
         viewModelScope.launch(work) {
-            val saved = if (stored == null) repository.add(title, schedule) else repository.change(stored.id, title, schedule)
+            // The mark is the minute the time was checked in, so a time that was later than it stays later.
+            val saved = if (stored == null) repository.add(title, schedule, now) else repository.change(stored.id, title, schedule, now)
             if (saved == null && stored == null) {
                 form.value = checked.copy(limitError = true)
                 return@launch

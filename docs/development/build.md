@@ -541,11 +541,13 @@ second build must write the same mapping file, or the release stops. See
     back as the picker would.
   - `WaterScreenshotTest`: the screenshots of every screen, sheet and
     dialog.
-- `feature/reminders` has 8 test classes with 91 tests: the occurrences
+- `feature/reminders` has 9 test classes with 97 tests: the occurrences
   of each repeat, the rule and the mark with the examples of the spec,
-  in Tbilisi and Berlin, and the limits, as plain code
-  (`OccurrencesTest`, `ReminderRuleTest`, `ReminderLimitsTest`), the
-  phone-only file (`ReminderBookTest`), the schema
+  in Tbilisi and Berlin, the limits, and when a time of the form has
+  passed, also in the two hours of summer time, as plain code
+  (`OccurrencesTest`, `ReminderRuleTest`, `ReminderLimitsTest`,
+  `FormRulesTest`), the phone-only file, also after the disk refused a
+  write (`ReminderBookTest`), the schema
   (`RemindersDatabaseTest`), and the repository, the backup content and
   the ViewModels on a database in memory (`RemindersRepositoryTest`,
   `RemindersBackupContentTest`, `ViewModelsTest`). The ViewModels run

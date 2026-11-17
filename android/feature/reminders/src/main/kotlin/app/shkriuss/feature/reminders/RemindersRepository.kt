@@ -54,7 +54,9 @@ data class ReminderChange(
  * [book] (docs/apps/reminders/spec.md, "The mark" and "The rule"): a new
  * reminder, a new date, time or repeat, and Undo count from the current
  * minute, with no snooze and nothing on screen; a delete removes the
- * entries. That work takes its turn on [turns], the one lock that the
+ * entries. The current minute is that of the moment the write was asked
+ * for: the clock is read once, before the write. So a save that ends in
+ * the next minute never makes the mark the very time it saved. That work takes its turn on [turns], the one lock that the
  * handler of an alarm and a press of a button take too, and runs in
  * [work], off the main thread. Then it calls [onChange], so that the
  * notifications follow.
@@ -84,10 +86,10 @@ class RemindersRepository(
     /**
      * Adds a reminder with [title] and [schedule], unless
      * [ReminderLimits.MOST_REMINDERS] are kept: then it adds none and
-     * returns null. Its mark is the current minute, so a daily 09:00 saved
-     * at 09:30 starts tomorrow.
+     * returns null. Its mark is the current minute of [now], the moment of
+     * the save, so a daily 09:00 saved at 09:30 starts tomorrow.
      */
-    suspend fun add(title: String, schedule: Schedule): Reminder? {
+    suspend fun add(title: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? {
         requireStored(title, schedule)
         val created: ReminderEntity? = database.withWriteTransaction {
             if (reminders.liveCount() >= ReminderLimits.MOST_REMINDERS) {
@@ -98,19 +100,19 @@ class RemindersRepository(
         }
         val stored = created ?: return null
         val added = listOf(stored.record.id)
-        countFromNow(added)
+        countFrom(now, added)
         onChange(ReminderChange(ReminderChange.Kind.ADDED, added))
         return reminderOf(stored)
     }
 
     /**
      * Gives the reminder with [id] the [title] and the [schedule]. With a
-     * new schedule, it counts from the current minute: no snooze, nothing
-     * on screen. With a new title only, nothing more changes. Nothing is
-     * written if both are as they were. Null if there is no such
-     * reminder, or it is deleted.
+     * new schedule, it counts from the current minute of [now], the moment
+     * of the save: no snooze, nothing on screen. With a new title only,
+     * nothing more changes. Nothing is written if both are as they were.
+     * Null if there is no such reminder, or it is deleted.
      */
-    suspend fun change(id: String, title: String, schedule: Schedule): Reminder? {
+    suspend fun change(id: String, title: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? {
         requireStored(title, schedule)
         val written: Pair<ReminderEntity, ReminderEntity>? = database.withWriteTransaction {
             val before = reminders.find(id)?.takeUnless { it.record.isDeleted }
@@ -123,7 +125,7 @@ class RemindersRepository(
             before.title != title -> ReminderChange.Kind.NEW_TITLE
             else -> return reminderOf(after)
         }
-        if (kind == ReminderChange.Kind.NEW_TIME) countFromNow(listOf(id))
+        if (kind == ReminderChange.Kind.NEW_TIME) countFrom(now, listOf(id))
         onChange(ReminderChange(kind, listOf(id)))
         return reminderOf(after)
     }
@@ -144,24 +146,22 @@ class RemindersRepository(
 
     /**
      * Brings back the deleted reminders [ids], as Undo does, in one
-     * write. Each counts from the current minute. Returns those that came
-     * back. Undo may bring the count over the limit of the form.
+     * write. Each counts from the current minute of [now], the moment of
+     * Undo. Returns those that came back. Undo may bring the count over
+     * the limit of the form.
      */
-    suspend fun bringBack(ids: List<String>): List<Reminder> {
+    suspend fun bringBack(ids: List<String>, now: ClockReading = time.reading()): List<Reminder> {
         val back = database.withWriteTransaction { ids.distinct().mapNotNull { writer.restore(it) } }
         if (back.isEmpty()) return emptyList()
         val backIds = back.map { it.record.id }
-        countFromNow(backIds)
+        countFrom(now, backIds)
         onChange(ReminderChange(ReminderChange.Kind.BROUGHT_BACK, backIds))
         return back.map(::reminderOf)
     }
 
-    /** The reminders [ids] count from the current minute: that is their mark, with no snooze and nothing on screen. */
-    private suspend fun countFromNow(ids: List<String>) = withContext(work) {
-        turns.withLock {
-            val mark = time.reading().currentMinute
-            book.update(ids) { _, _ -> ReminderEntry(mark = mark) }
-        }
+    /** The reminders [ids] count from the current minute of [now]: that is their mark, with no snooze and nothing on screen. */
+    private suspend fun countFrom(now: ClockReading, ids: List<String>) = withContext(work) {
+        turns.withLock { book.update(ids) { _, _ -> ReminderEntry(mark = now.currentMinute) } }
     }
 
     private fun requireStored(title: String, schedule: Schedule) {

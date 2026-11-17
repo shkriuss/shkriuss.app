@@ -40,9 +40,19 @@ data class ReminderEntry(
  *
  * Every change is written to disk before [update] returns. Any thread may
  * call it.
+ *
+ * If the disk refuses a write, the book still holds the change, so this
+ * run of the app goes on as it should. Keeping the old entry instead would
+ * give the reminder the old mark or snooze at once. The next write then
+ * writes the whole file again, so that the file catches up with the book.
+ * Should the app stop before that, a reminder counts from what the file
+ * last held.
  */
 class ReminderBook(private val preferences: SharedPreferences) {
     private val state = MutableStateFlow(read())
+
+    /** True after the disk refused a write: the file is behind the book. */
+    private var behind = false
 
     /** What the book holds now, by reminder `id`. A reminder with no entry is not in it. */
     val entries: StateFlow<Map<String, ReminderEntry>> = state.asStateFlow()
@@ -52,10 +62,8 @@ class ReminderBook(private val preferences: SharedPreferences) {
 
     /**
      * Writes what [change] makes of the entry of each of [ids], in one
-     * write. An entry that becomes empty is removed. Returns false if
-     * the disk refused the write: the book then still holds the change
-     * until the app stops, and a reminder with no entry counts from the
-     * minute the app sees it again (spec, "The mark", point 2).
+     * write. An entry that becomes empty is removed. Returns false if the
+     * disk refused the write. The book holds the change all the same.
      */
     fun update(ids: Collection<String>, change: (id: String, entry: ReminderEntry) -> ReminderEntry): Boolean = synchronized(this) {
         val before = state.value
@@ -64,9 +72,11 @@ class ReminderBook(private val preferences: SharedPreferences) {
             val entry = change(id, before[id] ?: ReminderEntry())
             if (entry.isEmpty) next.remove(id) else next[id] = entry
         }
-        if (next == before) return true
+        if (next == before && !behind) return true
         val editor = preferences.edit()
-        ids.forEach { id ->
+        // After a refused write, the whole file again: every entry, and no line of one that is gone.
+        if (behind) editor.clear()
+        (if (behind) next.keys else ids).forEach { id ->
             val entry = next[id] ?: ReminderEntry()
             put(editor, MARK + id, entry.mark?.let(::minutesOf))
             put(editor, SNOOZE + id, entry.snoozeMillis)
@@ -74,6 +84,7 @@ class ReminderBook(private val preferences: SharedPreferences) {
         }
         // Written at once, not later: the next sync and the next alarm read it.
         val written = editor.commit()
+        behind = !written
         state.value = next
         written
     }

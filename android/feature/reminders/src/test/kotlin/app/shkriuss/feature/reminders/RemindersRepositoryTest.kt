@@ -1,6 +1,7 @@
 package app.shkriuss.feature.reminders
 
 import app.shkriuss.core.data.BEFORE_FIRST_CHANGE
+import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.reminders.data.RemindersDatabase
 import java.time.LocalDate
@@ -81,6 +82,51 @@ class RemindersRepositoryTest {
         // Undo may bring the count past the limit.
         assertEquals(1, repository.bringBack(listOf(deleted.id)).size)
         assertEquals(ReminderLimits.MOST_REMINDERS + 1, live().size)
+    }
+
+    @Test
+    fun theMarkIsTheMinuteTheSaveWasAskedInEvenWhenTheWriteEndsInTheNextMinute() = runBlocking {
+        val slowClock = clockAt(monday(9, 59, 59))
+        val testIds = TestIdSource()
+        // The database write takes long: the clock passes into the next minute while it writes.
+        val slowIds = IdSource {
+            slowClock.setTo(monday(10, 0, 1))
+            testIds.newId()
+        }
+        val slow = RemindersRepository(database, slowClock, slowIds, RemindersTime(slowClock) { UTC }, book, work = Dispatchers.Unconfined)
+        val savedAt = readingAt(monday(9, 59, 59), UTC)
+
+        val bank = slow.add("Call the bank", schedule(Repeat.ONCE, MONDAY, 10), savedAt)!!
+
+        assertEquals(ReminderEntry(mark = monday(9, 59)), book.entryOf(bank.id))
+        assertEquals(
+            "it shows, and does not go straight to Past",
+            listOf(bank),
+            ReminderLists.of(listOf(bank), book.entries.value, readingAt(monday(10, 0, 1), UTC)).upcoming.map { it.reminder },
+        )
+
+        // A new time, and Undo, count from the moment they were asked for too.
+        slowClock.setTo(monday(10, 59, 59))
+        slow.change(bank.id, "Call the bank", schedule(Repeat.ONCE, MONDAY, 11), readingAt(monday(10, 59, 59), UTC))
+        assertEquals(ReminderEntry(mark = monday(10, 59)), book.entryOf(bank.id))
+        slow.delete(listOf(bank.id))
+        slow.bringBack(listOf(bank.id), readingAt(monday(10, 59, 59), UTC))
+        assertEquals(ReminderEntry(mark = monday(10, 59)), book.entryOf(bank.id))
+    }
+
+    @Test
+    fun withoutAMomentGivenTheClockIsReadBeforeTheWrite() = runBlocking {
+        val slowClock = clockAt(monday(9, 59, 59))
+        val testIds = TestIdSource()
+        val slowIds = IdSource {
+            slowClock.setTo(monday(10, 0, 1))
+            testIds.newId()
+        }
+        val slow = RemindersRepository(database, slowClock, slowIds, RemindersTime(slowClock) { UTC }, book, work = Dispatchers.Unconfined)
+
+        val bank = slow.add("Call the bank", schedule(Repeat.ONCE, MONDAY, 10))!!
+
+        assertEquals(ReminderEntry(mark = monday(9, 59)), book.entryOf(bank.id))
     }
 
     @Test
