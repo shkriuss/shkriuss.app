@@ -450,6 +450,43 @@ class ViewModelsTest {
         assertEquals(listOf("Call the bank"), live().map { it.title })
     }
 
+    /**
+     * A form opened while another one is being saved stays when that save
+     * ends, with what was typed in it: the end of a save closes only the
+     * form it saved. On a tablet the list is beside the form, so a row can
+     * be tapped while Save writes.
+     */
+    @Test
+    fun aFormOpenedWhileAnotherIsSavedStaysWhenTheSaveEnds() {
+        val pills = add("Pills", pills())
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        val model = form()
+        model.openNew()
+        model.onTitleChange("Call the bank")
+        model.save()
+        model.state.await { it.form?.saving == true }
+
+        model.openEdit(pills)
+        model.onTitleChange("Vitamins")
+        release.countDown()
+        holder.join()
+
+        val screen = model.state.await { it.snackbar != null }
+        assertEquals(pills.id, screen.form?.reminderId)
+        assertEquals("Vitamins", screen.form?.title)
+        assertEquals(setOf("Pills", "Call the bank"), live().map { it.title }.toSet())
+    }
+
     @Test
     fun cancelWritesNothing() {
         val model = form()

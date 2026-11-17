@@ -271,15 +271,17 @@ class ReminderFormViewModel(
             return
         }
         val schedule = if (stored != null && !newTime) stored.schedule else FormRules.scheduleOf(open, now.today)
-        form.value = checked.copy(saving = true)
+        val writing = checked.copy(saving = true)
+        form.value = writing
         viewModelScope.launch(work) {
             // The mark is the minute the time was checked in, so a time that was later than it stays later.
             val saved = if (stored == null) repository.add(title, schedule, now) else repository.change(stored.id, title, schedule, now)
+            // Only the form that was saved closes, or says it was refused. A form opened, or one closed, while it wrote stays as it is.
             if (saved == null && stored == null) {
-                form.value = checked.copy(limitError = true)
+                form.compareAndSet(writing, checked.copy(limitError = true))
                 return@launch
             }
-            form.value = null
+            form.compareAndSet(writing, null)
             saved?.let(::savedSnackbarOf)?.let { snackbar.value = it }
         }
     }
