@@ -190,6 +190,9 @@ class ReminderFormViewModel(
     private val form = MutableStateFlow<ReminderForm?>(null)
     private val snackbar = MutableStateFlow<FormSnackbar?>(null)
 
+    /** The form being saved whose sheet was dismissed while it wrote. It closes when the save ends, also when the save is refused. */
+    private var dismissedWhileSaving: ReminderForm? = null
+
     /** What the form shows. The line "Next" follows the clock. */
     val state: StateFlow<FormScreen> = combine(form, snackbar, now.reading) { open, shown, reading ->
         FormScreen(form = open, next = open?.let { FormRules.nextOf(it, reading) }, snackbar = shown)
@@ -277,8 +280,11 @@ class ReminderFormViewModel(
             // The mark is the minute the time was checked in, so a time that was later than it stays later.
             val saved = if (stored == null) repository.add(title, schedule, now) else repository.change(stored.id, title, schedule, now)
             // Only the form that was saved closes, or says it was refused. A form opened, or one closed, while it wrote stays as it is.
+            // A refused form whose sheet was dismissed meanwhile closes too: the sheet is gone.
+            val dismissed = dismissedWhileSaving == writing
+            dismissedWhileSaving = null
             if (saved == null && stored == null) {
-                form.compareAndSet(writing, checked.copy(limitError = true))
+                form.compareAndSet(writing, if (dismissed) null else checked.copy(limitError = true))
                 return@launch
             }
             form.compareAndSet(writing, null)
@@ -295,9 +301,27 @@ class ReminderFormViewModel(
         form.value = null
     }
 
-    /** Delete in "Edit reminder": the form closes, the reminder is marked as deleted, and the snackbar offers Undo. */
+    /**
+     * The sheet of the form was swiped away, or closed with Back or by a
+     * tap above it. As Cancel, except while Save writes: the sheet is gone
+     * from the screen then, so the form closes when the save ends, also
+     * when the 500 limit refuses it.
+     */
+    fun dismissSheet() {
+        val open = form.value ?: return
+        if (open.saving) dismissedWhileSaving = open else cancel()
+    }
+
+    /**
+     * Delete in "Edit reminder": the form closes, the reminder is marked as
+     * deleted, and the snackbar offers Undo. While Save writes it does
+     * nothing: the save has begun, and a delete then would race it, so its
+     * Undo could be lost.
+     */
     fun delete() {
-        val id = form.value?.reminderId ?: return
+        val open = form.value ?: return
+        if (open.saving) return
+        val id = open.reminderId ?: return
         form.value = null
         viewModelScope.launch(work) {
             repository.delete(listOf(id)).firstOrNull()?.let { snackbar.value = FormSnackbar.Deleted(it.id) }

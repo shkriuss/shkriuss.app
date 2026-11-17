@@ -120,7 +120,7 @@ private fun FormSheet(screen: FormScreen, model: ReminderFormViewModel, format: 
     val form = shown
     ShkBottomSheet(
         visible = open != null,
-        onDismissRequest = model::cancel,
+        onDismissRequest = model::dismissSheet,
         title = form?.let { formTitle(it) },
     ) {
         if (form != null) key(form.reminderId) { FormFields(form, screen.next, model, format, today) }

@@ -520,6 +520,77 @@ class ViewModelsTest {
         assertEquals(listOf("Call the bank"), live().map { it.title })
     }
 
+    /**
+     * Delete while Save writes does nothing: the save of the edit has
+     * begun, and a delete then would race it, so its Undo could be lost.
+     * The form closes when the save ends, and the reminder stays.
+     */
+    @Test
+    fun deleteWhileSaveWritesDoesNothing() {
+        val pills = add("Pills", pills())
+        holdingTheDatabase { release ->
+            val model = form()
+            model.openEdit(pills)
+            model.onTitleChange("Vitamins")
+            model.save()
+            model.state.await { it.form?.saving == true }
+
+            model.delete()
+            assertEquals(true, model.state.value.form?.saving)
+            release()
+
+            model.state.await { it.form == null && it.snackbar is FormSnackbar.Saved }
+            assertEquals(listOf("Vitamins"), live().map { it.title })
+        }
+    }
+
+    /**
+     * The sheet swiped away while Save writes is gone from the screen, so
+     * its form closes when the save ends, also when the 500 limit refuses
+     * the save: no refused form is left open behind a sheet that is gone.
+     */
+    @Test
+    fun aSheetDismissedWhileSaveWritesClosesWhenTheSaveEndsAlsoWhenRefused() {
+        repeat(ReminderLimits.MOST_REMINDERS) { add("Reminder ${it + 1}", pills()) }
+        holdingTheDatabase { release ->
+            val model = form()
+            model.openNew()
+            model.onTitleChange("One more")
+            model.save()
+            model.state.await { it.form?.saving == true }
+
+            model.dismissSheet()
+            release()
+
+            model.state.await { it.form == null }
+            assertEquals(ReminderLimits.MOST_REMINDERS, live().size)
+        }
+    }
+
+    /** Runs [test] while another thread holds the database's write lock, so that a save waits until [test] calls its release. */
+    private fun holdingTheDatabase(test: (release: () -> Unit) -> Unit) {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        try {
+            test {
+                release.countDown()
+                holder.join()
+            }
+        } finally {
+            release.countDown()
+            holder.join()
+        }
+    }
+
     @Test
     fun cancelWritesNothing() {
         val model = form()
