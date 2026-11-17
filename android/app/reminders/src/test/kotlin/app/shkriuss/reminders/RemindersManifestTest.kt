@@ -1,0 +1,97 @@
+package app.shkriuss.reminders
+
+import app.shkriuss.core.testing.MergedManifest
+import java.io.File
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+import org.junit.Assert.assertEquals
+import org.junit.Test
+import org.w3c.dom.Element
+
+/**
+ * What Reminders' merged manifest holds (docs/security/permissions.md,
+ * "Reminders"): the two permissions of core/security and no other;
+ * Reminders' one screen and the six screens of core/security; no
+ * receiver; and nothing that another app can reach but Reminders' own
+ * screen. The receiver of the profile installer is removed, as in Water.
+ *
+ * The APK rules check fails an APK with any permission that is not on
+ * Reminders' allow list too. This test also checks that the screen is the
+ * only exported part, so a library that adds another fails here first.
+ */
+class RemindersManifestTest {
+    private val manifest: Element = DocumentBuilderFactory.newInstance().apply {
+        isNamespaceAware = true
+        setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+        setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+    }.newDocumentBuilder().parse(File(System.getProperty(MergedManifest.PROPERTY)!!)).documentElement
+
+    private fun elements(tag: String): List<Element> =
+        manifest.getElementsByTagName(tag).let { nodes -> List(nodes.length) { nodes.item(it) as Element } }
+
+    private fun Element.android(name: String): String = getAttributeNS(ANDROID, name)
+
+    @Test
+    fun remindersHoldsTheTwoPermissionsOfCoreSecurityAndNoOther() {
+        val tags = listOf("uses-permission", "uses-permission-sdk-23", "permission", "permission-group", "permission-tree")
+        assertEquals(
+            listOf(
+                "<uses-permission> android.permission.USE_BIOMETRIC",
+                "<uses-permission> android.permission.HIDE_OVERLAY_WINDOWS",
+            ).sorted(),
+            tags.flatMap { tag -> elements(tag).map { "<$tag> ${it.android("name")}" } }.sorted(),
+        )
+    }
+
+    @Test
+    fun thereIsNoReceiver() {
+        // The receiver of the profile installer is removed. The three of core/notify come with that module.
+        assertEquals(emptyList<String>(), elements("receiver").map { it.android("name") })
+    }
+
+    @Test
+    fun remindersHasItsOwnScreenAndTheSixOfCoreSecurity() {
+        val screens = elements("activity")
+        assertEquals((SECURITY_SCREENS + RemindersActivity::class.java.name).toSet(), screens.map { it.android("name") }.toSet())
+        assertEquals("each screen once", SECURITY_SCREENS.size + 1, screens.size)
+        val own = screens.single { it.android("name") == RemindersActivity::class.java.name }
+        val launcher = own.getElementsByTagName("category").item(0) as Element
+        assertEquals("android.intent.category.LAUNCHER", launcher.android("name"))
+    }
+
+    @Test
+    fun noScreenOfCoreSecurityIsExportedOrStartsFromOutside() {
+        elements("activity").filter { it.android("name") in SECURITY_SCREENS }.forEach { screen ->
+            assertEquals(screen.android("name"), "false", screen.android("exported"))
+            assertEquals("${screen.android("name")} has no intent filter", 0, screen.getElementsByTagName("intent-filter").length)
+        }
+    }
+
+    @Test
+    fun theScreenIsTheOnlyExportedPart() {
+        val exported = listOf("activity", "activity-alias", "service", "receiver", "provider").flatMap(::elements)
+            .filter { it.android("exported") == "true" }
+            .map { it.android("name") }
+        assertEquals(listOf(RemindersActivity::class.java.name), exported)
+    }
+
+    @Test
+    fun androidBackupIsOff() {
+        val application = elements("application").single()
+        assertEquals("false", application.android("allowBackup"))
+    }
+
+    private companion object {
+        const val ANDROID = "http://schemas.android.com/apk/res/android"
+
+        /** The six screens of core/security, written out here, so that a seventh fails this test first. */
+        val SECURITY_SCREENS = listOf(
+            "app.shkriuss.core.security.SecurityActivity",
+            "app.shkriuss.core.security.CreateRecoveryKeyActivity",
+            "app.shkriuss.core.security.EnterRecoveryKeyActivity",
+            "app.shkriuss.core.security.ShowRecoveryKeyActivity",
+            "app.shkriuss.core.security.AppLockActivity",
+            "app.shkriuss.core.security.TurnOnAppLockActivity",
+        )
+    }
+}
