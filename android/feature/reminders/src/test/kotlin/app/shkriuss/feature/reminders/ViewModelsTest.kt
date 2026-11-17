@@ -1,5 +1,6 @@
 package app.shkriuss.feature.reminders
 
+import androidx.room3.withWriteTransaction
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.reminders.data.RemindersDatabase
 import java.time.DayOfWeek
@@ -7,6 +8,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -409,6 +412,42 @@ class ViewModelsTest {
         assertNull(model.state.await { it.snackbar == null }.snackbar)
         liveBecomes(listOf(pills))
         entryBecomes(pills.id, ReminderEntry(mark = monday(9, 30)))
+    }
+
+    /**
+     * While Save writes, the form takes no change, so nothing typed after
+     * the tap is shown and then lost when the form closes. The test holds
+     * the database's write lock on another thread, so the save waits.
+     */
+    @Test
+    fun whileSaveWritesTheFormTakesNoChange() {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        val model = form()
+        model.openNew()
+        model.onTitleChange("Call the bank")
+        model.save()
+
+        model.state.await { it.form?.saving == true }
+        model.onTitleChange("Call the bank tomorrow")
+        model.onRepeatChange(Repeat.DAILY)
+        val waiting = checkNotNull(model.state.value.form)
+        assertEquals("Call the bank", waiting.title)
+        assertEquals(Repeat.ONCE, waiting.repeat)
+
+        release.countDown()
+        holder.join()
+        model.state.await { it.form == null && it.snackbar != null }
+        assertEquals(listOf("Call the bank"), live().map { it.title })
     }
 
     @Test

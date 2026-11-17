@@ -45,7 +45,7 @@ data class ReminderForm(
     val daysError: Boolean = false,
     /** After a Save of a new reminder while 500 are kept: "Reminders keeps 500 reminders. Delete one to add another." */
     val limitError: Boolean = false,
-    /** True while Save writes. Another Save does nothing then. */
+    /** True while Save writes. Another Save does nothing then, and the form takes no change. */
     val saving: Boolean = false,
     /** The reminder as stored when the form opened, for Edit. A Save with no change writes nothing. */
     val stored: Reminder? = null,
@@ -317,8 +317,14 @@ class ReminderFormViewModel(
         return FormSnackbar.Saved(now.local(alarm.atMillis).truncatedTo(ChronoUnit.MINUTES))
     }
 
+    /**
+     * Changes the open form by [edit]. While Save writes, the form takes no
+     * change: the write is of what the form showed when Save was tapped,
+     * and the form closes when it ends, so a change then would be shown and
+     * lost.
+     */
     private fun change(edit: (ReminderForm) -> ReminderForm) {
-        form.value = form.value?.let(edit)
+        form.value = form.value?.let { open -> if (open.saving) open else edit(open) }
     }
 
     private companion object {
