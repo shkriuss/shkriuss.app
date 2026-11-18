@@ -297,7 +297,8 @@ in the
 [data inventory](../security/data-inventory.md#reminders-appshkriussreminders).
 
 A deleted reminder stays as a marked row, with its title, until you
-clear Reminders' storage. It is in your backups too, marked as deleted.
+clear Reminders' storage. Backups you make after the deletion hold it
+too, marked as deleted.
 
 To delete everything: in Android's Settings, open **Apps**, then
 **Reminders**, **Storage**, and tap **Clear storage**. That also deletes
@@ -350,9 +351,11 @@ Limits of backups:
 12. Some storage apps do not let Reminders read a file again right away.
     Reminders then says "Backup written, not checked". Check such a file
     with **Restore a backup**, and tap **Cancel** at the question.
-13. A deleted reminder stays in Reminders' storage and in every backup,
-    with its title, marked as deleted, until you clear Reminders'
-    storage. Reminders cannot yet remove deleted reminders for good.
+13. A deleted reminder stays in Reminders' storage, with its title,
+    marked as deleted, until you clear Reminders' storage. Backups you
+    make after the deletion hold it too. Clearing the storage does not
+    change backup files you already made: delete those where you put
+    them. Reminders cannot yet remove deleted reminders for good.
 
 Other:
 

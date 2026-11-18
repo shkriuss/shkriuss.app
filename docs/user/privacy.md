@@ -57,11 +57,13 @@ stores:
 - the settings of its app lock;
 - its keys, kept as Water's are.
 
-The titles are text you write. Reminders keeps them as you typed them,
-in its own storage. A deleted reminder stays as a marked row, with its
-title, until you clear Reminders' storage. It is in your backups too,
-marked as deleted. Reminders stores no name, no location and no data
-from other apps.
+The titles are text you write. Reminders keeps them in its own storage,
+on one line and without spaces at either end. A deleted reminder stays
+as a marked row, with its title, until you clear Reminders' storage.
+Backups you make after the deletion hold it too, marked as deleted.
+Clearing the storage does not change backup files you already made:
+delete those where you put them. Reminders stores no name, no location
+and no data from other apps.
 
 ### Later apps
 
