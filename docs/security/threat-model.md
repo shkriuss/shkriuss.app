@@ -11,9 +11,10 @@ does not. It ends with the OWASP MASVS controls and every open question.
   [The owner's decisions](#the-owners-decisions). Where
   nothing is decided, it says **Open**. Every open point is listed at
   the [end](#open-questions).
-- What exists today: Catalog, Water and the core modules
+- What exists today: Catalog, Water, Reminders and the core modules
   ([modules.md](../architecture/modules.md)). Water is the first data
-  app. There is no Sync app and no sync server yet. Where this page
+  app and Reminders the second; Reminders has no release yet. There is
+  no Sync app and no sync server yet. Where this page
   speaks of sync or of the handover between apps, it describes what is
   decided for them, not what is built. What each app stores is in the
   [data inventory](data-inventory.md).
@@ -187,8 +188,8 @@ What stops it:
 5. A kept recovery key always needs the system prompt, with the app lock
    on or off.
 6. Android's own backup and device transfer are off. crypto-design.md
-   asks this of every app ("Where keys are stored", point 1). Catalog
-   and Water turn both off.
+   asks this of every app ("Where keys are stored", point 1). Catalog,
+   Water and Reminders turn both off.
 
 What does not:
 
@@ -233,7 +234,7 @@ What stops it:
    - One exception, in Catalog only: the receiver of
      `androidx.profileinstaller` is exported to callers with
      `android.permission.DUMP`, which only the system and the developer
-     shell hold. Water removes it (owner's decision).
+     shell hold. Water and Reminders remove it (owner's decision).
      Open, for the next change to Catalog: remove it there too
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 4. There is no content provider of our own, no file provider and no deep
@@ -272,21 +273,24 @@ What does not:
      asks for the unlock only in its own notification list. The app's
      receiver does not check the phone's lock: a check there would not
      stop an app with notification access, which can wait for the
-     unlock. Water's buttons add one drink or put the reminder off,
-     and nothing else.
+     unlock. Water's buttons add one drink or put the reminder off.
+     Reminders' buttons mark the reminder done or snooze it for 10
+     minutes. Neither does anything else.
    - A button that such an app kept from an older reminder keeps the
      time of that reminder, and the app refuses it.
    - A button that such an app kept does nothing while the app lock
      hides the text.
 
-   With the app lock on, a reminder shows its hidden form, without
-   amounts and without buttons, unless "Show the text in notifications"
-   is on. Marking a reminder "local only" would
-   not change what an app with notification access gets. It only asks
-   apps that pass notifications to a watch not to pass that one. Water
-   does not mark its reminders so. Whether it should, or offers a
-   setting, is Open
-   ([spec.md](../apps/water/spec.md#open), item 9).
+   A reminder of Reminders shows its title, which is the user's own
+   text. With the app lock on, a reminder shows its hidden form, without
+   Water's amounts or Reminders' title and without buttons, unless "Show
+   the text in notifications" is on. Marking a reminder "local only"
+   would not change what an app with notification access gets. It only
+   asks apps that pass notifications to a watch not to pass that one.
+   Neither Water nor Reminders marks its reminders so. Whether they
+   should, or offer a setting, is Open
+   ([Water's spec](../apps/water/spec.md#open), item 9;
+   [Reminders' spec](../apps/reminders/spec.md#open), item 2).
 3. An app that the user lets record the screen captures every screen
    except the word screens, unless the user turns on "Hide in recent apps
    and block screenshots"
@@ -316,8 +320,8 @@ What stops it:
 1. Data apps have no network permission
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). The
    APK rules check fails the build of an app that asks for a permission
-   it is not allowed. Today only Water is allowed any: five, none of
-   them a network permission
+   it is not allowed. Today only Water and Reminders are allowed any:
+   the same five each, none of them a network permission
    ([permissions.md](permissions.md#rules)). So a data app sends nothing.
 2. Only the Sync app will talk to the network. It will move only sealed
    records and encrypted files, which it cannot open
@@ -1105,7 +1109,7 @@ Status: **Open (the sync design).**
 - MASWE-0018, components: met for what is built. Nothing is exported
   except the launcher screen. Open: Catalog still exports the receiver of
   `androidx.profileinstaller` to callers with `android.permission.DUMP`,
-  until its next change. Water removes it
+  until its next change. Water and Reminders remove it
   ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 - MASWE-0019, autofill for credential managers: does not apply. There
   are no passwords. The word field turns autofill off on purpose.
@@ -1432,7 +1436,8 @@ Status: **Partly met.**
   stores, that data apps have no network permission, what the Sync app
   and its server will see, and that nothing tracks the user.
 - MASWE-0073, declared data: met for what is built. The
-  [data inventory](data-inventory.md) lists what Catalog and Water store,
+  [data inventory](data-inventory.md) lists what Catalog, Water and
+  Reminders store,
   where, and what leaves the phone and how. It is written from the
   code. Each later app adds its part before its first release.
 - MASWE-0074, tracking domains: met. Data apps connect nowhere. The hub
@@ -1448,8 +1453,9 @@ Status: **Partly met.**
   - The data stays on the phone unless the user sets up sync or makes a
     backup.
   - Backup and restore to a file of the user's choice exist in
-    `core/backup`. Water has the screens
-    ([spec.md](../apps/water/spec.md#backup-and-restore-screens)). The
+    `core/backup`. Water and Reminders have the screens
+    ([Water's spec](../apps/water/spec.md#backup-and-restore-screens),
+    [Reminders' spec](../apps/reminders/spec.md#as-in-water)). The
     app reads every backup again right after it is written and checks
     it, so a backup that cannot be restored is found on the day it is
     made.
