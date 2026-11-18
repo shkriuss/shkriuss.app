@@ -234,7 +234,9 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
      * and the numbers the keyset files name. The list can be short when
      * the Keystore fails, so the exact alias is asked for before the key
      * is made: if a key is there, the next number is taken, and if the
-     * Keystore cannot say, this stops and makes nothing.
+     * Keystore cannot say, this stops and makes nothing. The number of a
+     * key that was invalidated and then deleted can come back: the new
+     * key under it is not invalidated.
      */
     fun newKey(kind: HardwareKeyKind): HardwareKeyRef {
         val listed = hardware.aliases().mapNotNull { HardwareKeyRef.ofAlias(it) }
@@ -243,6 +245,7 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         while (hardware.exists(HardwareKeyRef(kind, number))) number++
         val key = HardwareKeyRef(kind, number)
         hardware.make(key)
+        invalidated -= key
         return key
     }
 

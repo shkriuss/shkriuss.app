@@ -266,6 +266,24 @@ class AppLockTest {
     }
 
     @Test
+    fun aNewLockKeyUnderTheAliasOfAnInvalidatedOneThatWasDeletedIsNotGone() {
+        val fixture = appWithKeys()
+        val app = fixture.app
+        val crypto = app.open()
+        // The new Lock key is invalidated as its cipher starts, for example because the screen lock went that moment.
+        app.hardware.invalidated += "shk.lock.1"
+        assertEquals(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW, TestKeys.answerOf { crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)) })
+        assertFalse("the key that failed is deleted", "shk.lock.1" in app.hardware.existing())
+
+        // The screen lock is back. In the same run, the next try makes a key under the same alias.
+        app.hardware.invalidated.clear()
+        crypto.appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
+
+        assertEquals(HardwareKeyRef(HardwareKeyKind.LOCK, 1), app.keyOf(KeysetName.FILE_KEY))
+        assertEquals("the new key is not taken for the one that was invalidated", AppLockState.ON, crypto.appLock.state())
+    }
+
+    @Test
     fun theKeysetFilesSayMissingOnlyForAFileThatIsNotThere() {
         val fixture = appWithKeys()
         val files = KeysetFiles(fixture.app.folder)
