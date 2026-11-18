@@ -179,6 +179,20 @@ class BackupViewModelTest {
         assertEquals(BackupOpen.AppLock, state.open)
     }
 
+    @Test
+    fun aSecondRequestBeforeTheFirstScreenOpenedIsIgnored() {
+        giveKeys()
+
+        model.goOn(RecoveryKeyNeed.BACKUP)
+        // A tap on App lock while Settings waits for the file picker.
+        model.goOn(RecoveryKeyNeed.APP_LOCK)
+
+        assertEquals("only the first screen opens", BackupOpen.NewDocument("reminders-2026-11-16.shkbackup"), state.open)
+        model.opened()
+        model.goOn(RecoveryKeyNeed.APP_LOCK)
+        assertEquals("once it opened, the next request goes on", BackupOpen.AppLock, state.open)
+    }
+
     // Making a backup.
 
     @Test

@@ -306,7 +306,7 @@ Reminders' keys. A backup then opens only with your 24 words.
 
 Reminders has no release yet. These are its known problems and limits.
 
-Not checked on a phone yet:
+Not known yet:
 
 1. How TalkBack reads "Snooze 10 min" on the button of a notification.
 2. Whether reminders are lost when many were missed at once. Android

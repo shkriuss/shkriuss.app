@@ -68,6 +68,12 @@ class BackupViewModel(
     /** The file picked for a restore, between the question and the restore. It is never shown. */
     private var picked: Uri? = null
 
+    /**
+     * True from [goOn] until the screen has opened what it asked for
+     * ([opened]). Read and written on the main thread only.
+     */
+    private var goingOn = false
+
     /** Reads the keys again. A pending move of the file keys is finished first (Water's spec, "Files"). */
     fun refresh() {
         viewModelScope.launch(work) { readKeys() }
@@ -82,10 +88,16 @@ class BackupViewModel(
      * The app has its keys from a recovery key, and the user started
      * [need]. Reminders goes on with it, without another tap (Water's
      * spec, "After the flow"): the "create document" screen, the "open
-     * document" screen, or the app lock screen. Before that, the keys are read again, which
-     * finishes a pending move of the file keys.
+     * document" screen, or the app lock screen. Before that, the keys are
+     * read again, which finishes a pending move of the file keys.
+     *
+     * Settings can be tapped while the keys are read. A second [goOn]
+     * before the screen has opened the first is ignored, as a second start
+     * of the first-need dialog is: so only one screen opens.
      */
     fun goOn(need: RecoveryKeyNeed) {
+        if (goingOn) return
+        goingOn = true
         viewModelScope.launch(work) {
             readKeys()
             val next = when (need) {
@@ -97,8 +109,9 @@ class BackupViewModel(
         }
     }
 
-    /** The screen has opened what [BackupScreen.open] asked for. */
+    /** The screen has opened what [BackupScreen.open] asked for. A new [goOn] may follow. */
     fun opened() {
+        goingOn = false
         screen.update { it.copy(open = null) }
     }
 
