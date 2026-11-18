@@ -167,10 +167,24 @@ object FormRules {
         return time <= now.currentMinute || now.millisOf(time) <= now.millis
     }
 
-    /** The line "Next: ...": the first occurrence of what the form gives, saved now. Null with no day of the week, or a time that has passed. */
-    fun nextOf(form: ReminderForm, now: ClockReading): LocalDateTime? {
+    /**
+     * The line "Next: ...": when the reminder would show, as the phone's
+     * clock shows that moment, so a time in the hour that does not exist
+     * says 03:30, as the row of Upcoming does. While the date, time and
+     * repeat are those stored, it is the alarm the rule gives now, with
+     * [entry], this phone's entry: a snooze shows. Otherwise it is the
+     * first occurrence of what the form gives, saved now. Null with no
+     * day of the week, or when nothing would show.
+     */
+    fun nextOf(form: ReminderForm, now: ClockReading, entry: ReminderEntry? = null): LocalDateTime? {
         if (form.repeat == Repeat.WEEKLY && form.weekdays == Weekdays.NONE) return null
-        return Occurrences.firstAfter(scheduleOf(form, now.today), now.currentMinute)
+        val stored = form.stored
+        val atMillis = if (stored != null && !newTime(stored.schedule, form)) {
+            ReminderLists.alarmOf(stored, entry, now)?.atMillis
+        } else {
+            Occurrences.firstAfter(scheduleOf(form, now.today), now.currentMinute)?.let(now::millisOf)
+        }
+        return atMillis?.let { now.local(it).truncatedTo(ChronoUnit.MINUTES) }
     }
 
     /** The repeats that show the date row. */
@@ -185,8 +199,8 @@ object FormRules {
  * on its row. It checks the form as the spec says, writes through
  * [repository], and shows the snackbar of a Save or a Delete.
  *
- * [onSaved] runs after each Save that wrote, so that the question for
- * notifications can follow it. Every change runs in [work] on top of the
+ * [onSaved] runs after each Save that passed its checks, also one with
+ * no change, so that the question for notifications can follow it. Every change runs in [work] on top of the
  * ViewModel's scope. Tests pass `Dispatchers.Unconfined`.
  */
 class ReminderFormViewModel(
@@ -200,10 +214,12 @@ class ReminderFormViewModel(
     private val snackbar = MutableStateFlow<FormSnackbar?>(null)
     private val opened = MutableStateFlow(0)
 
-    /** What the form shows. The line "Next" follows the clock. */
-    val state: StateFlow<FormScreen> = combine(form, snackbar, now.reading, opened) { open, shown, reading, opening ->
-        FormScreen(form = open, next = open?.let { FormRules.nextOf(it, reading) }, snackbar = shown, opening = opening)
-    }.stateIn(viewModelScope + work, SharingStarted.Eagerly, FormScreen())
+    /** What the form shows. The line "Next" follows the clock and this phone's entries. */
+    val state: StateFlow<FormScreen> =
+        combine(form, snackbar, now.reading, opened, repository.entries) { open, shown, reading, opening, entries ->
+            val next = open?.let { FormRules.nextOf(it, reading, it.stored?.let { stored -> entries[stored.id] }) }
+            FormScreen(form = open, next = next, snackbar = shown, opening = opening)
+        }.stateIn(viewModelScope + work, SharingStarted.Eagerly, FormScreen())
 
     /** **Add a reminder**: an empty form, Once, today, at the next full hour. */
     fun openNew() {
@@ -256,8 +272,9 @@ class ReminderFormViewModel(
 
     /**
      * Save. A wrong field shows its words and nothing is written. With no
-     * change it closes and writes nothing. Otherwise it writes, closes,
-     * the snackbar says when the reminder shows next, and [onSaved] runs.
+     * change it closes, writes nothing, and [onSaved] runs. Otherwise it
+     * writes, closes, the snackbar says when the reminder shows next, and
+     * [onSaved] runs.
      * A new reminder while 500 are kept is refused: the form stays, with
      * its words.
      */
@@ -269,7 +286,9 @@ class ReminderFormViewModel(
         val stored = open.stored
         val newTime = stored == null || FormRules.newTime(stored.schedule, open)
         if (stored != null && !newTime && title == stored.title) {
+            // Nothing to write. It is still a save: the question for notifications follows (the owner's decision 9).
             form.value = null
+            onSaved()
             return
         }
         val checked = open.copy(
@@ -283,12 +302,17 @@ class ReminderFormViewModel(
             form.value = checked
             return
         }
-        val schedule = if (stored != null && !newTime) stored.schedule else FormRules.scheduleOf(open, now.today)
+        val schedule = FormRules.scheduleOf(open, now.today)
         val writing = checked.copy(saving = true)
         form.value = writing
         viewModelScope.launch(work) {
             // The mark is the minute the time was checked in, so a time that was later than it stays later.
-            val saved = if (stored == null) repository.add(title, schedule, now) else repository.change(stored.id, title, schedule, now)
+            // A new title alone keeps the schedule as it is stored now, also one another form changed meanwhile.
+            val saved = when {
+                stored == null -> repository.add(title, schedule, now)
+                newTime -> repository.change(stored.id, title, schedule, now)
+                else -> repository.changeTitle(stored.id, title)
+            }
             // Only the form that was saved closes, or says it was refused. A form opened, or one closed, while it wrote stays as it is.
             if (saved == null && stored == null) {
                 form.compareAndSet(writing, checked.copy(limitError = true))

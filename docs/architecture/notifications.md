@@ -208,7 +208,7 @@ Two more rules:
 
 | Moment | What Android does | What `core/notify` does |
 |---|---|---|
-| The app starts | | `Notify.start()` makes the channels and runs a sync that sets all alarms again. |
+| The app starts | | `Notify.start()` makes the channels, posts the shown notifications again in the hidden form if the text must be hidden, and runs a sync that sets all alarms again. |
 | The app changes a reminder | | The app calls `Notify.sync()`. New and changed alarms are set. |
 | An alarm fired | The alarm is gone. | The handler runs, then a sync as after a change. |
 | Reboot | Every alarm is forgotten. After the first unlock, Android sends `BOOT_COMPLETED`. | `SystemEventReceiver` runs a sync that sets all alarms again. |
@@ -270,6 +270,8 @@ Decided by the owner, with the app lock
    sound (`setOnlyAlertOnce`). `Notify.hideShownText()` does it, on the
    module's one worker thread, after any alarm handler that is running.
    The app lock calls it through the `onTextHidden` it was given.
+   `Notify.start()` does the same at every start, before its sync, in
+   case the app stopped between storing the choice and hiding the text.
 4. If the state of the app lock cannot be read, the text is hidden.
    `Notifications.show` also hides it when `hidesText` itself fails.
 5. A notification that is hidden stays hidden after the app lock is
@@ -393,7 +395,7 @@ Unit tests, on the JVM. They are in `core/notify/src/test/`:
 |---|---|
 | `AlarmSyncTest` | The rules of "How alarms are kept right", with a clock the test moves and a stand-in for Android's alarms: what is registered, that an alarm fires once and not before its time, changed and removed reminders, a reminder that repeats, a reboot, a missed alarm, the clock set forward and back, a new time zone, more than 100 alarms, a handler that fails (the notice, and the sync after it), and that a change in the app does not set the other alarms again. |
 | `AlarmManagerSchedulerTest` | What is asked of `AlarmManager`: exact, on the wall clock, waking the device, one alarm for each id, a broadcast that only this app can send and that carries only the id. |
-| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. The hidden form while the app lock is on, also when `hidesText` fails, and the shown notifications posted again in it with the same key and tap target and no new alert. The buttons: their labels, the unlock, their pending intents and what a press carries, a press through the receiver, at most three, none in the hidden form. An old button keeps its own time and value after the next notification with the same key, and a button that was kept does nothing while the text is hidden. The end of a notification, kept in the hidden form. The notice when a handler fails, and that the next alarm still comes. |
+| `NotifyTest` | `Notify` as an app uses it, on Robolectric's Android: the channels, a notification when an alarm fires, the four states and the settings pages, and that the alarms are registered again after each of the four broadcasts. The broadcasts reach the receivers through the module's manifest. The hidden form while the app lock is on, also when `hidesText` fails, and the shown notifications posted again in it with the same key and tap target and no new alert, also at the next start. The buttons: their labels, the unlock, their pending intents and what a press carries, a press through the receiver, at most three, none in the hidden form. An old button keeps its own time and value after the next notification with the same key, and a button that was kept does nothing while the text is hidden. The end of a notification, kept in the hidden form. The notice when a handler fails, and that the next alarm still comes. |
 | `ManifestTest` | The module's manifest: the three permissions and no other, three receivers, not exported, nothing that runs before the first unlock, exactly the four broadcasts, and no intent filter on the receivers of alarms and buttons. |
 | `NotifyBoundaryTest` | No other module under `android/` names `AlarmManager` or a notification class of Android or AndroidX. It reads source, like `CryptoBoundaryTest` ([build.md](../development/build.md#unit-tests)). |
 

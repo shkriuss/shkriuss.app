@@ -76,9 +76,12 @@ internal class BackupEngine(
 
     /**
      * Restores the backup in [input]. The whole of it is read, checked and
-     * put aside first. Only then does the app's own code get it.
+     * put aside first. Only then does the app's own code get it. With
+     * [shown], it does so only if the backup is still the one [shown]
+     * describes. Otherwise nothing changes, and the answer is
+     * [RestoreResult.Changed] with what the file holds now.
      */
-    suspend fun restore(input: InputStream): RestoreResult {
+    suspend fun restore(input: InputStream, shown: BackupSummary? = null): RestoreResult {
         val staged = StagingOnDemand(staging)
         try {
             val summary = try {
@@ -86,6 +89,7 @@ internal class BackupEngine(
             } catch (refused: BackupRefused) {
                 return RestoreResult.Refused(refused.answer)
             }
+            if (shown != null && summary != shown) return RestoreResult.Changed(summary)
             content.restore(staged.finish().checked(summary))
             return RestoreResult.Restored(summary)
         } finally {

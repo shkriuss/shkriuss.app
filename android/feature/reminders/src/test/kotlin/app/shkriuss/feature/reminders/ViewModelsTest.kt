@@ -205,6 +205,28 @@ class ViewModelsTest {
     }
 
     @Test
+    fun deleteAllLeavesAReminderSnoozedWhileTheQuestionWasOpen() {
+        val early = add("Early", schedule(Repeat.ONCE, MONDAY, 10))
+        val late = add("Late", schedule(Repeat.ONCE, MONDAY, 11))
+        clockTo(monday(12))
+        book.update(listOf(early.id, late.id)) { _, entry -> entry.copy(mark = monday(12)) }
+        val model = past()
+        model.rows(2)
+        model.askDeleteAll()
+        assertEquals(2, model.state.await { it.question != null }.question!!.count)
+
+        // Snooze 10 min on the notification of "Late" while the question is open: it is upcoming again.
+        val snoozeEnd = millisAt(monday(12, 10), UTC)
+        book.update(late.id) { it.copy(snoozeMillis = snoozeEnd) }
+        model.confirmDeleteAll()
+
+        val deleted = model.state.await { it.snackbar != null }
+        assertEquals("only the one still past", 1, deleted.snackbar!!.count)
+        assertEquals(listOf("Late"), live().map { it.title })
+        assertEquals("its snooze stays", snoozeEnd, book.entryOf(late.id).snoozeMillis)
+    }
+
+    @Test
     fun deleteAllWithNoPastReminderAsksNothing() {
         val model = past()
         assertTrue(model.state.await { it.loaded }.isEmpty)
@@ -248,7 +270,7 @@ class ViewModelsTest {
     }
 
     @Test
-    fun aSaveThatWroteTellsTheQuestionForNotificationsAndOneThatWroteNothingDoesNot() {
+    fun everySaveTellsTheQuestionForNotificationsAlsoOneWithNoChangeButNotAWrongOne() {
         val saves = AtomicInteger()
         val model = ReminderFormViewModel(repository, time, now, Dispatchers.Unconfined, onSaved = { saves.incrementAndGet() })
         model.openNew()
@@ -257,18 +279,34 @@ class ViewModelsTest {
         model.state.await { it.form == null && it.snackbar != null }
         assertEquals(1, saves.get())
 
-        // No change: nothing is written.
+        // No change: nothing is written, and the question still follows (the owner's decision 9: after every save).
         model.snackbarDismissed()
         model.openEdit(live().single())
         model.save()
         model.state.await { it.form == null }
-        // A wrong title: nothing is written.
+        assertEquals(2, saves.get())
+        // A wrong title: nothing is written, and it is no save.
         model.openEdit(live().single())
         model.onTitleChange(" ")
         model.save()
         model.openForm { it.titleError != null }
 
-        assertEquals(1, saves.get())
+        assertEquals(2, saves.get())
+    }
+
+    @Test
+    fun theLineNextOfAnUnchangedFormShowsTheSnooze() {
+        val bank = add("Call the bank", schedule(Repeat.ONCE, MONDAY, 10))
+        clockTo(monday(10, 5))
+        val snoozeEnd = millisAt(monday(10, 12), UTC)
+        book.update(bank.id) { ReminderEntry(mark = monday(10), snoozeMillis = snoozeEnd) }
+        val model = form()
+
+        model.openEdit(bank)
+
+        assertEquals("the snooze, as Upcoming says it", monday(10, 12), model.state.await { it.next != null }.next)
+        model.onTimeChange(LocalTime.of(11, 0))
+        assertEquals("a new time counts as if saved now", monday(11), model.state.await { it.next == monday(11) }.next)
     }
 
     @Test
@@ -392,6 +430,28 @@ class ViewModelsTest {
         assertEquals("Call the bank again", live().single().title)
         assertEquals(CALL_THE_BANK, live().single().schedule)
         assertNull("it does not show again, so no snackbar", model.state.value.snackbar)
+    }
+
+    @Test
+    fun aNewTitleAloneKeepsATimeThatAnotherFormChangedMeanwhile() {
+        val bank = add("Call the bank", CALL_THE_BANK)
+        clockTo(monday(8))
+        val upcoming = form()
+        upcoming.openEdit(bank)
+        val past = form()
+        past.openEdit(bank)
+        past.onTimeChange(LocalTime.of(16, 0))
+        past.save()
+        past.state.await { it.form == null }
+        val rescheduled = live().single().schedule
+
+        upcoming.onTitleChange("Call the bank about the card")
+        upcoming.save()
+
+        upcoming.state.await { it.form == null }
+        assertEquals("Call the bank about the card", live().single().title)
+        assertEquals("the time the other form saved stays", rescheduled, live().single().schedule)
+        assertEquals(16 * 60, rescheduled.minuteOfDay)
     }
 
     @Test

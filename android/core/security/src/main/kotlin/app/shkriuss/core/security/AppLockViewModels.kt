@@ -288,12 +288,16 @@ class AppLockViewModel internal constructor(
  * read is also dropped when the screen stops, as "Show the words" drops
  * the words: the phone's screen turns off, or another app comes to the
  * front. A turn of the phone does not count. On the way back the prompt
- * asks again. [onTurnedOn] runs on the main thread when the app lock is
- * on.
+ * asks again. An error that ends the turn-on drops it too.
+ *
+ * [onTurnedOn] runs on the main thread when the app lock is on, with the
+ * mark that [unlockMark] gave when the last prompt ended. The app counts
+ * as unlocked only if it has not locked since (`AppLockWatcher.turnedOn`).
  */
 class TurnOnViewModel internal constructor(
     private val crypto: ShkCrypto,
-    private val onTurnedOn: () -> Unit,
+    private val unlockMark: () -> Int,
+    private val onTurnedOn: (mark: Int) -> Unit,
     private val background: CoroutineDispatcher = Dispatchers.IO,
     private val random: Random = Random.Default,
 ) : ViewModel() {
@@ -492,6 +496,8 @@ class TurnOnViewModel internal constructor(
             work { request.step.cancel() }
             return
         }
+        // Taken on the main thread as the prompt ends. If the app locks before the app lock is stored, it stays locked.
+        val mark = unlockMark()
         screen.value = TurnOnWorking
         work {
             try {
@@ -501,7 +507,7 @@ class TurnOnViewModel internal constructor(
                 return@work
             }
             proof = null
-            withContext(Dispatchers.Main.immediate) { onTurnedOn() }
+            withContext(Dispatchers.Main.immediate) { onTurnedOn(mark) }
             screen.value = TurnOnDone
         }
     }
@@ -512,14 +518,20 @@ class TurnOnViewModel internal constructor(
                 withContext(background) { work() }
             } catch (failed: BlobException) {
                 val problem = if (failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) TurnOnProblem.DAMAGED else TurnOnProblem.NOT_NOW
-                screen.value = TurnOnFailed(problem)
+                failedWith(problem)
             } catch (_: CannotMakeHardwareKeyException) {
-                screen.value = TurnOnFailed(TurnOnProblem.CANNOT_MAKE_KEY)
+                failedWith(TurnOnProblem.CANNOT_MAKE_KEY)
             } catch (_: IllegalStateException) {
                 // The app lock may not be turned on now, or the file-key keyset changed meanwhile. Nothing was changed.
-                screen.value = TurnOnFailed(TurnOnProblem.NOT_ALLOWED)
+                failedWith(TurnOnProblem.NOT_ALLOWED)
             }
         }
+    }
+
+    /** The turn-on ended with [problem]. The kept recovery key leaves memory first: only Done is left to tap. */
+    private fun failedWith(problem: TurnOnProblem) {
+        kept = null
+        screen.value = TurnOnFailed(problem)
     }
 
     override fun onCleared() {

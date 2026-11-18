@@ -246,7 +246,7 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val watcher = securityHost.appLock
-        model = flowViewModel { TurnOnViewModel(it, onTurnedOn = watcher::turnedOn) }
+        model = flowViewModel { TurnOnViewModel(it, unlockMark = watcher::unlockMark, onTurnedOn = watcher::turnedOn) }
         val actions = TurnOnActions(
             onBack = ::finish,
             onContinue = model::onContinue,

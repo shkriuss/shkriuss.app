@@ -93,6 +93,13 @@ sealed class RestoreResult {
 
     /** The file is not taken. Nothing in the app changed. */
     data class Refused(val answer: BackupAnswer) : RestoreResult()
+
+    /**
+     * The document no longer holds the backup the app asked about: it now
+     * holds [backup], which passed every check. Nothing in the app
+     * changed. The app asks again, with what [backup] says.
+     */
+    data class Changed(val backup: BackupSummary) : RestoreResult()
 }
 
 /**

@@ -1194,7 +1194,9 @@ Status: **Met for what is built.**
 - MASWE-0030, the clipboard: met. The words never go on the clipboard,
   and a paste never lands in the word field
   ([security-screens.md](../architecture/security-screens.md#what-protects-the-words)).
-  Nothing else uses the clipboard today.
+  No app puts anything else on the clipboard. Other text fields, such
+  as a reminder's title, offer the usual copy and paste, so what the
+  user copies there goes to the clipboard.
 - MASWE-0031, app extensions: does not apply. The apps offer no
   extension points.
 - Open: the handover between apps and the courier interface

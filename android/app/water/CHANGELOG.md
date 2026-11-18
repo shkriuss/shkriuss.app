@@ -25,6 +25,28 @@ Fixed:
 - **The notice "A reminder could not be shown."** A tap on it starts
   Water anew on Today, as a tap on a reminder does. Before, when Water
   was open, it opened a second Water screen on top of it.
+- **Make a backup over an old backup file.** If the place you picked
+  cannot be opened for writing, the old file stays as it was. Before,
+  Water deleted it, though nothing was written to it.
+- **Restore a backup.** If the file changes after Water asked "Restore
+  this backup?", for example because a storage app synced a newer one,
+  Water changes nothing and asks again with what the file holds now.
+  Before, it restored the newer file.
+- **A file Water may no longer read.** If the storage app takes back
+  Water's access during a backup or a restore, Water says the file
+  could not be read or written. Before, Water closed.
+- **Turning the app lock on.** If you leave Water at the moment the
+  app lock is turned on, Water stays locked. Before, it could open
+  without the prompt.
+- **Notifications after a stop.** If Water stopped right after the app
+  lock was turned on, or "Show the text in notifications" was turned
+  off, a reminder already shown kept its text. Water now hides it when
+  it starts again. It also hides the text while the app lock's key
+  file cannot be read.
+- **Recovery words.** A long press in the field of a recovery word no
+  longer hands the word to Android's text classifier. Water's own keys
+  are no longer deleted at a start when Android cannot list or read
+  their files.
 
 ## 1.0.1 (2026-11-17)
 

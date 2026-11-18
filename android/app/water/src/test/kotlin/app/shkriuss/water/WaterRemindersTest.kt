@@ -83,8 +83,8 @@ class WaterRemindersTest {
     private fun restoreTheBackup() = runBlocking {
         val backups = app.test.services.backups
         val document = TestDocuments.uri(BACKUP_NAME)
-        check(backups.look(document) is BackupStep.Question) { "The backup of the test does not pass its check" }
-        assertEquals(BackupStep.Restored, backups.restore(document))
+        val question = backups.look(document) as? BackupStep.Question ?: error("The backup of the test does not pass its check")
+        assertEquals(BackupStep.Restored, backups.restore(document, question))
     }
 
     @Test

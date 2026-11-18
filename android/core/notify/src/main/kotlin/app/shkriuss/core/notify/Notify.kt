@@ -76,14 +76,23 @@ class Notify(
      * registers the alarms. The alarms are read on [worker], so this
      * returns at once.
      *
+     * First, on [worker], the notifications already shown are posted again
+     * in the hidden form if `hidesText` says so now, as [hideShownText]
+     * does. The app may have stopped after the app lock was turned on and
+     * before it hid them: their text must not stay in the notification
+     * shade.
+     *
      * It fails if the app class is no [NotifyHost]: the receivers could
      * not find this object then.
      */
     fun start() {
         check(app is NotifyHost) { "The app class must implement NotifyHost" }
         notifications.createChannels(channels)
-        // Android may have dropped the alarms since the app last ran.
-        worker.execute { alarms.sync(setAll = true) }
+        worker.execute {
+            notifications.hideShown(channels)
+            // Android may have dropped the alarms since the app last ran.
+            alarms.sync(setAll = true)
+        }
     }
 
     /**

@@ -109,12 +109,24 @@ class RemindersAlarms(
      * `core/notify`, which shows its notice in place of the reminder. A
      * second run for T shows nothing: the mark is already at T.
      */
-    override fun onAlarm(alarm: Alarm, notifications: Notifications) {
+    override fun onAlarm(alarm: Alarm, notifications: Notifications) = handle(alarm, notifications::show)
+
+    /**
+     * The handler of [onAlarm], with the posting of the notification as
+     * [show], so that a test can look at what is stored at that moment.
+     *
+     * An alarm whose time T is still to come by this reading of the clock
+     * shows nothing and writes nothing. That happens only if the clock
+     * was set back after `core/notify` found T due: the alarm is set again
+     * for T, and shows then.
+     */
+    internal fun handle(alarm: Alarm, show: (ShkNotification) -> Unit) {
         val id = alarm.id.value
         val at = alarm.atMillis
         runBlocking {
             turns.withLock {
                 val now = time.reading()
+                if (at > now.millis) return@withLock
                 val entry = book.entryOf(id)
                 val reminder = try {
                     repository.find(id)
@@ -128,7 +140,7 @@ class RemindersAlarms(
                 if (due == null || due.atMillis != at) return@withLock
                 book.update(id) { it.copy(showingMillis = at) }
                 try {
-                    notifications.show(notificationOf(reminder, due, mark, now))
+                    show(notificationOf(reminder, due, mark, now))
                 } finally {
                     book.update(id) { it.copy(mark = laterOf(mark, minuteOf(at, now)), snoozeMillis = null) }
                 }
@@ -216,12 +228,18 @@ class RemindersAlarms(
      * table of changes), and after a restore. A reminder with a new date,
      * time or repeat, a deleted one, and one that a restore took, lose
      * their notification. The repository has already written their
-     * entries. Then the alarms move.
+     * entries, with nothing on screen. Then the alarms move.
+     *
+     * The repository's write and this one take their turns apart, so the
+     * handler can show a reminder between them. That newer notification
+     * stays: an entry with `showing` again has one that counts.
      */
     suspend fun afterChange(change: ReminderChange) {
         if (change.kind in LOSE_THEIR_NOTIFICATION) {
             withContext(work) {
-                turns.withLock { change.ids.forEach(notify().notifications::cancel) }
+                turns.withLock {
+                    change.ids.filter { book.entryOf(it).showingMillis == null }.forEach(notify().notifications::cancel)
+                }
             }
         }
         notify().sync()

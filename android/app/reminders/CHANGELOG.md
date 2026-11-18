@@ -92,3 +92,23 @@ Not released yet.
   ([permissions.md](../../../docs/security/permissions.md#reminders-appshkriussreminders)).
   Reminders asks you for one only: notifications.
 - No other app can reach any part of Reminders but its screen.
+- A new title alone keeps the reminder's time as it is stored, also a
+  time changed meanwhile from the form on the other list.
+- **Delete all** deletes the reminders that are still past when you tap
+  **Delete**. One snoozed from its notification meanwhile stays.
+- The line "Next:" of the form says when the reminder really shows: a
+  snooze, and in the hour that does not exist when the clocks go
+  forward, the time it rings, such as 03:30.
+- The question for notifications follows every **Save**, also one with
+  no change, while Android has not asked.
+- **Make a backup** over an old backup file keeps the old file if the
+  place cannot be opened for writing. A restore asks again if the file
+  changed after the question. A storage app that takes back its access
+  ends in "could not be read" or "could not be written", not in a closed
+  app.
+- If the clock is set back in the very moment a reminder is due, it
+  shows at its time, not early.
+- Turning the app lock on and leaving Reminders in that moment keeps
+  it locked. A notification already shown is hidden at the next start
+  if the app lock hides the text. A long press in the field of a
+  recovery word no longer hands the word to Android's text classifier.

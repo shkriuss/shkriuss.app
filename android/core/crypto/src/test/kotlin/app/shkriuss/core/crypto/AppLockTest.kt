@@ -1,6 +1,7 @@
 package app.shkriuss.core.crypto
 
 import app.shkriuss.core.crypto.fixtures.SoftwareHardwareKeys
+import java.io.File
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -211,6 +212,25 @@ class AppLockTest {
         val later = app.open()
         assertEquals(AppLockState.ON, later.appLock.state())
         assertEquals(setOf("shk.background.1", "shk.unlocked.2", "shk.lock.1"), app.hardware.existing())
+    }
+
+    @Test
+    fun aFileKeyFileWhoseFirstBytesCannotBeReadLeavesTheStateUncertain() {
+        val fixture = appWithKeys()
+        val app = fixture.app
+        assertTrue("no app lock, a readable file: the state is certain", app.open().appLock.isStateCertain())
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
+        assertTrue("on, and readable: certain", app.open().appLock.isStateCertain())
+
+        val file = File(app.folder, "file-key")
+        file.writeBytes(file.readBytes().copyOf(4))
+        val crypto = app.open()
+
+        assertEquals("no Lock key can be named, so the state reads as off", AppLockState.OFF, crypto.appLock.state())
+        assertFalse("but it is not certain: the app lock may be on", crypto.appLock.isStateCertain())
+
+        file.delete()
+        assertTrue("with no file at all, it is certain again", app.open().appLock.isStateCertain())
     }
 
     @Test

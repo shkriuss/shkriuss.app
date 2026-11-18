@@ -6,6 +6,7 @@ import app.shkriuss.core.backup.BackupSink
 import app.shkriuss.core.backup.Backups
 import app.shkriuss.core.backup.CheckedBackup
 import app.shkriuss.core.backup.CheckedFile
+import app.shkriuss.core.backup.CheckResult
 import app.shkriuss.core.backup.ExportResult
 import app.shkriuss.core.backup.RestoreResult
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
@@ -301,7 +302,9 @@ class RemindersBackupContentTest {
 
         val newPhone = SoftwareKeysApp(temporary.newFolder(), RemindersServices.APP_NAME).also { it.crypto.setup.storeDerivedKeys(recoveryKey) }
         val other = otherDatabase()
-        val restored = backupsOf(newPhone, RemindersBackupContent(other, clock, TestIdSource())).restore(document)
+        val onTheNewPhone = backupsOf(newPhone, RemindersBackupContent(other, clock, TestIdSource()))
+        val shown = (onTheNewPhone.check(document) as CheckResult.Good).backup
+        val restored = onTheNewPhone.restore(document, shown)
         assertTrue(restored is RestoreResult.Restored)
         assertEquals(everything(database), everything(other))
     }

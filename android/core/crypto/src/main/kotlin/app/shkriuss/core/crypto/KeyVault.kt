@@ -1,6 +1,7 @@
 package app.shkriuss.core.crypto
 
 import com.google.crypto.tink.KeysetHandle
+import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -260,17 +261,23 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
      *
      * 1. Removes what a stopped file replacement left behind.
      * 2. Deletes hardware keys of its own that no keyset file names, but
-     *    only if it could read the first bytes of every keyset file. It
-     *    deletes only keys the Keystore's list shows, so a list that
-     *    failed deletes nothing.
+     *    only if it could list the keyset files and read the first bytes
+     *    of every one the list shows. It deletes only keys the Keystore's
+     *    list shows, so a list that failed deletes nothing.
      */
     fun start() = locked {
-        var everyFileRead = store.tidy()
+        val listed = store.tidy()
+        var everyFileRead = listed != null
         val named = mutableSetOf<HardwareKeyRef>()
         KeysetName.entries.forEach { name ->
             try {
-                namedKey(name)?.let { named += it }
+                val key = namedKey(name)
+                // A file the list shows and the read did not find could not be read: it may name any key.
+                if (key == null && listed != null && name in listed) everyFileRead = false
+                key?.let { named += it }
             } catch (_: BlobException) {
+                everyFileRead = false
+            } catch (_: IOException) {
                 everyFileRead = false
             }
         }

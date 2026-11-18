@@ -36,6 +36,17 @@ class AppLock internal constructor(private val vault: KeyVault) {
     }
 
     /**
+     * False if the `file-key` keyset file is there but its first bytes
+     * cannot be read. Then [state] says [AppLockState.OFF], because no
+     * Lock key can be named, though the app lock may be on. Notifications
+     * hide their text then ("If the state cannot be read, the text is
+     * hidden" in crypto-design.md).
+     */
+    fun isStateCertain(): Boolean = vault.locked {
+        !vault.isStored(KeysetName.FILE_KEY) || vault.namedKeyOrNull(KeysetName.FILE_KEY) != null
+    }
+
+    /**
      * True if the app lock is on and the app is locked: the file keys are
      * not in memory, and the next use of a file needs [beginUnlock].
      */

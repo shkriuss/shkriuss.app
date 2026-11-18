@@ -102,12 +102,17 @@ class PastViewModel(
         question.value = null
     }
 
-    /** **Delete** in the question: it closes, the reminders it named are marked as deleted, and the snackbar offers Undo. */
+    /**
+     * **Delete** in the question: it closes, the reminders it named that
+     * are still past are marked as deleted, and the snackbar offers Undo
+     * and says how many went. One snoozed from its notification while the
+     * question was open is upcoming again, and stays.
+     */
     fun confirmDeleteAll() {
         val asked = question.value ?: return
         question.value = null
         viewModelScope.launch(work) {
-            val deleted = repository.delete(asked.ids)
+            val deleted = repository.deletePast(asked.ids)
             if (deleted.isNotEmpty()) snackbar.value = AllDeleted(deleted.map { it.id })
         }
     }

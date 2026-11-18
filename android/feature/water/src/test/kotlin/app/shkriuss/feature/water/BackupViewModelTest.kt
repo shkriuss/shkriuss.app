@@ -9,6 +9,7 @@ import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.core.testing.TestIdSource
 import java.io.File
 import java.io.FileNotFoundException
+import java.time.LocalDateTime
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -91,6 +92,9 @@ class BackupViewModelTest {
     private fun keyFile(name: String) = File(water.app.filesDir, "shk-keys/$name")
 
     /** Everything stored, as text, without the change numbers. */
+    /** When the backup of the question was made, and how many drinks it holds, or null while no question shows. */
+    private fun asked(): Pair<LocalDateTime, Long>? = (state.step as? BackupStep.Question)?.let { it.madeAt to it.drinks }
+
     private fun everything(): List<String> = runBlocking {
         val database = water.database
         (database.intake().all().map { it.copy(changeNumber = 0).toString() } +
@@ -287,7 +291,7 @@ class BackupViewModelTest {
         look(document)
 
         assertEquals("the whole file is checked first, while \"Checking the backup\" shows", listOf<BackupStep?>(BackupStep.Checking), steps.toList())
-        assertEquals(BackupStep.Question(madeAt = at(9, 30), drinks = 3), state.step)
+        assertEquals(at(9, 30) to 3L, asked())
         assertEquals("nothing is taken before the answer", emptyList<String>(), everything())
 
         restore()
@@ -296,6 +300,32 @@ class BackupViewModelTest {
         assertEquals(BackupStep.Restored, state.step)
         assertEquals(listOf(300, 250, 150), runBlocking { repository.drinksOf(THE_DAY).first() }.map { it.amountMl })
         assertEquals(3_000, runBlocking { repository.factsOf(THE_DAY) }.goalMl)
+    }
+
+    @Test
+    fun aFileThatChangedAfterTheQuestionIsAskedAboutAgainAndNothingIsTakenFirst() {
+        giveKeys()
+        clock.setTo(at(9, 30))
+        backupOfAnotherPhone(crypto, clock, document) { addDrink(THE_DAY, 7 * 60, 150) }
+        clock.setTo(at(14, 5))
+        look(document)
+        assertEquals(at(9, 30) to 1L, asked())
+
+        // A storage app syncs a newer backup into the same file before Restore is tapped.
+        clock.setTo(at(14, 10))
+        backupOfAnotherPhone(crypto, clock, document) {
+            addDrink(THE_DAY, 7 * 60, 150)
+            addDrink(THE_DAY, 8 * 60, 250)
+        }
+        restore()
+
+        assertEquals("asked again, with what the file holds now", at(14, 10) to 2L, asked())
+        assertEquals("nothing is taken before the new answer", emptyList<String>(), everything())
+
+        restore()
+
+        assertEquals(BackupStep.Restored, state.step)
+        assertEquals(listOf(250, 150), runBlocking { repository.drinksOf(THE_DAY).first() }.map { it.amountMl })
     }
 
     @Test
@@ -327,7 +357,7 @@ class BackupViewModelTest {
         runBlocking { repository.deleteDrink(drink.id) }
 
         look(document)
-        assertEquals(BackupStep.Question(madeAt = at(14, 5), drinks = 1), state.step)
+        assertEquals(at(14, 5) to 1L, asked())
         restore()
 
         assertEquals(BackupStep.Restored, state.step)
@@ -438,7 +468,7 @@ class BackupViewModelTest {
         writeBackup(crypto, WaterServices.APP_NAME, OtherContent(dataVersion = 1, records), clock, document)
 
         look(document)
-        assertEquals("the file itself is whole, and holds no drink", BackupStep.Question(madeAt = at(14, 5), drinks = 0), state.step)
+        assertEquals("the file itself is whole, and holds no drink", at(14, 5) to 0L, asked())
         restore()
 
         assertEquals(BackupStep.Unreadable, state.step)

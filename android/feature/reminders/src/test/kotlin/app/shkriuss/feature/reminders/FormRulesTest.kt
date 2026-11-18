@@ -2,6 +2,7 @@ package app.shkriuss.feature.reminders
 
 import java.time.LocalDate
 import java.time.ZoneOffset
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,6 +33,16 @@ class FormRulesTest {
         // In the first pass, 02:45 is still to come.
         val firstPass = ClockReading(sunday.atTime(2, 30).atOffset(ZoneOffset.ofHours(2)).toInstant().toEpochMilli(), BERLIN)
         assertFalse(FormRules.hasPassed(sunday, 2 * 60 + 45, firstPass))
+    }
+
+    @Test
+    fun theLineNextShowsTheTimeTheAlarmRingsAlsoInTheHourThatDoesNotExist() {
+        // Berlin, Sun 28 Mar 2027, at 01:50, before the jump from 02:00 to 03:00. A new daily 02:30 rings at 03:30.
+        val sunday = LocalDate.of(2027, 3, 28)
+        val now = readingAt(sunday.atTime(1, 50), BERLIN)
+        val form = FormRules.newForm(now).copy(repeat = Repeat.DAILY, minuteOfDay = 2 * 60 + 30)
+
+        assertEquals(sunday.atTime(3, 30), FormRules.nextOf(form, now))
     }
 
     @Test

@@ -112,7 +112,9 @@ notification. A reminder of Reminders shows your title.
 - Android's own backup and device-to-device transfer are turned off in
   every app. Your data does not go to Google or to a phone maker's cloud
   that way.
-- The apps share nothing with other apps and do not use the clipboard.
+- The apps share nothing with other apps and put nothing on the
+  clipboard themselves. A text field, such as a reminder's title, offers
+  the usual copy and paste: what you copy goes to the clipboard.
 - The apps write no logs of what you enter.
 
 ## Sync, later

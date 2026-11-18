@@ -204,6 +204,11 @@ private fun NoLearningKeyboard(content: @Composable () -> Unit) {
  * 3. Accessibility actions. The field's own copy, cut and paste are
  *    replaced by actions that do nothing. An accessibility tool may still
  *    list them.
+ *
+ * Smart selection, which hands selected text to Android's text
+ * classifier, is turned off for the whole app by `AppLockWatcher.start()`
+ * (`ComposeFoundationFlags.isSmartSelectionEnabled`). A newer Compose is
+ * checked for that flag too.
  */
 private fun Modifier.noCopyCutPaste(): Modifier = this
     .filterTextContextMenuComponents { false }

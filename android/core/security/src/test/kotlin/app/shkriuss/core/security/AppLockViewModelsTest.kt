@@ -218,7 +218,7 @@ class AppLockViewModelsTest {
     // Turning the app lock on.
 
     private fun turnOnModel(app: SoftwareKeysApp, onTurnedOn: () -> Unit = {}) =
-        TurnOnViewModel(app.crypto, onTurnedOn, inline, Random(7))
+        TurnOnViewModel(app.crypto, unlockMark = { 0 }, onTurnedOn = { onTurnedOn() }, background = inline, random = Random(7))
 
     private fun enterAll(model: TurnOnViewModel, words: List<String>) {
         words.forEach { word ->
@@ -336,6 +336,40 @@ class AppLockViewModelsTest {
     }
 
     @Test
+    fun anErrorThatEndsTheTurnOnDropsTheKeptKey() {
+        val (app, folder) = newApp()
+        val key = withKeys(app)
+        keep(app, key)
+        val model = upToFourWords(app)
+        val four = model.state.value as TurnOnFourWords
+        four.positions.forEachIndexed { index, position -> model.onAnswerChange(index, key.words()[position - 1]) }
+        // The record keyset cannot be read during the check.
+        File(folder, "record").let { it.writeBytes(it.readBytes().copyOf(4)) }
+
+        model.onCheckFour()
+
+        assertEquals(TurnOnFailed(TurnOnProblem.DAMAGED), model.state.value)
+        assertNull("the kept key left memory with the error, not only when the screen stops", keptKeyOf(model))
+    }
+
+    @Test
+    fun theMarkOfTheLastPromptGoesWithTheTurnOn() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        val marks = mutableListOf<Int>()
+        var mark = 3
+        val model = TurnOnViewModel(app.crypto, unlockMark = { mark }, onTurnedOn = { marks += it }, background = inline, random = Random(7))
+        model.onContinue()
+        enterAll(model, key.words())
+
+        answer(model, PromptOutcome.SUCCEEDED)
+        mark = 4
+
+        assertEquals(TurnOnDone, model.state.value)
+        assertEquals("the mark taken as the last prompt ended", listOf(3), marks)
+    }
+
+    @Test
     fun aTurnOfThePhoneKeepsTheFourWordsAndAsksNothing() {
         val (app, _) = newApp()
         val key = withKeys(app)
@@ -360,7 +394,7 @@ class AppLockViewModelsTest {
         val key = withKeys(app)
         keep(app, key)
         val queued = QueuedDispatcher()
-        val model = TurnOnViewModel(app.crypto, {}, queued, Random(7))
+        val model = TurnOnViewModel(app.crypto, unlockMark = { 0 }, onTurnedOn = {}, background = queued, random = Random(7))
         queued.runAll()
         model.onContinue()
         queued.runAll()

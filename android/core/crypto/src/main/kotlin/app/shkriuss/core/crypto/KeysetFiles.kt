@@ -30,11 +30,13 @@ internal interface KeysetStore {
     fun setAside(name: KeysetName)
 
     /**
-     * Removes what a stopped [replace] left behind. Returns false if the
-     * store holds something this code does not know. Then nobody can say
-     * that every keyset was seen, and no hardware key may be deleted.
+     * Removes what a stopped [replace] left behind, and returns the
+     * keysets whose files the store holds. Returns null if the store
+     * cannot be listed, or holds something this code does not know. Then
+     * nobody can say that every keyset was seen, and no hardware key may
+     * be deleted.
      */
-    fun tidy(): Boolean
+    fun tidy(): Set<KeysetName>?
 }
 
 /**
@@ -106,17 +108,21 @@ internal class KeysetFiles(
         flush(setAsideFolder)
     }
 
-    override fun tidy(): Boolean {
-        val names = KeysetName.entries.map { it.text }
+    override fun tidy(): Set<KeysetName>? {
+        // A list that failed says nothing: the folder may hold every keyset. A missing folder looks the same as one
+        // that cannot be read, so it says nothing either. Its keys are deleted at a later start, once a file is there.
+        val files = folder.listFiles() ?: return null
+        val listed = mutableSetOf<KeysetName>()
         var known = true
-        folder.listFiles().orEmpty().forEach { file ->
+        files.forEach { file ->
+            val name = KeysetName.entries.firstOrNull { it.text == file.name }
             when {
-                file.isFile && file.name in names -> Unit
-                file.isFile && file.name.removeSuffix(TEMPORARY) in names -> Files.delete(file.toPath())
+                file.isFile && name != null -> listed += name
+                file.isFile && KeysetName.entries.any { it.text == file.name.removeSuffix(TEMPORARY) } -> Files.delete(file.toPath())
                 else -> known = false
             }
         }
-        return known
+        return if (known) listed else null
     }
 
     /** Makes the rename itself survive a power loss. */
