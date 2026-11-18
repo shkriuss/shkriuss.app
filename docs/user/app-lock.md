@@ -4,9 +4,9 @@ The app lock makes an app ask for your fingerprint, or your phone's PIN,
 pattern or password, before it shows anything. Each app has its own app
 lock. It is off until you turn it on.
 
-Water is the first app that has it.
+Water and Reminders have it.
 
-Where it is, in Water: open **Settings**. Under **Security**, tap **App
+Where it is: open the app's **Settings**. Under **Security**, tap **App
 lock**. The row says **On** or **Off**. Later apps have the same row in
 their settings. The security screen has a button **App lock** too.
 
@@ -138,10 +138,11 @@ recovery key do
 ## Notifications
 
 While the app lock is on, a notification shows only its kind, for
-example **Drink reminders**, and the text "The app lock hides this
-notification. Open the app to see it." It has no buttons then: a
-reminder of Water shows no **Drank** and no **Later**. A tap opens the
-app, behind its lock screen.
+example **Drink reminders** or **Reminders**, and the text "The app lock
+hides this notification. Open the app to see it." It has no buttons
+then: a reminder of Water shows no **Drank** and no **Later**, and one
+of Reminders no **Done** and no **Snooze 10 min**. A tap opens the app,
+behind its lock screen.
 
 1. To show the text again, turn on **Show the text in notifications** on
    the app lock screen.

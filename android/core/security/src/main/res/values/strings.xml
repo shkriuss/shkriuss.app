@@ -18,6 +18,8 @@
     <string name="sec_no_key">This app has no recovery key yet. The recovery key is 24 words on paper. Backup and sync need it.</string>
     <string name="sec_create">Create a recovery key</string>
     <string name="sec_enter">I have a recovery key</string>
+    <!-- The owner's sentence (docs/apps/reminders/spec.md, "The recovery key"), here with the name of this screen's button. -->
+    <string name="sec_no_key_other_app">If another shkriuss app already has your recovery key, tap I have a recovery key and enter the same words.</string>
     <string name="sec_unfinished">Setting up the recovery key stopped half way. Enter the same 24 words to finish.</string>
     <string name="sec_finish">Enter the words to finish</string>
     <string name="sec_start_over">I do not have those words</string>
@@ -210,6 +212,8 @@
     <string name="sec_first_need_set_up_title">Set up your recovery key first</string>
     <string name="sec_first_need_backup_text">A backup is locked with your recovery key: 24 words that you write on paper. Only these words open your backups, on this phone or on a new one. If you lose them, nobody can open your backups.</string>
     <string name="sec_first_need_app_lock_text">The app lock needs your recovery key: 24 words that you write on paper. They are the way back in if the app lock cannot be opened.</string>
+    <!-- After the reason, in both forms that offer to create a key (docs/apps/reminders/spec.md, "The recovery key"). -->
+    <string name="sec_first_need_other_app">If another shkriuss app already has your recovery key, tap I already have one and enter the same words.</string>
     <string name="sec_first_need_create">Create a recovery key</string>
     <string name="sec_first_need_have_one">I already have one</string>
     <string name="sec_first_need_not_now">Not now</string>

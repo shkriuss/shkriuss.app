@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.shkriuss.feature.reminders.BackupViewModel
 import app.shkriuss.feature.reminders.NotificationsViewModel
 import app.shkriuss.feature.reminders.PastViewModel
 import app.shkriuss.feature.reminders.ReminderFormViewModel
@@ -38,6 +39,7 @@ class RemindersModels(owner: ViewModelStoreOwner, services: RemindersServices) {
                 initializer { PastViewModel(services.repository, now) }
                 // A form outlives this object when the phone is turned, so it holds the question's ViewModel only, not this.
                 initializer { ReminderFormViewModel(services.repository, services.time, now, onSaved = asks::saved) }
+                initializer { BackupViewModel(services.backups) }
             },
         )
     }
@@ -54,16 +56,22 @@ class RemindersModels(owner: ViewModelStoreOwner, services: RemindersServices) {
     /** The form that Past opens: one of its rows. */
     val pastForm: ReminderFormViewModel = provider[PAST_FORM_KEY, ReminderFormViewModel::class.java]
 
+    /** Backup and restore, and the rows "Recovery key" and "App lock" of Settings. */
+    val backup: BackupViewModel = provider[BackupViewModel::class.java]
+
     /**
      * The clock is read again, so every screen shows what is upcoming and
      * what is past now, also if the clock or the time zone changed while
      * the app was away. The line about notifications reads their state
      * again: the user can change it in Android's settings at any moment.
+     * Settings reads the keys again: on the way back from a screen of
+     * `core/security` the recovery key or the app lock may have changed.
      * The activity calls it each time it comes to the front.
      */
     fun check() {
         now.check()
         notifications.refresh()
+        backup.refresh()
     }
 
     private companion object {

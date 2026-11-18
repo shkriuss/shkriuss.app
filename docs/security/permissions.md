@@ -167,10 +167,11 @@ Other components that libraries add, none of them a permission:
   min** on a reminder. `RemindersManifestTest` checks that these three
   are Reminders' receivers.
 - The six screens of `core/security`, none exported
-  ([Screens](#screens)). Reminders' Settings has no Security section
-  yet, so nothing opens them, and the app lock cannot be turned on. A
-  screen of the module needs both permissions, and the APK rules check
-  fails a build of Reminders without them. `RemindersManifestTest`
+  ([Screens](#screens)). Reminders' Settings opens them from **Recovery
+  key** and **App lock**, and from the dialog for the moment the
+  recovery key is first needed. A screen of the module needs both
+  permissions, and the APK rules check fails a build of Reminders
+  without them. `RemindersManifestTest`
   checks that Reminders' screens are its own and these six, that none
   of the six is exported, and that none has an intent filter.
 - `androidx.room3.MultiInstanceInvalidationService`: added by Room, not

@@ -10,6 +10,11 @@ One guide per app:
   your daily goal, and get reminders. Everything on Today, History and
   Settings, the five permissions, and the known problems of 1.0.1. On the
   hub website at `/water/`.
+- [Reminders](reminders-app.md): set one-time and repeating reminders
+  with a title, and see each one as a notification at its time.
+  Everything on Upcoming, Past and Settings, the notifications, backup
+  and restore, the five permissions, and the known problems. Not on the
+  hub website until its first release.
 
 Pages:
 
@@ -32,7 +37,8 @@ Pages:
   hub website at `/app-lock/`.
 - [Back up and restore](backup.md): what a backup file is, how to make
   one and how to restore it. On the hub website at `/backup/`.
-- [Reminders and notifications](reminders.md): when a reminder shows,
+- [Reminders and notifications](reminders.md): for every app with
+  reminders, when a reminder shows,
   how to allow notifications, and what happens after a restart of the
   phone before the first unlock, in Private Space and in another user
   profile. On the hub website at `/reminders/`.

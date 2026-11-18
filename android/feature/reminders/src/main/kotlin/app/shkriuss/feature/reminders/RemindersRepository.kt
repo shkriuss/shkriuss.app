@@ -42,6 +42,9 @@ data class ReminderChange(
 
         /** Brought back by Undo. It counts from now. */
         BROUGHT_BACK,
+
+        /** Taken from a backup. It counts from the moment of the restore: no snooze, and its notification goes. */
+        RESTORED,
     }
 }
 
@@ -181,6 +184,31 @@ class RemindersRepository(
         countFrom(now, backIds)
         onChange(ReminderChange(ReminderChange.Kind.BROUGHT_BACK, backIds))
         return back.map(::reminderOf)
+    }
+
+    /**
+     * Runs after a restore, with the reminders it took, [taken]
+     * (docs/apps/reminders/spec.md, "Backup contents", point 3). The
+     * restore wrote them past this repository. Each one that is not
+     * deleted counts from the current minute of [now], the moment after
+     * the restore: its snooze ends, and its notification goes. One that
+     * came back deleted loses its entries, as a delete does. Then the
+     * notifications follow, also when the restore took none. Like every
+     * write here, it runs to its end once it has begun.
+     */
+    suspend fun afterRestore(taken: List<String>, now: ClockReading = time.reading()) =
+        withContext(NonCancellable) { afterRestoreWhole(taken.distinct(), now) }
+
+    private suspend fun afterRestoreWhole(taken: List<String>, now: ClockReading) {
+        if (taken.isNotEmpty()) {
+            val live = reminders.live().mapTo(HashSet()) { it.record.id }
+            withContext(work) {
+                turns.withLock {
+                    book.update(taken) { id, _ -> if (id in live) ReminderEntry(mark = now.currentMinute) else ReminderEntry() }
+                }
+            }
+        }
+        onChange(ReminderChange(ReminderChange.Kind.RESTORED, taken))
     }
 
     /** The reminders [ids] count from the current minute of [now]: that is their mark, with no snooze and nothing on screen. */

@@ -29,6 +29,18 @@ class RemindersFormatTest {
     }
 
     @Test
+    fun theQuestionBeforeARestoreSaysWhenTheBackupWasMadeInTheLongDateOfThePhone() {
+        assertEquals("16 November 2026, 14:05", uk.madeAt(monday(14, 5)))
+        assertEquals("November 16, 2026, 2:05 PM", us.madeAt(monday(14, 5)))
+    }
+
+    @Test
+    fun aCountOfABackupIsInThePhonesNumberFormat() {
+        assertEquals("1,250", uk.count(1_250))
+        assertEquals("42", us.count(42))
+    }
+
+    @Test
     fun theDateRowOfTheFormHasItsYear() {
         assertEquals("Mon, 16 Nov 2026", uk.date(MONDAY))
         assertEquals("Sat, 1 Jan 2028", uk.date(MONDAY.withYear(2028).withMonth(1).withDayOfMonth(1)))

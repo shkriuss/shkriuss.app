@@ -4,12 +4,14 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
+import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.notify.Notify
 import app.shkriuss.core.notify.NotifyHost
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.notify.fixtures.ShownNotification
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
+import java.io.File
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.concurrent.Executor
@@ -36,6 +38,9 @@ internal class AlarmsSetup(var zone: ZoneId = TBILISI) {
 
     /** One source of ids for every start of the app, so that a new start never makes an id that exists. */
     private val ids = TestIdSource()
+
+    /** The app's keys, on the stand-in for the Keystore. The app has no recovery key until a test gives it one. */
+    val keys = SoftwareKeysApp(File(app.filesDir, "shk-keys"), RemindersServices.APP_NAME)
 
     /** What the app lock answers about the text of notifications. */
     var hidesText = false
@@ -77,7 +82,17 @@ internal class AlarmsSetup(var zone: ZoneId = TBILISI) {
     }
 
     private fun newServices() =
-        RemindersServices(app, database, clock, ids, open, notify = { app.notify }, zone = { zone }, work = Dispatchers.Unconfined)
+        RemindersServices(
+            app,
+            database,
+            clock,
+            ids,
+            open,
+            notify = { app.notify },
+            crypto = keys.crypto,
+            zone = { zone },
+            work = Dispatchers.Unconfined,
+        )
 
     /** The phone's clock shows [local] in [zone]. */
     fun setClock(local: LocalDateTime) {

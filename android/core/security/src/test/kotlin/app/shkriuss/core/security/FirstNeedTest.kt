@@ -152,6 +152,9 @@ class FirstNeedTest {
 
         compose.onNodeWithText(text(R.string.sec_first_need_set_up_title)).assertExists()
         compose.onNodeWithText(text(R.string.sec_first_need_backup_text)).assertExists()
+        // The owner's sentence: a key made in another app of the suite is entered here.
+        compose.onNodeWithText(text(R.string.sec_first_need_other_app)).assertExists()
+        assertTrue("the sentence names the dialog's button", text(R.string.sec_first_need_other_app).contains(text(R.string.sec_first_need_have_one)))
         listOf(R.string.sec_first_need_create, R.string.sec_first_need_have_one, R.string.sec_first_need_not_now).forEach {
             compose.onNode(hasText(text(it))).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
         }
@@ -165,6 +168,7 @@ class FirstNeedTest {
         compose.onNodeWithText(text(R.string.sec_first_need_set_up_title)).assertExists()
         compose.onNodeWithText(text(R.string.sec_first_need_app_lock_text)).assertExists()
         compose.onNodeWithText(text(R.string.sec_first_need_backup_text)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.sec_first_need_other_app)).assertExists()
         compose.onNodeWithText(text(R.string.sec_first_need_create)).assertExists()
         compose.onNodeWithText(text(R.string.sec_first_need_have_one)).assertExists()
     }
@@ -180,6 +184,7 @@ class FirstNeedTest {
         // A new recovery key can never open an old backup.
         compose.onNodeWithText(text(R.string.sec_first_need_create)).assertDoesNotExist()
         compose.onNodeWithText(text(R.string.sec_first_need_have_one)).assertDoesNotExist()
+        compose.onNodeWithText(text(R.string.sec_first_need_other_app)).assertDoesNotExist()
     }
 
     @Test

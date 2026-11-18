@@ -96,9 +96,84 @@
     <string name="reminders_deleted">Reminder deleted</string>
     <string name="reminders_undo">Undo</string>
 
-    <!-- Settings. -->
+    <!-- Settings. A row with a value under its name is read as both: "Recovery key, Not set up". -->
+    <string name="reminders_setting_spoken">%1$s, %2$s</string>
     <string name="reminders_section_about">About</string>
     <string name="reminders_version">Version</string>
+    <!-- When a backup was made, in the phone's long date format and its clock: "16 November 2026, 14:05". -->
+    <string name="reminders_made_at">%1$s, %2$s</string>
+
+    <!-- Backup, in Settings. The note is text, not a button; it shows only while the app has no recovery key. -->
+    <string name="reminders_section_backup">Backup</string>
+    <string name="reminders_backup_note_no_key">Backups are locked with a recovery key. You set it up when you make your first backup.</string>
+    <string name="reminders_backup_note_unfinished">Finish setting up your recovery key to make backups.</string>
+    <string name="reminders_make_backup">Make a backup</string>
+    <string name="reminders_restore_backup">Restore a backup</string>
+
+    <!-- Security, in Settings. Each row shows its state under its name. -->
+    <string name="reminders_section_security">Security</string>
+    <string name="reminders_recovery_key">Recovery key</string>
+    <string name="reminders_recovery_key_not_set_up">Not set up</string>
+    <string name="reminders_recovery_key_unfinished">Setup not finished</string>
+    <string name="reminders_recovery_key_set_up">Set up</string>
+    <string name="reminders_app_lock">App lock</string>
+    <string name="reminders_app_lock_off">Off</string>
+    <string name="reminders_app_lock_on">On</string>
+
+    <!-- The dialogs of a backup and a restore. While it works, a progress circle with one of these three. -->
+    <string name="reminders_backup_writing">Writing the backup</string>
+    <string name="reminders_backup_checking">Checking the backup</string>
+    <string name="reminders_backup_restoring">Restoring the backup</string>
+    <string name="reminders_ok">OK</string>
+    <!-- A backup is read again and checked right after it is written, as in Water. -->
+    <string name="reminders_backup_written_title">Backup written</string>
+    <plurals name="reminders_backup_written_text">
+        <item quantity="one">The backup is written and checked. It holds %1$s reminder.</item>
+        <item quantity="other">The backup is written and checked. It holds %1$s reminders.</item>
+    </plurals>
+    <string name="reminders_backup_not_usable_title">This backup cannot be used</string>
+    <string name="reminders_backup_not_usable_text">Reminders wrote the file, but could not read it back as a whole backup. Make the backup again, in another place.</string>
+    <string name="reminders_backup_not_checked_title">Backup written, not checked</string>
+    <string name="reminders_backup_not_checked_text">The backup is written. Reminders could not read the file again to check it. To check it, choose Restore a backup, pick the file, and cancel at the question.</string>
+    <string name="reminders_backup_not_written_title">The backup could not be written</string>
+    <string name="reminders_backup_not_written_text">Writing the file failed, for example because the storage is full. If an unfinished file stays, delete it. It is never taken for a backup.</string>
+    <string name="reminders_backup_no_keys_title">No backup was made</string>
+    <string name="reminders_backup_no_keys_text">Reminders cannot use its keys now. Open Recovery key in Settings, then try again.</string>
+    <!-- The question before a restore. The date and time are in the phone's format: "16 November 2026, 14:05". -->
+    <string name="reminders_restore_question_title">Restore this backup?</string>
+    <plurals name="reminders_restore_question_text">
+        <item quantity="one">Made on %2$s. It holds %1$s reminder. A restore cannot undo a deletion or an edit you made after the backup.</item>
+        <item quantity="other">Made on %2$s. It holds %1$s reminders. A restore cannot undo a deletion or an edit you made after the backup.</item>
+    </plurals>
+    <string name="reminders_restore">Restore</string>
+    <string name="reminders_restored_title">Backup restored</string>
+    <string name="reminders_restored_text">For every record, the newest edit stays.</string>
+    <!-- When Reminders does not take a file: the answers of docs/user/backup.md. In each case nothing has changed. -->
+    <string name="reminders_refused_not_a_backup_title">Not a backup</string>
+    <string name="reminders_refused_not_a_backup_text">The file is something else, for example a photo. Pick the backup file. Nothing in Reminders has changed.</string>
+    <string name="reminders_refused_newer_title">Made by a newer version of Reminders</string>
+    <string name="reminders_refused_newer_text">The backup comes from a newer version of Reminders than the one on this phone. Update Reminders, then restore. Nothing in Reminders has changed.</string>
+    <string name="reminders_refused_other_app_title">Backup of another app</string>
+    <string name="reminders_refused_other_app_text">This is a backup of the app “%1$s”. Open the app the backup is from. Nothing in Reminders has changed.</string>
+    <string name="reminders_refused_other_key_title">Needs another recovery key</string>
+    <string name="reminders_refused_other_key_text">The backup was made with other recovery words than Reminders has. The short name of the key it needs is %1$s. Restore it in an app that is set up with those words. Nothing in Reminders has changed.</string>
+    <string name="reminders_refused_no_keys_title">No keys</string>
+    <string name="reminders_refused_no_keys_text">Reminders is not set up with a recovery key yet, or the phone was locked. Set up the recovery key, unlock the phone, and try again. Nothing in Reminders has changed.</string>
+    <string name="reminders_refused_damaged_title">Damaged or changed</string>
+    <string name="reminders_refused_damaged_text">The file is cut short or was changed. Use another copy of the backup. Nothing in Reminders has changed.</string>
+    <string name="reminders_not_read_title">The file could not be read</string>
+    <string name="reminders_not_read_text">Nothing in Reminders has changed. Try again.</string>
+    <string name="reminders_no_room_title">Not enough room on the phone</string>
+    <string name="reminders_no_room_text">A restore needs free room for about the size of the backup. Nothing in Reminders has changed.</string>
+    <string name="reminders_unreadable_title">Reminders cannot read this backup</string>
+    <string name="reminders_unreadable_text">It holds something this version of Reminders cannot read. Nothing in Reminders has changed.</string>
+
+    <!-- Licences: every third-party part that ships in Reminders, and its notice and licence in full. -->
+    <string name="reminders_licences">Licences</string>
+    <string name="reminders_licences_intro">Reminders contains these parts made by others. Tap one to read its notice and its licence.</string>
+    <string name="reminders_choose_a_part">Choose a part.</string>
+    <string name="reminders_licence_notice">Notice</string>
+    <string name="reminders_licence_text">Licence</string>
 
     <!-- The line at the top of Upcoming while a reminder is upcoming and notifications cannot show, and its button. -->
     <string name="reminders_line_not_asked">Reminders may not show notifications yet.</string>

@@ -4,9 +4,9 @@ The recovery key is your account. It is 24 words that you write on
 paper. With it you can read your backups and your synced data, and set
 up the apps on a new phone.
 
-Water is the first app that has these screens.
+Water and Reminders have these screens.
 
-Where they are, in Water: open **Settings**. Under **Security**, tap
+Where they are: open the app's **Settings**. Under **Security**, tap
 **Recovery key**. That opens the app's security screen. The row says
 **Not set up**, **Setup not finished** or **Set up**. Later apps have
 the same row in their settings.
@@ -28,6 +28,9 @@ comes when you first need it:
 | **App lock** | "Set up your recovery key first". The words are the way back in. | **Create a recovery key**, **I already have one**, **Not now** |
 | **Restore a backup** | "Enter your recovery key first". A backup opens only with the words it was made with. | **Enter the words**, **Cancel** |
 
+Under the reason, the first two say: "If another shkriuss app already
+has your recovery key, tap I already have one and enter the same words."
+
 1. A button opens the screens below.
 2. When you are done there, the app goes on with what you tapped: the
    file picker for a backup or a restore, or the app lock screen.
@@ -35,6 +38,24 @@ comes when you first need it:
    app without a recovery key.
 4. If setting up the key stopped half way, the app says "Finish your
    recovery key" instead, with **Open the security screen**.
+
+## One key for every app
+
+Use the same 24 words in every app of the suite. Each app is set up on
+its own:
+
+1. Create the key in the first app you set up, for example Water.
+2. In the next app, for example Reminders, tap **I already have one**
+   when it asks for the key. On its security screen, the button is **I
+   have a recovery key**. The screen says so too: "If another shkriuss
+   app already has your recovery key, tap I have a recovery key and
+   enter the same words."
+3. Enter the same 24 words ([Enter your recovery key](#enter-your-recovery-key)).
+4. Both apps then have their keys from the same recovery key, and each
+   can keep it. Their short name is the same.
+
+Do not create a second key in the next app. A backup opens only with the
+words it was made with, so two keys mean two papers to keep.
 
 ## What it is
 

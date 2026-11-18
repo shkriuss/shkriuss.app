@@ -222,7 +222,8 @@ never shows one late. On GrapheneOS:
 ## What Reminders does
 
 Reminders shows each reminder at its minute, with its title, and the
-buttons **Done** and **Snooze 10 min**.
+buttons **Done** and **Snooze 10 min**. Its own guide is
+[Reminders](reminders-app.md).
 
 1. **The text** says the repeat, such as "Every day" or "Every Mon, Wed,
    Fri". A one-time reminder has none.

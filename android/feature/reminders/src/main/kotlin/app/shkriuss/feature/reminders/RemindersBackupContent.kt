@@ -6,6 +6,7 @@ import app.shkriuss.core.backup.BackupContent
 import app.shkriuss.core.backup.BackupRecord
 import app.shkriuss.core.backup.BackupSink
 import app.shkriuss.core.backup.CheckedBackup
+import app.shkriuss.core.data.BackupTake
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.data.RecordWriter
@@ -29,9 +30,17 @@ import java.nio.charset.CodingErrorAction
  *
  * The phone-only entries are no part of it. After a restore, each
  * reminder it took counts from that moment (spec, "Backup contents",
- * point 3): that is for the code that runs the restore.
+ * point 3): once the transaction is written, [afterRestore] gets the
+ * `id` of every reminder it took, and `RemindersRepository.afterRestore`
+ * does the rest. A reminder the phone has with the same `updatedAt`, or a
+ * later one, is not taken, so it stays as it is.
  */
-class RemindersBackupContent(private val database: RemindersDatabase, clock: Clock, ids: IdSource) : BackupContent {
+class RemindersBackupContent(
+    private val database: RemindersDatabase,
+    clock: Clock,
+    ids: IdSource,
+    private val afterRestore: suspend (taken: List<String>) -> Unit = {},
+) : BackupContent {
     // takeFromBackup keeps the record fields it is given; the clock and the ID source are never used for it.
     private val reminders = RecordWriter(database, database.reminders(), clock, ids)
 
@@ -48,10 +57,15 @@ class RemindersBackupContent(private val database: RemindersDatabase, clock: Clo
     override suspend fun restore(from: CheckedBackup) {
         if (from.dataVersion != DATA_VERSION) throw UnreadableBackupException("data version ${from.dataVersion}")
         if (from.fileCount != 0L) throw UnreadableBackupException("the backup holds files")
+        val taken = mutableListOf<String>()
         database.withWriteTransaction {
-            from.forEachRecord { record -> reminders.takeFromBackup(RemindersBackupCodec.decode(record)) }
+            from.forEachRecord { record ->
+                val reminder = RemindersBackupCodec.decode(record)
+                if (reminders.takeFromBackup(reminder) == BackupTake.TAKEN) taken += reminder.record.id
+            }
             from.forEachFile { throw UnreadableBackupException("the backup holds files") }
         }
+        afterRestore(taken)
     }
 
     /** Reminders' data version. */

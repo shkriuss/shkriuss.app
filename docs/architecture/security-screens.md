@@ -47,7 +47,7 @@ Each flow is an activity of its own. None is exported.
 
 | Screen | What it shows |
 |---|---|
-| `SecurityActivity` | Where the recovery key stands: none, a setup that stopped, or set up with its key ID. Whether this phone keeps it. The screen lock. Each hardware key and where it lives: StrongBox, TEE, secure hardware of an unnamed kind, or software only. A repair notice, and "Give up these files" when a keyset no words can bring back is damaged. |
+| `SecurityActivity` | Where the recovery key stands: none, a setup that stopped, or set up with its key ID. With none, it says how to use a key that another app of the suite has: "If another shkriuss app already has your recovery key, tap I have a recovery key and enter the same words." Whether this phone keeps it. The screen lock. Each hardware key and where it lives: StrongBox, TEE, secure hardware of an unnamed kind, or software only. A repair notice, and "Give up these files" when a keyset no words can bring back is damaged. |
 | `CreateRecoveryKeyActivity` | Before the words; the 24 words; four of them to confirm at positions picked at random; storing; keeping the key with the system prompt; done. With the start-over extra, the new key starts a stopped setup over. |
 | `EnterRecoveryKeyActivity` | The 24 words, typed one at a time; the check; storing, which also repairs a damaged keyset; keeping; done. Other words in a stopped setup offer to start over. |
 | `ShowRecoveryKeyActivity` | Before the prompt; the words, once per prompt. |
@@ -94,7 +94,7 @@ What it does:
 
    | Form | Title | Buttons |
    |---|---|---|
-   | A backup, or the app lock | "Set up your recovery key first", with one sentence on why, which differs for the two | **Create a recovery key**, **I already have one**, **Not now** |
+   | A backup, or the app lock | "Set up your recovery key first", with one sentence on why, which differs for the two, and under it: "If another shkriuss app already has your recovery key, tap I already have one and enter the same words." | **Create a recovery key**, **I already have one**, **Not now** |
    | A restore | "Enter your recovery key first" | **Enter the words**, **Cancel**. There is no "create": a new key cannot open an old backup. |
    | A setup that stopped, whatever was started | "Finish your recovery key" | **Open the security screen**, **Not now** |
 

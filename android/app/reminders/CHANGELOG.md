@@ -22,7 +22,9 @@ Not released yet.
   **Delete all**, which asks first and has Undo.
 - On a phone the form slides up from the bottom. On a tablet held
   sideways it opens beside the list.
-- Settings shows the version.
+- Settings has the sections Backup, Security and About, as in Water.
+  About shows the version and **Licences**, which lists everything made
+  by others that is inside Reminders, with its notice and its licence.
 - Each reminder shows as a notification at its minute, with its title
   and its repeat, such as "Every day", and the buttons **Done** and
   **Snooze 10 min**. Each reminder has its own notification, and the
@@ -51,9 +53,12 @@ Not released yet.
   reminder could not be shown. Open the app to see it." A tap on it
   starts Reminders anew, with the form of that reminder.
 - Everything Reminders stores is on the phone: reminders, with their
-  title, date, time, repeat and days of the week, in one database, and
-  what this phone remembers of each one and of its alarm, in two small
-  files.
+  title, date, time, repeat and days of the week, in one database, what
+  this phone remembers of each one and of its alarm, in two small files,
+  the settings of the app lock, and the keys
+  ([data-inventory.md](../../../docs/security/data-inventory.md#reminders-appshkriussreminders)).
+  A backup file leaves the phone only when you make one, to the place
+  you pick.
 - The rules of the specification work as plain code, with tests: when
   a reminder shows, for each repeat; the last day of a shorter month and
   29 February; a missed reminder shown late, once; a snooze; a new time
@@ -61,13 +66,29 @@ Not released yet.
   are upcoming and which are past; and the form: its defaults, the
   limits of the title, a time that has passed, Every week with no day,
   and at most 500 reminders.
-- What a backup holds is in place: the reminders, with data version 1.
-  The backup and restore screens come later.
+- **Make a backup** and **Restore a backup**, as in Water: the file
+  picker, a name such as `reminders-2026-11-16.shkbackup`, a check of
+  every backup right after it is written, "It holds 42 reminders", the
+  question before a restore, and every answer for a file Reminders does
+  not take. A backup holds the reminders, deleted ones too, with data
+  version 1.
+- After a restore, each reminder the restore took counts from that
+  moment: a time that passed does not show late, its snooze ends and its
+  notification goes. Then the notifications follow.
+- **Recovery key** opens the security screen, and **App lock** the app
+  lock screen. A backup, a restore and the app lock ask for the recovery
+  key when they first need it. The dialog and the security screen say
+  how to use a recovery key that Water, or another app of the suite,
+  already has: tap **I already have one**, or **I have a recovery key**,
+  and enter the same words.
+- With the app lock on, Reminders asks for your fingerprint, or your
+  phone's PIN, pattern or password, before it shows anything. Its
+  notifications go on, in their hidden form.
 - Every screen, sheet and dialog of Reminders is behind the app lock,
   and a test checks each one.
 - Permissions: the three of reminders, for notifications, exact alarms
-  and setting them again after a restart, and the two of the app lock's
-  screens
+  and setting them again after a restart, and the two of the screens of
+  the recovery key and the app lock
   ([permissions.md](../../../docs/security/permissions.md#reminders-appshkriussreminders)).
   Reminders asks you for one only: notifications.
 - No other app can reach any part of Reminders but its screen.
