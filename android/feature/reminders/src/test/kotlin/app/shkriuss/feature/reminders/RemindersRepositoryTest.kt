@@ -5,7 +5,12 @@ import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.reminders.data.RemindersDatabase
 import java.time.LocalDate
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -13,6 +18,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -214,6 +220,68 @@ class RemindersRepositoryTest {
         val changed = database.reminders().changedSince(BEFORE_FIRST_CHANGE, 10)
         assertEquals(listOf(3L), changed.map { it.changeNumber })
         assertNotNull(changed.single().record.deletedAt)
+    }
+
+    /**
+     * A repository whose work cancels the caller each time it starts: the
+     * moment right after the database write, as when the screen goes away
+     * in the middle of a save. [run] is the write, in a job of its own that
+     * this cancels.
+     */
+    private fun cancelledAfterTheWrite(run: suspend RemindersRepository.() -> Unit) = runBlocking {
+        lateinit var caller: Job
+        val cancelsTheCaller = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) {
+                caller.cancel()
+                block.run()
+            }
+        }
+        val cancelled = RemindersRepository(
+            database,
+            clock,
+            TestIdSource(),
+            RemindersTime(clock) { UTC },
+            book,
+            work = cancelsTheCaller,
+            onChange = { changes += it },
+        )
+        caller = launch(Dispatchers.Unconfined, start = CoroutineStart.LAZY) { cancelled.run() }
+        caller.start()
+        caller.join()
+        assertTrue("the caller was cancelled", caller.isCancelled)
+    }
+
+    @Test
+    fun aSaveWhoseCallerIsCancelledAfterTheWriteStillWritesTheMarkAndTellsTheNotifications() {
+        cancelledAfterTheWrite { add("Pills", pills()) }
+
+        val stored = live().single()
+        assertEquals(ReminderEntry(mark = monday(9, 30)), book.entryOf(stored.id))
+        assertEquals(listOf(ReminderChange(ReminderChange.Kind.ADDED, listOf(stored.id))), changes)
+    }
+
+    @Test
+    fun aNewTimeWhoseCallerIsCancelledAfterTheWriteStillEndsTheSnoozeAndTellsTheNotifications() {
+        val pills = add()
+        book.update(pills.id) { it.copy(snoozeMillis = 1L, showingMillis = 2L) }
+        changes.clear()
+
+        cancelledAfterTheWrite { change(pills.id, "Pills", schedule(Repeat.DAILY, MONDAY, 10)) }
+
+        assertEquals(ReminderEntry(mark = monday(9, 30)), book.entryOf(pills.id))
+        assertEquals(listOf(ReminderChange(ReminderChange.Kind.NEW_TIME, listOf(pills.id))), changes)
+    }
+
+    @Test
+    fun aDeleteWhoseCallerIsCancelledAfterTheWriteStillRemovesTheEntriesAndTellsTheNotifications() {
+        val pills = add()
+        changes.clear()
+
+        cancelledAfterTheWrite { delete(listOf(pills.id)) }
+
+        assertEquals(emptyList<Reminder>(), live())
+        assertEquals(ReminderEntry(), book.entryOf(pills.id))
+        assertEquals(listOf(ReminderChange(ReminderChange.Kind.DELETED, listOf(pills.id))), changes)
     }
 
     @Test
