@@ -170,6 +170,35 @@ class RemindersBackupContentTest {
     }
 
     @Test
+    fun afterTheRestoreItHandsOnTheRemindersItTookAndOnlyThose() = runBlocking {
+        val kept = repository.add("Kept", pills())!!
+        val changed = repository.add("Changed", pills())!!
+        val backup = listed()
+        val stored = backup.first { it.fields.id == changed.id }
+        val newer = BackupRecord(stored.type, stored.fields.copy(updatedAt = stored.fields.updatedAt + 60_000), stored.content)
+        val gone = RemindersBackupCodec.encode(row(title = "Gone", fields = fields(1, deletedAt = 5_000)))
+        val handed = mutableListOf<List<String>>()
+
+        restore(RemindersBackupContent(database, clock, ids) { handed += it }, backup.map { if (it == stored) newer else it } + gone)
+
+        // "Kept" has the same updatedAt as the backup, so it is not taken. A newer edit and a new record are, deleted or not.
+        assertEquals("handed on once, after the transaction", 1, handed.size)
+        assertEquals(setOf(changed.id, gone.fields.id), handed.single().toSet())
+        assertTrue(kept.id !in handed.single())
+    }
+
+    @Test
+    fun aRestoreThatIsRefusedHandsOnNothing() {
+        val handed = mutableListOf<List<String>>()
+        val refusing = RemindersBackupContent(database, clock, ids) { handed += it }
+        val good = RemindersBackupCodec.encode(row())
+
+        assertThrows(UnreadableBackupException::class.java) { restore(refusing, listOf(good, BackupRecord("task", fields(2), good.content))) }
+
+        assertEquals(emptyList<List<String>>(), handed)
+    }
+
+    @Test
     fun aRecordOfAnotherTypeStopsTheRestoreAndNothingChanges() {
         val good = RemindersBackupCodec.encode(row())
         assertRefused(listOf(good, BackupRecord("task", fields(2), good.content)))

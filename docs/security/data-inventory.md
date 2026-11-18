@@ -144,35 +144,56 @@ private storage. This page did not check them in the code:
 
 ## Reminders (`app.shkriuss.reminders`)
 
-Reminders is being built. On its screens you add, change and delete
-reminders, it stores them and what this phone remembers of them, and it
-shows each reminder as a notification at its time, as below. It has no
-backup and cannot set up the recovery key yet.
+Reminders has no release yet. On its screens you add, change and delete
+reminders. It stores them and what this phone remembers of them, shows
+each reminder as a notification at its time, and makes and restores
+backups, as below.
 
 ### On the phone
 
-Everything is in Reminders' private storage.
+Everything is in Reminders' private storage, except the keys that the
+Android Keystore holds.
 
 | What | Where | What it holds | In a backup |
 |---|---|---|---|
-| The database `reminders.db` | Reminders' database folder | One record table, `reminder`, one row per reminder: its title, its date, its time, its repeat and its days of the week ([spec.md](../apps/reminders/spec.md#table-reminder)). Each row also has its random ID, its times and its deletion marker. A deleted reminder keeps its title. The table `change_counter` holds one number. **Text: the titles.** | `reminder`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
+| The database `reminders.db` | Reminders' database folder | One record table, `reminder`, one row per reminder: its title, its date, its time, its repeat and its days of the week ([spec.md](../apps/reminders/spec.md#table-reminder)). Each row also has its random ID, its times and its deletion marker. A deleted reminder keeps its title. The table `change_counter` holds one number. **Text: the titles.** | `reminder`: yes, deleted rows too. The change numbers and `change_counter`: no |
 | The preferences file `app.shkriuss.reminders` | Reminders' preferences folder | For each reminder, by its random ID: its mark (`mark.<id>`, a local date and minute), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`) ([spec.md](../apps/reminders/spec.md#on-this-phone-only)). IDs and times only. Never a title. | No |
 | The preferences file `app.shkriuss.core.notify` | Reminders' preferences folder | For each alarm, named by the random ID of its reminder: the time it is set for (`registered:<id>`) and the time it last fired (`fired:<id>`). And `permission-asked`: whether Android's question for notifications was answered ([notifications.md](../architecture/notifications.md#what-goes-where)). IDs and times only. | No |
+| The preferences file `app.shkriuss.core.security` | Reminders' preferences folder | Three settings of the app lock: `lock-after` (when it locks), `block-screenshots` and `notification-text` ([ADR 0032](../adr/0032-app-lock-settings-in-android-preferences.md)). Whether the app lock is on is not a setting in this file. It is which hardware key wraps the `file-key` keyset. | No |
+| Key files, `shk-keys/` | Reminders' no-backup folder | The keysets `record`, `backup` and `file-key`, each wrapped by a hardware key. `recovery`, the recovery key, only if the phone keeps it, wrapped by a key that needs the system prompt for every use. `file-key-old` only for a moment after a setup was started over. None of them exists before the recovery key is set up ([crypto-design.md](crypto-design.md#where-keys-are-stored)). | No |
+| Set-aside key files, `shk-keys-set-aside/` | Reminders' no-backup folder | A copy of a keyset file that could not be read, kept before the file is written again. Still wrapped. | No |
+| Hardware keys | The Android Keystore, in StrongBox where the phone has it | Up to four keys per app, which cannot be read out: the Background key, the Unlocked key, the Lock key (while the app lock is on) and the Recovery guard (while the phone keeps the recovery key) ([crypto-design.md](crypto-design.md#hardware-keys)). | No |
+| The restore staging folder, `shk-restore/` | Reminders' no-backup folder | Only while a restore runs: the records of the backup, **not encrypted**, titles too, so that nothing changes until the whole file is checked. Deleted when the restore ends, well or badly, and again at every start of Reminders. It is an ordinary delete ([backup-format.md](../architecture/backup-format.md#staging)). | Not applicable |
 
-- No key files and no hardware keys: the recovery key cannot be set up
-  in Reminders yet.
-- No preferences file of `core/security`: the settings of the app lock
-  cannot be changed in Reminders yet.
+- Reminders stores no files: it never asks `core/crypto` for a file key.
 - Android's SQLite keeps the write-ahead files `reminders.db-wal` and
   `reminders.db-shm` next to the database. They can hold rows of it,
   titles too, until SQLite writes them into `reminders.db`.
 
 ### What leaves the phone, and how
 
-Nothing leaves the phone. Two things leave Reminders' storage, to
-Android:
+1. **A backup file**, only when you make one, to the place you pick in
+   Android's file picker. That place can be a USB stick or a cloud
+   storage app. Reminders suggests the name `reminders-<date>.shkbackup`,
+   for example `reminders-2026-11-16.shkbackup`.
+   - In the clear, at its start: that it is a backup of the suite, its
+     format version, the app name `reminders`, and the short name (key
+     ID) of the recovery key it needs
+     ([backup-format.md](../architecture/backup-format.md)).
+   - Encrypted with the backup key of the recovery key: when it was
+     made, Reminders' data version, every record of `reminder`, deleted
+     ones too, with their titles, and their counts.
+   - Not in it: keys, the recovery key, the three preferences files,
+     change numbers.
+   - Its size shows roughly how many reminders it holds, and how long
+     their titles are. The date is in the suggested name.
+2. **A restore** reads one file that you pick. It writes nothing outside
+   Reminders.
 
-1. **Notifications.** A reminder shows its title, and "Every day",
+Two more things leave Reminders' storage, to Android. They stay inside
+the phone:
+
+3. **Notifications.** A reminder shows its title, and "Every day",
    "Missed: 09:00" or "Snoozed. It was due at 09:00.", with the buttons
    **Done** and **Snooze 10 min**.
    - On the lock screen it is private: Android shows its title only if
@@ -189,7 +210,7 @@ Android:
    - If a reminder cannot be shown, a notice comes in its place:
      "Reminders" and "A reminder could not be shown. Open the app to see
      it.", with no title and no buttons.
-2. **Intents**, which stay inside the phone. An alarm carries only the
+4. **Intents**, which stay inside the phone. An alarm carries only the
    random ID of its reminder. A tap on a reminder opens Reminders with
    that ID. A button's press goes only to Reminders' own receiver, and
    carries the ID, the button, the reminder's time and, for **Snooze 10
@@ -197,11 +218,13 @@ Android:
    pages for its notification settings.
 
 Reminders has no network permission. Android backup and device transfer
-are off. It writes no file outside its storage, shares nothing with
-other apps, uses no clipboard and writes no log.
+are off. It writes no file outside its storage but the backup you make,
+shares nothing with other apps, uses no clipboard and writes no log.
 
 ### How to delete it
 
-In Android's Settings, open **Apps**, then **Reminders**, **Storage**,
-and tap **Clear storage**. Everything above goes. Uninstalling Reminders
-does the same.
+- In Android's Settings, open **Apps**, then **Reminders**, **Storage**,
+  and tap **Clear storage**. Everything above goes, the keys too.
+  Uninstalling Reminders does the same.
+- Backup files stay where you put them. Delete them there.
+- Without the recovery words, nobody can open those backups.

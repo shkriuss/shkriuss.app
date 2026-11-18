@@ -7,6 +7,9 @@ development.
 
 - Catalog needs Android 15 or newer
   ([ADR 0040](../../../docs/adr/0040-minimum-android-15.md)).
+- **Recovery key when first needed** and **Recovery key screens**: the
+  forms that offer **Create a recovery key** say how to use a recovery
+  key that another app of the suite already has, as every app does.
 - New page **Recovery key when first needed**, in the group of shared
   screens: the dialog an app shows when a backup, a restore or the app
   lock first needs the recovery key, in its four forms

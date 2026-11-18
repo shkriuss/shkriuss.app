@@ -213,12 +213,13 @@ class RemindersAlarms(
 
     /**
      * Runs after every write that changed something (spec, "The rule", the
-     * table of changes). A reminder with a new date, time or repeat, and a
-     * deleted one, lose their notification. The repository has already
-     * written their entries. Then the alarms move.
+     * table of changes), and after a restore. A reminder with a new date,
+     * time or repeat, a deleted one, and one that a restore took, lose
+     * their notification. The repository has already written their
+     * entries. Then the alarms move.
      */
     suspend fun afterChange(change: ReminderChange) {
-        if (change.kind == ReminderChange.Kind.NEW_TIME || change.kind == ReminderChange.Kind.DELETED) {
+        if (change.kind in LOSE_THEIR_NOTIFICATION) {
             withContext(work) {
                 turns.withLock { change.ids.forEach(notify().notifications::cancel) }
             }
@@ -261,6 +262,10 @@ class RemindersAlarms(
 
         /** The one length of a snooze, in minutes. It is fixed (spec, "Decided by the owner", point 4). */
         const val SNOOZE_MINUTES: Int = 10
+
+        /** The changes after which a reminder's notification goes. After a new title or Undo, it stays as it is. */
+        private val LOSE_THEIR_NOTIFICATION =
+            setOf(ReminderChange.Kind.NEW_TIME, ReminderChange.Kind.DELETED, ReminderChange.Kind.RESTORED)
 
         /** A reminder shown more than this long after its moment is late (spec, "Words used on this page"). */
         private const val LATE_MILLIS = 60_000L

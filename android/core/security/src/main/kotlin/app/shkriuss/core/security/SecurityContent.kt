@@ -93,6 +93,7 @@ private fun RecoveryKeySection(state: SecurityState, actions: SecurityActions) {
     when (state.recoveryKey) {
         RecoveryKeyState.NONE -> {
             Paragraph(stringResource(R.string.sec_no_key))
+            Paragraph(stringResource(R.string.sec_no_key_other_app))
             Buttons {
                 ShkFilledButton(stringResource(R.string.sec_create), actions.onCreate)
                 ShkTonalButton(stringResource(R.string.sec_enter), actions.onEnter)

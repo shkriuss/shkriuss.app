@@ -212,6 +212,37 @@ class RemindersRepositoryTest {
     }
 
     @Test
+    fun afterARestoreEachReminderItTookCountsFromNowAndADeletedOneLosesItsEntries() = runBlocking {
+        val pills = add()
+        val gym = add("Gym", gym())
+        val bank = add("Call the bank", CALL_THE_BANK)
+        repository.delete(listOf(gym.id))
+        book.update(listOf(pills.id, gym.id, bank.id)) { _, _ -> ReminderEntry(mark = monday(9), snoozeMillis = 1L, showingMillis = 2L) }
+        changes.clear()
+
+        // As the backup content hands them on: "Pills" came back with a newer edit, "Gym" deleted. "Call the bank" was not taken.
+        clock.setTo(monday(12, 0, 30))
+        repository.afterRestore(listOf(pills.id, gym.id, pills.id))
+
+        assertEquals("no snooze and nothing on screen, counted from 12:00", ReminderEntry(mark = monday(12)), book.entryOf(pills.id))
+        assertEquals("a deleted one keeps no entry", ReminderEntry(), book.entryOf(gym.id))
+        assertEquals("one that was not taken stays as it was", ReminderEntry(monday(9), 1L, 2L), book.entryOf(bank.id))
+        assertEquals(listOf(ReminderChange(ReminderChange.Kind.RESTORED, listOf(pills.id, gym.id))), changes)
+    }
+
+    @Test
+    fun aRestoreThatTookNothingStillLetsTheNotificationsFollow() = runBlocking {
+        val pills = add()
+        val before = book.entryOf(pills.id)
+        changes.clear()
+
+        repository.afterRestore(emptyList())
+
+        assertEquals(before, book.entryOf(pills.id))
+        assertEquals(listOf(ReminderChange(ReminderChange.Kind.RESTORED, emptyList())), changes)
+    }
+
+    @Test
     fun everyWriteIsAChangeAndDeletedRemindersAreAmongTheChanges() = runBlocking {
         val pills = add()
         repository.change(pills.id, "Vitamins", pills())

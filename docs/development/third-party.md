@@ -3,8 +3,9 @@
 What others made and the apps contain: where it comes from, its licence
 and its notice.
 
-- Status: complete for Water: everything that ships in the release APK
-  of Water `1.0.1`, and the screen that shows it in the app.
+- Status: complete for Water and Reminders: everything that ships in
+  the release APK of Water `1.0.1` and of Reminders `1.0.0-alpha.1`, and
+  the screen that shows it in each app.
   [How to check again](#how-to-check-again) says how to keep it right.
 - The project's own licences are in
   [ADR 0018](../adr/0018-licences.md).
@@ -14,7 +15,7 @@ and its notice.
 | Part | Choice |
 |---|---|
 | What counts | What is in an app's release APK. A library that the build removes is listed here too, as not shipped. |
-| In the app | **Settings**, **Licences**: one entry for each part that ships, with its notice and the full text of its licence |
+| In the app | **Settings**, **Licences**: one entry for each part that ships, with its notice and the full text of its licence. Each app keeps its own list and texts (the owner's decision). |
 | Licence texts | In the app as files, byte for byte as their source has them. A test checks their SHA-256. |
 | How the list is made | From Gradle's list of the release runtime class path, then checked in the APK itself |
 | After a dependency change | Make the list again, and change this page, the app's list and its texts together |
@@ -38,10 +39,23 @@ The app's list is `Licences` in `android/feature/water`. `LicencesTest`
 checks that it has these seven, each with a name, a notice and a licence
 text.
 
+## What ships in Reminders
+
+The same seven parts, in the same versions, in the release APK of
+Reminders `1.0.0-alpha.1`. Its release runtime class path is the same as
+Water's, and so is what R8 removes
+([How the list is made](#how-the-list-is-made)).
+
+The app's list is `Licences` in `android/feature/reminders`, with its own
+notices and licence texts in that module's `res/raw`. The owner decided
+that each app keeps its own list, and that no shared module holds it.
+`LicencesTest` of Reminders checks the seven, as Water's does.
+
 ## On the class path, not in the APK
 
-Seven libraries are on Water's release runtime class path, and R8 removes
-all of them, because nothing in Water uses them. No class of theirs is
+Seven libraries are on the release runtime class path of Water and of
+Reminders, and R8 removes all of them, because nothing in either app
+uses them. No class of theirs is
 named in the APK's dex files. They are not in the app's list.
 
 | Library | Version | Licence | Who brings it |
@@ -54,8 +68,8 @@ named in the APK's dex files. They are not in the app's list.
 | [JSpecify annotations](#jspecify-annotations) | 1.0.0 | Apache-2.0 | AndroidX and Compose |
 | [kotlinx.serialization](#kotlinxserialization) | 1.7.3 | Apache-2.0 | AndroidX (`savedstate`, `lifecycle-viewmodel-savedstate`) |
 
-If a later change makes one of them ship, it must get an entry in the
-app's list in the same pull request. [How to check again](#how-to-check-again)
+If a later change makes one of them ship, it must get an entry in each
+app's list that ships it, in the same pull request. [How to check again](#how-to-check-again)
 says how to see it.
 
 In Catalog, Tink and Protocol Buffers are not in the APK either: Catalog
@@ -66,8 +80,10 @@ Catalog has no Licences screen. That is [open](#open).
 
 ## The licence texts in the app
 
-Three files in `android/feature/water/src/main/res/raw/`. Each is byte
-for byte the file of its source. `LicencesTest` checks the SHA-256.
+Three files in `android/feature/water/src/main/res/raw/`, and the same
+three in `android/feature/reminders/src/main/res/raw/`, named
+`reminders_licence_<part>.txt`. Each is byte for byte the file of its
+source. Each app's `LicencesTest` checks the SHA-256.
 
 | File | The source's file | SHA-256 |
 |---|---|---|
@@ -77,7 +93,8 @@ for byte the file of its source. `LicencesTest` checks the SHA-256.
 
 - The Apache-2.0 text is shown once for each of the five parts under it.
 - The notice of each part is a file of its own in the same folder,
-  `water_notice_<part>.txt`. It says whose the part is, with the copyright
+  `water_notice_<part>.txt` and `reminders_notice_<part>.txt`. The two
+  differ only in the app they name. It says whose the part is, with the copyright
   lines read at the source, and where the source is. The notices are
   written for this project; only the copyright lines and Kotlin's
   `NOTICE` lines are quoted.
@@ -125,8 +142,9 @@ The Jetpack libraries of the Android Open Source Project.
   text without its appendix.
 - **Notice:** the repository has no `NOTICE` file. Its files carry lines
   such as "Copyright 2018 The Android Open Source Project".
-- **Not all of each library is in the APK.** R8 keeps what Water uses.
-  The emoji font loader of `emoji2` is turned off in Water's manifest,
+- **Not all of each library is in the APK.** R8 keeps what each app
+  uses. The emoji font loader of `emoji2` is turned off in each app's
+  manifest,
   and the native library of `graphics-path` is left out
   ([build.md](build.md#native-code-from-compose)).
 - Tink names `androidx.annotation:annotation-jvm` 1.8.2. The build picks
@@ -230,7 +248,8 @@ keysets. It is not a separate dependency.
 them as they come
 ([crypto-design.md](../security/crypto-design.md#the-library)). None of
 the four jars holds a licence text or a notice file. Three of them are
-not in Water's APK; the fourth, AndroidX Annotation, is one of the
+not in the APK of Water or Reminders; the fourth, AndroidX Annotation,
+is one of the
 [AndroidX libraries](#androidx-libraries).
 
 ### Gson
@@ -311,11 +330,12 @@ not in Water's APK; the fourth, AndroidX Annotation, is one of the
 
 In the cloud environment, with dependency verification on:
 
-1. `./gradlew :app:water:dependencies --configuration
-   releaseRuntimeClasspath`, from `android/`. It lists 110 modules. They
-   are the 14 projects of the two tables above.
-2. `./gradlew :app:water:assembleRelease`. Then the APK,
-   `app/water/build/outputs/apk/release/`, is read as a zip file:
+1. `./gradlew :app:<app>:dependencies --configuration
+   releaseRuntimeClasspath`, from `android/`, for `water` and for
+   `reminders`. Each lists 110 modules, the same for both. They are the
+   14 projects of the two tables above.
+2. `./gradlew :app:<app>:assembleRelease`. Then the APK,
+   `app/<app>/build/outputs/apk/release/`, is read as a zip file:
    - the class names in its dex files, by package. The seven libraries of
      [On the class path, not in the APK](#on-the-class-path-not-in-the-apk)
      have none;
@@ -334,8 +354,9 @@ After a dependency change, and before a release:
 1. Run step 1 above. Compare the list with this page.
 2. Run step 2. Look for a package in the dex files that no row of
    [What ships in Water](#what-ships-in-water) covers.
-3. Change this page, `Licences` in `android/feature/water` and the files
-   in `res/raw` together. `LicencesTest` then needs the new count.
+3. Change this page, `Licences` in `android/feature/water` and in
+   `android/feature/reminders`, and the files in their `res/raw`,
+   together. Each `LicencesTest` then needs the new count.
 
 ### What the APK of Water 1.0.1 holds
 
@@ -353,6 +374,14 @@ What steps 1 and 2 give for version `1.0.1`, to compare with:
   1.4.0 and kotlinx.coroutines 1.9.0.
 - The three licence texts are in it, by their SHA-256.
 
+### What the APK of Reminders 1.0.0-alpha.1 holds
+
+The same as Water's: the 110 modules on the class path, one dex file
+with classes of the seven parts and of none of the seven libraries that
+R8 removes, no Google Play services, no `WebView`, no native library, 54
+files `META-INF/*.version`, and the three licence texts by their
+SHA-256.
+
 ## Open
 
 - **No build check fails when a library ships without a notice.** Today
@@ -361,8 +390,7 @@ What steps 1 and 2 give for version `1.0.1`, to compare with:
   decision.
 - **Catalog has no Licences screen.** It ships the AndroidX libraries,
   Compose, the Kotlin standard library, kotlinx.coroutines and the word
-  list. Whether the design gallery gets the screen, or a shared one moves
-  to a core module with the second app, is for the owner.
+  list. Whether the design gallery gets the screen is for the owner.
 - **Each later app** lists what ships in it, in the same way.
 
 ## How to add an entry

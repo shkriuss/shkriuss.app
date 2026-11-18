@@ -965,6 +965,10 @@ recovery key. Three things do:
    - For the app lock: "The app lock needs your recovery key: 24 words
      that you write on paper. They are the way back in if the app lock
      cannot be opened."
+   - Under it, for both: "If another shkriuss app already has your
+     recovery key, tap I already have one and enter the same words."
+     The owner decided it for every app
+     ([Reminders' spec](../reminders/spec.md#the-recovery-key)).
 2. Buttons:
    - **Create a recovery key**: opens "Create a recovery key"
      (`SecurityScreens.createIntent`).

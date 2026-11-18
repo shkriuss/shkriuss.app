@@ -437,7 +437,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has 17 test classes with 118 tests
+- `core/security` has 19 test classes with 137 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -478,6 +478,9 @@ second build must write the same mapping file, or the release stops. See
     Robolectric, and stores a key before it lets that screen close.
     `FirstNeedBehindTheAppLockTest` draws it inside a gate and locks the
     app.
+  - `SecurityContentTest` draws the security screen with no key, with a
+    setup that stopped and with a key, and checks that only the first
+    says how to enter a key that another app of the suite has.
   - `AppLockGateTest` and `AppLockActivitiesTest` wait for the state
     they read
     ([Tests that wait for a background thread](#tests-that-wait-for-a-background-thread)).
@@ -541,7 +544,7 @@ second build must write the same mapping file, or the release stops. See
     back as the picker would.
   - `WaterScreenshotTest`: the screenshots of every screen, sheet and
     dialog.
-- `feature/reminders` has 10 test classes with 115 tests: the occurrences
+- `feature/reminders` has 14 test classes with 216 tests: the occurrences
   of each repeat, the rule and the mark with the examples of the spec,
   in Tbilisi and Berlin, the limits, and when a time of the form has
   passed, also in the two hours of summer time, as plain code
@@ -552,20 +555,41 @@ second build must write the same mapping file, or the release stops. See
   write (`ReminderBookTest`), the schema
   (`RemindersDatabaseTest`), and the repository, the backup content and
   the ViewModels on a database in memory (`RemindersRepositoryTest`,
-  `RemindersBackupContentTest`, `ViewModelsTest`). The ViewModels run
-  their work at once, as Water's do. `RemindersBackupContentTest` also
-  writes a whole backup through `Backups` and restores it on a second
-  app with the same recovery key, as Water's does.
-- `app/reminders` has four test classes:
+  `RemindersBackupContentTest`, `ViewModelsTest`), the notifications
+  (`RemindersAlarmsTest`, `NotificationsViewModelTest`), and backup and
+  restore and the licences (`BackupViewModelTest`, `LicencesTest`). The
+  ViewModels run their work at once, as Water's do.
+  - `RemindersBackupContentTest` also writes a whole backup through
+    `Backups` and restores it on a second app with the same recovery
+    key, as Water's does. It checks that a restore hands on the
+    reminders it took, and only those, once its transaction is written.
+  - `BackupViewModelTest` is a copy of Water's, with a second phone
+    (`AnotherPhone`) that makes the backups to restore. It also checks
+    the example of the spec, a restore on Monday at 12:00, and that a
+    reminder the restore took loses its notification and its snooze,
+    while one it did not take keeps its snooze.
+  - `LicencesTest` is a copy of Water's.
+- `app/reminders` has seven test classes:
   - `EveryScreenIsBehindTheAppLockTest`, a copy of Water's. It also
     locks the app over the form, new and to edit, its date and time
-    pickers, and the question of Delete all.
+    pickers, the question of Delete all, the question for
+    notifications, the dialogs of backup and restore and the progress
+    dialog, held open by the test, and the Licences list and a notice.
   - `RemindersManifestTest` names everything Reminders' merged manifest
     lets another app reach: two permissions, Reminders' screen and the
     six of `core/security`, none of the six exported, no receiver, and
     Reminders' screen the only exported part.
   - `RemindersScreensTest`: what the screens do and what TalkBack hears,
     on a phone and on a tablet.
+  - `RemindersBackupScreensTest`, a copy of Water's
+    `WaterBackupScreensTest`: the rows of Backup and Security and what
+    each opens, the first-need dialog with the sentence about another
+    app's key, a backup and a restore on the screen, the answers, and
+    the Licences screen.
+  - `RemindersNotificationsTest` and
+    `RemindersNotificationsWithTheAppLockTest`: the notifications from
+    end to end through Robolectric's `AlarmManager` and the receivers of
+    the merged manifest, and their hidden form with the app lock on.
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
     and dialog. The date picker shows June 2100, because Material's
     picker marks the real today in the month it shows.

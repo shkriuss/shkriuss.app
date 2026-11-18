@@ -7,6 +7,15 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
+Changed:
+
+- **"Set up your recovery key first"**, the dialog when a backup or the
+  app lock first needs the recovery key, says one more sentence under
+  its reason: "If another shkriuss app already has your recovery key,
+  tap I already have one and enter the same words." With no recovery
+  key, the security screen says the same, with the name of its own
+  button, **I have a recovery key**.
+
 Fixed:
 
 - **The notice "A reminder could not be shown."** A tap on it starts

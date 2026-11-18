@@ -13,9 +13,11 @@ dependencies {
     // The app class builds RemindersServices with the Clock and the IdSource
     // of core/data, so the module shows core/data to the app.
     api(project(":core:data"))
-    // Reminders' records in a backup (RemindersBackupContent). It also
-    // brings AppName of core/crypto, the name of the app in keys and
-    // backups (RemindersServices.APP_NAME).
+    // Backup and restore: Reminders' records in a backup
+    // (RemindersBackupContent), and Backups, which writes, checks and
+    // restores the file the user picks. It also brings AppName of
+    // core/crypto, the name of the app in keys and backups
+    // (RemindersServices.APP_NAME).
     implementation(project(":core:backup"))
     // The notifications: Reminders' AlarmSource, AlarmHandler and
     // ButtonHandler, and the state of the notification permission. Alarms
@@ -27,6 +29,11 @@ dependencies {
     // has three destinations and one open form, as Water has three
     // destinations and one open day (ADR 0003, point 2).
     implementation(project(":core:design"))
+    // The recovery key and the app lock: Settings opens the screens of
+    // core/security through SecurityScreens, and shows its dialog for the
+    // moment the recovery key is first needed (ADR 0035). It comes after
+    // core/design, as in the build files of the apps.
+    implementation(project(":core:security"))
     implementation(libs.activity.compose)
 
     testImplementation(project(":core:testing"))

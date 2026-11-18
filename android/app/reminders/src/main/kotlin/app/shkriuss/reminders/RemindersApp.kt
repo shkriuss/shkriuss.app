@@ -20,6 +20,9 @@ import app.shkriuss.feature.reminders.data.RemindersDatabase
  * the app, and hands them to the screens and the receivers, which Android
  * creates itself (docs/architecture/security-screens.md, "What an app
  * does", and docs/architecture/notifications.md, "What an app does").
+ * [RemindersServices] builds the app's `Backups` with the backup keys of
+ * [crypto], and [onCreate] starts it (docs/architecture/backup-format.md,
+ * "Staging").
  */
 class RemindersApp : Application(), SecurityHost, RemindersHost, NotifyHost {
     override val crypto: ShkCrypto by lazy { ShkCrypto.create(this, RemindersServices.APP_NAME).also { it.start() } }
@@ -30,7 +33,15 @@ class RemindersApp : Application(), SecurityHost, RemindersHost, NotifyHost {
     }
 
     override val reminders: RemindersServices by lazy {
-        RemindersServices(this, RemindersDatabase.open(this), Clock.System, IdSource.RandomUuid, openReminders(), notify = { notify })
+        RemindersServices(
+            this,
+            RemindersDatabase.open(this),
+            Clock.System,
+            IdSource.RandomUuid,
+            openReminders(),
+            notify = { notify },
+            crypto = crypto,
+        )
     }
 
     override val notify: Notify by lazy {
@@ -49,6 +60,9 @@ class RemindersApp : Application(), SecurityHost, RemindersHost, NotifyHost {
         super.onCreate()
         // Before any screen starts, so that every screen's gate knows it (AppLockGate).
         appLock.start()
+        // Backups.start(): empties what a restore left behind when the app stopped in the middle of it. Then, off the
+        // main thread, a pending move of the file keys is finished (docs/apps/water/spec.md, "Files").
+        reminders.start()
         // Tells Android the channel and registers the alarms again: Android may have dropped them.
         notify.start()
     }

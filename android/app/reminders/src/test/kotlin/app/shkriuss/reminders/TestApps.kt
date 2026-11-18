@@ -8,6 +8,8 @@ import app.shkriuss.core.notify.NotifyHost
 import app.shkriuss.core.security.SecurityHost
 import app.shkriuss.core.testing.AppLockOnForTests
 import app.shkriuss.core.testing.LockedAppForTests
+import app.shkriuss.core.testing.NewAppForTests
+import app.shkriuss.core.testing.StoppedSetupAppForTests
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.core.testing.UnlockedAppForTests
@@ -48,8 +50,17 @@ class TestReminders(
     open: Intent = openReminders(app),
 ) {
     /** What the app class hands to the screens. */
-    val services: RemindersServices =
-        RemindersServices(app, database, clock, ids, open, notify = { notify }, zone = { ZoneOffset.UTC })
+    val services: RemindersServices = RemindersServices(
+        app,
+        database,
+        clock,
+        ids,
+        open,
+        notify = { notify },
+        // The keys of the test's app class, as `RemindersApp` passes its own.
+        crypto = (app as SecurityHost).crypto,
+        zone = { ZoneOffset.UTC },
+    )
 
     /** The app's one `Notify`. The text of notifications is hidden while the app lock of the test's app class says so. */
     val notify: Notify = Notify(
@@ -64,6 +75,7 @@ class TestReminders(
     )
 
     init {
+        services.start()
         notify.start()
     }
 }
@@ -104,6 +116,20 @@ class UnlockedRemindersApp : UnlockedAppForTests(REMINDERS), RemindersTestApp {
 }
 
 /**
+ * Reminders' app class with no recovery key yet, as right after Reminders
+ * was installed, for what Settings shows before the recovery key is first
+ * needed (Water's spec, "The recovery key when first needed").
+ */
+class NewRemindersApp : NewAppForTests(REMINDERS), RemindersTestApp {
+    override val test: TestReminders by lazy { TestReminders(this) }
+}
+
+/** Reminders' app class after a setup of the recovery key that stopped half way. */
+class StoppedSetupRemindersApp : StoppedSetupAppForTests(REMINDERS), RemindersTestApp {
+    override val test: TestReminders by lazy { TestReminders(this) }
+}
+
+/**
  * Reminders' app class with the app lock off, for the tests of the
  * notifications through Android's alarms. [restart] is a new start of the
  * app in a new process: new objects on the same database, clock and files.
@@ -113,6 +139,17 @@ class NotifyingRemindersApp : UnlockedAppForTests(REMINDERS), RemindersTestApp {
 
     override val test: TestReminders
         get() = started ?: TestReminders(this).also { started = it }
+
+    /**
+     * The same app on a phone with no data: new objects on an empty
+     * database, with the same keys, clock and source of IDs. As a second
+     * phone that has entered the same recovery words, before a restore.
+     */
+    fun startOnAPhoneWithNoData() {
+        val before = test
+        started = null
+        started = TestReminders(this, before.clock, ids = before.ids)
+    }
 
     /** The app starts again. [open] is what a tap on a notification opens. */
     fun restart(open: Intent = openReminders(this)) {

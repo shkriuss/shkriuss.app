@@ -41,7 +41,7 @@ Each part below is as Water's spec says, with the change named.
 | [Asking for notifications](../water/spec.md#asking-for-notifications) | It comes after every save while Android has not asked (`NotAsked`), also after **Not now** at an earlier save, and from **Allow**. The text: "Reminders shows each reminder as a notification. Android asks next whether Reminders may show notifications." The reminder is saved either way. |
 | [Settings screen](../water/spec.md#settings-screen) | Only the sections Backup, Security and About. Reminders has no settings of its own: the snooze is fixed. |
 | [Backup and restore screens](../water/spec.md#backup-and-restore-screens) | "Water" becomes "Reminders", "drinks" becomes "reminders": "It holds 42 reminders." The file name: `reminders-2026-11-16.shkbackup`. |
-| [Licences](../water/spec.md#licences), [Every screen](../water/spec.md#every-screen) | Nothing. |
+| [Licences](../water/spec.md#licences), [Every screen](../water/spec.md#every-screen) | Nothing. Reminders keeps a list of its own, with its notices and licence texts ([Decided by the owner](#decided-by-the-owner), point 12). |
 | [The database](../water/spec.md#the-database) | `reminders.db`, version 1, the table [`reminder`](#table-reminder) and `change_counter`. |
 | [On this phone only](../water/spec.md#on-this-phone-only) | Its first row is [Reminders' own file](#on-this-phone-only). |
 | [Files](../water/spec.md#files) | Nothing: no files, the pending file key move finished at once, with the same warning. |
@@ -397,16 +397,18 @@ words. Both apps then keep it
 The handover of keys between apps comes later.
 
 The owner decided: wherever an app offers **Create a recovery key**
-while it has no key, one more sentence follows the text: "If another
-shkriuss app already has your recovery key, tap I already have one and
-enter the same words." That is the dialog "Set up your recovery key
-first", and the security screen. It is shared text of `core/security`,
-so every app shows it. Water's dialog,
-[Water's spec](../water/spec.md#what-you-see-at-that-moment),
-[security-screens.md](../../architecture/security-screens.md#the-recovery-key-when-first-needed)
-and the user guide [recovery-key.md](../../user/recovery-key.md) change
-in the same pull request as the code that builds this part. This page
-changes none of them.
+while it has no key, one more sentence follows the text. It is shared
+text of `core/security`, so every app shows it
+([security-screens.md](../../architecture/security-screens.md#the-recovery-key-when-first-needed)):
+
+1. The dialog "Set up your recovery key first", for a backup and for the
+   app lock, under its reason: "If another shkriuss app already has your
+   recovery key, tap I already have one and enter the same words."
+2. The security screen, under "This app has no recovery key yet.", with
+   the name of its own button: "If another shkriuss app already has your
+   recovery key, tap I have a recovery key and enter the same words."
+   The owner chose that the sentence names the button of the screen it
+   is on.
 
 ## Backup contents
 
@@ -498,6 +500,14 @@ For the notifications, two more:
    has not asked, also after **Not now**.
 10. "Snoozed. It was due at ..." has the date when it was not today, as
     "Missed: ..." has.
+
+For backup, the recovery key and the app lock, two more:
+
+11. On the security screen, the sentence about another app's recovery
+    key names that screen's button, **I have a recovery key**
+    ([The recovery key](#the-recovery-key)).
+12. Licences is copied into Reminders: its own list, screen and texts in
+    `feature/reminders`, as Water has them. No shared module for it.
 
 ## Assumptions
 

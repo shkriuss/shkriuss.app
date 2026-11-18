@@ -1,0 +1,7 @@
+Protocol Buffers for Java, inside Tink
+
+Copyright 2008 Google Inc. All rights reserved.
+
+Source: https://github.com/protocolbuffers/protobuf
+
+Tink holds a copy of this library, under Tink's own package name. Its licence follows.

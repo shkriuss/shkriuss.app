@@ -4,6 +4,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -23,6 +24,8 @@ import app.shkriuss.core.design.ShkDialog
 import app.shkriuss.core.design.ShkDialogAction
 import app.shkriuss.core.design.ShkDialogInPlace
 import app.shkriuss.core.design.ShkInPlace
+import app.shkriuss.core.design.ShkText
+import app.shkriuss.core.design.ShkTheme
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -257,7 +260,9 @@ fun RecoveryKeyFirstNeedSample(form: FirstNeedForm, modifier: Modifier = Modifie
  * its action: the caller stops showing the dialog. The way out, a tap
  * outside and Back call [onDismiss]. [inPlace] draws it without its
  * window, for the Catalog. In its window it takes the shield of the screen
- * it opens over, if that has one ([shieldedLike]).
+ * it opens over, if that has one ([shieldedLike]). The two forms that
+ * offer **Create a recovery key** say under the reason that a key made in
+ * another app of the suite is entered with **I already have one**.
  */
 @OptIn(ShkInPlace::class)
 @Composable
@@ -275,6 +280,8 @@ internal fun FirstNeedDialogView(
     val confirm: ShkDialogAction
     val dismiss: ShkDialogAction
     var other: ShkDialogAction? = null
+    // The owner's sentence after the reason, wherever the dialog offers to create a key: the key may be in another app.
+    var otherApp: String? = null
     when (form) {
         FirstNeedForm.SET_UP_FOR_BACKUP, FirstNeedForm.SET_UP_FOR_APP_LOCK -> {
             title = stringResource(R.string.sec_first_need_set_up_title)
@@ -284,6 +291,7 @@ internal fun FirstNeedDialogView(
             confirm = ShkDialogAction(stringResource(R.string.sec_first_need_create), onCreate, closesDialog = false)
             other = ShkDialogAction(stringResource(R.string.sec_first_need_have_one), onEnter, closesDialog = false)
             dismiss = ShkDialogAction(stringResource(R.string.sec_first_need_not_now), {})
+            otherApp = stringResource(R.string.sec_first_need_other_app)
         }
         FirstNeedForm.ENTER_FOR_RESTORE -> {
             title = stringResource(R.string.sec_first_need_enter_title)
@@ -298,8 +306,18 @@ internal fun FirstNeedDialogView(
             dismiss = ShkDialogAction(stringResource(R.string.sec_first_need_not_now), {})
         }
     }
+    // A paragraph of its own under the reason, in the same colour.
+    val more: (@Composable ColumnScope.() -> Unit)? = otherApp?.let { { ShkText(text = it, color = ShkTheme.colors.textSecondary) } }
     if (inPlace) {
-        ShkDialogInPlace(title = title, confirmAction = confirm, modifier = modifier, text = text, dismissAction = dismiss, otherAction = other)
+        ShkDialogInPlace(
+            title = title,
+            confirmAction = confirm,
+            modifier = modifier,
+            text = text,
+            dismissAction = dismiss,
+            otherAction = other,
+            content = more,
+        )
     } else {
         ShkDialog(
             title = title,
@@ -309,6 +327,7 @@ internal fun FirstNeedDialogView(
             text = text,
             dismissAction = dismiss,
             otherAction = other,
+            content = more,
         )
     }
 }
