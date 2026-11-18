@@ -10,6 +10,8 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.os.SystemClock
 import android.view.WindowManager
+import androidx.compose.foundation.ComposeFoundationFlags
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -127,10 +129,18 @@ class AppLockWatcher(
     /**
      * Call once, in the app class's `onCreate`, before any screen starts.
      * The gate of a screen that started before refuses to show anything.
+     *
+     * It also turns off Compose's smart selection for the whole app: a
+     * long press in a text field would otherwise hand the field's text to
+     * Android's text classifier, and in the field of a recovery word that
+     * text is a word ("Screens that show or take the words" in
+     * crypto-design.md). It is set before any screen is drawn.
      */
+    @OptIn(ExperimentalFoundationApi::class)
     fun start() {
         check(!isStarted) { "AppLockWatcher.start() runs once" }
         isStarted = true
+        ComposeFoundationFlags.isSmartSelectionEnabled = false
         app.registerActivityLifecycleCallbacks(callbacks)
         app.registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         refresh()
@@ -139,11 +149,13 @@ class AppLockWatcher(
     /**
      * True if notifications must hide their title and text now: the app
      * lock is on, and the user did not ask to show the text. Also true if
-     * the state of the app lock cannot be read. Any thread may call it;
-     * `core/notify` calls it on its worker thread.
+     * the state of the app lock cannot be read, or is not certain because
+     * the first bytes of the `file-key` keyset file cannot be read. Any
+     * thread may call it; `core/notify` calls it on its worker thread.
      */
     fun hidesNotificationText(): Boolean = try {
-        crypto.appLock.state() == AppLockState.ON && !settings.notificationText
+        val appLock = crypto.appLock
+        !appLock.isStateCertain() || (appLock.state() == AppLockState.ON && !settings.notificationText)
     } catch (_: Exception) {
         true
     }
@@ -195,13 +207,22 @@ class AppLockWatcher(
         return true
     }
 
-    /** The app lock was turned on, and the app is unlocked. */
-    internal fun turnedOn() {
+    /**
+     * The app lock was turned on. The app is unlocked, unless it locked
+     * after the last prompt: [mark] is what [unlockMark] gave when that
+     * prompt ended. Then the file keys that turning it on put in memory
+     * leave it again, and the gate stays locked, as after any lock.
+     */
+    internal fun turnedOn(mark: Int) {
         generation++
         known = AppLockState.ON
-        locked = false
-        onlyAPromptUnlocks = false
-        publish()
+        if (mark == lockings) {
+            locked = false
+            onlyAPromptUnlocks = false
+            publish()
+        } else {
+            dropFileKeys()
+        }
         applyFlagsToAll()
         if (!settings.notificationText) onTextHidden()
         refresh()

@@ -157,6 +157,12 @@ More:
 
    These are the ways a text field of Compose Foundation 1.12.1 copies,
    cuts and pastes. A newer version is read again for others.
+   - Smart selection is off for the whole app:
+     `AppLockWatcher.start()`, which every app calls first in its app
+     class, sets `ComposeFoundationFlags.isSmartSelectionEnabled` to
+     false. Otherwise a long press would hand the selected letters to
+     Android's text classifier. A newer version of Compose is checked
+     for this flag too.
 5. The words of the list that start with what is typed show as buttons
    under the field, in the screen itself. A popup would be a second
    window. When the letters start no word of the list, the field says so

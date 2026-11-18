@@ -10,8 +10,11 @@ import android.os.Looper
 import android.os.PowerManager
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.ComposeFoundationFlags
+import androidx.compose.foundation.ExperimentalFoundationApi
 import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.RecoveryKey
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -50,8 +53,10 @@ class AppLockWatcherTest {
     private fun turnOn(): RecoveryKey {
         val key = app.crypto.setup.createRecoveryKey()
         app.crypto.setup.storeDerivedKeys(key)
-        app.crypto.appLock.beginTurnOn(app.crypto.setup.checkAllWords(key)!!).finish()
-        watcher.turnedOn()
+        val step = app.crypto.appLock.beginTurnOn(app.crypto.setup.checkAllWords(key)!!)
+        val mark = watcher.unlockMark()
+        step.finish()
+        watcher.turnedOn(mark)
         return key
     }
 
@@ -86,6 +91,24 @@ class AppLockWatcherTest {
         assertOpen()
 
         leave(screen)
+
+        assertLocked()
+        comeBack(screen)
+        assertLocked()
+    }
+
+    @Test
+    fun aLockBetweenTheLastPromptAndTheEndOfTurningItOnKeepsTheAppLocked() {
+        val key = app.crypto.setup.createRecoveryKey()
+        app.crypto.setup.storeDerivedKeys(key)
+        val screen = screen()
+        val step = app.crypto.appLock.beginTurnOn(app.crypto.setup.checkAllWords(key)!!)
+        // The last prompt ended. Before the app lock is stored, the user leaves the app.
+        val mark = watcher.unlockMark()
+        leave(screen)
+        step.finish()
+
+        watcher.turnedOn(mark)
 
         assertLocked()
         comeBack(screen)
@@ -431,6 +454,28 @@ class AppLockWatcherTest {
     }
 
     // Notifications.
+
+    @Test
+    fun notificationsHideTheirTextWhileTheFileKeyFileCannotBeRead() {
+        turnOn()
+        watcher.showsNotificationText = true
+        assertFalse(watcher.hidesNotificationText())
+
+        val file = File(app.filesDir, "shk-keys/file-key")
+        file.writeBytes(file.readBytes().copyOf(4))
+
+        assertTrue("the app lock may be on: the state is not certain", watcher.hidesNotificationText())
+    }
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Test
+    fun startTurnsOffSmartSelectionForTheWholeApp() {
+        ComposeFoundationFlags.isSmartSelectionEnabled = true
+
+        AppLockWatcher(app, app.crypto, onTextHidden = {}, elapsed = { 0L }, background = { it.run() }, main = { it.run() }).start()
+
+        assertFalse("no field hands its text to Android's text classifier", ComposeFoundationFlags.isSmartSelectionEnabled)
+    }
 
     @Test
     fun notificationsHideTheirTextWhileTheAppLockIsOnUnlessTheUserAsks() {

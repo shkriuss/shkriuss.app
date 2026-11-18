@@ -1230,8 +1230,10 @@ That text fits the QR alphanumeric mode and is at most 228 characters.
 
 1. The window blocks screenshots, screen recording and the recent-apps
    preview (`FLAG_SECURE`, and `setRecentsScreenshotEnabled(false)`).
-2. The app never puts the words on the clipboard. The words cannot be
-   selected.
+2. The app never puts the words on the clipboard. Shown words cannot be
+   selected. In the entry field a typed word can be selected, but
+   selecting it offers no menu and no copy, and the app turns off smart
+   selection, so the word never goes to Android's text classifier.
 3. The entry field turns off autofill, spell check and keyboard learning.
    It offers no paste, so the words are less likely to sit in a clipboard
    or a notes app.
@@ -2016,7 +2018,7 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 | Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. Whether a keeper can check for another app stays open for the handover between apps. |
 | Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. It names the key ID of the `record` key it was checked against, and `beginTurnOn` refuses a proof for another key. |
 | A keeper app that cannot read its kept recovery key | It asks for all 24 words instead: the same check as an app that does not keep the key. |
-| The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words. A turn of the phone does not count. The prompt asks again on the way back. |
+| The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words, and when an error ends the turn-on. A turn of the phone does not count. The prompt asks again on the way back. |
 | When the app locks | When it leaves the screen (the default), or after 1, 5 or 15 minutes or 1 hour away. Time away is counted with a clock the user cannot change. The app always locks when the screen turns off with the app on it, and after Android stopped it. |
 | What a waiting app learns of a screen that turned off | Nothing sure. Android holds the screen-off broadcast back, and a late one is ignored. "Keys in memory", point 5, says what happens; the user guide says it plainly. |
 | What a notification shows while the app lock is on | Only its channel's name and a fixed text, unless the user turns on "Show the text in notifications". Turning the app lock on posts the shown notifications again in that form. If the state cannot be read, the text is hidden. |

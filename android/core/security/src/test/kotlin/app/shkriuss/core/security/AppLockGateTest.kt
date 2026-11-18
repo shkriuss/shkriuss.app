@@ -81,7 +81,7 @@ class AppLockGateTest {
         val key = app.crypto.setup.createRecoveryKey()
         app.crypto.setup.storeDerivedKeys(key)
         app.crypto.appLock.beginTurnOn(app.crypto.setup.checkAllWords(key)!!).finish()
-        compose.runOnUiThread { watcher.turnedOn() }
+        compose.runOnUiThread { watcher.turnedOn(watcher.unlockMark()) }
         compose.waitForIdle()
     }
 

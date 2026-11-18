@@ -21,7 +21,13 @@ internal class StoppingStore(private val files: KeysetStore) : KeysetStore {
      */
     val changes = mutableListOf<String>()
 
-    override fun read(name: KeysetName): ByteArray? = files.read(name)
+    /** Keysets whose files a read does not find, though the list shows them: as when Android cannot look at a file. */
+    var unreadable: Set<KeysetName> = emptySet()
+
+    /** True to make the list of the files fail, as when Android cannot list the folder. */
+    var listFails = false
+
+    override fun read(name: KeysetName): ByteArray? = if (name in unreadable) null else files.read(name)
 
     override fun replace(name: KeysetName, blob: ByteArray) {
         stopIfDue()
@@ -41,7 +47,7 @@ internal class StoppingStore(private val files: KeysetStore) : KeysetStore {
         changes += "~${name.text}"
     }
 
-    override fun tidy(): Boolean = files.tidy()
+    override fun tidy(): Set<KeysetName>? = if (listFails) null else files.tidy()
 
     private fun stopIfDue() {
         if (stopBeforeChange == changes.size + 1) throw Stopped()
@@ -62,9 +68,18 @@ internal class TestApp(val folder: File, val hardware: SoftwareHardwareKeys = So
     lateinit var vault: KeyVault
         private set
 
+    /** Keysets whose files the next runs cannot read, though they are listed ([StoppingStore.unreadable]). */
+    var unreadable: Set<KeysetName> = emptySet()
+
+    /** True to make the list of the files fail in the next runs ([StoppingStore.listFails]). */
+    var listFails = false
+
     /** Starts the app. With [start] it also runs what an app does at start. */
     fun open(start: Boolean = true): ShkCrypto {
-        store = StoppingStore(KeysetFiles(folder))
+        store = StoppingStore(KeysetFiles(folder)).also {
+            it.unreadable = unreadable
+            it.listFails = listFails
+        }
         vault = KeyVault(TestKeys.water, store, hardware)
         return ShkCrypto(vault).also { if (start) it.start() }
     }

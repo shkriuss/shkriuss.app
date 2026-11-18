@@ -3,7 +3,6 @@ package app.shkriuss.core.crypto
 import java.io.File
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -65,7 +64,7 @@ class KeysetFilesTest {
         File(folder, "record.tmp").writeBytes(byteArrayOf(9))
         File(folder, "backup.tmp").writeBytes(byteArrayOf(9))
 
-        assertTrue(files.tidy())
+        assertEquals(setOf(KeysetName.RECORD), files.tidy())
 
         assertEquals(listOf("record"), folder.list()!!.toList())
         assertArrayEquals("the old file is whole", byteArrayOf(1, 2, 3), files.read(KeysetName.RECORD))
@@ -79,7 +78,7 @@ class KeysetFilesTest {
         files.replace(KeysetName.RECORD, byteArrayOf(1))
         File(folder, "something-else").writeBytes(byteArrayOf(1))
 
-        assertFalse(files.tidy())
+        assertNull(files.tidy())
         assertTrue("it is left alone", File(folder, "something-else").exists())
     }
 
@@ -102,14 +101,26 @@ class KeysetFilesTest {
         assertArrayEquals(byteArrayOf(1), File(setAside, "file-key-1").readBytes())
         assertArrayEquals(byteArrayOf(2), File(setAside, "file-key-2").readBytes())
         assertArrayEquals("the file itself stays", byteArrayOf(2), files.read(KeysetName.FILE_KEY))
-        assertTrue("start-up cleaning still sees only keyset files", files.tidy())
+        assertEquals("start-up cleaning still sees only keyset files", setOf(KeysetName.FILE_KEY, KeysetName.FILE_KEY_OLD), files.tidy())
     }
 
     @Test
-    fun aFolderThatDoesNotExistYetIsEmpty() {
+    fun aFolderThatDoesNotExistYetHoldsNoKeysetButItsListSaysNothing() {
         val files = KeysetFiles(File(temporary.root, "not-there"))
-        assertTrue(files.tidy())
+        // A missing folder looks the same as one Android cannot read, so start deletes no key then.
+        assertNull(files.tidy())
         assertNull(files.read(KeysetName.RECORD))
         files.delete(KeysetName.RECORD)
+    }
+
+    @Test
+    fun aFolderThatCannotBeListedSaysNothing() {
+        val path = temporary.newFolder().path
+        KeysetFiles(File(path)).replace(KeysetName.RECORD, byteArrayOf(1))
+        val unlistable = object : File(path) {
+            override fun listFiles(): Array<File>? = null
+        }
+
+        assertNull(KeysetFiles(unlistable).tidy())
     }
 }

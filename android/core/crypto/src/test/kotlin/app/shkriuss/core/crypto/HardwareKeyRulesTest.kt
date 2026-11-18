@@ -228,6 +228,29 @@ class HardwareKeyRulesTest {
     }
 
     @Test
+    fun rule8NothingIsDeletedIfTheFilesCannotBeListedOrAListedOneCannotBeRead() {
+        val app = appWithKeys()
+        app.hardware.put(background(5), ByteArray(32))
+
+        app.listFails = true
+        app.open()
+        assertTrue("a list of the keyset files that failed", "shk.background.5" in app.hardware.existing())
+        assertTrue("so the keys the files name stay too", "shk.background.1" in app.hardware.existing())
+
+        app.listFails = false
+        app.unreadable = KeysetName.entries.toSet()
+        app.open()
+        assertTrue("files the list shows and a read cannot find", "shk.background.5" in app.hardware.existing())
+        assertTrue("shk.background.1" in app.hardware.existing())
+        assertTrue("shk.unlocked.1" in app.hardware.existing())
+
+        app.unreadable = emptySet()
+        app.open()
+        assertFalse("with every file read, the key that no file names goes", "shk.background.5" in app.hardware.existing())
+        assertNotNull(app.open().records.seal(recordId, ByteArray(1)))
+    }
+
+    @Test
     fun rule8AFailedOrShortListDeletesNothingItDoesNotShow() {
         val app = appWithKeys()
         app.hardware.put(background(5), ByteArray(32))
