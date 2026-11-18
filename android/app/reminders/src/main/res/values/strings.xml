@@ -2,7 +2,4 @@
 <resources>
     <!-- The app's name under its icon. -->
     <string name="app_name">Reminders</string>
-    <!-- The screen that stands in for Reminders' screens until they are built: its title and its one line. -->
-    <string name="placeholder_title">Reminders</string>
-    <string name="placeholder_line">Reminders\' screens are not built yet.</string>
 </resources>

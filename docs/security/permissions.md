@@ -159,12 +159,12 @@ Reminders' manifest removes one permission that a library asks for:
 Other components that libraries add, none of them a permission:
 
 - The six screens of `core/security`, none exported
-  ([Screens](#screens)). Reminders has no Settings yet, so nothing opens
-  them, and the app lock cannot be turned on. A screen of the module
-  needs both permissions, and the APK rules check fails a build of
-  Reminders without them. `RemindersManifestTest` checks that Reminders'
-  screens are its own and these six, that none of the six is exported,
-  and that none has an intent filter.
+  ([Screens](#screens)). Reminders' Settings has no Security section
+  yet, so nothing opens them, and the app lock cannot be turned on. A
+  screen of the module needs both permissions, and the APK rules check
+  fails a build of Reminders without them. `RemindersManifestTest`
+  checks that Reminders' screens are its own and these six, that none
+  of the six is exported, and that none has an intent filter.
 - `androidx.room3.MultiInstanceInvalidationService`: added by Room, not
   exported. Reminders does not use multi-instance invalidation.
 - `androidx.startup.InitializationProvider`: not exported. The emoji

@@ -1,5 +1,6 @@
 package app.shkriuss.feature.reminders
 
+import androidx.room3.withWriteTransaction
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.reminders.data.RemindersDatabase
 import java.time.DayOfWeek
@@ -7,6 +8,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -409,6 +412,199 @@ class ViewModelsTest {
         assertNull(model.state.await { it.snackbar == null }.snackbar)
         liveBecomes(listOf(pills))
         entryBecomes(pills.id, ReminderEntry(mark = monday(9, 30)))
+    }
+
+    /**
+     * While Save writes, the form takes no change, so nothing typed after
+     * the tap is shown and then lost when the form closes. The test holds
+     * the database's write lock on another thread, so the save waits.
+     */
+    @Test
+    fun whileSaveWritesTheFormTakesNoChange() {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        val model = form()
+        model.openNew()
+        model.onTitleChange("Call the bank")
+        model.save()
+
+        model.state.await { it.form?.saving == true }
+        model.onTitleChange("Call the bank tomorrow")
+        model.onRepeatChange(Repeat.DAILY)
+        val waiting = checkNotNull(model.state.value.form)
+        assertEquals("Call the bank", waiting.title)
+        assertEquals(Repeat.ONCE, waiting.repeat)
+
+        release.countDown()
+        holder.join()
+        model.state.await { it.form == null && it.snackbar != null }
+        assertEquals(listOf("Call the bank"), live().map { it.title })
+    }
+
+    /**
+     * A form opened while another one is being saved stays when that save
+     * ends, with what was typed in it: the end of a save closes only the
+     * form it saved. On a tablet the list is beside the form, so a row can
+     * be tapped while Save writes.
+     */
+    @Test
+    fun aFormOpenedWhileAnotherIsSavedStaysWhenTheSaveEnds() {
+        val pills = add("Pills", pills())
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        val model = form()
+        model.openNew()
+        model.onTitleChange("Call the bank")
+        model.save()
+        model.state.await { it.form?.saving == true }
+
+        model.openEdit(pills)
+        model.onTitleChange("Vitamins")
+        release.countDown()
+        holder.join()
+
+        val screen = model.state.await { it.snackbar != null }
+        assertEquals(pills.id, screen.form?.reminderId)
+        assertEquals("Vitamins", screen.form?.title)
+        assertEquals(setOf("Pills", "Call the bank"), live().map { it.title }.toSet())
+    }
+
+    /**
+     * Cancel while Save writes does nothing: the write has begun, so
+     * closing the form then would say that nothing is written while it
+     * is. The form closes when the save ends, with its snackbar.
+     */
+    @Test
+    fun cancelWhileSaveWritesDoesNothing() {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        val model = form()
+        model.openNew()
+        model.onTitleChange("Call the bank")
+        model.save()
+        model.state.await { it.form?.saving == true }
+
+        model.cancel()
+        assertEquals(true, model.state.value.form?.saving)
+        release.countDown()
+        holder.join()
+
+        model.state.await { it.form == null && it.snackbar is FormSnackbar.Saved }
+        assertEquals(listOf("Call the bank"), live().map { it.title })
+    }
+
+    /**
+     * Delete while Save writes does nothing: the save of the edit has
+     * begun, and a delete then would race it, so its Undo could be lost.
+     * The form closes when the save ends, and the reminder stays.
+     */
+    @Test
+    fun deleteWhileSaveWritesDoesNothing() {
+        val pills = add("Pills", pills())
+        holdingTheDatabase { release ->
+            val model = form()
+            model.openEdit(pills)
+            model.onTitleChange("Vitamins")
+            model.save()
+            model.state.await { it.form?.saving == true }
+
+            model.delete()
+            assertEquals(true, model.state.value.form?.saving)
+            release()
+
+            model.state.await { it.form == null && it.snackbar is FormSnackbar.Saved }
+            assertEquals(listOf("Vitamins"), live().map { it.title })
+        }
+    }
+
+    /**
+     * The sheet swiped away while Save writes is gone from the screen, so
+     * its form closes at once, and the save goes on. A form opened then
+     * opens a sheet of its own, and stays when the save ends.
+     */
+    @Test
+    fun aSheetDismissedWhileSaveWritesClosesAtOnceAndTheSaveGoesOn() {
+        holdingTheDatabase { release ->
+            val model = form()
+            model.openNew()
+            model.onTitleChange("Call the bank")
+            model.save()
+            model.state.await { it.form?.saving == true }
+
+            model.dismissSheet()
+            model.state.await { it.form == null }
+            model.openNew()
+            model.onTitleChange("Water the plants")
+            release()
+
+            val screen = model.state.await { it.snackbar is FormSnackbar.Saved }
+            assertEquals("Water the plants", screen.form?.title)
+            assertEquals(listOf("Call the bank"), live().map { it.title })
+        }
+    }
+
+    /** Each form opened is counted, so the screen starts it afresh, also a new form opened over a new form. */
+    @Test
+    fun eachFormOpenedIsCounted() {
+        val pills = add("Pills", pills())
+        val model = form()
+        model.openNew()
+        model.state.await { it.opening == 1 && it.form != null }
+        model.openNew()
+        model.state.await { it.opening == 2 }
+        model.openEdit(pills)
+        model.state.await { it.opening == 3 && it.form?.reminderId == pills.id }
+    }
+
+    /** Runs [test] while another thread holds the database's write lock, so that a save waits until [test] calls its release. */
+    private fun holdingTheDatabase(test: (release: () -> Unit) -> Unit) {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val holder = thread {
+            runBlocking {
+                database.withWriteTransaction {
+                    held.countDown()
+                    release.await()
+                }
+            }
+        }
+        held.await()
+        try {
+            test {
+                release.countDown()
+                holder.join()
+            }
+        } finally {
+            release.countDown()
+            holder.join()
+        }
     }
 
     @Test

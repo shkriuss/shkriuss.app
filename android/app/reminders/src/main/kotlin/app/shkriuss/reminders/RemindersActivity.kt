@@ -4,40 +4,36 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
-import app.shkriuss.core.design.ShkScreen
-import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTheme
-import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.core.security.AppLockGate
+import app.shkriuss.feature.reminders.remindersServices
+import app.shkriuss.feature.reminders.ui.RemindersModels
+import app.shkriuss.feature.reminders.ui.RemindersScreens
 
 /**
  * The one activity of Reminders (docs/apps/reminders/spec.md, "As in
- * Water", navigation). All of its content is inside [AppLockGate], inside
- * [ShkTheme]: while the app is locked, nothing of it is drawn.
- * `EveryScreenIsBehindTheAppLockTest` checks it.
+ * Water", navigation). All of its content, with every sheet and dialog,
+ * is inside [AppLockGate], inside [ShkTheme]: while the app is locked,
+ * nothing of it is drawn. `EveryScreenIsBehindTheAppLockTest` checks it.
  */
 class RemindersActivity : ComponentActivity() {
+    private lateinit var models: RemindersModels
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        models = RemindersModels(this, remindersServices)
+        val versionName = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
         setContent {
             ShkTheme {
-                AppLockGate { RemindersPlaceholder() }
+                AppLockGate { RemindersScreens(models, versionName) }
             }
         }
     }
-}
 
-/**
- * Stands in for Reminders' screens, Upcoming, Past, Settings and the
- * reminder form, until they are built. They replace it, and delete it
- * with its two strings and its screenshots.
- */
-@Composable
-internal fun RemindersPlaceholder() {
-    ShkScreen(scrollable = true, topBar = { ShkTopBar(title = stringResource(R.string.placeholder_title)) }) {
-        ShkText(stringResource(R.string.placeholder_line))
+    override fun onStart() {
+        super.onStart()
+        // Every screen shows what is upcoming and what is past now, also if the clock changed while the app was away.
+        models.check()
     }
 }

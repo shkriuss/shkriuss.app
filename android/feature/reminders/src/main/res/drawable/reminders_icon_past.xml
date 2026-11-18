@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Past, in the navigation: a clock face with an arrow that turns back.
+    Drawn for the suite on the 24 dp grid; not taken from an icon set. The
+    colour is replaced by the navigation's icon colour.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4,12A8,8 0,1 0,6.34 6.34M6.34,2.84V6.34H9.84M12,8V12L15,14"
+        android:strokeWidth="2"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

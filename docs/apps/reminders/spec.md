@@ -77,16 +77,17 @@ Each part below is as Water's spec says, with the change named.
 
 3. One row per upcoming reminder, soonest first. At the same moment, the
    one created first. The title, then when it shows next and its repeat:
-   "Today, 09:00 · Every day", "Wed 18 Nov, 18:30 · Mon, Wed, Fri". The
-   year shows when it is not this year. When a snooze ends before the
-   next occurrence: "Snoozed until 09:12". Due and not shown yet: "Now".
-   A tap opens the form.
+   "Today, 09:00 · Every day", "Tomorrow, 09:00 · Every day", "Wed 18
+   Nov, 18:30 · Mon, Wed, Fri". The year shows when it is not this
+   year. When a snooze ends before the next occurrence: "Snoozed until
+   09:12". Due and not shown yet: "Now". A tap opens the form.
 4. With none: "No reminders yet. Tap Add a reminder to make one."
 5. A floating button, "Add a reminder", opens an empty form.
 
 ### Past
 
-1. Top bar: "Past", with **Delete all** while the list is not empty.
+1. Top bar: "Past", with **Delete all** while the list is not empty: a
+   bin icon, which TalkBack reads "Delete all".
 2. One row per past reminder, newest first: the title, and "Mon 16 Nov,
    14:00". The year shows when it is not this year. A tap opens the
    form.
@@ -104,7 +105,9 @@ form beside it, or "Choose a reminder."
 
 "New reminder" or "Edit reminder", from top to bottom:
 
-1. **Title**: a one-line field, empty at the start, with the keyboard.
+1. **Title**: a one-line field, empty at the start. For a new reminder
+   the keyboard opens on it. The form of an existing reminder opens
+   without the keyboard.
 2. **Repeat**: a `ShkRadioGroup`: Once, Every day, Every week, Every
    month, Every year.
 3. **Date**, for Once, Every month and Every year: "Mon 16 Nov 2026". A
@@ -481,6 +484,12 @@ checklists belong to Tasks. And five answers:
 4. The buttons **Done** and **Snooze 10 min**, the snooze fixed.
 5. A one-time reminder stays under Past until deleted or given a new
    time.
+
+For the screens, three more:
+
+6. **Delete all** is a bin icon in the top bar of Past.
+7. A row of Upcoming says "Tomorrow" as it says "Today".
+8. The keyboard opens on the title of a new reminder only.
 
 ## Assumptions
 

@@ -58,8 +58,8 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   [apps/water/spec.md](../apps/water/spec.md).
 - `android/feature/reminders/`: the data and logic of Reminders: its
   database, with the committed schemas in `schemas/`, its rules, its
-  ViewModels and its backup content. See
-  [apps/reminders/spec.md](../apps/reminders/spec.md).
+  ViewModels and its backup content, and its screens, in the package
+  `ui`. See [apps/reminders/spec.md](../apps/reminders/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
 - `android/app/water/`: the Water app, `app.shkriuss.water`.
@@ -541,12 +541,14 @@ second build must write the same mapping file, or the release stops. See
     back as the picker would.
   - `WaterScreenshotTest`: the screenshots of every screen, sheet and
     dialog.
-- `feature/reminders` has 9 test classes with 97 tests: the occurrences
+- `feature/reminders` has 10 test classes with 115 tests: the occurrences
   of each repeat, the rule and the mark with the examples of the spec,
   in Tbilisi and Berlin, the limits, and when a time of the form has
   passed, also in the two hours of summer time, as plain code
   (`OccurrencesTest`, `ReminderRuleTest`, `ReminderLimitsTest`,
-  `FormRulesTest`), the phone-only file, also after the disk refused a
+  `FormRulesTest`), how the screens write dates, times and repeats and
+  what TalkBack reads for them (`RemindersFormatTest`), the phone-only
+  file, also after the disk refused a
   write (`ReminderBookTest`), the schema
   (`RemindersDatabaseTest`), and the repository, the backup content and
   the ViewModels on a database in memory (`RemindersRepositoryTest`,
@@ -554,13 +556,19 @@ second build must write the same mapping file, or the release stops. See
   their work at once, as Water's do. `RemindersBackupContentTest` also
   writes a whole backup through `Backups` and restores it on a second
   app with the same recovery key, as Water's does.
-- `app/reminders` has three test classes:
-  `EveryScreenIsBehindTheAppLockTest`, a copy of Water's;
-  `RemindersManifestTest`, which names everything Reminders' merged
-  manifest lets another app reach: two permissions, Reminders' screen
-  and the six of `core/security`, none of the six exported, no receiver,
-  and Reminders' screen the only exported part; and the screenshots of
-  the line that stands in for the screens.
+- `app/reminders` has four test classes:
+  - `EveryScreenIsBehindTheAppLockTest`, a copy of Water's. It also
+    locks the app over the form, new and to edit, its date and time
+    pickers, and the question of Delete all.
+  - `RemindersManifestTest` names everything Reminders' merged manifest
+    lets another app reach: two permissions, Reminders' screen and the
+    six of `core/security`, none of the six exported, no receiver, and
+    Reminders' screen the only exported part.
+  - `RemindersScreensTest`: what the screens do and what TalkBack hears,
+    on a phone and on a tablet.
+  - `RemindersScreenshotTest`: the screenshots of every screen, sheet
+    and dialog. The date picker shows June 2100, because Material's
+    picker marks the real today in the month it shows.
 
 ### Instrumented tests
 

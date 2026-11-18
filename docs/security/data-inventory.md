@@ -144,10 +144,10 @@ private storage. This page did not check them in the code:
 
 ## Reminders (`app.shkriuss.reminders`)
 
-Reminders is being built. Its code stores reminders and what this
-phone remembers of them, as below. Its screens are not built yet: the
-app shows one line and writes none of it. It has no backup, shows no
-reminder and cannot set up the recovery key.
+Reminders is being built. On its screens you add, change and delete
+reminders, and it stores them and what this phone remembers of them,
+as below. It has no backup, shows no reminder and cannot set up the
+recovery key yet.
 
 ### On the phone
 
