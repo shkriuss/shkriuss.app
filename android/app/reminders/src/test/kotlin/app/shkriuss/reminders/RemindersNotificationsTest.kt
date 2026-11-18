@@ -201,6 +201,18 @@ class RemindersNotificationsTest {
         nothingShows(words(R.string.reminders_edit_reminder))
     }
 
+    @Test
+    fun openingRemindersAgainFromRecentsDoesNotOpenTheFormOfAnOldTap() {
+        val pills = runBlocking { app.test.services.repository.addSaved("Pills", Schedule(Repeat.DAILY, TODAY, 9 * 60)) }
+        // The tap started the task, so Android passes its intent again when the user opens Reminders from Recents.
+        val fromRecents = tapOn(pills.id).addFlags(Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)
+
+        start(ready = "Pills", intent = fromRecents)
+
+        destination(R.string.reminders_upcoming).assertIsSelected()
+        nothingShows(words(R.string.reminders_edit_reminder))
+    }
+
     // The line on Upcoming and the question.
 
     @Test
