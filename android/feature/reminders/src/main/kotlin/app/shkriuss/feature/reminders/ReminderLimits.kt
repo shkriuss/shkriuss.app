@@ -59,7 +59,7 @@ object TitleRules {
         title == clean(title) && title.none { it in LINE_BREAKS } && problemOf(title) == null
 
     /** The characters that end a line. */
-    private val LINE_BREAKS = setOf('\n', '\r', '\u000B', '\u000C', '\u0085', ' ', ' ')
+    private val LINE_BREAKS = setOf('\n', '\r', '\u000B', '\u000C', '\u0085', '\u2028', '\u2029')
 }
 
 /** The limits of a [Schedule], as table `reminder` has them. */
