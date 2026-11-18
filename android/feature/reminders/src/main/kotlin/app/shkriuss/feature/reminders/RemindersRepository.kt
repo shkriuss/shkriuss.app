@@ -206,10 +206,12 @@ class RemindersRepository(
             turns.withLock {
                 val now = time.reading()
                 val entries = book.entries.value
-                val past = reminders.live()
-                    .filter { it.record.id in ids && ReminderLists.alarmOf(reminderOf(it), entries[it.record.id], now) == null }
-                    .map { it.record.id }
-                val marked = database.withWriteTransaction { past.mapNotNull { writer.markDeleted(it) } }
+                // Read and written in one transaction: a save from another form cannot come between them.
+                val marked = database.withWriteTransaction {
+                    reminders.live()
+                        .filter { it.record.id in ids && ReminderLists.alarmOf(reminderOf(it), entries[it.record.id], now) == null }
+                        .mapNotNull { writer.markDeleted(it.record.id) }
+                }
                 book.remove(marked.map { it.record.id })
                 marked
             }
