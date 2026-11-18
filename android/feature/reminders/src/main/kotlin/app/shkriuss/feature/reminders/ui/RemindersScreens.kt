@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.design.ShkDestination
 import app.shkriuss.core.design.ShkNavigationScaffold
 import app.shkriuss.feature.reminders.R
+import app.shkriuss.feature.reminders.TappedReminder
 
 /**
  * Every screen of Reminders (docs/apps/reminders/spec.md, "As in Water",
@@ -25,6 +28,11 @@ import app.shkriuss.feature.reminders.R
  * - Back from Past or Settings goes to Upcoming. A form open as a sheet
  *   closes first. Back from Upcoming leaves the app.
  *
+ * A tap on a notification opens the form of its reminder on the list it
+ * is in, or Upcoming if that reminder is gone (spec, "The notification",
+ * point 6). The question for notifications is drawn here, over every
+ * destination.
+ *
  * There is no navigation library (ADR 0003, point 2): the chosen
  * destination is saved state, and the open forms are in the
  * [RemindersModels]. The activity puts this in `AppLockGate`, and every
@@ -33,6 +41,18 @@ import app.shkriuss.feature.reminders.R
 @Composable
 fun RemindersScreens(models: RemindersModels, versionName: String) {
     var destination by rememberSaveable { mutableStateOf(RemindersDestination.UPCOMING) }
+    val notifications by models.notifications.state.collectAsState()
+    LaunchedEffect(notifications.tapped) {
+        when (val tapped = notifications.tapped) {
+            null -> return@LaunchedEffect
+            is TappedReminder.Open -> {
+                destination = if (tapped.past) RemindersDestination.PAST else RemindersDestination.UPCOMING
+                (if (tapped.past) models.pastForm else models.upcomingForm).openEdit(tapped.reminder)
+            }
+            TappedReminder.Missing -> destination = RemindersDestination.UPCOMING
+        }
+        models.notifications.tapOpened()
+    }
     // Before the content, so that the Back of a form open in place of a list comes first.
     BackHandler(enabled = destination != RemindersDestination.UPCOMING) { destination = RemindersDestination.UPCOMING }
     val saved = rememberSaveableStateHolder()
@@ -43,12 +63,13 @@ fun RemindersScreens(models: RemindersModels, versionName: String) {
     ) {
         saved.SaveableStateProvider(destination.name) {
             when (destination) {
-                RemindersDestination.UPCOMING -> UpcomingContent(models.upcoming, models.upcomingForm)
+                RemindersDestination.UPCOMING -> UpcomingContent(models.upcoming, models.upcomingForm, models.notifications)
                 RemindersDestination.PAST -> PastContent(models.past, models.pastForm)
                 RemindersDestination.SETTINGS -> SettingsContent(versionName)
             }
         }
     }
+    NotificationQuestion(models.notifications)
 }
 
 /** The three destinations of Reminders, in the order the navigation shows them. */

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.shkriuss.feature.reminders.NotificationsViewModel
 import app.shkriuss.feature.reminders.PastViewModel
 import app.shkriuss.feature.reminders.ReminderFormViewModel
 import app.shkriuss.feature.reminders.RemindersServices
@@ -23,14 +24,23 @@ class RemindersModels(owner: ViewModelStoreOwner, services: RemindersServices) {
     /** The clock of the screens: the one source that every ViewModel observes. */
     private val now = services.now.also { it.check() }
 
-    private val provider = ViewModelProvider(
+    /** The line about notifications, the question for notifications, and a tap on a notification. */
+    val notifications: NotificationsViewModel = ViewModelProvider(
         owner,
-        viewModelFactory {
-            initializer { UpcomingViewModel(services.repository, now) }
-            initializer { PastViewModel(services.repository, now) }
-            initializer { ReminderFormViewModel(services.repository, services.time, now) }
-        },
-    )
+        viewModelFactory { initializer { NotificationsViewModel(services.alarms, services.repository, services.time) } },
+    )[NotificationsViewModel::class.java]
+
+    private val provider = notifications.let { asks ->
+        ViewModelProvider(
+            owner,
+            viewModelFactory {
+                initializer { UpcomingViewModel(services.repository, now) }
+                initializer { PastViewModel(services.repository, now) }
+                // A form outlives this object when the phone is turned, so it holds the question's ViewModel only, not this.
+                initializer { ReminderFormViewModel(services.repository, services.time, now, onSaved = asks::saved) }
+            },
+        )
+    }
 
     /** Upcoming. */
     val upcoming: UpcomingViewModel = provider[UpcomingViewModel::class.java]
@@ -47,11 +57,13 @@ class RemindersModels(owner: ViewModelStoreOwner, services: RemindersServices) {
     /**
      * The clock is read again, so every screen shows what is upcoming and
      * what is past now, also if the clock or the time zone changed while
-     * the app was away. The activity calls it each time it comes to the
-     * front.
+     * the app was away. The line about notifications reads their state
+     * again: the user can change it in Android's settings at any moment.
+     * The activity calls it each time it comes to the front.
      */
     fun check() {
         now.check()
+        notifications.refresh()
     }
 
     private companion object {

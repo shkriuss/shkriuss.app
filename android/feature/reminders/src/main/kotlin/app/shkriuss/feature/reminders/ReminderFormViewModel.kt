@@ -185,14 +185,16 @@ object FormRules {
  * on its row. It checks the form as the spec says, writes through
  * [repository], and shows the snackbar of a Save or a Delete.
  *
- * Every change runs in [work] on top of the ViewModel's scope. Tests pass
- * `Dispatchers.Unconfined`.
+ * [onSaved] runs after each Save that wrote, so that the question for
+ * notifications can follow it. Every change runs in [work] on top of the
+ * ViewModel's scope. Tests pass `Dispatchers.Unconfined`.
  */
 class ReminderFormViewModel(
     private val repository: RemindersRepository,
     private val time: RemindersTime,
     now: RemindersNow,
     private val work: CoroutineContext = EmptyCoroutineContext,
+    private val onSaved: () -> Unit = {},
 ) : ViewModel() {
     private val form = MutableStateFlow<ReminderForm?>(null)
     private val snackbar = MutableStateFlow<FormSnackbar?>(null)
@@ -255,8 +257,9 @@ class ReminderFormViewModel(
     /**
      * Save. A wrong field shows its words and nothing is written. With no
      * change it closes and writes nothing. Otherwise it writes, closes,
-     * and the snackbar says when the reminder shows next. A new reminder
-     * while 500 are kept is refused: the form stays, with its words.
+     * the snackbar says when the reminder shows next, and [onSaved] runs.
+     * A new reminder while 500 are kept is refused: the form stays, with
+     * its words.
      */
     fun save() {
         val open = form.value ?: return
@@ -292,7 +295,9 @@ class ReminderFormViewModel(
                 return@launch
             }
             form.compareAndSet(writing, null)
-            saved?.let(::savedSnackbarOf)?.let { snackbar.value = it }
+            if (saved == null) return@launch
+            onSaved()
+            savedSnackbarOf(saved)?.let { snackbar.value = it }
         }
     }
 

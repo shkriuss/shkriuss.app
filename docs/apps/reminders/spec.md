@@ -38,7 +38,7 @@ Each part below is as Water's spec says, with the change named.
 | Part of Water's spec | What differs in Reminders |
 |---|---|
 | [Navigation](../water/spec.md#navigation) | The activity is `RemindersActivity`. The destinations are **Upcoming** (the start), **Past** and **Settings**. |
-| [Asking for notifications](../water/spec.md#asking-for-notifications) | It comes after the first save while Android has not asked (`NotAsked`), and from **Allow**. The text: "Reminders shows each reminder as a notification. Android asks next whether Reminders may show notifications." The reminder is saved either way. |
+| [Asking for notifications](../water/spec.md#asking-for-notifications) | It comes after every save while Android has not asked (`NotAsked`), also after **Not now** at an earlier save, and from **Allow**. The text: "Reminders shows each reminder as a notification. Android asks next whether Reminders may show notifications." The reminder is saved either way. |
 | [Settings screen](../water/spec.md#settings-screen) | Only the sections Backup, Security and About. Reminders has no settings of its own: the snooze is fixed. |
 | [Backup and restore screens](../water/spec.md#backup-and-restore-screens) | "Water" becomes "Reminders", "drinks" becomes "reminders": "It holds 42 reminders." The file name: `reminders-2026-11-16.shkbackup`. |
 | [Licences](../water/spec.md#licences), [Every screen](../water/spec.md#every-screen) | Nothing. |
@@ -324,7 +324,8 @@ As [Water does](../water/spec.md#how-water-uses-corenotify), except:
 2. **Text**: on time, the repeat, such as "Every day" or "Every Mon,
    Wed, Fri", and none for Once. Late: "Missed: 09:00", or "Missed: Mon
    16 Nov, 09:00" when not today. After a snooze: "Snoozed. It was due at
-   09:00." Here 09:00 is the latest occurrence at or before the mark as
+   09:00.", or "Snoozed. It was due at Mon 16 Nov, 09:00." when not
+   today. Here 09:00 is the latest occurrence at or before the mark as
    it is before the handler's step 3. After a second snooze the mark is
    the first snooze's end, 09:12, and that never shows.
 3. **Time**: the moment of its alarm.
@@ -490,6 +491,13 @@ For the screens, three more:
 6. **Delete all** is a bin icon in the top bar of Past.
 7. A row of Upcoming says "Tomorrow" as it says "Today".
 8. The keyboard opens on the title of a new reminder only.
+
+For the notifications, two more:
+
+9. The question for notifications comes after every save while Android
+   has not asked, also after **Not now**.
+10. "Snoozed. It was due at ..." has the date when it was not today, as
+    "Missed: ..." has.
 
 ## Assumptions
 

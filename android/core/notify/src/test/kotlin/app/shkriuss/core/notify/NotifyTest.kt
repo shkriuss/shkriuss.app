@@ -833,6 +833,9 @@ class NotifyTest {
         assertTrue(tap.isActivity)
         assertTrue(tap.isImmutable)
         assertEquals(startScreen, tap.savedIntent.component)
+        assertEquals("the alarm's id", "a", tap.savedIntent.identifier)
+        val anew = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        assertEquals("the app starts anew, with no second screen on top", anew, tap.savedIntent.flags and anew)
         // The next one is registered, and comes.
         assertEquals(mapOf<String?, Long>("b" to start + 2 * HOUR), waiting())
         app.failure = null

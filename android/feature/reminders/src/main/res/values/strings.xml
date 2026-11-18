@@ -99,4 +99,38 @@
     <!-- Settings. -->
     <string name="reminders_section_about">About</string>
     <string name="reminders_version">Version</string>
+
+    <!-- The line at the top of Upcoming while a reminder is upcoming and notifications cannot show, and its button. -->
+    <string name="reminders_line_not_asked">Reminders may not show notifications yet.</string>
+    <string name="reminders_line_denied">Notifications are off for Reminders. Your reminders are silent.</string>
+    <string name="reminders_line_channel_off">Reminders are turned off in Android\'s settings. Your reminders are silent.</string>
+    <string name="reminders_allow">Allow</string>
+    <string name="reminders_open_settings">Open settings</string>
+
+    <!-- The dialog before Android's own question for notifications. The title is Water's, which the owner chose. -->
+    <string name="reminders_question_title">Allow notifications</string>
+    <string name="reminders_question_text">Reminders shows each reminder as a notification. Android asks next whether Reminders may show notifications.</string>
+    <string name="reminders_continue">Continue</string>
+    <string name="reminders_not_now">Not now</string>
+
+    <!-- The channel, as Android's settings show it. -->
+    <string name="reminders_channel_name">Reminders</string>
+    <string name="reminders_channel_description">Shows each reminder at its time.</string>
+
+    <!--
+        The text of a reminder's notification. On time, its repeat: "Every
+        day", "Every Mon, Wed, Fri", or none for Once. Late: "Missed: 09:00",
+        or "Missed: Mon 16 Nov, 09:00" when not today. After a snooze:
+        "Snoozed. It was due at 09:00.", with the date in the same way.
+    -->
+    <string name="reminders_every_days">Every %1$s</string>
+    <string name="reminders_missed">Missed: %1$s</string>
+    <string name="reminders_snoozed_was_due">Snoozed. It was due at %1$s.</string>
+
+    <!-- The two buttons of the notification. The snooze is fixed at 10 minutes. -->
+    <string name="reminders_done">Done</string>
+    <plurals name="reminders_snooze_minutes">
+        <item quantity="one">Snooze %1$s min</item>
+        <item quantity="other">Snooze %1$s min</item>
+    </plurals>
 </resources>

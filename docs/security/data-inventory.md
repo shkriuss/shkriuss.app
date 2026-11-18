@@ -145,9 +145,9 @@ private storage. This page did not check them in the code:
 ## Reminders (`app.shkriuss.reminders`)
 
 Reminders is being built. On its screens you add, change and delete
-reminders, and it stores them and what this phone remembers of them,
-as below. It has no backup, shows no reminder and cannot set up the
-recovery key yet.
+reminders, it stores them and what this phone remembers of them, and it
+shows each reminder as a notification at its time, as below. It has no
+backup and cannot set up the recovery key yet.
 
 ### On the phone
 
@@ -157,6 +157,7 @@ Everything is in Reminders' private storage.
 |---|---|---|---|
 | The database `reminders.db` | Reminders' database folder | One record table, `reminder`, one row per reminder: its title, its date, its time, its repeat and its days of the week ([spec.md](../apps/reminders/spec.md#table-reminder)). Each row also has its random ID, its times and its deletion marker. A deleted reminder keeps its title. The table `change_counter` holds one number. **Text: the titles.** | `reminder`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
 | The preferences file `app.shkriuss.reminders` | Reminders' preferences folder | For each reminder, by its random ID: its mark (`mark.<id>`, a local date and minute), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`) ([spec.md](../apps/reminders/spec.md#on-this-phone-only)). IDs and times only. Never a title. | No |
+| The preferences file `app.shkriuss.core.notify` | Reminders' preferences folder | For each alarm, named by the random ID of its reminder: the time it is set for (`registered:<id>`) and the time it last fired (`fired:<id>`). And `permission-asked`: whether Android's question for notifications was answered ([notifications.md](../architecture/notifications.md#what-goes-where)). IDs and times only. | No |
 
 - No key files and no hardware keys: the recovery key cannot be set up
   in Reminders yet.
@@ -168,10 +169,36 @@ Everything is in Reminders' private storage.
 
 ### What leaves the phone, and how
 
-Nothing. Reminders has no network permission and shows no notification.
-Android backup and device transfer are off. It writes no file outside
-its storage, shares nothing with other apps, uses no clipboard and
-writes no log.
+Nothing leaves the phone. Two things leave Reminders' storage, to
+Android:
+
+1. **Notifications.** A reminder shows its title, and "Every day",
+   "Missed: 09:00" or "Snoozed. It was due at 09:00.", with the buttons
+   **Done** and **Snooze 10 min**.
+   - On the lock screen it is private: Android shows its title only if
+     the phone's setting allows it.
+   - A reminder's title and buttons reach another app only if you gave
+     that app notification access. Such an app can pass them on to a
+     watch.
+   - Reminders does not mark its reminders "local only", as Water does
+     not ([spec.md](../apps/reminders/spec.md#open), item 2).
+   - With the app lock on, a reminder shows only its hidden form:
+     "Reminders" and "The app lock hides this notification. Open the app
+     to see it.", without its title and without buttons. Unless **Show
+     the text in notifications** is on.
+   - If a reminder cannot be shown, a notice comes in its place:
+     "Reminders" and "A reminder could not be shown. Open the app to see
+     it.", with no title and no buttons.
+2. **Intents**, which stay inside the phone. An alarm carries only the
+   random ID of its reminder. A tap on a reminder opens Reminders with
+   that ID. A button's press goes only to Reminders' own receiver, and
+   carries the ID, the button, the reminder's time and, for **Snooze 10
+   min**, the 10 minutes. Never a title. Reminders opens Android's own
+   pages for its notification settings.
+
+Reminders has no network permission. Android backup and device transfer
+are off. It writes no file outside its storage, shares nothing with
+other apps, uses no clipboard and writes no log.
 
 ### How to delete it
 

@@ -222,6 +222,14 @@ What stops it:
    receiver is registered as not exported. A tap on a notification opens
    only the same app, through an explicit, immutable intent
    ([permissions.md](permissions.md)).
+   - Reminders' launcher screen reads one thing from the intent that
+     starts it: the identifier, which a tap on a reminder sets to the
+     reminder's random ID. Another app can start the screen with any
+     identifier. Then Reminders opens the form of the reminder with that
+     ID, behind its app lock, or Upcoming. The other app cannot see the
+     screen. A reminder's ID, a random UUID, reaches another app only if
+     that app has notification access: it is the key of the
+     notification ([permissions.md](permissions.md#reminders-appshkriussreminders)).
    - One exception, in Catalog only: the receiver of
      `androidx.profileinstaller` is exported to callers with
      `android.permission.DUMP`, which only the system and the developer
@@ -1173,9 +1181,10 @@ Status: **Open (the sync design).**
 Status: **Met for what is built.**
 
 - MASWE-0018 and 0032, components and intents: met. Only the launcher
-  screen is exported. Receivers are not exported and ignore actions they
-  do not expect. A notification opens only the same app, through an
-  explicit, immutable intent ([permissions.md](permissions.md),
+  screen is exported. Of the intent that starts it, only Reminders reads
+  anything: its identifier, a reminder's ID. Receivers are not exported
+  and ignore actions they do not expect. A notification opens only the
+  same app, through an explicit, immutable intent ([permissions.md](permissions.md),
   [notifications.md](../architecture/notifications.md#what-goes-where)).
 - MASWE-0029, deep links: met. There are none.
 - MASWE-0030, the clipboard: met. The words never go on the clipboard,

@@ -81,9 +81,17 @@ class RemindersFormat(
         else -> dateTimeSpoken(at, today)
     }
 
-    /** When a snooze ends: the time alone today, "09:12", or [dateTime] on another day. */
-    fun snoozeEnd(at: LocalDateTime, today: LocalDate): String =
+    /**
+     * The time alone today, "09:12", or [dateTime] on another day, "Mon 16
+     * Nov, 09:00". The end of a snooze in a row of Upcoming, and the time
+     * in "Missed: 09:00" and "Snoozed. It was due at 09:00." of a
+     * notification, say it so.
+     */
+    fun timeOrDateTime(at: LocalDateTime, today: LocalDate): String =
         if (at.toLocalDate() == today) time(at.toLocalTime()) else dateTime(at, today)
+
+    /** When a snooze ends: the time alone today, "09:12", or [dateTime] on another day. */
+    fun snoozeEnd(at: LocalDateTime, today: LocalDate): String = timeOrDateTime(at, today)
 
     /** [snoozeEnd] as TalkBack reads it. */
     fun snoozeEndSpoken(at: LocalDateTime, today: LocalDate): String =
@@ -105,6 +113,16 @@ class RemindersFormat(
         Repeat.ONCE -> null
         Repeat.WEEKLY -> days(schedule.weekdays, ::dayShort)
         else -> repeatName(schedule.repeat)
+    }
+
+    /**
+     * The repeat of [schedule] in the text of its notification, on time:
+     * "Every day", "Every Mon, Wed, Fri", "Every month", "Every year".
+     * None for Once (docs/apps/reminders/spec.md, "The notification").
+     */
+    fun repeatOfNotification(schedule: Schedule): String? = when (schedule.repeat) {
+        Repeat.WEEKLY -> resources.getString(R.string.reminders_every_days, days(schedule.weekdays, ::dayShort))
+        else -> repeat(schedule)
     }
 
     /** [repeat] as TalkBack reads it: "every day", "Monday, Wednesday, Friday". */

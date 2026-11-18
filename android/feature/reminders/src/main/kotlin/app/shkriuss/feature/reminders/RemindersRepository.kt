@@ -11,6 +11,7 @@ import app.shkriuss.feature.reminders.data.RemindersDatabase
 import java.time.LocalDate
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -56,10 +57,19 @@ data class ReminderChange(
  * minute, with no snooze and nothing on screen; a delete removes the
  * entries. The current minute is that of the moment the write was asked
  * for: the clock is read once, before the write. So a save that ends in
- * the next minute never makes the mark the very time it saved. That work takes its turn on [turns], the one lock that the
- * handler of an alarm and a press of a button take too, and runs in
- * [work], off the main thread. Then it calls [onChange], so that the
- * notifications follow.
+ * the next minute never makes the mark the very time it saved. That work
+ * takes its turn on [turns], the one lock that the handler of an alarm
+ * and a press of a button take too, and runs in [work], off the main
+ * thread. Then it calls [onChange], so that the notifications follow
+ * (`RemindersAlarms.afterChange`).
+ *
+ * Once a write has begun, it runs to its end, from the database through
+ * [onChange], also when its caller is cancelled: a screen that goes away
+ * in the middle of a save must not leave a stored reminder with no mark,
+ * no alarm, or the notification of its old time. A stop of the process
+ * between the database write and the entry is not covered: the reminder
+ * then counts from when Reminders next sees it (spec, "The mark", point
+ * 2).
  */
 class RemindersRepository(
     private val database: RemindersDatabase,
@@ -80,6 +90,9 @@ class RemindersRepository(
     /** The phone-only entries, by reminder `id`. They change after every write, and when an alarm or a button changes them. */
     val entries: StateFlow<Map<String, ReminderEntry>> = book.entries
 
+    /** The reminders that are not deleted, as stored now, in no order. The alarms are read from them. */
+    suspend fun live(): List<Reminder> = reminders.live().map(::reminderOf)
+
     /** The reminder with [id], or null if there is none or it is deleted. */
     suspend fun find(id: String): Reminder? = reminders.find(id)?.takeUnless { it.record.isDeleted }?.let(::reminderOf)
 
@@ -89,7 +102,10 @@ class RemindersRepository(
      * returns null. Its mark is the current minute of [now], the moment of
      * the save, so a daily 09:00 saved at 09:30 starts tomorrow.
      */
-    suspend fun add(title: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? {
+    suspend fun add(title: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? =
+        withContext(NonCancellable) { addWhole(title, schedule, now) }
+
+    private suspend fun addWhole(title: String, schedule: Schedule, now: ClockReading): Reminder? {
         requireStored(title, schedule)
         val created: ReminderEntity? = database.withWriteTransaction {
             if (reminders.liveCount() >= ReminderLimits.MOST_REMINDERS) {
@@ -112,7 +128,10 @@ class RemindersRepository(
      * nothing more changes. Nothing is written if both are as they were.
      * Null if there is no such reminder, or it is deleted.
      */
-    suspend fun change(id: String, title: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? {
+    suspend fun change(id: String, title: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? =
+        withContext(NonCancellable) { changeWhole(id, title, schedule, now) }
+
+    private suspend fun changeWhole(id: String, title: String, schedule: Schedule, now: ClockReading): Reminder? {
         requireStored(title, schedule)
         val written: Pair<ReminderEntity, ReminderEntity>? = database.withWriteTransaction {
             val before = reminders.find(id)?.takeUnless { it.record.isDeleted }
@@ -135,7 +154,9 @@ class RemindersRepository(
      * with their content. Their entries go. Returns those that were
      * deleted now: not one that was already deleted or never stored.
      */
-    suspend fun delete(ids: List<String>): List<Reminder> {
+    suspend fun delete(ids: List<String>): List<Reminder> = withContext(NonCancellable) { deleteWhole(ids) }
+
+    private suspend fun deleteWhole(ids: List<String>): List<Reminder> {
         val deleted = database.withWriteTransaction { ids.distinct().mapNotNull { writer.markDeleted(it) } }
         if (deleted.isEmpty()) return emptyList()
         val deletedIds = deleted.map { it.record.id }
@@ -150,7 +171,10 @@ class RemindersRepository(
      * Undo. Returns those that came back. Undo may bring the count over
      * the limit of the form.
      */
-    suspend fun bringBack(ids: List<String>, now: ClockReading = time.reading()): List<Reminder> {
+    suspend fun bringBack(ids: List<String>, now: ClockReading = time.reading()): List<Reminder> =
+        withContext(NonCancellable) { bringBackWhole(ids, now) }
+
+    private suspend fun bringBackWhole(ids: List<String>, now: ClockReading): List<Reminder> {
         val back = database.withWriteTransaction { ids.distinct().mapNotNull { writer.restore(it) } }
         if (back.isEmpty()) return emptyList()
         val backIds = back.map { it.record.id }

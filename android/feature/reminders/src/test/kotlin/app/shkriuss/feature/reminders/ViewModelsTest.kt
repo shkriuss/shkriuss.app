@@ -9,6 +9,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -244,6 +245,30 @@ class ViewModelsTest {
         assertEquals("Call the bank", stored.title)
         assertEquals(CALL_THE_BANK, stored.schedule)
         assertEquals(ReminderEntry(mark = monday(9, 30)), book.entryOf(stored.id))
+    }
+
+    @Test
+    fun aSaveThatWroteTellsTheQuestionForNotificationsAndOneThatWroteNothingDoesNot() {
+        val saves = AtomicInteger()
+        val model = ReminderFormViewModel(repository, time, now, Dispatchers.Unconfined, onSaved = { saves.incrementAndGet() })
+        model.openNew()
+        model.onTitleChange("Pills")
+        model.save()
+        model.state.await { it.form == null && it.snackbar != null }
+        assertEquals(1, saves.get())
+
+        // No change: nothing is written.
+        model.snackbarDismissed()
+        model.openEdit(live().single())
+        model.save()
+        model.state.await { it.form == null }
+        // A wrong title: nothing is written.
+        model.openEdit(live().single())
+        model.onTitleChange(" ")
+        model.save()
+        model.openForm { it.titleError != null }
+
+        assertEquals(1, saves.get())
     }
 
     @Test

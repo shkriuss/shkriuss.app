@@ -17,6 +17,10 @@ dependencies {
     // brings AppName of core/crypto, the name of the app in keys and
     // backups (RemindersServices.APP_NAME).
     implementation(project(":core:backup"))
+    // The notifications: Reminders' AlarmSource, AlarmHandler and
+    // ButtonHandler, and the state of the notification permission. Alarms
+    // and notifications only through core/notify (CLAUDE.md).
+    implementation(project(":core:notify"))
     implementation(libs.lifecycle.viewmodel)
     // The screens: the Shk* components, and BackHandler from Activity
     // Compose, which the app has already. No navigation library: Reminders
@@ -26,6 +30,9 @@ dependencies {
     implementation(libs.activity.compose)
 
     testImplementation(project(":core:testing"))
+    // What the notifications show and which alarms wait, on Robolectric's
+    // Android, without naming Android's alarm or notification classes.
+    testImplementation(testFixtures(project(":core:notify")))
     // Real keys for the backup round trip, where no Android Keystore
     // exists (ADR 0029). Test fixtures are never part of an app.
     testImplementation(testFixtures(project(":core:crypto")))

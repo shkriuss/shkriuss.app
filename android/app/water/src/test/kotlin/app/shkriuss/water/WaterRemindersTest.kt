@@ -258,6 +258,8 @@ class WaterRemindersTest {
         assertEquals("Drink reminders", notice.title)
         assertEquals(app.getString(NotifyR.string.notify_reminder_failed), notice.text)
         assertEquals(ComponentName(app, WaterActivity::class.java), notice.tap?.component)
+        val anew = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        assertEquals("Water starts anew on Today, with no second screen on top", anew, checkNotNull(notice.tap).flags and anew)
         assertEquals(listOf(millis(at(10, 0))), waiting())
     }
 }

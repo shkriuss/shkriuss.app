@@ -3,6 +3,7 @@ package app.shkriuss.feature.reminders.ui
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.core.design.ShkWindowWidth
 import app.shkriuss.core.design.rememberShkSnackbarHostState
 import app.shkriuss.feature.reminders.NextShow
+import app.shkriuss.feature.reminders.NotificationsViewModel
 import app.shkriuss.feature.reminders.R
 import app.shkriuss.feature.reminders.ReminderFormViewModel
 import app.shkriuss.feature.reminders.UpcomingRow
@@ -36,17 +38,21 @@ import java.time.LocalDate
 
 /**
  * Upcoming, the start screen (docs/apps/reminders/spec.md, "Upcoming"):
- * one row per upcoming reminder, soonest first, the floating button "Add
- * a reminder", and the [form] that both open ([ListAndForm]).
+ * while a reminder is upcoming and notifications cannot show, the line
+ * that says so; one row per upcoming reminder, soonest first; the
+ * floating button "Add a reminder"; and the [form] that both open
+ * ([ListAndForm]).
  */
 @Composable
 internal fun UpcomingContent(
     model: UpcomingViewModel,
     form: ReminderFormViewModel,
+    notifications: NotificationsViewModel,
     windowWidth: ShkWindowWidth = ShkWindowWidth.current,
 ) {
     val screen by model.state.collectAsState()
     val formScreen by form.state.collectAsState()
+    val notificationsScreen by notifications.state.collectAsState()
     val format = rememberRemindersFormat()
     val snackbars = rememberShkSnackbarHostState()
     // The list leaves room under its last row for the floating button, so that row can scroll clear of it.
@@ -72,6 +78,9 @@ internal fun UpcomingContent(
                     modifier = Modifier.weight(1f),
                 )
                 return@ShkScreen
+            }
+            notificationsScreen.line?.let { line ->
+                NotificationLineRow(line, notifications, Modifier.padding(bottom = ShkSpacing.Small))
             }
             val roomForButton = with(LocalDensity.current) { buttonHeight.toDp() } + ShkSpacing.Large
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {

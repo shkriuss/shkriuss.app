@@ -2,6 +2,7 @@ package app.shkriuss.feature.reminders
 
 import app.shkriuss.feature.reminders.ui.RemindersFormat
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 import java.util.Locale
 import org.junit.Assert.assertEquals
@@ -71,6 +72,22 @@ class RemindersFormatTest {
         assertEquals("Mon, Wed, Fri", uk.repeat(gym()))
         assertEquals("Every month", uk.repeat(schedule(Repeat.MONTHLY, MONDAY, 10)))
         assertEquals("Every year", uk.repeat(schedule(Repeat.YEARLY, MONDAY, 10)))
+    }
+
+    @Test
+    fun theRepeatOfANotificationOnTime() {
+        assertNull(uk.repeatOfNotification(CALL_THE_BANK))
+        assertEquals("Every day", uk.repeatOfNotification(pills()))
+        assertEquals("Every Mon, Wed, Fri", uk.repeatOfNotification(gym()))
+        assertEquals("Every month", uk.repeatOfNotification(schedule(Repeat.MONTHLY, MONDAY, 10)))
+        assertEquals("Every year", uk.repeatOfNotification(schedule(Repeat.YEARLY, MONDAY, 10)))
+    }
+
+    @Test
+    fun aTimeOfANotificationIsATimeTodayAndADateOnAnotherDay() {
+        assertEquals("09:00", uk.timeOrDateTime(monday(9), MONDAY))
+        assertEquals("Mon 16 Nov, 09:00", uk.timeOrDateTime(monday(9), MONDAY.plusDays(1)))
+        assertEquals("Mon, 16 Nov 2026, 09:00", uk.timeOrDateTime(monday(9), LocalDate.of(2027, 1, 1)))
     }
 
     @Test
