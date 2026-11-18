@@ -18,6 +18,10 @@ Changed:
 
 Fixed:
 
+- **One screen after the recovery key.** Right after the recovery key
+  was set up or entered for a backup, a restore or the app lock, a tap
+  on another row of Settings could open a second screen. Now only the
+  screen you started opens.
 - **The notice "A reminder could not be shown."** A tap on it starts
   Water anew on Today, as a tap on a reminder does. Before, when Water
   was open, it opened a second Water screen on top of it.

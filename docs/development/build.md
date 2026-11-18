@@ -513,7 +513,8 @@ second build must write the same mapping file, or the release stops. See
     check and one that cannot be read again; each of the six answers and
     the three failures; Cancel at the question; a restore on the same
     phone, which cannot undo a deletion; a restore from another phone;
-    that the reminders follow; and that a pending move of the file keys
+    that the reminders follow; that a second request before the first
+    screen opened is ignored; and that a pending move of the file keys
     is finished only with keys. `WaterRemindersTest` has four tests of
     `afterRestore`. `LicencesTest` checks that every part has a name, a
     notice and a licence text, and that each licence text has the
