@@ -114,7 +114,8 @@ delete it or give it a new time.
    Upcoming.
 2. To empty the list, tap the bin at the top, **Delete all**. Reminders
    asks "Delete all past reminders?" and says how many it deletes. Tap
-   **Delete**.
+   **Delete**. It deletes those that are still past then: one you
+   snoozed from its notification meanwhile stays.
 3. A message says, for example, "12 reminders deleted". Tap **Undo** to
    bring them back.
 
@@ -329,29 +330,32 @@ Limits of reminders:
    reminders "local only". Whether it should is not decided yet.
 7. With the app lock off, the lock screen shows a reminder's title if
    your phone's setting allows it.
+8. On the night the clocks go back, a reminder you save or restore
+   between 02:00 and 03:00 can show at once as "Missed", if its time in
+   that hour already went by once.
 
 Limits of the recovery key:
 
-8. Reminders cannot tell whether another app of the suite already has
+9. Reminders cannot tell whether another app of the suite already has
    your recovery key. If one has, tap **I already have one** yourself,
    and enter the same words.
 
 Limits of the app lock:
 
-9. If you choose a time in **Lock the app** and turn the screen off
+10. If you choose a time in **Lock the app** and turn the screen off
    from another app, Reminders may stay unlocked until that time has
    passed ([The app lock](app-lock.md#when-the-app-locks)).
-10. The app lock hides your reminders. It does not encrypt them.
+11. The app lock hides your reminders. It does not encrypt them.
     Android's own encryption protects them, with your screen lock.
 
 Limits of backups:
 
-11. A restore keeps the newest edit of each reminder. It cannot bring
+12. A restore keeps the newest edit of each reminder. It cannot bring
     back exactly how Reminders was on the day of the backup.
-12. Some storage apps do not let Reminders read a file again right away.
+13. Some storage apps do not let Reminders read a file again right away.
     Reminders then says "Backup written, not checked". Check such a file
     with **Restore a backup**, and tap **Cancel** at the question.
-13. A deleted reminder stays in Reminders' storage, with its title,
+14. A deleted reminder stays in Reminders' storage, with its title,
     marked as deleted, until you clear Reminders' storage. Backups you
     make after the deletion hold it too. Clearing the storage does not
     change backup files you already made: delete those where you put
@@ -359,7 +363,10 @@ Limits of backups:
 
 Other:
 
-14. Never type your real recovery words into a preview build of a pull
+15. When the phone's storage is completely full, **Save** can close
+    Reminders, and a snooze or a change in the app lock's settings can
+    be lost when Reminders stops. Free some room on the phone.
+16. Never type your real recovery words into a preview build of a pull
     request. Use test words.
 
 Not in version 1:

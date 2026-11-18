@@ -118,8 +118,10 @@ Android also keeps some things for Water, outside Water's folders:
    amount in millilitres. Never a text. The alarm carries only its name.
    Water opens Android's own pages for its notification settings.
 5. **Nothing else.** Water has no network permission. Android backup and
-   device transfer are off. Water shares nothing with other apps, uses
-   no clipboard and writes no log.
+   device transfer are off. Water shares nothing with other apps, puts
+   nothing on the clipboard itself and writes no log. Its number fields
+   offer the usual copy and paste, so what you copy from them goes to
+   the clipboard.
 
 ### Not checked in the code
 
@@ -219,7 +221,9 @@ the phone:
 
 Reminders has no network permission. Android backup and device transfer
 are off. It writes no file outside its storage but the backup you make,
-shares nothing with other apps, uses no clipboard and writes no log.
+shares nothing with other apps, puts nothing on the clipboard itself and
+writes no log. The title field offers the usual copy and paste, so a
+title you copy goes to the clipboard.
 
 ### How to delete it
 
