@@ -160,15 +160,20 @@ class WaterReminders(
 
     /**
      * A press of **Drank** or **Later** (spec, "Buttons on a reminder").
-     * It works once, and only while its reminder is the one showing. A
-     * press on an older one only removes it, and never a newer one.
+     * It works once, and only while its reminder is the one showing, on
+     * the day it showed: Android removes a reminder at midnight, and a
+     * press that comes after that, for example from a watch, only takes
+     * it. A press on an older one only removes it, and never a newer one.
      *
      * **Drank** takes its reminder only once the drink is stored: the
      * repository then calls [afterChange], which removes it. So a save
      * that fails leaves the reminder as it is, and `core/notify` leaves
      * the notification. A second press finds no reminder showing and does
      * nothing: presses run one after another on the worker of
-     * `core/notify`. Any other press takes the reminder first.
+     * `core/notify`. **Later** works out its snooze first, and stores it
+     * with the end of the reminder in one write: a read of the settings
+     * that fails leaves the reminder as it is. Any other press takes the
+     * reminder.
      */
     override fun onButton(press: ButtonPress, notifications: Notifications) {
         if (press.key != KEY) {
@@ -179,17 +184,25 @@ class WaterReminders(
         val current = runBlocking {
             lock.withLock {
                 val showing = book.entries.value.showing
-                val taken = showing == press.atMillis && !logsADrink
-                if (taken) book.update { it.copy(showing = null) }
+                val isShowing = showing == press.atMillis
+                val inTime = isShowing && time.local(press.atMillis).toLocalDate() == time.today()
+                val taken = isShowing && !(inTime && logsADrink)
+                when {
+                    inTime && press.action == LATER -> {
+                        val (pressedAt, snooze) = laterNow()
+                        book.update { it.copy(showing = null, lastLater = pressedAt, snooze = snooze) }
+                    }
+                    taken -> book.update { it.copy(showing = null) }
+                }
                 // An older reminder is no longer on screen: its key now shows the newer one, which stays.
                 if (taken || showing == null) notifications.cancel(KEY)
-                showing == press.atMillis
+                inTime
             }
         }
         if (!current) return
         when {
             logsADrink -> drank(press.value.toInt())
-            press.action == LATER -> later()
+            press.action == LATER -> notify().sync()
         }
     }
 
@@ -203,13 +216,15 @@ class WaterReminders(
         runBlocking { repository.addDrink(now.toLocalDate(), now.hour * MINUTES_PER_HOUR + now.minute, amountMl) }
     }
 
-    /** Sets a snooze 15 minutes from now, or none if that is after "Until", and moves the count to now. */
-    private fun later() {
+    /**
+     * What a press of **Later** now stores: the moment of the press, which
+     * moves the count to now, and a snooze 15 minutes later, or none if
+     * that is after "Until".
+     */
+    private suspend fun laterNow(): Pair<Long, Long?> {
         val now = time.now()
-        val settings = runBlocking { repository.settingsNow() }
-        val snooze = NextReminder.snoozeAfter(now, settings)?.let(time::millisOf)
-        book.update { it.copy(lastLater = time.millisOf(now), snooze = snooze) }
-        notify().sync()
+        val snooze = NextReminder.snoozeAfter(now, repository.settingsNow())?.let(time::millisOf)
+        return time.millisOf(now) to snooze
     }
 
     // After a change in the app.

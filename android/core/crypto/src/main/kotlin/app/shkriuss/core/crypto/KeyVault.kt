@@ -3,6 +3,7 @@ package app.shkriuss.core.crypto
 import com.google.crypto.tink.KeysetHandle
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantLock
+import javax.crypto.Cipher
 import kotlin.concurrent.withLock
 
 /** What is stored for one keyset, and whether it can be opened now. */
@@ -50,6 +51,13 @@ internal class FileKeysets(val current: KeysetHandle, val old: KeysetHandle?)
  */
 internal class KeyVault(val app: AppName, private val store: KeysetStore, val hardware: HardwareKeys) {
     private val lock = ReentrantLock()
+
+    /**
+     * Keys whose cipher Android refused as permanently invalidated, in
+     * this run (rule 1). Their alias may still exist, but they are gone.
+     * Only memory holds this: in a new run the first prompt finds it again.
+     */
+    private val invalidated = mutableSetOf<HardwareKeyRef>()
     private var record: KeysetHandle? = null
     private var fileKey: KeysetHandle? = null
     private var fileKeyOld: KeysetHandle? = null
@@ -84,6 +92,9 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
     /** Whether a file is stored for [name]. */
     fun isStored(name: KeysetName): Boolean = store.read(name) != null
 
+    /** True only if Android says for certain that no file of [name] is there. */
+    fun isMissing(name: KeysetName): Boolean = store.isMissing(name)
+
     /** The stored bytes of [name], or null. */
     fun storedBlob(name: KeysetName): ByteArray? = store.read(name)
 
@@ -109,7 +120,7 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
             return Stored.Damaged
         }
         try {
-            if (!hardware.exists(key)) return Stored.KeyGone(key)
+            if (key in invalidated || !hardware.exists(key)) return Stored.KeyGone(key)
             if (key.kind.needsPrompt) return Stored.NeedsPrompt(key, blob)
             val plain = hardware.decrypt(key, WrappedKeyset.afterPrefix(blob), AssociatedData.forKeyset(key, name))
             try {
@@ -249,11 +260,27 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         }
     }
 
-    /** True if [key] is gone for certain. False also when the Keystore cannot say. */
-    fun isGone(key: HardwareKeyRef): Boolean = try {
+    /**
+     * True if [key] is gone for certain: its alias does not exist, or a
+     * cipher of it was refused as permanently invalidated. False also when
+     * the Keystore cannot say.
+     */
+    fun isGone(key: HardwareKeyRef): Boolean = key in invalidated || try {
         !hardware.exists(key)
     } catch (_: HardwareKeyFailure) {
         false
+    }
+
+    /**
+     * Starts the cipher of [key], a key that needs the prompt. If Android
+     * says that the key is permanently invalidated, the key is gone from
+     * then on ([isGone], [look]), and [HardwareKeyGone] is thrown.
+     */
+    fun startCipher(key: HardwareKeyRef, iv: ByteArray?): Cipher = try {
+        hardware.startCipher(key, iv)
+    } catch (gone: HardwareKeyGone) {
+        invalidated += key
+        throw gone
     }
 
     /**

@@ -134,17 +134,29 @@ class RemindersRepository(
     suspend fun change(id: String, title: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? =
         withContext(NonCancellable) { changeWhole(id, title, schedule, now) }
 
-    private suspend fun changeWhole(id: String, title: String, schedule: Schedule, now: ClockReading): Reminder? {
+    /**
+     * Gives the reminder with [id] the [schedule], and keeps its title as
+     * it is stored now. A form whose title is unchanged saves with this, so
+     * it never puts back a title that another form changed while it was
+     * open. Otherwise as [change].
+     */
+    suspend fun changeSchedule(id: String, schedule: Schedule, now: ClockReading = time.reading()): Reminder? =
+        withContext(NonCancellable) { changeWhole(id, title = null, schedule, now) }
+
+    /** [change], or [changeSchedule] with a [title] of null: the stored title stays. */
+    private suspend fun changeWhole(id: String, title: String?, schedule: Schedule, now: ClockReading): Reminder? {
         requireStored(title, schedule)
         val written: Pair<ReminderEntity, ReminderEntity>? = database.withWriteTransaction {
             val before = reminders.find(id)?.takeUnless { it.record.isDeleted }
-            val after = before?.let { writer.update(id) { stored -> entityOf(stored.record, stored.changeNumber, title, schedule) } }
+            val after = before?.let {
+                writer.update(id) { stored -> entityOf(stored.record, stored.changeNumber, title ?: stored.title, schedule) }
+            }
             if (before == null || after == null) null else before to after
         }
         val (before, after) = written ?: return null
         val kind = when {
             scheduleOf(before) != schedule -> ReminderChange.Kind.NEW_TIME
-            before.title != title -> ReminderChange.Kind.NEW_TITLE
+            before.title != after.title -> ReminderChange.Kind.NEW_TITLE
             else -> return reminderOf(after)
         }
         if (kind == ReminderChange.Kind.NEW_TIME) countFrom(now, listOf(id))
@@ -269,8 +281,10 @@ class RemindersRepository(
         turns.withLock { book.update(ids) { _, _ -> ReminderEntry(mark = now.currentMinute) } }
     }
 
-    private fun requireStored(title: String, schedule: Schedule) {
-        require(TitleRules.isStored(title)) { "A title is 1 to 200 code points on one line, without spaces at either end" }
+    private fun requireStored(title: String?, schedule: Schedule) {
+        require(title == null || TitleRules.isStored(title)) {
+            "A title is 1 to 200 code points on one line, without spaces at either end"
+        }
         require(ScheduleRules.isValid(schedule)) { "A date, a time or the days of the week are outside their limits" }
     }
 

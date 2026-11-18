@@ -5,6 +5,14 @@ development.
 
 ## Unreleased
 
+- Catalog turns off Compose's smart selection before it draws anything,
+  as the apps do: a long press in a text field, such as a sample of a
+  recovery-word field, no longer hands its text to Android's text
+  classifier.
+- **Text fields**: the field to try counts characters as you see them.
+  An emoji is one, so 20 emoji show no error.
+- **Time pickers**: the time chosen under the picker to try shows with
+  the phone's 12 or 24-hour setting, as the picker itself does.
 - Catalog needs Android 15 or newer
   ([ADR 0040](../../../docs/adr/0040-minimum-android-15.md)).
 - **Recovery key when first needed** and **Recovery key screens**: the

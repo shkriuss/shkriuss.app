@@ -123,13 +123,7 @@ class BackupViewModel(
         if (to == null || screen.value.step != null) return
         show(BackupStep.Writing)
         viewModelScope.launch(work) {
-            val ended = backups.write(to)
-            if (ended != null) {
-                show(ended)
-            } else {
-                show(BackupStep.Checking)
-                show(backups.checkWritten(to))
-            }
+            show(backups.write(to) { show(BackupStep.Checking) })
         }
     }
 

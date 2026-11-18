@@ -42,6 +42,12 @@ internal class SoftwareHardwareKeys : HardwareKeys {
     /** Aliases the list leaves out, for a list that comes back short. */
     val leftOutOfList = mutableSetOf<String>()
 
+    /**
+     * Aliases that Android says are permanently invalidated: the alias
+     * stays, and starting a cipher of it fails as for a key that is gone.
+     */
+    val invalidated = mutableSetOf<String>()
+
     /** Android cannot make keys. */
     var cannotMake = false
 
@@ -124,6 +130,7 @@ internal class SoftwareHardwareKeys : HardwareKeys {
     override fun startCipher(key: HardwareKeyRef, iv: ByteArray?): Cipher {
         check(key.kind.needsPrompt) { "Only a key that needs the prompt is used through startCipher" }
         val secret = usable(key)
+        if (key.alias in invalidated) throw HardwareKeyGone()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         if (iv == null) {
             cipher.init(Cipher.ENCRYPT_MODE, secret)

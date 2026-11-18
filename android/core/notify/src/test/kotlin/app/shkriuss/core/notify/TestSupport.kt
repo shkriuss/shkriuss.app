@@ -95,6 +95,9 @@ class TestReminders(private val clock: Clock, var zone: ZoneId = ZoneId.of("UTC"
     /** If set, the handler fails with this. */
     var failure: RuntimeException? = null
 
+    /** Runs inside the handler, before it does anything: where a stop of the app would come. */
+    var duringHandler: (Alarm) -> Unit = {}
+
     override fun alarms(): List<Alarm> {
         asked++
         return reminders.mapNotNull { reminder ->
@@ -108,6 +111,7 @@ class TestReminders(private val clock: Clock, var zone: ZoneId = ZoneId.of("UTC"
 
     override fun onAlarm(alarm: Alarm, notifications: Notifications) {
         handled += alarm
+        duringHandler(alarm)
         failure?.let { throw it }
         done += alarm.id
         lastHandled[alarm.id] = clock.nowMillis()

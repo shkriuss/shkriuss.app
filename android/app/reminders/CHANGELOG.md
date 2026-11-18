@@ -93,9 +93,11 @@ Not released yet.
   Reminders asks you for one only: notifications.
 - No other app can reach any part of Reminders but its screen.
 - A new title alone keeps the reminder's time as it is stored, also a
-  time changed meanwhile from the form on the other list.
+  time changed meanwhile from the form on the other list. A new time
+  alone keeps the title in the same way.
 - **Delete all** deletes the reminders that are still past when you tap
-  **Delete**. One snoozed from its notification meanwhile stays.
+  **Delete**. One snoozed from its notification meanwhile stays, and so
+  does what you typed in its open form.
 - The line "Next:" of the form says when the reminder really shows: a
   snooze, and in the hour that does not exist when the clocks go
   forward, the time it rings, such as 03:30.
@@ -106,9 +108,24 @@ Not released yet.
   changed after the question. A storage app that takes back its access
   ends in "could not be read" or "could not be written", not in a closed
   app.
+- "Backup written" comes only if the file read back is the backup just
+  written. If a storage app hands back an older copy, Reminders says
+  "Backup written, not checked". A backup that holds one reminder twice
+  is not taken.
 - If the clock is set back in the very moment a reminder is due, it
   shows at its time, not early.
 - Turning the app lock on and leaving Reminders in that moment keeps
-  it locked. A notification already shown is hidden at the next start
-  if the app lock hides the text. A long press in the field of a
-  recovery word no longer hands the word to Android's text classifier.
+  it locked, also right after you answer its last prompt. A notification
+  already shown is hidden at the next start if the app lock hides the
+  text. A long press in the field of a recovery word no longer hands
+  the word to Android's text classifier.
+- When the text of notifications is hidden, Reminders posts the shown
+  ones again a quarter of a second apart, and removes any that Android
+  left with its title. The text is also hidden while Android cannot say
+  whether the key file of the app lock is there.
+- If the screen stops just as Reminders reads your kept recovery key to
+  turn the app lock on, the key is not kept, and the prompt asks again
+  when you come back.
+- If Android says that the key of the app lock can no longer be used,
+  Reminders says that the app lock was reset and leads to your 24
+  words, instead of offering **Unlock** again and again.

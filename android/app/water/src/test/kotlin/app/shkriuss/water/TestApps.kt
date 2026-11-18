@@ -72,6 +72,8 @@ class TestWater(
         hidesText = { (app as SecurityHost).appLock.hidesNotificationText() },
         worker = Executor { it.run() },
         buttons = services.reminders,
+        // Hiding the text of notifications does not wait between its posts here.
+        pause = {},
     )
 
     init {

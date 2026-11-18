@@ -234,6 +234,55 @@ class AppLockTest {
     }
 
     @Test
+    fun aFileKeyFileThatAndroidCannotLookAtLeavesTheStateUncertain() {
+        val fixture = appWithKeys()
+        val app = fixture.app
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
+
+        // The file is there, but Android cannot read its details: a read finds nothing.
+        app.unreadable = setOf(KeysetName.FILE_KEY)
+        val crypto = app.open(start = false)
+
+        assertEquals("no Lock key can be named, so the state reads as off", AppLockState.OFF, crypto.appLock.state())
+        assertFalse("but it is not certain: the file may be there", crypto.appLock.isStateCertain())
+    }
+
+    @Test
+    fun theKeysetFilesSayMissingOnlyForAFileThatIsNotThere() {
+        val fixture = appWithKeys()
+        val files = KeysetFiles(fixture.app.folder)
+        assertFalse(files.isMissing(KeysetName.FILE_KEY))
+        assertTrue(files.isMissing(KeysetName.FILE_KEY_OLD))
+        assertTrue("no folder at all", KeysetFiles(File(temporary.newFolder(), "shk-keys")).isMissing(KeysetName.FILE_KEY))
+    }
+
+    @Test
+    fun aLockKeyThatAndroidCallsPermanentlyInvalidatedResetsTheAppLock() {
+        val fixture = appWithKeys()
+        val app = fixture.app
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
+        val lockAlias = app.keyOf(KeysetName.FILE_KEY)!!.alias
+
+        // The alias stays, but Android refuses its cipher as permanently invalidated.
+        app.hardware.invalidated += lockAlias
+        val crypto = app.open()
+        assertEquals("the alias is there, so nobody knows yet", AppLockState.ON, crypto.appLock.state())
+        assertEquals(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW, TestKeys.answerOf { crypto.appLock.beginUnlock() })
+
+        assertEquals("from then on the Lock key is gone", AppLockState.RESET, crypto.appLock.state())
+        assertEquals(AppLockState.RESET, crypto.status().appLock)
+        assertFilesAreClosed(crypto, fixture)
+        assertRecordsWork(crypto, fixture)
+
+        // As after a removed screen lock: the 24 words open the files again.
+        assertEquals(KeySetupResult.STORED, crypto.setup.storeDerivedKeys(recoveryKey))
+        val restored = app.open()
+        assertEquals(AppLockState.OFF, restored.appLock.state())
+        assertFilesOpen(restored, fixture)
+        assertFalse("the invalidated key is deleted at a start, as no file names it", lockAlias in app.hardware.existing())
+    }
+
+    @Test
     fun turningItOffPutsFileKeyBackUnderAKeyWithoutPromptAndDeletesTheLockKey() {
         val fixture = appWithKeys()
         val app = fixture.app

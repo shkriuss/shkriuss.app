@@ -54,13 +54,14 @@ internal class BackupEngine(
             }
             val body = DataOutputStream(BufferedOutputStream(encrypting, BackupFormat.COPY_BUFFER))
             val writer = BackupWriter(body)
-            writer.manifest(content.dataVersion, clock.nowMillis())
+            val madeAt = clock.nowMillis()
+            writer.manifest(content.dataVersion, madeAt)
             content.list(writer)
             writer.end()
             // Closing writes the last segment. Only now is the stream whole.
             body.close()
             whole = true
-            return ExportResult.Written(writer.records, writer.files, writer.filesLeftOut, writer.notDeleted)
+            return ExportResult.Written(writer.records, writer.files, writer.filesLeftOut, writer.notDeleted, madeAt)
         } finally {
             // A backup that failed is left cut: its stream is never closed as a whole one.
             if (!whole) runCatching { document.close() }

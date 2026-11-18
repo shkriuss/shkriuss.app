@@ -62,9 +62,25 @@ sealed class ExportResult {
      * this backup. The file itself does not say that number.
      * [notDeleted] says, for each type name, how many of its records are
      * not deleted, as [BackupSummary.notDeleted] does for a backup that
-     * was read.
+     * was read. [madeAt] is the time its Manifest gives, in milliseconds
+     * since 1970-01-01T00:00:00Z.
      */
-    data class Written(val records: Long, val files: Long, val filesLeftOut: Long, val notDeleted: Map<String, Long>) : ExportResult()
+    data class Written(
+        val records: Long,
+        val files: Long,
+        val filesLeftOut: Long,
+        val notDeleted: Map<String, Long>,
+        val madeAt: Long,
+    ) : ExportResult() {
+        /**
+         * True if [backup], read back from the document right after this
+         * write, says what this write wrote: when it was made, to the
+         * millisecond, and the same counts. A storage app that hands back
+         * an older copy of the document gives a backup that does not.
+         */
+        fun isThe(backup: BackupSummary): Boolean =
+            backup.madeAt == madeAt && backup.records == records && backup.files == files && backup.notDeleted == notDeleted
+    }
 
     /**
      * No backup can be made yet: the app has no keys from a recovery key,

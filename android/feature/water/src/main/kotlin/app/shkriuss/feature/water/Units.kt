@@ -78,9 +78,11 @@ object Amounts {
 }
 
 /**
- * Reads what the user typed into an amount field. Whole numbers only. The
- * limits are those of the unit shown, so the field's message names them
- * in that unit.
+ * Reads what the user typed into an amount field. Whole numbers only, in
+ * the digits 0 to 9 or in the decimal digits of another script, such as
+ * Arabic-Indic digits, as the phone's keyboard may type them. The limits
+ * are those of the unit shown, so the field's message names them in that
+ * unit.
  */
 object AmountInput {
     /**
@@ -88,10 +90,13 @@ object AmountInput {
      * is empty, not a whole number, or outside [limits] (in [unit]).
      */
     fun millilitres(text: String, unit: WaterUnit, limits: IntRange): Int? {
-        val amount = text.trim().takeIf { typed -> typed.isNotEmpty() && typed.all { it in '0'..'9' } }
-            ?.toIntOrNull() ?: return null
+        val digits = text.trim().map { Character.digit(it, DECIMAL) }
+        if (digits.isEmpty() || digits.any { it < 0 }) return null
+        val amount = digits.joinToString("").toIntOrNull() ?: return null
         return if (amount in limits) unit.toMillilitres(amount) else null
     }
+
+    private const val DECIMAL = 10
 
     /** What an amount field shows for [millilitres] in [unit], as the user would type it. */
     fun textOf(millilitres: Int, unit: WaterUnit): String = unit.shown(millilitres).toString()

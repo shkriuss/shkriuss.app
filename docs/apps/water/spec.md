@@ -401,7 +401,7 @@ Make a backup:
    |---|---|---|
    | Written, and the file passed the check | Backup written | "The backup is written and checked. It holds 42 drinks." |
    | Written, but the file does not pass the check | This backup cannot be used | "Water wrote the file, but could not read it back as a whole backup. Make the backup again, in another place." Water does not delete the file. |
-   | Written, but the file could not be read again | Backup written, not checked | "The backup is written. Water could not read the file again to check it. To check it, choose Restore a backup, pick the file, and cancel at the question." |
+   | Written, but the file could not be read again, or what was read is not the backup just written (when it was made and its counts differ), such as an older copy a storage app hands back | Backup written, not checked | "The backup is written. Water could not read the file again to check it. To check it, choose Restore a backup, pick the file, and cancel at the question." |
    | Writing failed | The backup could not be written | "Writing the file failed, for example because the storage is full. If an unfinished file stays, delete it. It is never taken for a backup." |
    | "Not ready", or the keys cannot be used now | No backup was made | "Water cannot use its keys now. Open Recovery key in Settings, then try again." |
 

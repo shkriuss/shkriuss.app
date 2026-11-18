@@ -81,9 +81,15 @@ class BackupsTest {
 
         val written = backups.export(picked)
 
-        assertEquals(ExportResult.Written(records = 2, files = 1, filesLeftOut = 0, notDeleted = mapOf("note" to 1L, "file" to 1L)), written)
+        assertEquals(
+            ExportResult.Written(records = 2, files = 1, filesLeftOut = 0, notDeleted = mapOf("note" to 1L, "file" to 1L), madeAt = clock.nowMillis),
+            written,
+        )
         val summary = BackupSummary(dataVersion = 1, madeAt = clock.nowMillis, records = 2, files = 1, notDeleted = mapOf("note" to 1L, "file" to 1L))
         assertEquals(CheckResult.Good(summary), backups.check(picked))
+        assertTrue("the file read back is the one just written", (written as ExportResult.Written).isThe(summary))
+        assertFalse("one made a millisecond later is not", written.isThe(summary.copy(madeAt = summary.madeAt + 1)))
+        assertFalse("nor one with another count", written.isThe(summary.copy(notDeleted = mapOf("note" to 1L))))
         assertEquals("the check never calls the app", 0, app.restores)
 
         app.records.clear()

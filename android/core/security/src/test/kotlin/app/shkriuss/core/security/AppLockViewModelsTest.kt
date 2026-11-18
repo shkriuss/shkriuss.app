@@ -92,6 +92,23 @@ class AppLockViewModelsTest {
     }
 
     @Test
+    fun aLockKeyThatAndroidCallsPermanentlyInvalidatedShowsTheResetNotice() {
+        val (app, _) = newApp()
+        withTheAppLockOn(app)
+        app.crypto.appLock.lock()
+        app.invalidateLockKeys()
+        val watcher = watcherOf(app).also { it.refresh() }
+        assertEquals(AppGate.LOCKED, watcher.gate.value)
+        val model = unlockModel(app, watcher)
+
+        model.onUnlock()
+
+        assertEquals(AppLockState.RESET, app.crypto.appLock.state())
+        assertEquals("the app says the app lock was reset, and leads to the words", AppLockNotice.RESET, watcher.notice)
+        assertEquals(AppGate.OPEN, watcher.gate.value)
+    }
+
+    @Test
     fun aDamagedKeyFileOfTheAppLockSendsTheUserToTheWords() {
         val (app, folder) = newApp()
         withTheAppLockOn(app)
@@ -301,6 +318,11 @@ class AppLockViewModelsTest {
     private fun keptKeyOf(model: TurnOnViewModel): Any? =
         TurnOnViewModel::class.java.getDeclaredField("kept").apply { isAccessible = true }.get(model)
 
+    /** Locks the app at once, as leaving it or turning the screen off does. */
+    private fun lockNowOf(watcher: AppLockWatcher) {
+        AppLockWatcher::class.java.getDeclaredMethod("lockNow").apply { isAccessible = true }.invoke(watcher)
+    }
+
     /** A keeper app, up to the four words. Returns the model. */
     private fun upToFourWords(app: SoftwareKeysApp, model: TurnOnViewModel = turnOnModel(app)): TurnOnViewModel {
         model.onContinue()
@@ -353,7 +375,7 @@ class AppLockViewModelsTest {
     }
 
     @Test
-    fun theMarkOfTheLastPromptGoesWithTheTurnOn() {
+    fun theMarkFromBeforeTheLastPromptGoesWithTheTurnOn() {
         val (app, _) = newApp()
         val key = withKeys(app)
         val marks = mutableListOf<Int>()
@@ -361,12 +383,33 @@ class AppLockViewModelsTest {
         val model = TurnOnViewModel(app.crypto, unlockMark = { mark }, onTurnedOn = { marks += it }, background = inline, random = Random(7))
         model.onContinue()
         enterAll(model, key.words())
+        assertTrue(model.state.value is TurnOnLocking)
 
-        answer(model, PromptOutcome.SUCCEEDED)
+        // The user answers the prompt and goes Home before Android hands the answer back: the app locked meanwhile.
         mark = 4
+        answer(model, PromptOutcome.SUCCEEDED)
 
         assertEquals(TurnOnDone, model.state.value)
-        assertEquals("the mark taken as the last prompt ended", listOf(3), marks)
+        assertEquals("the mark taken before the last prompt showed", listOf(3), marks)
+    }
+
+    @Test
+    fun leavingTheAppAfterTheLastPromptLeavesItLocked() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        val watcher = watcherOf(app).also { it.refresh() }
+        val model = TurnOnViewModel(app.crypto, watcher::unlockMark, watcher::turnedOn, background = inline, random = Random(7))
+        model.onContinue()
+        enterAll(model, key.words())
+        val locking = (model.state.value as TurnOnLocking).prompt!!
+
+        // The app left the screen after the prompt showed: with the app lock off yet, it locks at once.
+        lockNowOf(watcher)
+        model.onPromptResult(locking, PromptOutcome.SUCCEEDED)
+
+        assertEquals(TurnOnDone, model.state.value)
+        assertEquals(AppLockState.ON, app.crypto.appLock.state())
+        assertEquals("the app stays locked: its unlock needs a prompt", AppGate.LOCKED, watcher.gate.value)
     }
 
     @Test
@@ -409,6 +452,34 @@ class AppLockViewModelsTest {
         model.onStart()
         queued.runAll()
         assertNotNull((model.state.value as TurnOnReading).prompt)
+    }
+
+    @Test
+    fun aStopRightAfterTheKeptKeyWasReadKeepsNothing() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        keep(app, key)
+        val background = QueuedDispatcher()
+        val main = QueuedDispatcher()
+        val model = TurnOnViewModel(app.crypto, unlockMark = { 0 }, onTurnedOn = {}, background = background, random = Random(7), main = main)
+        background.runAll()
+        model.onContinue()
+        background.runAll()
+        val reading = (model.state.value as TurnOnReading).prompt!!
+        model.onPromptResult(reading, PromptOutcome.SUCCEEDED)
+
+        // The key is read. Before the main thread keeps it, the screen stops.
+        background.runAll()
+        model.onStop(changingConfigurations = false)
+        main.runAll()
+        background.runAll()
+
+        assertNull("the key read before the stop is not kept", keptKeyOf(model))
+        assertEquals(TurnOnReading(), model.state.value)
+        model.onStart()
+        background.runAll()
+        main.runAll()
+        assertNotNull("the prompt asks again on the way back", (model.state.value as TurnOnReading).prompt)
     }
 
     @Test

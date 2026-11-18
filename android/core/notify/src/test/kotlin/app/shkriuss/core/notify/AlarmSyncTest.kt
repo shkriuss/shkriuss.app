@@ -325,6 +325,19 @@ class AlarmSyncTest {
     }
 
     @Test
+    fun anAlarmCountsAsFiredOnlyAfterItsHandler() {
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        appChanged()
+        val stored = mutableListOf<AlarmState>()
+        app.duringHandler = { stored += AlarmRegistry(RuntimeEnvironment.getApplication().notifyStore()).read() }
+
+        advanceBy(HOUR)
+
+        // A stop of the app inside the handler leaves this on file: the alarm is still due, so it fires again.
+        assertEquals(listOf(AlarmState(registered = mapOf(a to start + HOUR), fired = emptyMap())), stored)
+    }
+
+    @Test
     fun aHandlerThatFailsDoesNotFailAgainForTheSameAlarm() {
         app.reminders += TestReminder.Once(a, start + HOUR)
         appChanged()

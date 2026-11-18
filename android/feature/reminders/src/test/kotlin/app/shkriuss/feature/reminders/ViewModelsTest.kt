@@ -227,6 +227,34 @@ class ViewModelsTest {
     }
 
     @Test
+    fun deleteAllClosesAFormOnlyIfItsReminderWasDeleted() {
+        val early = add("Early", schedule(Repeat.ONCE, MONDAY, 10))
+        val late = add("Late", schedule(Repeat.ONCE, MONDAY, 11))
+        clockTo(monday(12))
+        book.update(listOf(early.id, late.id)) { _, entry -> entry.copy(mark = monday(12)) }
+        val model = past()
+        model.rows(2)
+        val onLate = form()
+        onLate.openEdit(late)
+        onLate.onTitleChange("Late, and more")
+        val onEarly = form()
+        onEarly.openEdit(early)
+        model.askDeleteAll()
+        model.state.await { it.question != null }
+
+        // Snooze 10 min on the notification of "Late" while the question is open: it stays, and so does its form.
+        book.update(late.id) { it.copy(snoozeMillis = millisAt(monday(12, 10), UTC)) }
+        model.confirmDeleteAll { ids ->
+            onLate.closeIfDeleted(ids)
+            onEarly.closeIfDeleted(ids)
+        }
+
+        model.state.await { it.snackbar != null }
+        assertNull("the form of the deleted reminder closed", onEarly.state.await { it.form == null }.form)
+        assertEquals("the unsaved title stays", "Late, and more", onLate.state.value.form?.title)
+    }
+
+    @Test
     fun deleteAllWithNoPastReminderAsksNothing() {
         val model = past()
         assertTrue(model.state.await { it.loaded }.isEmpty)
@@ -452,6 +480,26 @@ class ViewModelsTest {
         assertEquals("Call the bank about the card", live().single().title)
         assertEquals("the time the other form saved stays", rescheduled, live().single().schedule)
         assertEquals(16 * 60, rescheduled.minuteOfDay)
+    }
+
+    @Test
+    fun aNewTimeAloneKeepsATitleThatAnotherFormChangedMeanwhile() {
+        val bank = add("Call the bank", CALL_THE_BANK)
+        clockTo(monday(8))
+        val upcoming = form()
+        upcoming.openEdit(bank)
+        val past = form()
+        past.openEdit(bank)
+        past.onTitleChange("Call the clinic")
+        past.save()
+        past.state.await { it.form == null }
+
+        upcoming.onTimeChange(LocalTime.of(16, 0))
+        upcoming.save()
+
+        upcoming.state.await { it.form == null }
+        assertEquals("the title the other form saved stays", "Call the clinic", live().single().title)
+        assertEquals(16 * 60, live().single().schedule.minuteOfDay)
     }
 
     @Test

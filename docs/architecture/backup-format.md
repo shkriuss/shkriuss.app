@@ -397,7 +397,11 @@ the user restores it.
 When a screen calls the check (the owner's decision):
 
 1. **After every backup**, by itself. The app reads the file it has just
-   written and checks it. The user does not have to ask.
+   written and checks it. The user does not have to ask. What it reads
+   must be the backup it wrote: the same time it was made, to the
+   millisecond, and the same counts. If a storage app hands back
+   another file, for example an older copy, the backup counts as
+   written, but not checked.
 2. **Before every restore.** The app checks the file, shows what it
    holds, and asks. Only then does it restore. The restore reads the
    file again, and takes it only if it is still the backup the question

@@ -82,7 +82,7 @@ make it. You do not have to ask for the check.
 |---|---|---|
 | Backup written | The file is written and passed the check. | Nothing. |
 | This backup cannot be used | The file was written, but the app could not read it back as a whole backup. | Make the backup again, in another place. Delete the file that cannot be used. |
-| Backup written, not checked | The file is written. The storage app did not let the app read it again. | To check it: tap **Restore a backup**, pick the file, and tap **Cancel** when the app asks. |
+| Backup written, not checked | The file is written. The storage app did not let the app read it again, or it gave back another file, such as an older copy. | To check it: tap **Restore a backup**, pick the file, and tap **Cancel** when the app asks. |
 | The backup could not be written | Writing failed, for example because the storage is full. | Make room, or choose another place, and try again. If an unfinished file stays, delete it. It is never taken for a backup. |
 | No backup was made | The app cannot use its keys now. | Open **Recovery key** in the app's settings, then try again. |
 

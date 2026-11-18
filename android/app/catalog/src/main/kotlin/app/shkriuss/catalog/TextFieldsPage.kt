@@ -97,7 +97,8 @@ private fun TextFieldToTry() {
         onValueChange = { value = it },
         label = stringResource(R.string.sample_name),
         supportingText = stringResource(R.string.sample_name_limit),
-        errorText = if (value.length > NAME_LIMIT) stringResource(R.string.sample_name_too_long) else null,
+        // Characters as the user sees them: an emoji is one, though it takes two UTF-16 units.
+        errorText = if (value.codePointCount(0, value.length) > NAME_LIMIT) stringResource(R.string.sample_name_too_long) else null,
     )
 }
 

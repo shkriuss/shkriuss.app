@@ -291,10 +291,14 @@ class DayViewModel(
         }
     }
 
-    /** Undo in the snackbar: a new drink is marked as deleted, a deleted drink comes back. */
-    fun undo() {
-        val shown = snackbar.value ?: return
-        snackbar.value = null
+    /**
+     * Undo in the snackbar [shown]: its new drink is marked as deleted, or
+     * its deleted drink comes back. It acts on the drink that snackbar
+     * named, also when a newer snackbar has come meanwhile, and clears the
+     * snackbar only if it is still that one.
+     */
+    fun undo(shown: DrinkSnackbar) {
+        snackbar.compareAndSet(shown, null)
         viewModelScope.launch(work) {
             when (shown.kind) {
                 DrinkSnackbar.Kind.ADDED -> repository.deleteDrink(shown.drinkId)
@@ -303,9 +307,9 @@ class DayViewModel(
         }
     }
 
-    /** The snackbar went away without Undo. */
-    fun snackbarDismissed() {
-        snackbar.value = null
+    /** The snackbar [shown] went away without Undo. A newer one stays. */
+    fun snackbarDismissed(shown: DrinkSnackbar) {
+        snackbar.compareAndSet(shown, null)
     }
 
     private fun add(on: LocalDate, minuteOfDay: Int, amountMl: Int) {

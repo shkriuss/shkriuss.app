@@ -44,7 +44,9 @@ private fun cancelQuietly(request: PromptRequest?) {
  * once for each lock, and after that from the button. When the file keys
  * are in memory, [watcher] is told on the main thread. The unlock counts
  * only if the app has not locked since the prompt was asked for
- * ([AppLockWatcher.unlocked]).
+ * ([AppLockWatcher.unlocked]). An unlock that cannot start has the
+ * watcher read the state again: a Lock key that Android has just called
+ * permanently invalidated is gone, and the app lock is reset.
  */
 class UnlockViewModel internal constructor(
     private val crypto: ShkCrypto,
@@ -107,6 +109,9 @@ class UnlockViewModel internal constructor(
             } catch (failed: BlobException) {
                 val note = if (failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) LockNote.DAMAGED else LockNote.NOT_NOW
                 screen.value = LockScreen(note = note)
+                // The Lock key may have turned out gone just now, for example permanently invalidated. Then the app lock
+                // reads as reset, and the watcher shows its notice and the way to the words.
+                if (note == LockNote.NOT_NOW) watcher.refresh()
             }
         }
     }
@@ -291,8 +296,12 @@ class AppLockViewModel internal constructor(
  * asks again. An error that ends the turn-on drops it too.
  *
  * [onTurnedOn] runs on the main thread when the app lock is on, with the
- * mark that [unlockMark] gave when the last prompt ended. The app counts
- * as unlocked only if it has not locked since (`AppLockWatcher.turnedOn`).
+ * mark that [unlockMark] gave on the main thread before the last prompt
+ * showed, as for an unlock. The app counts as unlocked only if it has not
+ * locked since (`AppLockWatcher.turnedOn`): leaving the app after the
+ * prompt was answered leaves it locked.
+ *
+ * [main] is the main thread. Tests hold its work back.
  */
 class TurnOnViewModel internal constructor(
     private val crypto: ShkCrypto,
@@ -300,6 +309,7 @@ class TurnOnViewModel internal constructor(
     private val onTurnedOn: (mark: Int) -> Unit,
     private val background: CoroutineDispatcher = Dispatchers.IO,
     private val random: Random = Random.Default,
+    private val main: CoroutineDispatcher = Dispatchers.Main.immediate,
 ) : ViewModel() {
     private val screen = MutableStateFlow<TurnOnScreen>(TurnOnWorking)
 
@@ -317,7 +327,7 @@ class TurnOnViewModel internal constructor(
     @Volatile
     private var proof: WordsProof? = null
 
-    /** True while a prompt that read the kept key finishes, before [kept] is set. */
+    /** True while a prompt that read the kept key finishes, until [kept] is set on the main thread. */
     @Volatile
     private var reading = false
 
@@ -378,22 +388,30 @@ class TurnOnViewModel internal constructor(
         val asked = stops
         reading = true
         work {
-            val read = try {
-                request.step.finish() as RecoveryKey
+            var read: RecoveryKey? = null
+            try {
+                read = request.step.finish() as RecoveryKey
             } catch (failed: BlobException) {
                 screen.value = if (failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) {
                     TurnOnAllWords(WordEntry.empty(), keptUnreadable = true)
                 } else {
                     TurnOnReading(note = KeepNote.FAILED)
                 }
-                return@work
             } finally {
-                reading = false
+                // No key came, so a stop has nothing to drop. A key that came is kept, or not, on the main thread below.
+                if (read == null) reading = false
             }
-            // The screen stopped while the key was read: keep nothing, and ask again on the way back.
-            if (asked != stops) return@work
-            kept = read
-            screen.value = TurnOnFourWords(confirmPositions(random), List(WORDS_TO_CONFIRM) { "" })
+            val key = read ?: return@work
+            // On the main thread, where onStop runs: a stop comes either before this, and the key is not kept, or after it,
+            // and drops the kept key. No stop can come between the check and the keeping.
+            withContext(main) {
+                reading = false
+                // The screen stopped while the key was read: keep nothing, and ask again on the way back.
+                if (asked == stops) {
+                    kept = key
+                    screen.value = TurnOnFourWords(confirmPositions(random), List(WORDS_TO_CONFIRM) { "" })
+                }
+            }
         }
     }
 
@@ -484,10 +502,11 @@ class TurnOnViewModel internal constructor(
         work { beginLocking() }
     }
 
-    private fun beginLocking() {
+    private suspend fun beginLocking() {
         val checked = proof ?: return
         val step = crypto.appLock.beginTurnOn(checked)
-        screen.value = TurnOnLocking(prompt = PromptRequest(++requests, step))
+        // The watcher's mark from before the prompt shows, taken on the main thread. It goes with this request.
+        withContext(main) { screen.value = TurnOnLocking(prompt = PromptRequest(++requests, step, unlockMark())) }
     }
 
     private fun lockEnded(request: PromptRequest, outcome: PromptOutcome) {
@@ -496,8 +515,6 @@ class TurnOnViewModel internal constructor(
             work { request.step.cancel() }
             return
         }
-        // Taken on the main thread as the prompt ends. If the app locks before the app lock is stored, it stays locked.
-        val mark = unlockMark()
         screen.value = TurnOnWorking
         work {
             try {
@@ -507,7 +524,8 @@ class TurnOnViewModel internal constructor(
                 return@work
             }
             proof = null
-            withContext(Dispatchers.Main.immediate) { onTurnedOn(mark) }
+            // The mark from before the prompt showed. If the app locked after it, also after the prompt was answered, it stays locked.
+            withContext(main) { onTurnedOn(request.askedAt) }
             screen.value = TurnOnDone
         }
     }

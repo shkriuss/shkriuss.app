@@ -107,7 +107,7 @@ class ViewModelsTest {
         assertEquals(250, screen.totalMl)
         assertEquals(12, screen.percent)
 
-        model.undo()
+        model.undo(screen.snackbar!!)
         val undone = model.state.await { it.drinks.isEmpty() && it.snackbar == null }
         assertNull(undone.snackbar)
         assertNotNull("Undo only marks the drink as deleted", runBlocking { database.intake().find(TestIdSource.idNumber(1)) })
@@ -238,8 +238,41 @@ class ViewModelsTest {
         assertNull(deleted.sheet)
         assertEquals(DrinkSnackbar(DrinkSnackbar.Kind.DELETED, drink.id, 250), deleted.snackbar)
 
-        model.undo()
+        model.undo(deleted.snackbar!!)
         assertEquals(listOf(drink), model.state.await { it.drinks.isNotEmpty() }.drinks)
+    }
+
+    @Test
+    fun undoOnAnOlderSnackbarDeletesTheDrinkItNamedAndLeavesTheNewerSnackbar() {
+        val model = today()
+        model.loaded()
+        model.addQuick(1)
+        val first = model.state.await { it.snackbar != null }.snackbar!!
+        model.addQuick(2)
+        val second = model.state.await { it.drinks.size == 2 && it.snackbar != first }.snackbar!!
+
+        // Undo on "Added 250 ml" comes after the second drink was stored, before its snackbar replaced the first.
+        model.undo(first)
+
+        val after = model.state.await { it.drinks.size == 1 }
+        assertEquals("the drink the message named is gone", second.drinkId, after.drinks.single().id)
+        assertEquals("the newer snackbar stays", second, after.snackbar)
+        model.snackbarDismissed(first)
+        assertEquals(second, model.state.value.snackbar)
+    }
+
+    @Test
+    fun anAmountInThePhonesOwnDigitsIsSaved() {
+        val model = today()
+        model.loaded()
+        model.openAdd()
+
+        // 250 in Arabic-Indic digits, as a keyboard of a phone in Arabic types it.
+        model.onAmountChange("\u0662\u0665\u0660")
+        assertFalse(model.sheetThat { it.amountText == "\u0662\u0665\u0660" }.amountError)
+        model.save()
+
+        assertEquals(listOf(250), model.state.await { it.drinks.isNotEmpty() }.drinks.map { it.amountMl })
     }
 
     @Test

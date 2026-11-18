@@ -142,7 +142,7 @@ fun writeABackup(name: String = BACKUP_NAME): Uri {
     val document = TestDocuments.uri(name)
     val ended = runBlocking {
         val backups = testApp.test.services.backups
-        backups.write(document) ?: backups.checkWritten(document)
+        backups.write(document) {}
     }
     check(ended is BackupStep.Written) { "The backup of the test was not written: $ended" }
     return document

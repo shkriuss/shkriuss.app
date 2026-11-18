@@ -1,5 +1,6 @@
 package app.shkriuss.catalog
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
@@ -9,6 +10,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.design.ShkInPlace
 import app.shkriuss.core.design.ShkScreen
@@ -20,7 +22,6 @@ import app.shkriuss.core.design.ShkTimePickerInPlace
 import app.shkriuss.core.design.ShkTonalButton
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 /**
  * The time picker with the 12-hour clock and with the 24-hour clock, with
@@ -86,9 +87,11 @@ private fun TimePickerToTry() {
     var open by rememberSaveable { mutableStateOf(false) }
     var time by rememberSaveable { mutableStateOf(MorningTime) }
     val locale = LocalConfiguration.current.locales[0]
+    // The phone's 12 or 24-hour setting, as the picker itself reads it.
+    val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
     ShkTonalButton(text = stringResource(R.string.sample_choose_time), onClick = { open = true })
     Spacer(Modifier.height(ShkSpacing.Small))
-    val shown = time.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale))
+    val shown = time.format(DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, if (is24Hour) "Hm" else "hm"), locale))
     ShkText(text = stringResource(R.string.sample_reminder_at, shown), color = ShkTheme.colors.textSecondary)
     if (open) {
         ShkTimePicker(

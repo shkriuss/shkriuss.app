@@ -37,13 +37,18 @@ class AppLock internal constructor(private val vault: KeyVault) {
 
     /**
      * False if the `file-key` keyset file is there but its first bytes
-     * cannot be read. Then [state] says [AppLockState.OFF], because no
-     * Lock key can be named, though the app lock may be on. Notifications
-     * hide their text then ("If the state cannot be read, the text is
-     * hidden" in crypto-design.md).
+     * cannot be read, or if Android cannot say whether the file is there.
+     * Then [state] says [AppLockState.OFF], because no Lock key can be
+     * named, though the app lock may be on. Notifications hide their text
+     * then ("If the state cannot be read, the text is hidden" in
+     * crypto-design.md).
      */
     fun isStateCertain(): Boolean = vault.locked {
-        !vault.isStored(KeysetName.FILE_KEY) || vault.namedKeyOrNull(KeysetName.FILE_KEY) != null
+        if (vault.isStored(KeysetName.FILE_KEY)) {
+            vault.namedKeyOrNull(KeysetName.FILE_KEY) != null
+        } else {
+            vault.isMissing(KeysetName.FILE_KEY)
+        }
     }
 
     /**
@@ -96,7 +101,7 @@ class AppLock internal constructor(private val vault: KeyVault) {
         moveOtherKeysetsOff(oldKey)
         val lockKey = vault.newKey(HardwareKeyKind.LOCK)
         val cipher = try {
-            PromptCipher(vault.hardware.startCipher(lockKey, null), encrypts = true)
+            PromptCipher(vault.startCipher(lockKey, null), encrypts = true)
         } catch (failed: HardwareKeyFailure) {
             vault.deleteIfUnnamed(lockKey)
             throw failed
@@ -135,7 +140,7 @@ class AppLock internal constructor(private val vault: KeyVault) {
     fun beginUnlock(): PromptStep<Unit> = vault.locked {
         val stored = vault.look(KeysetName.FILE_KEY) as? Stored.NeedsPrompt
             ?: throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
-        val cipher = PromptCipher(vault.hardware.startCipher(stored.key, WrappedKeyset.iv(stored.blob)), encrypts = false)
+        val cipher = PromptCipher(vault.startCipher(stored.key, WrappedKeyset.iv(stored.blob)), encrypts = false)
         PromptStep(
             cryptoObject = cipher.cryptoObject,
             onFinish = {

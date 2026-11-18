@@ -307,9 +307,11 @@ class ReminderFormViewModel(
         form.value = writing
         viewModelScope.launch(work) {
             // The mark is the minute the time was checked in, so a time that was later than it stays later.
-            // A new title alone keeps the schedule as it is stored now, also one another form changed meanwhile.
+            // A new title alone keeps the schedule as it is stored now, and a new time alone the title, also one another
+            // form changed meanwhile.
             val saved = when {
                 stored == null -> repository.add(title, schedule, now)
+                newTime && title == stored.title -> repository.changeSchedule(stored.id, schedule, now)
                 newTime -> repository.change(stored.id, title, schedule, now)
                 else -> repository.changeTitle(stored.id, title)
             }
@@ -332,6 +334,15 @@ class ReminderFormViewModel(
     fun cancel() {
         if (form.value?.saving == true) return
         form.value = null
+    }
+
+    /**
+     * The reminders [ids] were deleted. A form open on one of them closes
+     * and writes nothing, as with Cancel. Any other form stays as it is.
+     */
+    fun closeIfDeleted(ids: Set<String>) {
+        val open = form.value ?: return
+        if (open.reminderId in ids && !open.saving) form.compareAndSet(open, null)
     }
 
     /**

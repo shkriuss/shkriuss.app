@@ -1,5 +1,6 @@
 package app.shkriuss.catalog
 
+import android.provider.Settings
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -16,7 +17,6 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.performTextReplacement
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -183,6 +183,21 @@ class ComponentPagesTest {
         field.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
 
         field.performTextInput(" and a name that is too long")
+        field.assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, text(R.string.sample_name_too_long)))
+    }
+
+    @Test
+    fun textFieldToTryCountsAnEmojiAsOneCharacter() {
+        open(CatalogPage.TextFields)
+        val grinning = "\uD83D\uDE00"
+        compose.onNode(IS_TEXT_FIELD and hasText(text(R.string.sample_name_limit)))
+            .performScrollTo()
+            .performTextInput(grinning.repeat(20))
+        // Twenty emoji take 40 UTF-16 units, but they are 20 characters: no error yet.
+        val field = compose.onNode(IS_TEXT_FIELD and hasText(grinning.repeat(20), substring = true))
+        field.assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Error))
+
+        field.performTextInput(grinning)
         field.assert(SemanticsMatcher.expectValue(SemanticsProperties.Error, text(R.string.sample_name_too_long)))
     }
 
@@ -420,8 +435,24 @@ class ComponentPagesTest {
         compose.onAllNodes(hasText("PM") and hasClickAction()).onLast().performClick()
         ok.assertIsEnabled().performClick()
 
-        val time = LocalTime.of(19, 5).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(Locale.US))
-        compose.onNode(hasText(compose.activity.getString(R.string.sample_reminder_at, time))).assertExists()
+        compose.onNode(hasText("7:05", substring = true) and hasText("PM", substring = true)).assertExists()
+    }
+
+    @Test
+    fun timePickerToTryShowsTheTimeWithThePhonesTwentyFourHourClock() {
+        Settings.System.putString(compose.activity.contentResolver, Settings.System.TIME_12_24, "24")
+        open(CatalogPage.TimePickers)
+        compose.onNode(hasText(text(R.string.sample_choose_time)) and hasClickAction()).performScrollTo().performClick()
+        val ok = compose.onAllNodes(hasText(text(DesignR.string.shk_ok)) and hasClickAction()).onLast()
+
+        compose.onAllNodes(IS_TEXT_FIELD and hasText(text(DesignR.string.shk_hour), substring = true)).onLast()
+            .performTextReplacement("19")
+        compose.onAllNodes(IS_TEXT_FIELD and hasText(text(DesignR.string.shk_minute), substring = true)).onLast()
+            .performTextReplacement("05")
+        ok.assertIsEnabled().performClick()
+
+        // English (United States) with the 24-hour clock on: as the picker showed it, not "7:05 PM".
+        compose.onNode(hasText(compose.activity.getString(R.string.sample_reminder_at, "19:05"))).assertExists()
     }
 
     private fun text(id: Int): String = compose.activity.getString(id)

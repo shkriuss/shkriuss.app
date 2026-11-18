@@ -41,6 +41,8 @@ interface NotifyHost {
  * that reads the app's records, one piece at a time. The default is one
  * background thread. [buttons] gets the presses of the buttons on the
  * app's notifications (ADR 0034). An app without buttons leaves it out.
+ * [pause] waits on [worker] between the posts of [hideShownText]. Tests
+ * pass one that does not wait.
  * The design is in docs/architecture/notifications.md.
  *
  * The first of [channels] is also where `core/notify` shows that the app
@@ -56,6 +58,7 @@ class Notify(
     scheduler: AlarmScheduler = AlarmManagerScheduler(context.applicationContext),
     private val worker: Executor = Executors.newSingleThreadExecutor { Thread(it, "core-notify") },
     private val buttons: ButtonHandler? = null,
+    pause: (millis: Long) -> Unit = Thread::sleep,
 ) {
     init {
         require(channels.isNotEmpty()) { "An app with notifications has at least one channel" }
@@ -65,7 +68,7 @@ class Notify(
     private val preferences = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
 
     /** Shows and removes notifications. */
-    val notifications = Notifications(app, hidesText, clock, takesPresses = buttons != null)
+    val notifications = Notifications(app, hidesText, clock, takesPresses = buttons != null, pause = pause)
 
     private val alarms = AlarmSync(source, handler, notifications, scheduler, AlarmRegistry(preferences), clock) { alarm ->
         notifications.showFailure(channels.first(), alarm)

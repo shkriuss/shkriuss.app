@@ -51,13 +51,15 @@ class ShkNotification(
  * no buttons (docs/architecture/notifications.md, ADR 0034). If
  * [hidesText] fails, the text is hidden too. [takesPresses] is true when
  * the app gave `Notify` a [ButtonHandler]: only then may a notification
- * have buttons.
+ * have buttons. [pause] waits for a number of milliseconds, between the
+ * posts of [hideShown].
  */
 class Notifications internal constructor(
     private val context: Context,
     private val hidesText: () -> Boolean,
     private val clock: Clock,
     private val takesPresses: Boolean = false,
+    private val pause: (millis: Long) -> Unit = Thread::sleep,
 ) {
     private val manager = context.getSystemService(NotificationManager::class.java)
 
@@ -102,6 +104,7 @@ class Notifications internal constructor(
             .setSmallIcon(notification.smallIcon)
             .setContentTitle(if (hidden) context.getString(notification.channel.name) else notification.title)
             .setContentText(if (hidden) context.getString(R.string.notify_text_hidden) else notification.text)
+        if (hidden) builder.addExtras(Bundle().apply { putBoolean(EXTRA_HIDDEN, true) })
         // No buttons while the text is hidden: a label such as "Drank 250 ml" can show what the app lock hides.
         if (!hidden) notification.buttons.forEach { builder.addAction(action(notification, it)) }
         manager.notify(notification.key, NOTIFICATION_ID, builder.build())
@@ -112,9 +115,16 @@ class Notifications internal constructor(
      * the hidden form: the same key, tap target, icon, time and end, no
      * buttons, and no new sound or vibration. Does nothing if the text is
      * not to be hidden.
+     *
+     * Android drops an update of a notification that comes when an app
+     * posts more than about five a second, and the old text stays. So the
+     * posts come [PACE_MILLIS] apart. Then, after [SETTLE_MILLIS], any of
+     * them that still shows the old form is removed: the text must leave
+     * the notification shade, also at the cost of the notification.
      */
     internal fun hideShown(channels: List<NotifyChannel>) {
         if (!mustHide()) return
+        var posted = 0
         manager.activeNotifications.forEach { shown ->
             val old = shown.notification
             val channel = channels.firstOrNull { it.id == old.channelId } ?: return@forEach
@@ -123,15 +133,26 @@ class Notifications internal constructor(
                 manager.cancel(shown.tag, shown.id)
                 return@forEach
             }
+            if (posted > 0) pause(PACE_MILLIS)
             // A new builder carries no button of the old notification.
             val built = builder(channel.id, old.`when`, old.contentIntent, endsAt)
                 .setSmallIcon(old.smallIcon)
                 .setContentTitle(context.getString(channel.name))
                 .setContentText(context.getString(R.string.notify_text_hidden))
                 .setOnlyAlertOnce(true)
+                .addExtras(Bundle().apply { putBoolean(EXTRA_HIDDEN, true) })
                 .build()
             manager.notify(shown.tag, shown.id, built)
+            posted++
         }
+        if (posted == 0) return
+        pause(SETTLE_MILLIS)
+        // Only while the text is still to be hidden: a notification shown since, with its text, stays.
+        if (!mustHide()) return
+        manager.activeNotifications
+            .filter { shown -> channels.any { it.id == shown.notification.channelId } }
+            .filterNot { it.notification.extras.getBoolean(EXTRA_HIDDEN, false) }
+            .forEach { manager.cancel(it.tag, it.id) }
     }
 
     /**
@@ -243,5 +264,14 @@ class Notifications internal constructor(
 
         /** The end of a notification, kept in it, in milliseconds since 1970. A time, never content. */
         const val EXTRA_ENDS_AT = "app.shkriuss.core.notify.ENDS_AT"
+
+        /** Set on a notification posted in the hidden form. A mark, never content. */
+        const val EXTRA_HIDDEN = "app.shkriuss.core.notify.HIDDEN"
+
+        /** How far apart [hideShown] posts its notifications: four a second, below Android's limit of about five. */
+        const val PACE_MILLIS = 250L
+
+        /** How long [hideShown] waits for Android to take its posts, before it looks at the shade again. */
+        const val SETTLE_MILLIS = 1_000L
     }
 }

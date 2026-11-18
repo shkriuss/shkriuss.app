@@ -54,8 +54,11 @@ class WaterBackupContent(private val database: WaterDatabase, clock: Clock, ids:
     override suspend fun restore(from: CheckedBackup) {
         if (from.dataVersion != DATA_VERSION) throw UnreadableBackupException("data version ${from.dataVersion}")
         if (from.fileCount != 0L) throw UnreadableBackupException("the backup holds files")
+        val seen = mutableSetOf<Pair<String, String>>()
         database.withWriteTransaction {
             from.forEachRecord { record ->
+                // Water writes each record once. Of two with one ID only one would stay, though the question counted both.
+                if (!seen.add(record.type to record.fields.id)) throw UnreadableBackupException("a record ID is there twice")
                 when (val decoded = WaterBackupCodec.decode(record)) {
                     is IntakeEntity -> drinks.takeFromBackup(decoded)
                     is GoalEntity -> goals.takeFromBackup(decoded)
@@ -77,7 +80,8 @@ class WaterBackupContent(private val database: WaterDatabase, clock: Clock, ids:
 /**
  * Thrown by [WaterBackupContent.restore] when a backup holds something this
  * version of Water cannot read: another record type, a content of another
- * length, a value or a record time outside its limits, or a file. It is
+ * length, a value or a record time outside its limits, a record ID that
+ * is there twice in one type, or a file. It is
  * the third failure of
  * docs/architecture/backup-format.md, "The answers". The message names
  * what was wrong, never what a record holds.

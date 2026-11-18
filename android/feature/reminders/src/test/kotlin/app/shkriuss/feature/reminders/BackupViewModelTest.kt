@@ -250,6 +250,23 @@ class BackupViewModelTest {
     }
 
     @Test
+    fun anOlderCopyThatTheStorageAppHandsBackIsNotTakenForTheNewBackup() {
+        giveKeys()
+        twoRemindersAndADeletedOne()
+        write(document)
+        assertEquals(BackupStep.Written(reminders = 2), state.step)
+        model.close()
+        val older = TestDocuments.file("reminders-2026-11-16.shkbackup").readBytes()
+        setup.add("Dentist", CALL_THE_BANK, savedAt = monday(14, 6))
+        // Right after the new backup is written, the storage app hands back the older copy, which also passes its check.
+        TestDocuments.onOpen = { mode -> if (mode == "r") TestDocuments.file("reminders-2026-11-16.shkbackup").writeBytes(older) }
+
+        write(document)
+
+        assertEquals("not \"Backup written\" with the older copy's reminders", BackupStep.WrittenNotChecked, state.step)
+    }
+
+    @Test
     fun aFileThatCannotBeReadBackIsWrittenButNotChecked() {
         giveKeys()
         twoRemindersAndADeletedOne()

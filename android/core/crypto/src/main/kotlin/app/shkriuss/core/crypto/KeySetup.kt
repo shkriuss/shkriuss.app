@@ -319,7 +319,7 @@ class KeySetup internal constructor(private val vault: KeyVault) {
         val oldGuard = (stored as? Stored.NeedsPrompt)?.key
         val guard = vault.newKey(HardwareKeyKind.RECOVERY_GUARD)
         val cipher = try {
-            PromptCipher(vault.hardware.startCipher(guard, null), encrypts = true)
+            PromptCipher(vault.startCipher(guard, null), encrypts = true)
         } catch (failed: HardwareKeyFailure) {
             vault.deleteIfUnnamed(guard)
             throw failed
@@ -356,7 +356,7 @@ class KeySetup internal constructor(private val vault: KeyVault) {
             is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
             else -> throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
         }
-        val cipher = PromptCipher(vault.hardware.startCipher(stored.key, WrappedKeyset.iv(stored.blob)), encrypts = false)
+        val cipher = PromptCipher(vault.startCipher(stored.key, WrappedKeyset.iv(stored.blob)), encrypts = false)
         PromptStep(
             cryptoObject = cipher.cryptoObject,
             onFinish = {
