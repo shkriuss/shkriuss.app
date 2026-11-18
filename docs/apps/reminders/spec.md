@@ -252,6 +252,9 @@ When the alarm for time T reaches the handler:
   lost this way.
 - After step 3, a second run for T shows nothing: the mark is already at
   T.
+- If T is still to come when the handler reads the clock, because the
+  clock was set back in that moment, it shows nothing and writes
+  nothing. The alarm is set again for T.
 - Nothing is written before the rule is checked.
 
 | Change | What follows |

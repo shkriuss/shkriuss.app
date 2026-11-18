@@ -153,6 +153,28 @@ class RemindersRepository(
     }
 
     /**
+     * Gives the reminder with [id] the [title], and keeps its schedule as
+     * it is stored now. A form whose date, time and repeat are unchanged
+     * saves with this, so it never puts back a schedule that another form
+     * changed while it was open. Nothing more changes: a notification on
+     * screen keeps the old title. Nothing is written if the title is as it
+     * was. Null if there is no such reminder, or it is deleted.
+     */
+    suspend fun changeTitle(id: String, title: String): Reminder? = withContext(NonCancellable) { changeTitleWhole(id, title) }
+
+    private suspend fun changeTitleWhole(id: String, title: String): Reminder? {
+        require(TitleRules.isStored(title)) { "A title is 1 to 200 code points on one line, without spaces at either end" }
+        val written: Pair<ReminderEntity, ReminderEntity>? = database.withWriteTransaction {
+            val before = reminders.find(id)?.takeUnless { it.record.isDeleted }
+            val after = before?.let { writer.update(id) { stored -> stored.copy(title = title) } }
+            if (before == null || after == null) null else before to after
+        }
+        val (before, after) = written ?: return null
+        if (before.title != title) onChange(ReminderChange(ReminderChange.Kind.NEW_TITLE, listOf(id)))
+        return reminderOf(after)
+    }
+
+    /**
      * Marks the reminders [ids] as deleted, in one write. The rows stay,
      * with their content. Their entries go. Returns those that were
      * deleted now: not one that was already deleted or never stored.
@@ -165,6 +187,35 @@ class RemindersRepository(
         val deletedIds = deleted.map { it.record.id }
         withContext(work) { turns.withLock { book.remove(deletedIds) } }
         onChange(ReminderChange(ReminderChange.Kind.DELETED, deletedIds))
+        return deleted.map(::reminderOf)
+    }
+
+    /**
+     * Deletes those of the reminders [ids] that are past now, as **Delete
+     * all** does: the rule gives them no alarm, with this phone's entries.
+     * One that is upcoming again by now stays, for example after **Snooze
+     * 10 min** on its notification while the question was open. The check
+     * and the write take their turn on [turns], as a press of a button
+     * does, so no press comes between them. Returns those that were
+     * deleted now.
+     */
+    suspend fun deletePast(ids: List<String>): List<Reminder> = withContext(NonCancellable) { deletePastWhole(ids.toSet()) }
+
+    private suspend fun deletePastWhole(ids: Set<String>): List<Reminder> {
+        val deleted = withContext(work) {
+            turns.withLock {
+                val now = time.reading()
+                val entries = book.entries.value
+                val past = reminders.live()
+                    .filter { it.record.id in ids && ReminderLists.alarmOf(reminderOf(it), entries[it.record.id], now) == null }
+                    .map { it.record.id }
+                val marked = database.withWriteTransaction { past.mapNotNull { writer.markDeleted(it) } }
+                book.remove(marked.map { it.record.id })
+                marked
+            }
+        }
+        if (deleted.isEmpty()) return emptyList()
+        onChange(ReminderChange(ReminderChange.Kind.DELETED, deleted.map { it.record.id }))
         return deleted.map(::reminderOf)
     }
 

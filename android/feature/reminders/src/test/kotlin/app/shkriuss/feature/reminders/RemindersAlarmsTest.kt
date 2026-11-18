@@ -7,6 +7,7 @@ import app.shkriuss.core.notify.AlarmId
 import app.shkriuss.core.notify.ButtonPress
 import app.shkriuss.core.notify.ChannelImportance
 import app.shkriuss.core.notify.R as NotifyR
+import app.shkriuss.core.notify.ShkNotification
 import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -579,6 +580,48 @@ class RemindersAlarmsTest {
         assertNull(setup.shown(pills))
         assertEquals(ReminderEntry(mark = monday(9, 20)), setup.entryOf(pills))
         assertEquals(listOf(setup.millisOf(monday(9, 30))), setup.waiting())
+    }
+
+    @Test
+    fun aNotificationThatShowedAfterTheEntryWasResetStays() {
+        val pills = savePills()
+        setup.fireAt(monday(9))
+        assertNotNull(setup.shown(pills))
+
+        // The handler showed it after a write reset the entry, and before that write's notification was to go.
+        runBlocking { setup.alarms.afterChange(ReminderChange(ReminderChange.Kind.NEW_TIME, listOf(pills.id))) }
+
+        assertNotNull("a notification whose showing counts stays", setup.shown(pills))
+    }
+
+    @Test
+    fun theHandlerStoresShowingBeforeItPostsAndMovesTheMarkOnlyAfter() {
+        val pills = savePills()
+        setup.setClock(monday(9))
+        val at = setup.millisOf(monday(9))
+        var atThePost: ReminderEntry? = null
+
+        setup.alarms.handle(Alarm(AlarmId(pills.id), at)) { atThePost = ReminderBook.of(setup.app).entryOf(pills.id) }
+
+        assertEquals(
+            "stored as it posts: showing is T, and the mark has not moved, so a stop here shows it again",
+            ReminderEntry(mark = day(-1, 9, 30), showingMillis = at),
+            atThePost,
+        )
+        assertEquals("after the post, the mark is T", ReminderEntry(mark = monday(9), showingMillis = at), setup.entryOf(pills))
+    }
+
+    @Test
+    fun anAlarmWhoseTimeIsStillToComeAfterTheClockWasSetBackShowsNothingYet() {
+        val pills = savePills()
+        // core/notify found 09:00 due. Before the handler reads the clock, it is set back to 08:00.
+        setup.setClock(monday(8))
+        val shown = mutableListOf<ShkNotification>()
+
+        setup.alarms.handle(Alarm(AlarmId(pills.id), setup.millisOf(monday(9)))) { shown += it }
+
+        assertEquals(emptyList<ShkNotification>(), shown)
+        assertEquals("nothing is written", ReminderEntry(mark = day(-1, 9, 30)), setup.entryOf(pills))
     }
 
     @Test
