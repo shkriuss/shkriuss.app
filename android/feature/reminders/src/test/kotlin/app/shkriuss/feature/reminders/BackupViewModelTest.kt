@@ -9,6 +9,7 @@ import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.core.testing.TestIdSource
 import java.io.File
 import java.io.FileNotFoundException
+import java.time.LocalDateTime
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -100,6 +101,9 @@ class BackupViewModelTest {
     private fun everything(): List<String> = runBlocking {
         setup.database.reminders().all().map { it.copy(changeNumber = 0).toString() }.sorted()
     }
+
+    /** When the backup of the question was made, and how many reminders it holds, or null while no question shows. */
+    private fun asked(): Pair<LocalDateTime, Long>? = (state.step as? BackupStep.Question)?.let { it.madeAt to it.reminders }
 
     /** The titles of the reminders that are not deleted. */
     private fun titles(): List<String> = runBlocking { repository.reminders().first() }.map { it.title }.sorted()
@@ -292,7 +296,7 @@ class BackupViewModelTest {
         look(document)
 
         assertEquals("the whole file is checked first, while \"Checking the backup\" shows", listOf<BackupStep?>(BackupStep.Checking), steps.toList())
-        assertEquals("made at 09:30 in Tbilisi", BackupStep.Question(madeAt = monday(9, 30), reminders = 3), state.step)
+        assertEquals("made at 09:30 in Tbilisi, with 3 reminders", monday(9, 30) to 3L, asked())
         assertEquals("nothing is taken before the answer", emptyList<String>(), everything())
 
         restore()
@@ -300,6 +304,33 @@ class BackupViewModelTest {
         assertEquals("read again while \"Restoring the backup\" shows", listOf<BackupStep?>(BackupStep.Checking, BackupStep.Restoring), steps.toList())
         assertEquals(BackupStep.Restored, state.step)
         assertEquals(listOf("Call the bank", "Gym", "Pills"), titles())
+    }
+
+    @Test
+    fun aFileThatChangedAfterTheQuestionIsAskedAboutAgainAndNothingIsTakenFirst() {
+        giveKeys()
+        setup.setClock(monday(9, 30))
+        val phone = anotherPhone().apply {
+            add("Pills", pills())
+            writeBackup(document)
+        }
+        setup.setClock(monday(14, 5))
+        look(document)
+        assertEquals(monday(9, 30) to 1L, asked())
+
+        // A storage app syncs a newer backup into the same file before Restore is tapped.
+        setup.setClock(monday(14, 10))
+        phone.add("Gym", gym())
+        phone.writeBackup(document)
+        restore()
+
+        assertEquals("asked again, with what the file holds now", monday(14, 10) to 2L, asked())
+        assertEquals("nothing is taken before the new answer", emptyList<String>(), everything())
+
+        restore()
+
+        assertEquals(BackupStep.Restored, state.step)
+        assertEquals(listOf("Gym", "Pills"), titles())
     }
 
     @Test
@@ -334,7 +365,7 @@ class BackupViewModelTest {
         runBlocking { repository.delete(listOf(pills.id)) }
 
         look(document)
-        assertEquals(BackupStep.Question(madeAt = monday(14, 5), reminders = 1), state.step)
+        assertEquals(monday(14, 5) to 1L, asked())
         restore()
 
         assertEquals(BackupStep.Restored, state.step)
@@ -519,7 +550,7 @@ class BackupViewModelTest {
         writeBackup(crypto, RemindersServices.APP_NAME, OtherContent(dataVersion = 1, records), setup.clock, document)
 
         look(document)
-        assertEquals("the file itself is whole, and holds no reminder", BackupStep.Question(madeAt = monday(14, 5), reminders = 0), state.step)
+        assertEquals("the file itself is whole, and holds no reminder", monday(14, 5) to 0L, asked())
         restore()
 
         assertEquals(BackupStep.Unreadable, state.step)

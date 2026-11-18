@@ -148,13 +148,21 @@ class BackupViewModel(
         }
     }
 
-    /** **Restore** at the question: the picked file is restored. */
+    /**
+     * **Restore** at the question: the picked file is restored, if it
+     * still holds the backup the question shows. If it holds another one
+     * by now, the question shows again, with what it holds now.
+     */
     fun restore() {
         val from = picked ?: return
-        if (screen.value.step !is BackupStep.Question) return
+        val question = screen.value.step as? BackupStep.Question ?: return
         picked = null
         show(BackupStep.Restoring)
-        viewModelScope.launch(work) { show(backups.restore(from)) }
+        viewModelScope.launch(work) {
+            val ended = backups.restore(from, question)
+            if (ended is BackupStep.Question) picked = from
+            show(ended)
+        }
     }
 
     /** **OK** in a dialog that ended, or **Cancel** at the question: the dialog closes. Nothing else changes. */

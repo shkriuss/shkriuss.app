@@ -13,6 +13,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.testing.TestClock
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.IOException
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +57,8 @@ class BackupsTest {
         TestDocuments.folder = temporary.newFolder()
         TestDocuments.modes.clear()
         TestDocuments.deleted.clear()
+        TestDocuments.refuseWriting = false
+        TestDocuments.refusal = null
         Robolectric.setupContentProvider(TestDocuments::class.java, AUTHORITY)
 
         keys = SoftwareKeysApp(temporary.newFolder(), WATER)
@@ -85,7 +88,7 @@ class BackupsTest {
 
         app.records.clear()
         fileOf("water-2026-11-12.shkbackup").let { assertTrue(it.length() > 0) }
-        assertEquals(RestoreResult.Restored(summary), backups.restore(picked))
+        assertEquals(RestoreResult.Restored(summary), backups.restore(picked, summary))
         assertEquals(before, app.snapshot())
         assertEquals(emptyList<String>(), stagingFolder.list().orEmpty().toList())
     }
@@ -110,7 +113,7 @@ class BackupsTest {
         val before = app.snapshot()
 
         assertEquals(CheckResult.Refused(BackupAnswer.NotABackup), backups.check(document("holiday.jpg")))
-        assertEquals(RestoreResult.Refused(BackupAnswer.NotABackup), backups.restore(document("holiday.jpg")))
+        assertEquals(RestoreResult.Refused(BackupAnswer.NotABackup), backups.restore(document("holiday.jpg"), ANY_SUMMARY))
         assertEquals(before, app.snapshot())
         assertEquals(0, app.restores)
     }
@@ -151,7 +154,7 @@ class BackupsTest {
         for (other in listOf(path, web)) {
             assertTrue(runCatching { backups.export(other) }.exceptionOrNull() is IllegalArgumentException)
             assertTrue(runCatching { backups.check(other) }.exceptionOrNull() is IllegalArgumentException)
-            assertTrue(runCatching { backups.restore(other) }.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(runCatching { backups.restore(other, ANY_SUMMARY) }.exceptionOrNull() is IllegalArgumentException)
         }
         assertFalse(fileOf("direct.shkbackup").exists())
     }
@@ -161,7 +164,65 @@ class BackupsTest {
         val missing = document("missing.shkbackup")
 
         assertTrue(runCatching { backups.check(missing) }.exceptionOrNull() is IOException)
-        assertTrue(runCatching { backups.restore(missing) }.exceptionOrNull() is IOException)
+        assertTrue(runCatching { backups.restore(missing, ANY_SUMMARY) }.exceptionOrNull() is IOException)
+    }
+
+    @Test
+    fun aDocumentThatCannotBeOpenedForWritingKeepsWhatItHeld() = runBlocking {
+        val old = fileOf("old.shkbackup")
+        old.writeBytes(pattern(5_000))
+        app.add(record(1))
+        TestDocuments.refuseWriting = true
+
+        val thrown = runCatching { backups.export(document("old.shkbackup")) }.exceptionOrNull()
+
+        assertTrue("$thrown", thrown is IOException)
+        assertEquals("nothing was cut off, so nothing is deleted", emptyList<Uri>(), TestDocuments.deleted)
+        assertTrue("the older backup in it is whole", old.readBytes().contentEquals(pattern(5_000)))
+    }
+
+    @Test
+    fun aProviderThatRefusesWithASecurityExceptionIsAFailedReadOrWrite() = runBlocking {
+        app.add(record(1))
+        val picked = document("my-private-name.shkbackup")
+        backups.export(picked)
+        val summary = (backups.check(picked) as CheckResult.Good).backup
+        TestDocuments.refusal = SecurityException("Permission Denial: reading content://$AUTHORITY/my-private-name.shkbackup")
+
+        val failures = listOf(
+            runCatching { backups.check(picked) }.exceptionOrNull(),
+            runCatching { backups.restore(picked, summary) }.exceptionOrNull(),
+            runCatching { backups.export(picked) }.exceptionOrNull(),
+        )
+
+        failures.forEach { failed ->
+            assertTrue("$failed", failed is IOException)
+            assertFalse("no URI, so no file name, in the message", failed?.message.orEmpty().contains("my-private-name"))
+        }
+        assertEquals(0, app.restores)
+        assertEquals("a document that could not be opened is not deleted", emptyList<Uri>(), TestDocuments.deleted)
+    }
+
+    @Test
+    fun aRestoreTakesOnlyTheBackupTheQuestionShowed() = runBlocking {
+        val picked = document("synced.shkbackup")
+        app.add(record(1))
+        backups.export(picked)
+        val shown = (backups.check(picked) as CheckResult.Good).backup
+        // A storage app syncs a newer backup of the same app into the same document before the user taps Restore.
+        app.add(record(2))
+        clock.advanceBy(60_000)
+        backups.export(picked)
+        val now = (backups.check(picked) as CheckResult.Good).backup
+        app.records.clear()
+
+        assertEquals(RestoreResult.Changed(now), backups.restore(picked, shown))
+        assertEquals("nothing was restored", 0, app.restores)
+        assertEquals(emptyMap<String, String>(), app.snapshot())
+        assertEquals(emptyList<String>(), stagingFolder.list().orEmpty().toList())
+
+        assertEquals("asked again, the user restores what the question now shows", RestoreResult.Restored(now), backups.restore(picked, now))
+        assertEquals(2, app.records.size)
     }
 
     @Test
@@ -217,6 +278,8 @@ class BackupsTest {
         override fun onCreate(): Boolean = true
 
         override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+            refusal?.let { throw it }
+            if (mode != "r" && refuseWriting) throw FileNotFoundException("This place cannot be written now")
             if (mode != "r") modes += mode
             return ParcelFileDescriptor.open(fileOf(uri), ParcelFileDescriptor.parseMode(mode))
         }
@@ -252,6 +315,12 @@ class BackupsTest {
             /** The documents that were deleted through Android's call. */
             val deleted = mutableListOf<Uri>()
 
+            /** True to refuse every open for writing, as a place that cannot be written now does. */
+            var refuseWriting = false
+
+            /** A refusal to throw at every open, as a provider whose grant was taken back does. */
+            var refusal: SecurityException? = null
+
             /** How `DocumentsContract.deleteDocument` reaches a provider. */
             private const val DELETE_DOCUMENT = "android:deleteDocument"
             private const val DOCUMENT_URI = "uri"
@@ -260,5 +329,8 @@ class BackupsTest {
 
     private companion object {
         const val AUTHORITY = "app.shkriuss.core.backup.test.documents"
+
+        /** A summary for a restore that is refused or fails before any summary is compared. */
+        val ANY_SUMMARY = BackupSummary(dataVersion = 1, madeAt = 0L, records = 0, files = 0, notDeleted = emptyMap())
     }
 }

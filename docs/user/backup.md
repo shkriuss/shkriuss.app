@@ -106,7 +106,9 @@ is good. Tap **Cancel**, and nothing changes.
    November 2026, 14:05. It holds 42 drinks." **Cancel** changes
    nothing.
 7. Tap **Restore**. The app takes the records and files, and says
-   **Backup restored**.
+   **Backup restored**. If the file changed since the question, for
+   example because a storage app synced a newer backup into it, the app
+   changes nothing and asks again, with what the file holds now.
 
 A restore needs free room on the phone for about the size of the backup.
 

@@ -90,8 +90,12 @@ sealed interface BackupStep {
     /** No backup was made: Reminders cannot use its keys now. */
     data object NoKeys : BackupStep
 
-    /** "Restore this backup?" The file passed the check. It was made at [madeAt], local time, and holds [reminders] reminders. */
-    data class Question(val madeAt: LocalDateTime, val reminders: Long) : BackupStep
+    /**
+     * "Restore this backup?" The file passed the check. It was made at
+     * [madeAt], local time, and holds [reminders] reminders. [backup] is
+     * what the check read: **Restore** takes only that backup.
+     */
+    data class Question(val madeAt: LocalDateTime, val reminders: Long, val backup: BackupSummary) : BackupStep
 
     /** "Backup restored". */
     data object Restored : BackupStep
@@ -228,7 +232,7 @@ class RemindersBackups(
     /** Checks the document [picked] before a restore. A good one gives the question, with what the backup says about itself. */
     suspend fun look(picked: Uri): BackupStep = try {
         when (val checked = backups.check(picked)) {
-            is CheckResult.Good -> BackupStep.Question(time.reading().local(checked.backup.madeAt), remindersOf(checked.backup))
+            is CheckResult.Good -> questionOf(checked.backup)
             is CheckResult.Refused -> BackupStep.Refused(refusalOf(checked.answer))
         }
     } catch (_: IOException) {
@@ -236,15 +240,19 @@ class RemindersBackups(
     }
 
     /**
-     * Restores the document [picked]. The reminders it took then count from
-     * that moment and the notifications follow (spec, "Backup contents",
-     * point 3), inside the restore. The two are one step: it is not cut
-     * between them when the screen goes away.
+     * Restores the document [picked], if it still holds the backup that
+     * [question] showed. The reminders it took then count from that
+     * moment and the notifications follow (spec, "Backup contents", point
+     * 3), inside the restore. The two are one step: it is not cut between
+     * them when the screen goes away. If the document now holds another
+     * backup, nothing changes, and the answer is the question again, with
+     * what the document holds now.
      */
-    suspend fun restore(picked: Uri): BackupStep = withContext(NonCancellable) {
+    suspend fun restore(picked: Uri, question: BackupStep.Question): BackupStep = withContext(NonCancellable) {
         try {
-            when (val restored = backups.restore(picked)) {
+            when (val restored = backups.restore(picked, question.backup)) {
                 is RestoreResult.Restored -> BackupStep.Restored
+                is RestoreResult.Changed -> questionOf(restored.backup)
                 is RestoreResult.Refused -> BackupStep.Refused(refusalOf(restored.answer))
             }
         } catch (_: UnreadableBackupException) {
@@ -255,6 +263,10 @@ class RemindersBackups(
             BackupStep.NotRead
         }
     }
+
+    /** The question before a restore of [backup]: when it was made, as the phone's clock shows it now, and how many reminders it holds. */
+    private fun questionOf(backup: BackupSummary): BackupStep.Question =
+        BackupStep.Question(time.reading().local(backup.madeAt), remindersOf(backup), backup)
 
     /** How many reminders a backup holds, without the deleted ones. */
     private fun remindersOf(backup: BackupSummary): Long = backup.notDeleted[ReminderEntity.TABLE] ?: 0L

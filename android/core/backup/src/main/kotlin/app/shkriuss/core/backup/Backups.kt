@@ -53,14 +53,19 @@ class Backups(
      * If no backup is made, by a result or by a failure, the document is
      * deleted where Android allows it. A document that stays is never
      * taken for a backup. A write that fails throws its [IOException].
+     * A document that could not even be opened for writing is left as it
+     * was: nothing of it was cut off, so an older backup in it is still
+     * whole.
      */
     suspend fun export(to: Uri): ExportResult = withContext(io) {
         requireFromPicker(to)
         var opened = false
         val result = try {
             engine.write {
-                opened = true
-                resolver.openOutputStream(to, WRITE_AND_CUT) ?: throw IOException("The document cannot be opened for writing")
+                // Only a document that was opened for writing has lost its old content. One that could not be opened stays as it was.
+                providerCall { resolver.openOutputStream(to, WRITE_AND_CUT) }
+                    ?.also { opened = true }
+                    ?: throw IOException("The document cannot be opened for writing")
             }
         } catch (failed: Throwable) {
             if (opened) deleteQuietly(to)
@@ -82,20 +87,38 @@ class Backups(
     }
 
     /**
-     * Restores the backup in the document [from]. Nothing in the app
-     * changes until the whole document was read and checked.
+     * Restores the backup in the document [from], if it is still the
+     * backup [shown]: the summary that [check] gave and the question
+     * before the restore showed. Nothing in the app changes until the
+     * whole document was read and checked. If the document now holds
+     * another backup, for example because a storage app synced a newer
+     * file between the question and the restore, nothing changes and the
+     * answer is [RestoreResult.Changed], so the app can ask again.
      *
      * A read of the document that fails throws its [IOException]. Staging
      * that cannot be written throws [BackupStagingException]. What the
      * app's own [BackupContent.restore] throws passes through.
      */
-    suspend fun restore(from: Uri): RestoreResult = withContext(io) {
+    suspend fun restore(from: Uri, shown: BackupSummary): RestoreResult = withContext(io) {
         requireFromPicker(from)
-        open(from).use { engine.restore(it) }
+        open(from).use { engine.restore(it, shown) }
     }
 
     private fun open(document: Uri) =
-        (resolver.openInputStream(document) ?: throw IOException("The document cannot be opened for reading")).buffered()
+        (providerCall { resolver.openInputStream(document) } ?: throw IOException("The document cannot be opened for reading")).buffered()
+
+    /**
+     * Opens a document through its provider. A provider that refuses with
+     * a [SecurityException], for example because its grant was taken
+     * back, is a failed read or write like any other. The new exception
+     * carries no message of the provider's, which can name the document's
+     * URI and so the file name the user chose (hard rule 10).
+     */
+    private fun <T> providerCall(open: () -> T): T = try {
+        open()
+    } catch (_: SecurityException) {
+        throw IOException("The document cannot be opened")
+    }
 
     private fun requireFromPicker(document: Uri) {
         require(document.scheme == ContentResolver.SCHEME_CONTENT) {

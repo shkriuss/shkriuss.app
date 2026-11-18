@@ -399,7 +399,12 @@ When a screen calls the check (the owner's decision):
 1. **After every backup**, by itself. The app reads the file it has just
    written and checks it. The user does not have to ask.
 2. **Before every restore.** The app checks the file, shows what it
-   holds, and asks. Only then does it restore.
+   holds, and asks. Only then does it restore. The restore reads the
+   file again, and takes it only if it is still the backup the question
+   showed: the same time it was made and the same counts. If the file
+   holds another backup by then, for example because a storage app
+   synced a newer one, nothing changes and the app asks again with what
+   the file holds now.
 3. There is no item to check a file on its own. To check an older file,
    the user starts a restore and cancels at the question.
 
