@@ -21,6 +21,10 @@ dependencies {
     // before the Compose BOM settles the version.
     implementation(project(":core:design"))
     implementation(project(":feature:reminders"))
+    // The notifications: the app class is a NotifyHost and builds the one
+    // Notify. The module adds three permissions and three receivers, none
+    // exported (docs/security/permissions.md).
+    implementation(project(":core:notify"))
     // The app lock: SecurityHost, AppLockWatcher and AppLockGate. The
     // module adds two permissions and six screens, none exported
     // (docs/security/permissions.md).
@@ -32,5 +36,8 @@ dependencies {
     // gate"), and its app classes, which need real keys on the stand-in
     // for the Keystore (ADR 0029). Test fixtures are never part of an app.
     testImplementation(project(":core:testing"))
+    // What the notifications show and which alarms wait, on Robolectric's
+    // Android, without naming Android's alarm or notification classes.
+    testImplementation(testFixtures(project(":core:notify")))
     testImplementation(testFixtures(project(":core:crypto")))
 }

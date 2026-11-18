@@ -8,6 +8,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.testing.AppLockCheck
 import app.shkriuss.feature.reminders.R
 import app.shkriuss.feature.reminders.Repeat
@@ -32,9 +33,10 @@ import org.robolectric.annotation.GraphicsMode
  * - With the app lock on and the app open, it opens each sheet and dialog
  *   of Reminders, turns the screen off so that the app locks, and fails
  *   unless only the lock screen shows, in every window. These are the
- *   form, new and to edit, its date and time pickers, and the question of
- *   Delete all. On a phone the form is a sheet; from 840dp it is a pane of
- *   the screen, which the first check covers.
+ *   form, new and to edit, its date and time pickers, the question of
+ *   Delete all, and the question for notifications. On a phone the form
+ *   is a sheet; from 840dp it is a pane of the screen, which the first
+ *   check covers.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = LockedRemindersApp::class)
@@ -85,6 +87,14 @@ class EveryScreenIsBehindTheAppLockTest {
             compose.waitForText("Call the bank")
             tap(R.string.reminders_delete_all)
         }
+    }
+
+    @Test
+    @Config(application = AppLockOnRemindersApp::class)
+    fun theQuestionForNotificationsGoesWhenTheAppLocks() {
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).allowNotifications(false)
+        seed { addSaved("Pills", Schedule(Repeat.DAILY, THE_TIME.toLocalDate(), 9 * 60)) }
+        openThenLock(ready = "Pills") { tap(R.string.reminders_allow) }
     }
 
     /**

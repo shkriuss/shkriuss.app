@@ -6,7 +6,7 @@ notifications ([CLAUDE.md](../../CLAUDE.md)). The decisions are in
 [ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md) and
 [ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md).
 
-Water is the first app that uses it.
+Water and Reminders use it.
 
 ## At a glance
 

@@ -11,6 +11,8 @@ import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.feature.reminders.R
 import app.shkriuss.feature.reminders.Repeat
 import app.shkriuss.feature.reminders.Schedule
@@ -89,6 +91,27 @@ class RemindersScreenshotTest(private val config: ScreenshotConfig) {
         compose.waitFor(hasText("Pills") and hasClickAction())
         compose.waitForGone(hasText(words(R.string.reminders_new_reminder)))
         captureWindows("UpcomingSnackbar")
+    }
+
+    /** While notifications cannot show: the line at the top, before the list, with **Allow**. */
+    @Test
+    fun upcomingWithTheLineAboutNotifications() {
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).allowNotifications(false)
+        seedUpcoming()
+        start(ready = "Pills")
+        compose.waitForText(words(R.string.reminders_line_not_asked))
+        compose.captureWholeScreen("UpcomingNotificationsLine", config, LIST)
+    }
+
+    /** The question before Android's own, after **Allow**. */
+    @Test
+    fun theQuestionForNotifications() {
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).allowNotifications(false)
+        seedUpcoming()
+        start(ready = "Pills")
+        compose.tap(R.string.reminders_allow)
+        compose.waitForText(words(R.string.reminders_question_text))
+        captureWindows("NotificationsQuestion")
     }
 
     // The reminder form.

@@ -56,10 +56,11 @@ data class ReminderChange(
  * minute, with no snooze and nothing on screen; a delete removes the
  * entries. The current minute is that of the moment the write was asked
  * for: the clock is read once, before the write. So a save that ends in
- * the next minute never makes the mark the very time it saved. That work takes its turn on [turns], the one lock that the
- * handler of an alarm and a press of a button take too, and runs in
- * [work], off the main thread. Then it calls [onChange], so that the
- * notifications follow.
+ * the next minute never makes the mark the very time it saved. That work
+ * takes its turn on [turns], the one lock that the handler of an alarm
+ * and a press of a button take too, and runs in [work], off the main
+ * thread. Then it calls [onChange], so that the notifications follow
+ * (`RemindersAlarms.afterChange`).
  */
 class RemindersRepository(
     private val database: RemindersDatabase,
@@ -79,6 +80,9 @@ class RemindersRepository(
 
     /** The phone-only entries, by reminder `id`. They change after every write, and when an alarm or a button changes them. */
     val entries: StateFlow<Map<String, ReminderEntry>> = book.entries
+
+    /** The reminders that are not deleted, as stored now, in no order. The alarms are read from them. */
+    suspend fun live(): List<Reminder> = reminders.live().map(::reminderOf)
 
     /** The reminder with [id], or null if there is none or it is deleted. */
     suspend fun find(id: String): Reminder? = reminders.find(id)?.takeUnless { it.record.isDeleted }?.let(::reminderOf)

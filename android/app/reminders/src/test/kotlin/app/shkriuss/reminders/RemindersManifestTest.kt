@@ -10,10 +10,11 @@ import org.w3c.dom.Element
 
 /**
  * What Reminders' merged manifest holds (docs/security/permissions.md,
- * "Reminders"): the two permissions of core/security and no other;
- * Reminders' one screen and the six screens of core/security; no
- * receiver; and nothing that another app can reach but Reminders' own
- * screen. The receiver of the profile installer is removed, as in Water.
+ * "Reminders"): five permissions and no other, the three of core/notify
+ * and the two of core/security; the three receivers of core/notify;
+ * Reminders' one screen and the six screens of core/security; and nothing
+ * that another app can reach but Reminders' own screen. The receiver of
+ * the profile installer is removed, as in Water.
  *
  * The APK rules check fails an APK with any permission that is not on
  * Reminders' allow list too. This test also checks that the screen is the
@@ -32,10 +33,13 @@ class RemindersManifestTest {
     private fun Element.android(name: String): String = getAttributeNS(ANDROID, name)
 
     @Test
-    fun remindersHoldsTheTwoPermissionsOfCoreSecurityAndNoOther() {
+    fun remindersHoldsTheThreePermissionsOfCoreNotifyTheTwoOfCoreSecurityAndNoOther() {
         val tags = listOf("uses-permission", "uses-permission-sdk-23", "permission", "permission-group", "permission-tree")
         assertEquals(
             listOf(
+                "<uses-permission> android.permission.POST_NOTIFICATIONS",
+                "<uses-permission> android.permission.USE_EXACT_ALARM",
+                "<uses-permission> android.permission.RECEIVE_BOOT_COMPLETED",
                 "<uses-permission> android.permission.USE_BIOMETRIC",
                 "<uses-permission> android.permission.HIDE_OVERLAY_WINDOWS",
             ).sorted(),
@@ -44,9 +48,19 @@ class RemindersManifestTest {
     }
 
     @Test
-    fun thereIsNoReceiver() {
-        // The receiver of the profile installer is removed. The three of core/notify come with that module.
-        assertEquals(emptyList<String>(), elements("receiver").map { it.android("name") })
+    fun theReceiversAreTheThreeOfCoreNotifyAndNoneIsExported() {
+        // The receiver of the profile installer is removed.
+        val receivers = elements("receiver")
+        assertEquals(
+            setOf(
+                "app.shkriuss.core.notify.AlarmReceiver",
+                "app.shkriuss.core.notify.SystemEventReceiver",
+                "app.shkriuss.core.notify.ButtonReceiver",
+            ),
+            receivers.map { it.android("name") }.toSet(),
+        )
+        assertEquals("each receiver once", 3, receivers.size)
+        receivers.forEach { assertEquals(it.android("name"), "false", it.android("exported")) }
     }
 
     @Test

@@ -130,25 +130,27 @@ are turned off.
 
 ### Reminders (`app.shkriuss.reminders`)
 
-Two permissions, from `core/security`, for the recovery key screens and
-the app lock.
+Five permissions, the same as Water's: three from `core/notify`, for
+its reminders, and two from `core/security`, for the recovery key
+screens and the app lock.
 
 | Permission | From | Why |
 |---|---|---|
+| `android.permission.POST_NOTIFICATIONS` | `core/notify` | To show a reminder. The user allows it or not: Reminders explains first, then Android asks ([spec.md](../apps/reminders/spec.md#as-in-water)). |
+| `android.permission.USE_EXACT_ALARM` | `core/notify` | To show a reminder at its exact minute ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)). Granted at install. |
+| `android.permission.RECEIVE_BOOT_COMPLETED` | `core/notify` | To set the alarms again after a restart. Granted at install. |
 | `android.permission.USE_BIOMETRIC` | `core/security` | To show Android's system prompt: for the recovery key that the phone keeps, and for the app lock ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). Granted at install. |
 | `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | To hide other apps' windows while a screen of the recovery key or the lock screen shows ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Granted at install. |
 
-- Reminders' allow list in the APK rules check has five permissions,
-  the same as Water's, which its
-  [specification](../apps/reminders/spec.md#as-in-water) names: these
-  two, and the three of `core/notify`, `POST_NOTIFICATIONS`,
-  `USE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`. The owner asked for
-  all five. A build of Reminders with any other permission fails.
-- Reminders does not use `core/notify` yet, so it does not hold the
-  three. They come with the module, for the reminders. Their reasons are
-  those of Water, above.
-- Reminders asks the user for none of the two. Android grants both at
-  install.
+- They are Reminders' allow list in the APK rules check, which its
+  [specification](../apps/reminders/spec.md#as-in-water) names. The
+  owner asked for all five. A build of Reminders with any other
+  permission fails.
+- What they allow and do not allow is under
+  [Apps that use core/notify](#apps-that-use-corenotify) and
+  [Apps that use core/security](#apps-that-use-coresecurity).
+- Reminders asks the user for one only: `POST_NOTIFICATIONS`. Android
+  grants the other four at install.
 
 Reminders' manifest removes one permission that a library asks for:
 
@@ -158,6 +160,12 @@ Reminders' manifest removes one permission that a library asks for:
 
 Other components that libraries add, none of them a permission:
 
+- The three receivers of `core/notify`, none exported
+  ([Receivers](#receivers)): `AlarmReceiver` for the one alarm of each
+  reminder, `SystemEventReceiver` for a restart, an update and a new
+  time or time zone, and `ButtonReceiver` for **Done** and **Snooze 10
+  min** on a reminder. `RemindersManifestTest` checks that these three
+  are Reminders' receivers.
 - The six screens of `core/security`, none exported
   ([Screens](#screens)). Reminders' Settings has no Security section
   yet, so nothing opens them, and the app lock cannot be turned on. A
@@ -174,9 +182,13 @@ Other components that libraries add, none of them a permission:
 - The app lock's screen-off receiver, registered while the app runs,
   not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
   Reminders starts its `AppLockWatcher`.
-- No receiver in the manifest. `RemindersManifestTest` checks that there
-  is none, and fails unless `RemindersActivity` is the only exported
-  part of Reminders' merged manifest.
+- `RemindersManifestTest` fails unless `RemindersActivity` is the only
+  exported part of Reminders' merged manifest.
+- A tap on a reminder starts `RemindersActivity` with the reminder's
+  random ID as the intent's identifier, and its form opens behind the
+  app lock. Another app can start the screen with an identifier too.
+  Then Reminders opens the form of the reminder with that ID, or
+  Upcoming if there is none. It reads nothing else from the intent.
 
 Reminders stores its data in its own database and backs it up only into
 the backup file of the suite, so Android backup and device-to-device
@@ -187,8 +199,8 @@ transfer are turned off.
 `core/notify` sets the alarms and shows the notifications of an app with
 reminders ([notifications.md](../architecture/notifications.md)). Its
 manifest declares three permissions and three receivers. Every app that
-uses the module gets them when the app is built. Water uses it.
-Calendar, Reminders and Tasks will use it too
+uses the module gets them when the app is built. Water and Reminders
+use it. Calendar and Tasks will use it too
 ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)).
 
 An app does not get them unnoticed. The APK rules check fails the app
@@ -225,7 +237,7 @@ A receiver is a part of an app that Android can start for a broadcast.
 |---|---|---|---|
 | `app.shkriuss.core.notify.AlarmReceiver` | No | The app's own alarm, sent by Android's `AlarmManager` at the alarm's time. It has no intent filter. | It hands the alarm's id to the app, which reads the reminder from its database and shows the notification. Then the alarms are set again. |
 | `app.shkriuss.core.notify.SystemEventReceiver` | No | Four broadcasts of Android: `BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET` and `TIMEZONE_CHANGED`. | It sets the app's alarms again. It reads nothing from the broadcast. |
-| `app.shkriuss.core.notify.ButtonReceiver` | No | A press of a button on a notification of the app, after the phone's unlock: the button's own pending intent, which the app made. It has no intent filter. | It hands the press to the app, which logs a drink or sets a snooze, for example ([ADR 0034](../adr/0034-notification-buttons.md)). |
+| `app.shkriuss.core.notify.ButtonReceiver` | No | A press of a button on a notification of the app, after the phone's unlock: the button's own pending intent, which the app made. It has no intent filter. | It hands the press to the app, which logs a drink, marks a reminder done or sets a snooze, for example ([ADR 0034](../adr/0034-notification-buttons.md)). |
 
 - No receiver is exported. No other app can start them. Android itself
   can, and so can a pending intent the app made.

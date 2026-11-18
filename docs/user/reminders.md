@@ -4,8 +4,9 @@ Some apps of the suite remind you at a time you set: Water, Reminders,
 Tasks and Calendar. This page says when a reminder shows, and when it
 cannot.
 
-Water is the first app with reminders. How to use Water's reminders is
-in [its guide](water.md#reminders).
+Water and Reminders have reminders now. How to use Water's reminders is
+in [its guide](water.md#reminders). What Reminders does is
+[below](#what-reminders-does).
 
 ## The short version
 
@@ -24,8 +25,9 @@ in [its guide](water.md#reminders).
 
 Android shows a notification only if you allowed it.
 
-1. When you turn on reminders in an app for the first time, the app
-   explains what they are for.
+1. When you turn on reminders in an app, or save a reminder in
+   Reminders, the app explains what they are for. If you tap **Not
+   now**, it explains again the next time, until Android has asked.
 2. Then Android asks: "Allow the app to send you notifications?" Tap
    **Allow**.
 
@@ -57,7 +59,9 @@ Good to know:
 
 Some reminders have buttons. Water's has **Drank** with your first
 quick amount, such as **Drank 150 ml**, which logs that drink, and
-**Later**, which reminds you again in 15 minutes.
+**Later**, which reminds you again in 15 minutes. Each reminder of
+Reminders has **Done**, which takes it away, and **Snooze 10 min**,
+which shows it again 10 minutes later.
 
 1. On the lock screen, a button first asks you to unlock the phone.
    Without the unlock it does nothing.
@@ -77,14 +81,15 @@ quick amount, such as **Drank 150 ml**, which logs that drink, and
 2. A reminder's text and buttons reach another app only if you gave that
    app notification access. Such an app can pass them on to a watch, for
    example a watch's companion app.
-3. Water does not mark its reminders "local only". That mark would not
-   hide them from apps with notification access. It only asks apps that
-   pass notifications to a watch not to pass them on. Whether Water
-   marks them, or offers a setting, is decided after its first release.
+3. Water and Reminders do not mark their reminders "local only". That
+   mark would not hide them from apps with notification access. It only
+   asks apps that pass notifications to a watch not to pass them on.
+   Whether they mark them, or offer a setting, is decided after Water's
+   first release.
 4. With the app lock on, a reminder shows only its kind and "The app
-   lock hides this notification. Open the app to see it.", without
-   amounts and without buttons. Unless you turn on **Show the text in
-   notifications** ([The app lock](app-lock.md#notifications)).
+   lock hides this notification. Open the app to see it.", without its
+   title or amounts and without buttons. Unless you turn on **Show the
+   text in notifications** ([The app lock](app-lock.md#notifications)).
 
 ## When a reminder cannot be shown
 
@@ -106,7 +111,8 @@ its reminders, so:
    not need to open the app.
 3. A reminder whose time passed while the phone was off or locked shows
    then, late. Each app decides whether a late reminder is still
-   useful. Its own guide says so.
+   useful. Water skips it; Reminders shows it
+   ([below](#what-reminders-does)).
 
 What to do: if the phone restarts, for example after a system update at
 night, unlock it once.
@@ -212,3 +218,30 @@ never shows one late. On GrapheneOS:
    reminder appears, and Water names the next one.
 5. **After a change of time zone**, the next reminder moves to the new
    local time.
+
+## What Reminders does
+
+Reminders shows each reminder at its minute, with its title, and the
+buttons **Done** and **Snooze 10 min**.
+
+1. **The text** says the repeat, such as "Every day" or "Every Mon, Wed,
+   Fri". A one-time reminder has none.
+2. **A missed reminder shows late, once.** Its text says "Missed:
+   09:00", or "Missed: Mon 16 Nov, 09:00" when it was another day. If
+   several times of one reminder were missed, only the latest shows.
+   This happens after a restart, after **Force stop**, in another
+   profile and in Private Space, as the cases above say.
+3. **Snooze 10 min** shows the reminder again 10 minutes later, with
+   "Snoozed. It was due at 09:00."
+4. **Done**, a swipe, or no answer: the reminder shows next at its next
+   time. The next one replaces the old one on the screen.
+5. **A tap** opens Reminders with that reminder, after the app lock.
+6. **Each reminder has its own notification.** Several can show at
+   once.
+7. **After a change of time zone**, a reminder shows at its time in the
+   new zone: "09:00" stays 09:00 on the phone's clock.
+8. **After you set the clock back**, a reminder that showed can show
+   again.
+9. **Without notifications**, Reminders still keeps time: a reminder
+   that repeats moves on to its next time. Upcoming says that your
+   reminders are silent, with a button to fix it.
