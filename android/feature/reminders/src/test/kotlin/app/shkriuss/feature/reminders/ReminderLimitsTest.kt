@@ -25,10 +25,10 @@ class ReminderLimitsTest {
     @Test
     fun aStoredTitleIsOnOneLineWithNoSpaceAtEitherEnd() {
         assertTrue(TitleRules.isStored("Call the bank"))
-        listOf("", " Pills", "Pills ", "Two\nlines", "Two lines", "x".repeat(201)).forEach {
+        listOf("", " Pills", "Pills ", "Two\nlines", "Two\u2028lines", "x".repeat(201)).forEach {
             assertFalse(it, TitleRules.isStored(it))
         }
-        assertEquals("Two lines and three", TitleRules.oneLine("Two\r\nlines and three").replace("  ", " "))
+        assertEquals("Two lines and three", TitleRules.oneLine("Two\r\nlines\u2029and three").replace("  ", " "))
     }
 
     @Test

@@ -156,7 +156,8 @@ The two buttons:
    reminder.
 
 A tap on the notification opens Reminders, after the app lock, with the
-form of that reminder.
+form of that reminder, on **Upcoming** or **Past**. If you deleted the
+reminder, Reminders opens on **Upcoming**.
 
 A missed reminder shows late, once: "Missed: 09:00", or "Missed: Mon 16
 Nov, 09:00" when it was another day. If several times of one reminder
@@ -349,10 +350,13 @@ Limits of backups:
 12. Some storage apps do not let Reminders read a file again right away.
     Reminders then says "Backup written, not checked". Check such a file
     with **Restore a backup**, and tap **Cancel** at the question.
+13. A deleted reminder stays in Reminders' storage and in every backup,
+    with its title, marked as deleted, until you clear Reminders'
+    storage. Reminders cannot yet remove deleted reminders for good.
 
 Other:
 
-13. Never type your real recovery words into a preview build of a pull
+14. Never type your real recovery words into a preview build of a pull
     request. Use test words.
 
 Not in version 1:

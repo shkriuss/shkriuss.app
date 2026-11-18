@@ -30,7 +30,7 @@ stores nothing.
 
 ### Water
 
-Water is in development ([Apps](apps.md)). On your phone, it stores:
+Water is released ([Apps](apps.md)). On your phone, it stores:
 
 - your drinks: the amount, the day and the time of each;
 - your daily goal, and the day each goal counts from;
@@ -44,6 +44,24 @@ Water is in development ([Apps](apps.md)). On your phone, it stores:
 It stores no name, no text you write, no location and no health data
 from other apps. A deleted drink stays as a marked row until you clear
 Water's storage.
+
+### Reminders
+
+Reminders has no release yet ([Apps](apps.md)). On your phone, it
+stores:
+
+- your reminders: the title, the date, the time, the repeat and the days
+  of the week of each;
+- for each reminder, times only: when it was last dealt with, the end of
+  a snooze, and the times of its alarm and its notification;
+- the settings of its app lock;
+- its keys, kept as Water's are.
+
+The titles are text you write. Reminders keeps them as you typed them,
+in its own storage. A deleted reminder stays as a marked row, with its
+title, until you clear Reminders' storage. It is in your backups too,
+marked as deleted. Reminders stores no name, no location and no data
+from other apps.
 
 ### Later apps
 
@@ -69,20 +87,22 @@ Without the words, whoever has the file can still see:
 
 ### Notifications
 
-Water's reminders show on your phone, like every notification.
+The reminders of Water and of Reminders show on your phone, like every
+notification. A reminder of Reminders shows your title.
 
 - On the lock screen, Android shows their text only if your phone's
   setting allows it.
 - A reminder's text and buttons reach another app only if you gave that
   app notification access. Such an app can pass them on to a watch.
-- Water does not mark its reminders "local only". That mark would not
-  hide them from apps with notification access. It only asks apps that
-  pass notifications to a watch not to pass them on. Whether Water marks
-  them, or offers a setting, is decided after its first release.
-- With the app lock on, a reminder shows only "Drink reminders" and "The
-  app lock hides this notification. Open the app to see it.", without
-  amounts and without buttons. Unless you turn on **Show the text in
-  notifications** ([The app lock](app-lock.md)).
+- Water and Reminders do not mark their reminders "local only". That
+  mark would not hide them from apps with notification access. It only
+  asks apps that pass notifications to a watch not to pass them on.
+  Whether the apps mark them, or offer a setting, is not decided yet.
+- With the app lock on, a reminder shows only "Drink reminders" in Water
+  or "Reminders" in Reminders, and "The app lock hides this
+  notification. Open the app to see it.", without amounts or titles and
+  without buttons. Unless you turn on **Show the text in notifications**
+  ([The app lock](app-lock.md)).
 
 ### Nothing else
 
