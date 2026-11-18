@@ -113,8 +113,9 @@ class Notifications internal constructor(
     /**
      * Posts every notification of [channels] that is on screen again, in
      * the hidden form: the same key, tap target, icon, time and end, no
-     * buttons, and no new sound or vibration. Does nothing if the text is
-     * not to be hidden.
+     * buttons, and no new sound or vibration. One that is in the hidden
+     * form already stays as it is. Does nothing if the text is not to be
+     * hidden.
      *
      * Android drops an update of a notification that comes when an app
      * posts more than about five a second, and the old text stays. So the
@@ -133,6 +134,8 @@ class Notifications internal constructor(
                 manager.cancel(shown.tag, shown.id)
                 return@forEach
             }
+            // Already hidden: nothing to post, and nothing to wait for. A start while the text is hidden waits for none.
+            if (old.extras.getBoolean(EXTRA_HIDDEN, false)) return@forEach
             if (posted > 0) pause(PACE_MILLIS)
             // A new builder carries no button of the old notification.
             val built = builder(channel.id, old.`when`, old.contentIntent, endsAt)

@@ -290,7 +290,8 @@ Limits of reminders:
    early or too late, that one night.
 8. If the phone's clock or time zone moves past midnight while a
    reminder shows, the reminder can keep yesterday's total until the
-   old midnight has passed. Its buttons then do nothing.
+   old midnight has passed. A press on it then only takes it away:
+   **Drank** logs no drink and **Later** sets no snooze.
 
 Limits of the app lock:
 

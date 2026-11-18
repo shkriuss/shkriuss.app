@@ -547,6 +547,23 @@ class NotifyTest {
     }
 
     @Test
+    fun aStartWithEveryNotificationHiddenAlreadyPostsNothingAndWaitsForNothing() {
+        hidesText = { true }
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+        val before = shownBy.getNotification("one", 0)
+
+        context.notify = newNotify()
+        context.notify.start()
+
+        assertEquals("the alarms that wait behind it are not held up", emptyList<Long>(), pauses)
+        assertTrue("not posted again", before === shownBy.getNotification("one", 0))
+        assertHidden(shownBy.getNotification("two", 0), context.getString(android.R.string.ok))
+    }
+
+    @Test
     fun startHidesTheTextOfNotificationsLeftFromBeforeAStop() {
         context.notify.start()
         context.notify.notifications.show(

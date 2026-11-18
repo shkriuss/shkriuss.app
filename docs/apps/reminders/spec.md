@@ -447,7 +447,7 @@ and Fri at 18:30 from 2026-11-16:
    length other than 12 + n, a title that is not UTF-8 or breaks the
    limits of [the table](#table-reminder), a `day` outside 0 to
    2932896, any other value outside its limits, days for a repeat other
-   than every week, or a File entry.
+   than every week, an ID that is there twice, or a File entry.
 3. After a restore, each reminder it took counts from that moment: its
    snooze ends and its notification goes. `notify.sync()` follows in the
    same step, as in [Water](../water/spec.md#after-a-restore).

@@ -278,7 +278,8 @@ Decided by the owner, with the app lock
    notification of the app that still shows its old form is removed: the
    text leaves the shade, also at the cost of the notification. A
    notification in the hidden form carries a mark that says so, and
-   nothing more.
+   nothing more. One with the mark is not posted again, so a start while
+   the text is hidden waits for nothing.
 4. If the state of the app lock cannot be read, the text is hidden.
    `Notifications.show` also hides it when `hidesText` itself fails.
 5. A notification that is hidden stays hidden after the app lock is

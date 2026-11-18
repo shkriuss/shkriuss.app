@@ -1110,7 +1110,8 @@ so that nothing changes, when it meets:
 3. a value outside its limits in the tables above, a day among them,
 4. a `createdAt`, `updatedAt` or `deletedAt` that no record can hold
    ([data.md](../../architecture/data.md#record-fields)),
-5. a File entry. Water has no files.
+5. a second record with the same ID in one type,
+6. a File entry. Water has no files.
 
 This is the third failure of
 [backup-format.md](../../architecture/backup-format.md#the-answers): "the
