@@ -248,6 +248,24 @@ class AppLockTest {
     }
 
     @Test
+    fun aLockKeyThatAndroidCallsPermanentlyInvalidatedWhenThePromptFinishesResetsTheAppLock() {
+        val fixture = appWithKeys()
+        val app = fixture.app
+        app.open().appLock.beginTurnOn(WordsProof(recoveryKey.keyId)).finish()
+        val lockAlias = app.keyOf(KeysetName.FILE_KEY)!!.alias
+        app.hardware.invalidatedAtFinish += lockAlias
+        val crypto = app.open()
+        crypto.appLock.lock()
+
+        // The cipher starts and the prompt succeeds. Only the finish says that the key is permanently invalidated.
+        val unlock = crypto.appLock.beginUnlock()
+        assertEquals(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW, TestKeys.answerOf { unlock.finish() })
+
+        assertEquals("from then on the Lock key is gone", AppLockState.RESET, crypto.appLock.state())
+        assertFilesAreClosed(crypto, fixture)
+    }
+
+    @Test
     fun theKeysetFilesSayMissingOnlyForAFileThatIsNotThere() {
         val fixture = appWithKeys()
         val files = KeysetFiles(fixture.app.folder)

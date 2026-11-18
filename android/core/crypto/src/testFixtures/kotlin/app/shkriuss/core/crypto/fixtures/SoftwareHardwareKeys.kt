@@ -1,5 +1,6 @@
 package app.shkriuss.core.crypto.fixtures
 
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import app.shkriuss.core.crypto.CannotMakeHardwareKeyException
 import app.shkriuss.core.crypto.HardwareBlobRefused
 import app.shkriuss.core.crypto.HardwareKeyGone
@@ -8,9 +9,14 @@ import app.shkriuss.core.crypto.HardwareKeyNotUsable
 import app.shkriuss.core.crypto.HardwareKeyRef
 import app.shkriuss.core.crypto.HardwareKeys
 import app.shkriuss.core.crypto.SecurityLevel
+import java.security.AlgorithmParameters
+import java.security.Key
+import java.security.Provider
 import java.security.SecureRandom
+import java.security.spec.AlgorithmParameterSpec
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
+import javax.crypto.CipherSpi
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -47,6 +53,12 @@ internal class SoftwareHardwareKeys : HardwareKeys {
      * stays, and starting a cipher of it fails as for a key that is gone.
      */
     val invalidated = mutableSetOf<String>()
+
+    /**
+     * Aliases whose cipher starts, and then, when the prompt has
+     * succeeded, refuses its key as permanently invalidated.
+     */
+    val invalidatedAtFinish = mutableSetOf<String>()
 
     /** Android cannot make keys. */
     var cannotMake = false
@@ -131,6 +143,7 @@ internal class SoftwareHardwareKeys : HardwareKeys {
         check(key.kind.needsPrompt) { "Only a key that needs the prompt is used through startCipher" }
         val secret = usable(key)
         if (key.alias in invalidated) throw HardwareKeyGone()
+        if (key.alias in invalidatedAtFinish) return InvalidatedAtFinish.cipher()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         if (iv == null) {
             cipher.init(Cipher.ENCRYPT_MODE, secret)
@@ -145,5 +158,54 @@ internal class SoftwareHardwareKeys : HardwareKeys {
         val secret = keys[key.alias] ?: throw HardwareKeyGone()
         if (phoneLocked && key.kind == HardwareKeyKind.UNLOCKED) throw HardwareKeyNotUsable()
         return secret
+    }
+}
+
+/**
+ * A cipher that starts, and refuses its key as permanently invalidated
+ * when it finishes, as Android's Keystore can. It comes from a provider of
+ * its own, which only the tests know.
+ */
+internal object InvalidatedAtFinish : Provider("ShkInvalidatedAtFinish", 1.0, "A cipher whose key turns out invalidated") {
+    private const val NAME = "ShkInvalidatedAtFinish"
+
+    init {
+        put("Cipher.$NAME", Spi::class.java.name)
+    }
+
+    /** A started cipher of this kind. */
+    fun cipher(): Cipher = Cipher.getInstance(NAME, this).apply { init(Cipher.DECRYPT_MODE, SecretKeySpec(ByteArray(32), "AES")) }
+
+    /** What the cipher does: everything but its finish works. */
+    class Spi : CipherSpi() {
+        override fun engineSetMode(mode: String?) = Unit
+
+        override fun engineSetPadding(padding: String?) = Unit
+
+        override fun engineGetBlockSize(): Int = 0
+
+        override fun engineGetOutputSize(inputLen: Int): Int = inputLen
+
+        override fun engineGetIV(): ByteArray? = null
+
+        override fun engineGetParameters(): AlgorithmParameters? = null
+
+        override fun engineInit(opmode: Int, key: Key?, random: SecureRandom?) = Unit
+
+        override fun engineInit(opmode: Int, key: Key?, params: AlgorithmParameterSpec?, random: SecureRandom?) = Unit
+
+        override fun engineInit(opmode: Int, key: Key?, params: AlgorithmParameters?, random: SecureRandom?) = Unit
+
+        override fun engineUpdate(input: ByteArray?, inputOffset: Int, inputLen: Int): ByteArray = ByteArray(0)
+
+        override fun engineUpdate(input: ByteArray?, inputOffset: Int, inputLen: Int, output: ByteArray?, outputOffset: Int): Int = 0
+
+        override fun engineUpdateAAD(src: ByteArray?, offset: Int, len: Int) = Unit
+
+        override fun engineDoFinal(input: ByteArray?, inputOffset: Int, inputLen: Int): ByteArray =
+            throw KeyPermanentlyInvalidatedException()
+
+        override fun engineDoFinal(input: ByteArray?, inputOffset: Int, inputLen: Int, output: ByteArray?, outputOffset: Int): Int =
+            throw KeyPermanentlyInvalidatedException()
     }
 }

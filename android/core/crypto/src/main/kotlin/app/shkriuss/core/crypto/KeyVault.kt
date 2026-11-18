@@ -53,8 +53,9 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
     private val lock = ReentrantLock()
 
     /**
-     * Keys whose cipher Android refused as permanently invalidated, in
-     * this run (rule 1). Their alias may still exist, but they are gone.
+     * Keys whose cipher Android refused as permanently invalidated, at its
+     * start or at its finish, in this run (rule 1). Their alias may still
+     * exist, but they are gone.
      * Only memory holds this: in a new run the first prompt finds it again.
      */
     private val invalidated = mutableSetOf<HardwareKeyRef>()
@@ -182,7 +183,9 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
     /**
      * Opens what [stored] holds with the started [cipher], after the prompt
      * succeeded. If the Keystore refuses the blob, or what it opens is not
-     * a keyset, the file is marked as damaged for this run of the app.
+     * a keyset, the file is marked as damaged for this run of the app. If
+     * Android says the key is permanently invalidated, the key is gone
+     * from then on ([isGone]).
      */
     fun openWithPrompt(name: KeysetName, stored: Stored.NeedsPrompt, cipher: PromptCipher): KeysetHandle {
         val plain = try {
@@ -190,6 +193,10 @@ internal class KeyVault(val app: AppName, private val store: KeysetStore, val ha
         } catch (refused: HardwareBlobRefused) {
             damagedBehindPrompt += name
             throw refused
+        } catch (gone: HardwareKeyGone) {
+            // The cipher said that its key is permanently invalidated when it finished: gone from then on, as at its start.
+            invalidated += stored.key
+            throw gone
         }
         try {
             return KeysetCodec.parse(plain, name.type)

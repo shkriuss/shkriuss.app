@@ -90,7 +90,8 @@ object AmountInput {
      * is empty, not a whole number, or outside [limits] (in [unit]).
      */
     fun millilitres(text: String, unit: WaterUnit, limits: IntRange): Int? {
-        val digits = text.trim().map { Character.digit(it, DECIMAL) }
+        // By code point: the digits of some scripts, such as Adlam, take two UTF-16 units each.
+        val digits = text.trim().codePoints().toArray().map { Character.digit(it, DECIMAL) }
         if (digits.isEmpty() || digits.any { it < 0 }) return null
         val amount = digits.joinToString("").toIntOrNull() ?: return null
         return if (amount in limits) unit.toMillilitres(amount) else null
