@@ -38,17 +38,18 @@ fun openReminders(app: Application): Intent =
  * It builds the one `Notify` as `RemindersApp` does, with a worker that
  * runs each piece at once, and starts it. A new start of the app in a
  * test is a new [TestReminders] on the same [database], [clock] and
- * [ids].
+ * [ids]. [open] is what a tap on a notification opens.
  */
 class TestReminders(
     app: Application,
     val clock: TestClock = TestClock(THE_TIME.toInstant(ZoneOffset.UTC).toEpochMilli()),
     val database: RemindersDatabase = inMemoryTestDatabaseBuilder<RemindersDatabase>(app).build(),
     val ids: TestIdSource = TestIdSource(),
+    open: Intent = openReminders(app),
 ) {
     /** What the app class hands to the screens. */
     val services: RemindersServices =
-        RemindersServices(app, database, clock, ids, openReminders(app), notify = { notify }, zone = { ZoneOffset.UTC })
+        RemindersServices(app, database, clock, ids, open, notify = { notify }, zone = { ZoneOffset.UTC })
 
     /** The app's one `Notify`. The text of notifications is hidden while the app lock of the test's app class says so. */
     val notify: Notify = Notify(
@@ -113,10 +114,10 @@ class NotifyingRemindersApp : UnlockedAppForTests(REMINDERS), RemindersTestApp {
     override val test: TestReminders
         get() = started ?: TestReminders(this).also { started = it }
 
-    /** The app starts again. */
-    fun restart() {
+    /** The app starts again. [open] is what a tap on a notification opens. */
+    fun restart(open: Intent = openReminders(this)) {
         val before = test
         started = null
-        started = TestReminders(this, before.clock, before.database, before.ids)
+        started = TestReminders(this, before.clock, before.database, before.ids, open)
     }
 }

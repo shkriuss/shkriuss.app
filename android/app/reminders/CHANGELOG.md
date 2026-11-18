@@ -48,7 +48,8 @@ Not released yet.
   reminder is upcoming and notifications cannot show, Upcoming says so,
   with **Allow** or **Open settings**.
 - When a reminder could not be shown, a notice takes its place: "A
-  reminder could not be shown. Open the app to see it."
+  reminder could not be shown. Open the app to see it." A tap on it
+  starts Reminders anew, with the form of that reminder.
 - Everything Reminders stores is on the phone: reminders, with their
   title, date, time, repeat and days of the week, in one database, and
   what this phone remembers of each one and of its alarm, in two small

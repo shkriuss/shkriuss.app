@@ -186,8 +186,12 @@ When Android fires an alarm:
    "Drink reminders", and "A reminder could not be shown. Open the app to
    see it." It has no buttons and nothing of the app's own. Its key is
    the alarm's id, so the app's next notification for that alarm
-   replaces it. A tap opens the app's start screen. Then the sync runs as
-   after any alarm, so the next reminder is set. This is the owner's
+   replaces it. A tap starts the app anew on its start screen, with the
+   alarm's id as the intent's identifier, as a tap on a reminder of
+   Water or Reminders does: a screen of the app that is open closes, so
+   no second one opens on top of it. Reminders opens the form of the
+   reminder with that id. Then the sync runs as after any alarm, so the
+   next reminder is set. This is the owner's
    decision, for every app ([Open](#open), item 6). Without it, the
    failure would stop the app's process in the background, and the next
    reminder would be set only at the next start of the app.

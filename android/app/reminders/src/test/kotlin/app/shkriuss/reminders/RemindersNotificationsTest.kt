@@ -1,6 +1,7 @@
 package app.shkriuss.reminders
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.notify.R as NotifyR
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.feature.reminders.R
 import app.shkriuss.feature.reminders.RemindersAlarms
@@ -47,13 +49,13 @@ import org.robolectric.annotation.GraphicsMode
  * On Monday 16 November 2026 from 09:30, in UTC, with the 24-hour clock.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(application = UnlockedRemindersApp::class, qualifiers = PHONE)
+@Config(application = NotifyingRemindersApp::class, qualifiers = PHONE)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RemindersNotificationsTest {
     @get:Rule
     val compose = createEmptyComposeRule()
 
-    private val app = ApplicationProvider.getApplicationContext<UnlockedRemindersApp>()
+    private val app = ApplicationProvider.getApplicationContext<NotifyingRemindersApp>()
     private val device = NotifyTestDevice(app)
     private var scenario: ActivityScenario<RemindersActivity>? = null
 
@@ -178,12 +180,22 @@ class RemindersNotificationsTest {
     }
 
     @Test
-    fun aTapOnTheNoticeOfCoreNotifyOpensTheFormToo() {
+    fun aTapOnTheNoticeOfCoreNotifyStartsRemindersAnewWithTheFormOfItsReminder() {
         val pills = runBlocking { app.test.services.repository.addSaved("Pills", Schedule(Repeat.DAILY, TODAY, 9 * 60)) }
-        // The notice opens the app's start screen with the alarm's id, which is the reminder's id, as its identifier.
-        val notice = checkNotNull(app.packageManager.getLaunchIntentForPackage(app.packageName)).setIdentifier(pills.id)
+        // A reminder whose tap would open another app is refused: the handler fails while it shows it.
+        app.restart(open = Intent().setComponent(ComponentName("org.example.other", "org.example.other.Screen")))
+        setClock(TODAY.plusDays(1).atTime(9, 0))
+        device.fireTheAlarm()
 
-        start(ready = words(R.string.reminders_edit_reminder), intent = notice)
+        val notice = checkNotNull(device.shown(pills.id)) { "The notice does not show" }
+        assertEquals(app.getString(NotifyR.string.notify_reminder_failed), notice.text)
+        val tap = checkNotNull(notice.tap)
+        assertEquals(RemindersActivity::class.java.name, tap.component?.className)
+        assertEquals("the alarm's id, which is the reminder's", pills.id, tap.identifier)
+        val newScreen = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        assertEquals("Reminders starts anew, with no second screen on top", newScreen, tap.flags and newScreen)
+
+        start(ready = words(R.string.reminders_edit_reminder), intent = tap)
 
         compose.field(words(R.string.reminders_title)).assert(hasText("Pills"))
     }

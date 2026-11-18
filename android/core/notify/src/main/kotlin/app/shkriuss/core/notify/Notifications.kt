@@ -139,9 +139,12 @@ class Notifications internal constructor(
      * place: the name of [channel] and the fixed text "A reminder could
      * not be shown. Open the app to see it.", with no buttons and nothing
      * of the app's own. Its key is the alarm's id, so the app's next
-     * notification for that alarm replaces it. A tap opens the app's start
-     * screen. This is the owner's decision
-     * (docs/architecture/notifications.md, "How alarms are kept right").
+     * notification for that alarm replaces it. A tap starts the app anew
+     * on its start screen, with the alarm's id as the intent's identifier,
+     * as a tap on a reminder of the apps does: a screen of the app that is
+     * open closes, so no second one opens on top of it. This is the
+     * owner's decision (docs/architecture/notifications.md, "How alarms
+     * are kept right").
      */
     internal fun showFailure(channel: NotifyChannel, alarm: Alarm) {
         val start = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -149,7 +152,7 @@ class Notifications internal constructor(
             PendingIntent.getActivity(
                 context,
                 0,
-                Intent(it).setIdentifier(alarm.id.value),
+                Intent(it).setIdentifier(alarm.id.value).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
         }

@@ -7,6 +7,12 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
+Fixed:
+
+- **The notice "A reminder could not be shown."** A tap on it starts
+  Water anew on Today, as a tap on a reminder does. Before, when Water
+  was open, it opened a second Water screen on top of it.
+
 ## 1.0.1 (2026-11-17)
 
 Released as `water-v1.0.1`.
