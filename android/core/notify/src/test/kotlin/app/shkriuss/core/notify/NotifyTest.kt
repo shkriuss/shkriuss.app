@@ -529,6 +529,22 @@ class NotifyTest {
     }
 
     @Test
+    fun aNotificationTheAppRemovesDuringAPauseDoesNotComeBack() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+        // The reminder of "two" is deleted while the first is posted again: the app removes its notification, from its own thread.
+        duringPause = { millis -> if (millis == 250L) notifications.cancel("two") }
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        assertHidden(shownBy.getNotification("one", 0), context.getString(android.R.string.ok))
+        assertNull("the removed notification stays removed", shownBy.getNotification("two", 0))
+    }
+
+    @Test
     fun aNotificationShownInTheHiddenFormMeanwhileStaysWhenTheShadeIsCheckedAgain() {
         context.notify.start()
         val notifications = context.notify.notifications

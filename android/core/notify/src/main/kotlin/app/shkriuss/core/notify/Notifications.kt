@@ -119,14 +119,20 @@ class Notifications internal constructor(
      *
      * Android drops an update of a notification that comes when an app
      * posts more than about five a second, and the old text stays. So the
-     * posts come [PACE_MILLIS] apart. Then, after [SETTLE_MILLIS], any of
-     * them that still shows the old form is removed: the text must leave
-     * the notification shade, also at the cost of the notification.
+     * posts come [PACE_MILLIS] apart. Each is read again just before it is
+     * posted: during a pause the app may have removed it, for example for
+     * a deleted reminder, and it must not come back. Then, after
+     * [SETTLE_MILLIS], any of them that still shows the old form is
+     * removed: the text must leave the notification shade, also at the
+     * cost of the notification.
      */
     internal fun hideShown(channels: List<NotifyChannel>) {
         if (!mustHide()) return
         var posted = 0
-        manager.activeNotifications.forEach { shown ->
+        val keys = manager.activeNotifications.map { it.tag to it.id }
+        keys.forEach { (tag, id) ->
+            if (posted > 0) pause(PACE_MILLIS)
+            val shown = manager.activeNotifications.firstOrNull { it.tag == tag && it.id == id } ?: return@forEach
             val old = shown.notification
             val channel = channels.firstOrNull { it.id == old.channelId } ?: return@forEach
             val endsAt = old.extras.getLong(EXTRA_ENDS_AT, 0L).takeIf { it > 0L }
