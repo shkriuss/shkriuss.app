@@ -142,7 +142,6 @@ class Notifications internal constructor(
             }
             // Already hidden: nothing to post, and nothing to wait for. A start while the text is hidden waits for none.
             if (old.extras.getBoolean(EXTRA_HIDDEN, false)) return@forEach
-            if (posted > 0) pause(PACE_MILLIS)
             // A new builder carries no button of the old notification.
             val built = builder(channel.id, old.`when`, old.contentIntent, endsAt)
                 .setSmallIcon(old.smallIcon)

@@ -534,14 +534,23 @@ class NotifyTest {
         val notifications = context.notify.notifications
         notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
         notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
-        // The reminder of "two" is deleted while the first is posted again: the app removes its notification, from its own thread.
-        duringPause = { millis -> if (millis == 250L) notifications.cancel("two") }
+        // While the first is posted again, the reminder of the other one is deleted: the app removes its notification,
+        // from its own thread. Which one is first is Android's order.
+        var removed: String? = null
+        duringPause = { millis ->
+            if (millis == 250L) {
+                removed = notificationManager.activeNotifications
+                    .single { !it.notification.extras.getBoolean(Notifications.EXTRA_HIDDEN, false) }.tag
+                notifications.cancel(removed!!)
+            }
+        }
 
         hidesText = { true }
         context.notify.hideShownText()
 
-        assertHidden(shownBy.getNotification("one", 0), context.getString(android.R.string.ok))
-        assertNull("the removed notification stays removed", shownBy.getNotification("two", 0))
+        val kept = listOf("one", "two").single { it != removed }
+        assertHidden(shownBy.getNotification(kept, 0), context.getString(android.R.string.ok))
+        assertNull("the removed notification stays removed", shownBy.getNotification(removed, 0))
     }
 
     @Test
