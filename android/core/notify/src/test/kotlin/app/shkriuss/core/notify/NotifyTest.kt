@@ -479,6 +479,34 @@ class NotifyTest {
     }
 
     @Test
+    fun startHidesTheTextOfNotificationsLeftFromBeforeAStop() {
+        context.notify.start()
+        context.notify.notifications.show(
+            ShkNotification("one", reminders, "Water the plants", "In the kitchen", android.R.drawable.ic_dialog_info, open, start),
+        )
+        // The app lock was turned on, and the app stopped before it hid the shown notifications.
+        hidesText = { true }
+
+        context.notify = newNotify()
+        context.notify.start()
+
+        assertHidden(shownBy.getNotification("one", 0), context.getString(android.R.string.ok))
+    }
+
+    @Test
+    fun startLeavesTheTextWhenItIsNotToBeHidden() {
+        context.notify.start()
+        context.notify.notifications.show(
+            ShkNotification("one", reminders, "Water the plants", "In the kitchen", android.R.drawable.ic_dialog_info, open, start),
+        )
+
+        context.notify = newNotify()
+        context.notify.start()
+
+        assertEquals("Water the plants", shownBy.getNotification("one", 0).extras.getString(Notification.EXTRA_TITLE))
+    }
+
+    @Test
     fun hideShownTextLeavesTheTextWhenItIsNotToBeHidden() {
         context.notify.start()
         context.notify.notifications.show(
