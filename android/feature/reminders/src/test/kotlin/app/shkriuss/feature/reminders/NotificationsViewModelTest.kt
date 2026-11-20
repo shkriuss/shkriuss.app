@@ -108,7 +108,8 @@ class NotificationsViewModelTest {
         model.open(pills.id)
         assertEquals(TappedReminder.Open(pills, past = false), model.state.await { it.tapped != null }.tapped)
         model.tapOpened()
-        assertNull(model.state.value.tapped)
+        // The screen's state follows on the thread that last changed it, here the database's: it is awaited, not read at once.
+        assertNull(model.state.await { it.tapped == null }.tapped)
 
         model.open(bank.id)
         assertEquals("a one-time reminder that showed is past", TappedReminder.Open(bank, past = true), model.state.await { it.tapped != null }.tapped)
@@ -123,6 +124,8 @@ class NotificationsViewModelTest {
         model.open(pills.id)
         assertEquals(TappedReminder.Missing, model.state.await { it.tapped != null }.tapped)
         model.tapOpened()
+        // Gone first, so that the next answer is the one for the unknown id.
+        model.state.await { it.tapped == null }
         model.open("no-such-reminder")
         assertEquals(TappedReminder.Missing, model.state.await { it.tapped != null }.tapped)
     }

@@ -1,6 +1,8 @@
 package app.shkriuss.core.crypto.fixtures
 
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.crypto.HardwareKeyKind
+import app.shkriuss.core.crypto.HardwareKeyRef
 import app.shkriuss.core.crypto.KeyVault
 import app.shkriuss.core.crypto.KeysetFiles
 import app.shkriuss.core.crypto.ShkCrypto
@@ -57,4 +59,12 @@ class SoftwareKeysApp(folder: File, appName: AppName) {
         set(value) {
             if (value) hardware.screenLock = true else hardware.removeScreenLock()
         }
+
+    /**
+     * Android says that the keys of the app lock are permanently
+     * invalidated: their aliases stay, and their ciphers are refused.
+     */
+    fun invalidateLockKeys() {
+        hardware.invalidated += hardware.existing().filter { HardwareKeyRef.ofAlias(it)?.kind == HardwareKeyKind.LOCK }
+    }
 }

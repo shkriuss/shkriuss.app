@@ -352,9 +352,10 @@ Limits of backups:
 
 12. A restore keeps the newest edit of each reminder. It cannot bring
     back exactly how Reminders was on the day of the backup.
-13. Some storage apps do not let Reminders read a file again right away.
-    Reminders then says "Backup written, not checked". Check such a file
-    with **Restore a backup**, and tap **Cancel** at the question.
+13. Some storage apps do not let Reminders read a file again right away,
+    or hand back an older copy. Reminders then says "Backup written, not
+    checked". Check such a file with **Restore a backup**, and tap
+    **Cancel** at the question.
 14. A deleted reminder stays in Reminders' storage, with its title,
     marked as deleted, until you clear Reminders' storage. Backups you
     make after the deletion hold it too. Clearing the storage does not

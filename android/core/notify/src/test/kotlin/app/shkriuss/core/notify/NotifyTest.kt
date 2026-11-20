@@ -73,9 +73,26 @@ class NotifyTest {
     /** What the app lock answers about the text of notifications: hide it, show it, or fail. */
     private var hidesText: () -> Boolean = { false }
 
+    /** Every pause of the worker, in milliseconds, in order. */
+    private val pauses = mutableListOf<Long>()
+
+    /** What happens during a pause, besides being counted. Nothing waits. */
+    private var duringPause: (Long) -> Unit = {}
+
     /** What the app class builds when the app starts. The worker runs each piece at once, so a test needs no waiting. */
-    private fun newNotify() =
-        Notify(context, listOf(reminders, summaries), app, handler, clock, hidesText = { hidesText() }, worker = Executor { it.run() })
+    private fun newNotify() = Notify(
+        context,
+        listOf(reminders, summaries),
+        app,
+        handler,
+        clock,
+        hidesText = { hidesText() },
+        worker = Executor { it.run() },
+        pause = { millis ->
+            pauses += millis
+            duringPause(millis)
+        },
+    )
 
     private fun waiting() = alarmManager.waiting()
 
@@ -476,6 +493,99 @@ class NotifyTest {
         assertEquals("one", shadowOf(one.contentIntent).savedIntent.identifier)
         assertTrue("no new sound or vibration", one.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
         assertTrue(one.flags and Notification.FLAG_AUTO_CANCEL != 0)
+    }
+
+    @Test
+    fun hideShownTextPostsFourASecondAndThenLooksAgain() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        listOf("one", "two", "three").forEach { key ->
+            notifications.show(ShkNotification(key, reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        }
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        // Android drops updates that come faster than about five a second.
+        assertEquals(listOf(250L, 250L, 1_000L), pauses)
+        listOf("one", "two", "three").forEach { assertHidden(shownBy.getNotification(it, 0), context.getString(android.R.string.ok)) }
+    }
+
+    @Test
+    fun aNotificationWhoseHiddenFormDidNotLandIsRemoved() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", "In the kitchen", android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", summaries, "Two plants", null, android.R.drawable.ic_dialog_info, open, start + 1))
+        val oldOne = shownBy.getNotification("one", 0)
+        // Android dropped the update of "one": the old one, with its text, is what it shows.
+        duringPause = { millis -> if (millis == 1_000L) notificationManager.notify("one", 0, oldOne) }
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        assertNull("the old text left the shade, with its notification", shownBy.getNotification("one", 0))
+        assertHidden(shownBy.getNotification("two", 0), context.getString(android.R.string.copy))
+    }
+
+    @Test
+    fun aNotificationTheAppRemovesDuringAPauseDoesNotComeBack() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+        // While the first is posted again, the reminder of the other one is deleted: the app removes its notification,
+        // from its own thread. Which one is first is Android's order.
+        var removed: String? = null
+        duringPause = { millis ->
+            if (millis == 250L) {
+                removed = notificationManager.activeNotifications
+                    .single { !it.notification.extras.getBoolean(Notifications.EXTRA_HIDDEN, false) }.tag
+                notifications.cancel(removed!!)
+            }
+        }
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        val kept = listOf("one", "two").single { it != removed }
+        assertHidden(shownBy.getNotification(kept, 0), context.getString(android.R.string.ok))
+        assertNull("the removed notification stays removed", shownBy.getNotification(removed, 0))
+    }
+
+    @Test
+    fun aNotificationShownInTheHiddenFormMeanwhileStaysWhenTheShadeIsCheckedAgain() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        duringPause = { millis ->
+            if (millis == 1_000L) {
+                notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+            }
+        }
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        assertHidden(shownBy.getNotification("one", 0), context.getString(android.R.string.ok))
+        assertHidden(shownBy.getNotification("two", 0), context.getString(android.R.string.ok))
+    }
+
+    @Test
+    fun aStartWithEveryNotificationHiddenAlreadyPostsNothingAndWaitsForNothing() {
+        hidesText = { true }
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+        val before = shownBy.getNotification("one", 0)
+
+        context.notify = newNotify()
+        context.notify.start()
+
+        assertEquals("the alarms that wait behind it are not held up", emptyList<Long>(), pauses)
+        assertTrue("not posted again", before === shownBy.getNotification("one", 0))
+        assertHidden(shownBy.getNotification("two", 0), context.getString(android.R.string.ok))
     }
 
     @Test

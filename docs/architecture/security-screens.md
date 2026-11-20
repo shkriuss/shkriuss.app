@@ -363,7 +363,11 @@ class WaterActivity : ComponentActivity() {
    enter flow says so, with a button to the app lock screen.
 5. A notice shows over the screen once per run of the app: the app lock
    was reset because the screen lock was removed, or it went off while
-   the app was unlocked for the same reason.
+   the app was unlocked for the same reason. Some phones keep the Lock
+   key's alias then, and Android only says that the key is permanently
+   invalidated when the lock screen starts its prompt. The vault then
+   counts the key as gone, and the lock screen has the watcher read the
+   state again, so the notice shows.
 6. The watcher reads the keys again whenever a screen of the app starts,
    and after each flow. `core/crypto` is the truth: a keyset write drops
    the keys from memory (for example keeping the recovery key), and the
@@ -376,6 +380,9 @@ class WaterActivity : ComponentActivity() {
    decides this on the main thread, where every lock runs
    (`AppLockWatcher.unlocked`). After a lock, a read of the keys never
    opens the gate. Only a prompt does, or turning the app lock on.
+   Turning it on counts on the same terms: the mark is taken on the main
+   thread before its last prompt shows, so leaving the app after the
+   prompt was answered leaves it locked (`AppLockWatcher.turnedOn`).
 
 The screens of the recovery key are not behind the gate. They show no
 records, "Show the words" has its own prompt, and the repair must be
@@ -550,7 +557,9 @@ like the recovery key screens.
    in memory (the phone's screen turns off, or another app comes to the
    front), the key leaves memory, as on the screen that shows the words.
    A turn of the phone does not count. The prompt asks again on the way
-   back.
+   back. The key that the prompt read is kept on the main thread, where
+   the stop is handled, so a stop that comes just as the read ends keeps
+   nothing.
 3. An app that does not keep the key: all 24 words, on the screen of
    "Enter your recovery key" (the same composable and rules). Words that
    give this app's own `record` key are the proof. The key is not kept.
@@ -656,8 +665,10 @@ file says that.
   turning on in a keeper and in an app that does not keep the key, with
   wrong words, other words, closed prompts and a kept copy that cannot
   be read; the kept key dropped when the screen stops, also while the
-  prompt still reads it, kept through a turn of the phone, and the
-  prompt asking again on the way back.
+  prompt still reads it and right after it was read, kept through a turn
+  of the phone, and the prompt asking again on the way back; the mark
+  of the last prompt, taken before it shows; a Lock key that Android
+  calls permanently invalidated, which leads to the reset notice.
 - `AppLockActivitiesTest`: the app lock screen's labels and touch
   targets.
 - `AppLockCheckTest`: the check that every screen is behind the gate,

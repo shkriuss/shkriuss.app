@@ -58,8 +58,11 @@ class RemindersBackupContent(
         if (from.dataVersion != DATA_VERSION) throw UnreadableBackupException("data version ${from.dataVersion}")
         if (from.fileCount != 0L) throw UnreadableBackupException("the backup holds files")
         val taken = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
         database.withWriteTransaction {
             from.forEachRecord { record ->
+                // Reminders writes each reminder once. Of two with one ID only one would stay, though the question counted both.
+                if (!seen.add(record.fields.id)) throw UnreadableBackupException("a record ID is there twice")
                 val reminder = RemindersBackupCodec.decode(record)
                 if (reminders.takeFromBackup(reminder) == BackupTake.TAKEN) taken += reminder.record.id
             }
@@ -79,7 +82,8 @@ class RemindersBackupContent(
  * Thrown by [RemindersBackupContent.restore] when a backup holds something
  * this version of Reminders cannot read: another record type, a content
  * of another length, a title that is not UTF-8 or breaks its limits, a
- * value or a record time outside its limits, or a file. It is the third
+ * value or a record time outside its limits, a record ID that is there
+ * twice, or a file. It is the third
  * failure of docs/architecture/backup-format.md, "The answers". The
  * message names what was wrong, never what a record holds.
  */

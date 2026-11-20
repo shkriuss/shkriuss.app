@@ -15,6 +15,13 @@ internal interface KeysetStore {
     /** The stored blob of [name], or null if there is none. */
     fun read(name: KeysetName): ByteArray?
 
+    /**
+     * True only if Android says for certain that no file of [name] is
+     * there. False if there is one, and also if Android cannot say: then
+     * [read] gives null though the file may be there.
+     */
+    fun isMissing(name: KeysetName): Boolean
+
     /** Stores [blob] as [name], so that after a stop either the old blob or the new one is there, whole. */
     fun replace(name: KeysetName, blob: ByteArray)
 
@@ -56,6 +63,9 @@ internal class KeysetFiles(
         val file = File(folder, name.text)
         return if (file.isFile) file.readBytes() else null
     }
+
+    // notExists is false both for a file that is there and for one whose details cannot be read.
+    override fun isMissing(name: KeysetName): Boolean = Files.notExists(File(folder, name.text).toPath())
 
     /**
      * Rule 6 of "Rules for making, replacing and losing a hardware key":

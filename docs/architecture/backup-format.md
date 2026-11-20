@@ -397,7 +397,11 @@ the user restores it.
 When a screen calls the check (the owner's decision):
 
 1. **After every backup**, by itself. The app reads the file it has just
-   written and checks it. The user does not have to ask.
+   written and checks it. The user does not have to ask. What it reads
+   must be the backup it wrote: the same time it was made, to the
+   millisecond, and the same counts. If a storage app hands back
+   another file, for example an older copy, the backup counts as
+   written, but not checked.
 2. **Before every restore.** The app checks the file, shows what it
    holds, and asks. Only then does it restore. The restore reads the
    file again, and takes it only if it is still the backup the question
@@ -625,7 +629,7 @@ For sync, later:
 | `BackupSink` | `core/backup` | Where an app lists: `record(...)`, `file(id, length, content)` and `filesLeftOut(count)` |
 | `BackupRecord` | `core/backup` | One record on its way: type name, the four fields (`RecordFields` of `core/data`), content |
 | `CheckedBackup`, `CheckedFile` | `core/backup` | A backup that passed every check, as the app gets it: its data version, when it was made, the counts, every record, and every file. A file can be opened or moved into the app's file store. |
-| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto`, its app name, its staging folder and a clock. `export(to)` writes a backup to a URI and says how many records, files and left-out files there were, and how many records of each type name are not deleted. `check(from)` checks one, and gives a `BackupSummary` with the same counts. `restore(from)` restores one. `start()` empties the staging folder at app start. |
+| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto`, its app name, its staging folder and a clock. `export(to)` writes a backup to a URI and says how many records, files and left-out files there were, how many records of each type name are not deleted, and when it was made (`madeAt`). `ExportResult.Written.isThe` tells whether a backup read back is that one. `check(from)` checks one, and gives a `BackupSummary` with the same counts. `restore(from)` restores one. `start()` empties the staging folder at app start. |
 | `ExportResult`, `CheckResult`, `RestoreResult`, `BackupAnswer` | `core/backup` | What the three functions give back: a result, or one of the answers of this page |
 | `BackupDocuments` | `core/backup` | The two intents for the system file picker, the result of the picker, and the suggested file name |
 | `RecordWriter.takeFromBackup` | `core/data` | The only way a record of a backup is written ([ADR 0027](../adr/0027-record-fields-and-stamping.md), point 8). It answers with a `BackupTake`. |

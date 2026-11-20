@@ -264,6 +264,14 @@ class RemindersBackupContentTest {
     }
 
     @Test
+    fun aReminderThatIsThereTwiceStopsTheRestore() {
+        val live = RemindersBackupCodec.encode(row())
+        // The same ID again, with a newer deletion: the question counted one reminder, and the restore would end with none.
+        val deleted = RemindersBackupCodec.encode(row(fields = fields(1, updatedAt = 5_000, deletedAt = 5_000)))
+        assertRefused(listOf(live, deleted))
+    }
+
+    @Test
     fun aFileStopsTheRestore() {
         assertRefused(listOf(RemindersBackupCodec.encode(row())), files = 1)
     }
@@ -298,7 +306,7 @@ class RemindersBackupContentTest {
         val recoveryKey = keys.crypto.setup.createRecoveryKey().also { keys.crypto.setup.storeDerivedKeys(it) }
 
         val written = backupsOf(keys, content).export(document)
-        assertEquals(ExportResult.Written(records = 2, files = 0, filesLeftOut = 0, notDeleted = mapOf("reminder" to 2L)), written)
+        assertEquals(ExportResult.Written(records = 2, files = 0, filesLeftOut = 0, notDeleted = mapOf("reminder" to 2L), madeAt = clock.nowMillis()), written)
 
         val newPhone = SoftwareKeysApp(temporary.newFolder(), RemindersServices.APP_NAME).also { it.crypto.setup.storeDerivedKeys(recoveryKey) }
         val other = otherDatabase()

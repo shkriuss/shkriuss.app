@@ -142,8 +142,9 @@ internal fun DaySnackbars(screen: DayScreen, model: DayViewModel, host: ShkSnack
     LaunchedEffect(snackbar) {
         if (snackbar == null || message == null) return@LaunchedEffect
         when (host.show(message, undo)) {
-            ShkSnackbarResult.ActionPerformed -> model.undo()
-            ShkSnackbarResult.Dismissed -> model.snackbarDismissed()
+            // The snackbar that was shown, not the newest one: Undo changes back the drink its message named.
+            ShkSnackbarResult.ActionPerformed -> model.undo(snackbar)
+            ShkSnackbarResult.Dismissed -> model.snackbarDismissed(snackbar)
         }
     }
 }

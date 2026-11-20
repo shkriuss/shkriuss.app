@@ -256,6 +256,24 @@ class BackupViewModelTest {
     }
 
     @Test
+    fun anOlderCopyThatTheStorageAppHandsBackIsNotTakenForTheNewBackup() {
+        giveKeys()
+        twoDrinksAndMore()
+        write(document)
+        assertEquals(BackupStep.Written(drinks = 2), state.step)
+        model.close()
+        val older = TestDocuments.file("water-2026-11-13.shkbackup").readBytes()
+        runBlocking { repository.addDrink(THE_DAY, 13 * 60, 150) }
+        clock.advanceBy(60_000)
+        // Right after the new backup is written, the storage app hands back the older copy, which also passes its check.
+        TestDocuments.onOpen = { mode -> if (mode == "r") TestDocuments.file("water-2026-11-13.shkbackup").writeBytes(older) }
+
+        write(document)
+
+        assertEquals("not \"Backup written\" with the older copy's drinks", BackupStep.WrittenNotChecked, state.step)
+    }
+
+    @Test
     fun aFileThatDoesNotPassItsCheckIsNamedAtOnce() {
         giveKeys()
         twoDrinksAndMore()

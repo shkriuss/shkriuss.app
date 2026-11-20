@@ -439,6 +439,33 @@ class WaterRemindersTest {
     }
 
     @Test
+    fun aDrankThatComesAfterMidnightLogsNothingAndTakesTheReminder() {
+        remindersOn()
+        dueAt(21)
+        alarmComes(at(21, 0))
+        checkNotNull(water.reminder())
+
+        // Android removed the reminder at midnight. A watch hands the press over later.
+        press(WaterReminders.DRANK, at(21, 0), pressedAt = THE_DAY.plusDays(1).atTime(0, 10), value = 150)
+
+        assertEquals(emptyList<Drink>(), runBlocking { repository.drinksOf(THE_DAY.plusDays(1)).first() })
+        assertNull(reminders.entries.value.showing)
+        assertNull(water.reminder())
+    }
+
+    @Test
+    fun aLaterThatComesAfterMidnightSetsNoSnooze() {
+        remindersOn()
+        dueAt(21)
+        alarmComes(at(21, 0))
+
+        press(WaterReminders.LATER, at(21, 0), pressedAt = THE_DAY.plusDays(1).atTime(0, 10))
+
+        assertNull(reminders.entries.value.snooze)
+        assertNull(reminders.entries.value.showing)
+    }
+
+    @Test
     fun aDrankWithAnAmountOutsideTheLimitsLogsNothing() {
         remindersOn()
         alarmComes(at(9, 0))
@@ -461,6 +488,22 @@ class WaterRemindersTest {
         assertNull(water.reminder())
         assertEquals(water.millisOf(at(9, 17)), reminders.entries.value.snooze)
         assertEquals(listOf(water.millisOf(at(9, 17))), water.waiting())
+    }
+
+    @Test
+    fun aLaterWhoseSettingsCannotBeReadLeavesTheReminderAsItWas() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        clock.setTo(at(9, 2))
+        // The settings cannot be read when Later is pressed. Nothing may be lost: not the reminder, and not the snooze.
+        water.database.close()
+
+        // Through the button's pending intent and core/notify, which holds the failure back.
+        water.device.press(WaterReminders.KEY, 1)
+
+        assertEquals("the reminder stays, with its buttons", listOf("Drank 150 ml", "Later"), checkNotNull(water.reminder()).buttons)
+        assertEquals(water.millisOf(at(9, 0)), reminders.entries.value.showing)
+        assertNull(reminders.entries.value.snooze)
     }
 
     @Test

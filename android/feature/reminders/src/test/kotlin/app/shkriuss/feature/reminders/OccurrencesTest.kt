@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -103,22 +104,30 @@ class OccurrencesTest {
 
     @Test
     fun theLatestAtOrBeforeAndTheFirstAfterMeetForEveryRepeat() {
+        // Each with its first time, worked out by hand.
         val schedules = listOf(
-            pills(),
-            gym(),
-            CALL_THE_BANK,
-            schedule(Repeat.MONTHLY, LocalDate.of(2026, 1, 30), 7, 15),
-            schedule(Repeat.YEARLY, LocalDate.of(2024, 2, 29), 23, 59),
+            pills() to day(-1, 9),
+            gym() to day(0, 18, 30),
+            CALL_THE_BANK to day(0, 14),
+            schedule(Repeat.MONTHLY, LocalDate.of(2026, 1, 30), 7, 15) to at("2026-01-30", 7, 15),
+            schedule(Repeat.YEARLY, LocalDate.of(2024, 2, 29), 23, 59) to at("2024-02-29", 23, 59),
         )
         val start = LocalDate.of(2026, 1, 1).atStartOfDay()
-        schedules.forEach { schedule ->
+        schedules.forEach { (schedule, firstTime) ->
+            var met = 0
             // Every 7 hours over two years: the first occurrence after a time is the one after the latest at or before it.
             generateSequence(start) { it.plusHours(7) }.takeWhile { it.year < 2028 }.forEach { time ->
                 val latest = Occurrences.latestAtOrBefore(schedule, time)
                 val first = Occurrences.firstAfter(schedule, time)
-                if (latest != null) assertEquals("$schedule at $time", first, Occurrences.firstAfter(schedule, latest))
+                // From its first time on there is always a latest one, so a function that gave none fails here.
+                assertEquals("$schedule at $time has a latest one", time >= firstTime, latest != null)
+                if (latest != null) {
+                    assertEquals("$schedule at $time", first, Occurrences.firstAfter(schedule, latest))
+                    met++
+                }
                 if (first != null && latest != null) assertEquals("$schedule at $time", latest, Occurrences.latestAtOrBefore(schedule, first.minusMinutes(1)))
             }
+            assertTrue("$schedule is checked at more than a few times: $met", met > 1_000)
         }
     }
 }

@@ -82,6 +82,8 @@ internal class RemindersSetup(val clock: TestClock) {
             hidesText = { hidesText },
             worker = Executor { it.run() },
             buttons = built.reminders,
+            // Hiding the text of notifications does not wait between its posts here.
+            pause = {},
         )
         app.notify.start()
     }

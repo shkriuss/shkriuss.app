@@ -36,17 +36,43 @@ Fixed:
   Water's access during a backup or a restore, Water says the file
   could not be read or written. Before, Water closed.
 - **Turning the app lock on.** If you leave Water at the moment the
-  app lock is turned on, Water stays locked. Before, it could open
-  without the prompt.
+  app lock is turned on, also right after you answer its last prompt,
+  Water stays locked. Before, it could open without the prompt. If the
+  screen stops just as Water reads your kept recovery key, the key is
+  not kept, and the prompt asks again when you come back.
+- **A reset app lock.** If Android says that the key of the app lock
+  can no longer be used, Water says that the app lock was reset and
+  leads you to your 24 words. Before, it offered **Unlock** again and
+  again.
 - **Notifications after a stop.** If Water stopped right after the app
   lock was turned on, or "Show the text in notifications" was turned
   off, a reminder already shown kept its text. Water now hides it when
   it starts again. It also hides the text while the app lock's key
-  file cannot be read.
+  file cannot be read, or while Android cannot say whether it is there.
 - **Recovery words.** A long press in the field of a recovery word no
   longer hands the word to Android's text classifier. Water's own keys
   are no longer deleted at a start when Android cannot list or read
   their files.
+- **Backup written.** Water says "Backup written" only if the file it
+  reads back is the backup it just wrote. If a storage app hands back
+  an older copy, Water says "Backup written, not checked". Before, it
+  said "Backup written", with the older file's count of drinks.
+- **Restore a backup.** A backup that holds one drink, goal or setting
+  twice is not taken. Before, the restore could end with fewer drinks
+  than the question said.
+- **Undo.** Undo on "Added 150 ml" takes back that drink, also when
+  you added another one right after it. Before, it could take back the
+  newer drink.
+- **Later on a reminder.** Water stores the snooze and takes the
+  reminder away in one step. Before, if Water stopped or could not read
+  its settings in between, the reminder went and no snooze came.
+- **A button pressed after midnight.** **Drank** or **Later** on a
+  reminder of an earlier day, for example from a watch that hands the
+  press over late, only takes the reminder away. Before, **Drank**
+  added the drink to the new day.
+- **Amounts in your phone's digits.** An amount typed in other digits,
+  such as Arabic-Indic digits, is taken. Before, Water said it was
+  outside the limits.
 
 ## 1.0.1 (2026-11-17)
 

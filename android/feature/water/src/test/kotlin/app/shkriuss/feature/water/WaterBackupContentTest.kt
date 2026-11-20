@@ -269,6 +269,22 @@ class WaterBackupContentTest {
     }
 
     @Test
+    fun aDrinkThatIsThereTwiceStopsTheRestore() {
+        val live = WaterBackupCodec.encode(IntakeEntity(fields(1), 0, 250, THE_DAY.asWaterDay(), 600))
+        // The same ID again, with a newer deletion: the question counted one drink, and the restore would end with none.
+        val deleted = WaterBackupCodec.encode(IntakeEntity(fields(1, updatedAt = 5_000, deletedAt = 5_000), 0, 250, THE_DAY.asWaterDay(), 600))
+        assertRefused(listOf(live, deleted))
+    }
+
+    @Test
+    fun oneIdInTwoTypesIsNoRepeat() {
+        val drink = WaterBackupCodec.encode(IntakeEntity(fields(1), 0, 250, THE_DAY.asWaterDay(), 600))
+        val goal = WaterBackupCodec.encode(GoalEntity(fields(1), 0, amountMl = 2_500, fromDay = THE_DAY.asWaterDay()))
+        restore(content, listOf(drink, goal))
+        assertEquals(250, runBlocking { repository.factsOf(THE_DAY).totalMl })
+    }
+
+    @Test
     fun aFileStopsTheRestore() {
         val drink = WaterBackupCodec.encode(IntakeEntity(fields(1), 0, 250, THE_DAY.asWaterDay(), 600))
         assertRefused(listOf(drink), files = 1)
@@ -295,7 +311,7 @@ class WaterBackupContentTest {
         val recoveryKey = keys.crypto.setup.createRecoveryKey().also { keys.crypto.setup.storeDerivedKeys(it) }
 
         val written = backupsOf(keys, content).export(document)
-        assertEquals(ExportResult.Written(records = 3, files = 0, filesLeftOut = 0, notDeleted = mapOf("intake" to 1L, "goal" to 1L, "settings" to 1L)), written)
+        assertEquals(ExportResult.Written(records = 3, files = 0, filesLeftOut = 0, notDeleted = mapOf("intake" to 1L, "goal" to 1L, "settings" to 1L), madeAt = clock.nowMillis()), written)
 
         val newPhone = SoftwareKeysApp(temporary.newFolder(), WATER).also { it.crypto.setup.storeDerivedKeys(recoveryKey) }
         val other = otherDatabase()

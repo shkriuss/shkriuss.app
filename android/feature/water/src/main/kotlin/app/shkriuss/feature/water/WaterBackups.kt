@@ -80,7 +80,11 @@ sealed interface BackupStep {
     /** The file was written, but it does not pass the check. It must not be relied on. */
     data object WrittenNotUsable : BackupStep
 
-    /** The backup is written, but the file could not be read again, so it was not checked. */
+    /**
+     * The backup is written, but it was not checked: the file could not be
+     * read again, or what was read is not the backup just written, such as
+     * an older copy that a storage app handed back.
+     */
     data object WrittenNotChecked : BackupStep
 
     /** Writing the file failed, for example because the storage is full. */
@@ -196,27 +200,34 @@ class WaterBackups(
     fun suggestedName(): String = BackupDocuments.fileName(WaterServices.APP_NAME, clock.nowMillis(), zone())
 
     /**
-     * Writes a backup into the document [to]. Null when it is written:
-     * [checkWritten] follows. Otherwise how it ended, and no backup was
-     * made.
+     * Writes a backup into the document [to], and then reads it again and
+     * checks everything a restore checks, so that a backup that cannot be
+     * restored is found on the day it is made. [checking] runs between the
+     * two, so the screen can say so. Returns how it ended.
      */
-    suspend fun write(to: Uri): BackupStep? = try {
-        when (backups.export(to)) {
-            is ExportResult.Written -> null
-            ExportResult.NotReady, ExportResult.NoKeysNow -> BackupStep.NoKeys
+    suspend fun write(to: Uri, checking: () -> Unit): BackupStep {
+        val export = try {
+            when (val result = backups.export(to)) {
+                is ExportResult.Written -> result
+                ExportResult.NotReady, ExportResult.NoKeysNow -> return BackupStep.NoKeys
+            }
+        } catch (_: IOException) {
+            return BackupStep.NotWritten
         }
-    } catch (_: IOException) {
-        BackupStep.NotWritten
+        checking()
+        return checkWritten(to, export)
     }
 
     /**
-     * Reads the document [written] again, right after it was written, and
-     * checks everything a restore checks. So a backup that cannot be
-     * restored is found on the day it is made.
+     * Reads the document [written] again, right after [export] wrote it.
+     * What is read must be that backup: when it was made, to the
+     * millisecond, and the same counts. A storage app that hands back an
+     * older copy of the document has not let the new one be checked.
      */
-    suspend fun checkWritten(written: Uri): BackupStep = try {
+    private suspend fun checkWritten(written: Uri, export: ExportResult.Written): BackupStep = try {
         when (val checked = backups.check(written)) {
-            is CheckResult.Good -> BackupStep.Written(drinksOf(checked.backup))
+            is CheckResult.Good ->
+                if (export.isThe(checked.backup)) BackupStep.Written(drinksOf(checked.backup)) else BackupStep.WrittenNotChecked
             is CheckResult.Refused -> BackupStep.WrittenNotUsable
         }
     } catch (_: IOException) {

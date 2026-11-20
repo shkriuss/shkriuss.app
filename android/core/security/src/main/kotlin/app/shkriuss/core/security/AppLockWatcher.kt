@@ -209,9 +209,10 @@ class AppLockWatcher(
 
     /**
      * The app lock was turned on. The app is unlocked, unless it locked
-     * after the last prompt: [mark] is what [unlockMark] gave when that
-     * prompt ended. Then the file keys that turning it on put in memory
-     * leave it again, and the gate stays locked, as after any lock.
+     * after the last prompt was asked for: [mark] is what [unlockMark]
+     * gave on the main thread before that prompt showed. Then the file
+     * keys that turning it on put in memory leave it again, and the gate
+     * stays locked, as after any lock.
      */
     internal fun turnedOn(mark: Int) {
         generation++

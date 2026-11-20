@@ -78,10 +78,8 @@ internal fun PastContent(
         }
     }
     screen.question?.let { question ->
-        DeleteAllDialog(question, model, format) {
-            // A form open beside the list on a reminder that goes closes with it.
-            if (formScreen.form?.reminderId in question.ids) form.cancel()
-        }
+        // A form open beside the list on a reminder that goes closes with it. One that stays keeps what it holds.
+        DeleteAllDialog(question, model, format, onDeleted = form::closeIfDeleted)
     }
 }
 
@@ -104,19 +102,22 @@ private fun PastItem(row: PastRow, today: LocalDate, format: RemindersFormat, se
 
 /**
  * "Delete all past reminders?", "This deletes 12 reminders.", with
- * **Delete** and **Cancel**. [onDelete] comes before the delete.
+ * **Delete** and **Cancel**. [onDeleted] gets the IDs of the reminders
+ * that were deleted.
  */
 @Composable
-private fun DeleteAllDialog(question: DeleteAllQuestion, model: PastViewModel, format: RemindersFormat, onDelete: () -> Unit) {
+private fun DeleteAllDialog(
+    question: DeleteAllQuestion,
+    model: PastViewModel,
+    format: RemindersFormat,
+    onDeleted: (Set<String>) -> Unit,
+) {
     ShkDialog(
         title = stringResource(R.string.reminders_delete_all_question),
         text = pluralStringResource(R.plurals.reminders_delete_all_text, question.count, format.number(question.count)),
         confirmAction = ShkDialogAction(
             text = stringResource(R.string.reminders_delete),
-            onClick = {
-                onDelete()
-                model.confirmDeleteAll()
-            },
+            onClick = { model.confirmDeleteAll(onDeleted) },
             destructive = true,
         ),
         dismissAction = ShkDialogAction(text = stringResource(R.string.reminders_cancel), onClick = model::cancelDeleteAll),

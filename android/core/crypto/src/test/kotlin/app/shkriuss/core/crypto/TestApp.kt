@@ -29,6 +29,8 @@ internal class StoppingStore(private val files: KeysetStore) : KeysetStore {
 
     override fun read(name: KeysetName): ByteArray? = if (name in unreadable) null else files.read(name)
 
+    override fun isMissing(name: KeysetName): Boolean = name !in unreadable && files.isMissing(name)
+
     override fun replace(name: KeysetName, blob: ByteArray) {
         stopIfDue()
         files.replace(name, blob)

@@ -1,6 +1,8 @@
 package app.shkriuss.catalog
 
 import android.view.WindowManager
+import androidx.compose.foundation.ComposeFoundationFlags
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -30,6 +32,13 @@ import org.robolectric.RobolectricTestRunner
 class CatalogScreenTest {
     @get:Rule
     val compose = createAndroidComposeRule<CatalogActivity>()
+
+    @OptIn(ExperimentalFoundationApi::class)
+    @Test
+    fun noTextFieldHandsItsTextToTheTextClassifier() {
+        // Only the activity turns it off. Compose's default is on.
+        assertFalse(ComposeFoundationFlags.isSmartSelectionEnabled)
+    }
 
     @Test
     fun showsTheTitleAsAHeading() {
