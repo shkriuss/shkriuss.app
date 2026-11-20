@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -335,6 +336,47 @@ class WaterRemindersTest {
 
         assertNull("the 09:00 reminder, with its old total, goes", water.reminder())
         assertEquals(ten, reminders.entries.value.showing)
+    }
+
+    @Test
+    fun atAStartAReminderOfAnEarlierDayGoes() {
+        remindersOn()
+        dueAt(21)
+        alarmComes(at(21, 0))
+        checkNotNull(water.reminder())
+
+        clock.setTo(THE_DAY.plusDays(1).atTime(7, 30))
+        water.startTheApp()
+
+        assertNull("yesterday's total no longer shows", water.reminder())
+        assertNull(reminders.entries.value.showing)
+    }
+
+    @Test
+    fun atAStartAReminderThatNoReminderShowingNamesGoes() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        checkNotNull(water.reminder())
+        // A press took the reminder and Water stopped before it removed it.
+        ReminderBook.of(water.app).update { it.copy(showing = null) }
+
+        water.startTheApp()
+
+        assertNull(water.reminder())
+    }
+
+    @Test
+    fun atAStartTheReminderShowingStaysAsItIs() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        val nine = checkNotNull(water.reminder())
+        assertFalse("a reminder comes with its sound", nine.alertsOnlyOnce)
+
+        clock.setTo(at(9, 10))
+        water.startTheApp()
+
+        assertEquals("not removed and not posted again", nine, water.reminder())
+        assertEquals(water.millisOf(at(9, 0)), reminders.entries.value.showing)
     }
 
     @Test

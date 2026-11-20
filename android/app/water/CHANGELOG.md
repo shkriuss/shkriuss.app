@@ -75,8 +75,11 @@ Fixed:
   outside the limits.
 - **The night the clocks change.** Reminders count real minutes from
   the start of the day. In the hour that comes twice when summer time
-  ends, a reminder no longer comes too early, and **Later** waits 15
-  minutes. On the day the clocks go forward, reminder hours shorter
+  ends, an interval and the 15 minutes of **Later** are real time, so a
+  reminder turned on or snoozed in that hour no longer comes too early.
+  A drink you log in that hour still counts as the first of the two
+  hours ([Known problems](../../../docs/user/water.md#known-problems)).
+  On the day the clocks go forward, reminder hours shorter
   than one interval of real time have no reminder. On every other day
   nothing changes.
 - **A clock set back at the moment of a reminder.** The reminder comes at

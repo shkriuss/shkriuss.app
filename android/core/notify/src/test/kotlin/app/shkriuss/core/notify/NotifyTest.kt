@@ -13,7 +13,11 @@ import android.os.Looper
 import android.provider.Settings
 import app.shkriuss.core.testing.TestClock
 import java.time.LocalTime
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -571,6 +575,46 @@ class NotifyTest {
     }
 
     @Test
+    fun theTimerOfNotifyHandsEachStepOfHidingBackToTheWorker() {
+        val worker = Executors.newSingleThreadExecutor()
+        try {
+            // As the apps build it: the real timer of core/notify, and a worker thread of its own.
+            val notify = Notify(context, listOf(reminders, summaries), app, handler, clock, hidesText = { hidesText() }, worker = worker)
+            notify.start()
+            worker.submit {}.get()
+            notify.notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+            notify.notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+            hidesText = { true }
+            val busy = CountDownLatch(1)
+
+            notify.hideShownText()
+            // An alarm or a press that takes long holds the worker, past the time of the next step.
+            worker.execute { busy.await() }
+            Thread.sleep(PAST_THE_NEXT_STEP_MILLIS)
+
+            assertEquals("the next post waits for the worker", 1, hidden("one", "two"))
+            busy.countDown()
+            assertTrue("then it comes, on the worker", hiddenOnTheWorker(worker, expected = 2))
+        } finally {
+            worker.shutdownNow()
+        }
+    }
+
+    /** How many of [keys] show the hidden form now. */
+    private fun hidden(vararg keys: String): Int =
+        keys.count { shownBy.getNotification(it, 0).extras.getBoolean(Notifications.EXTRA_HIDDEN, false) }
+
+    /** True once [expected] notifications show the hidden form, as read on [worker], within two seconds. */
+    private fun hiddenOnTheWorker(worker: ExecutorService, expected: Int): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        while (System.nanoTime() < deadline) {
+            if (worker.submit<Int> { hidden("one", "two") }.get() == expected) return true
+            Thread.sleep(20)
+        }
+        return false
+    }
+
+    @Test
     fun theAppReviewsWhatIsOnScreenAtStartAndAfterTheTimeChanged() {
         context.notify.start()
         context.notify.notifications.show(
@@ -1104,3 +1148,6 @@ class NotifyTest {
         }
     }
 }
+
+/** Longer than the 250 ms between two posts of the hidden form, so the next step is due by then. */
+private const val PAST_THE_NEXT_STEP_MILLIS = 600L
