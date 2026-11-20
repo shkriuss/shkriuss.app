@@ -30,6 +30,7 @@ form:
 |---|---|
 | Catalog | `app.shkriuss.catalog` |
 | Water | `app.shkriuss.water` |
+| Reminders | `app.shkriuss.reminders` |
 
 Preview APKs from pull requests have a package name that ends in
 `.preview`. Each one is signed with its own throwaway key, never with this

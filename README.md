@@ -3,9 +3,11 @@
 An open-source suite of native Android apps, built from shared core modules.
 Every app has an ID of the form `app.shkriuss.<name>`.
 
-**Status: early development.** Two apps are released: Water 1.0.1, which
-logs the water you drink and reminds you, and Catalog 0.3.0, a gallery of
-the design components and shared screens for development.
+**Status: early development.** Three apps are released: Water 1.0.1,
+which logs the water you drink and reminds you, Reminders 1.0.0, which
+shows one-time and repeating reminders with a title at their time, and
+Catalog 0.3.0, a gallery of the design components and shared screens for
+development.
 
 ## What it is
 

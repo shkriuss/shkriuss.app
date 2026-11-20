@@ -30,16 +30,18 @@ fingerprint, and a link to the source.
 | `/verify/` | [`docs/user/verify.md`](../user/verify.md), plus the fingerprint and package names from [`fingerprints.md`](../security/fingerprints.md) |
 | `/privacy/` | [`docs/user/privacy.md`](../user/privacy.md) |
 | `/water/` | [`docs/user/water.md`](../user/water.md) |
+| `/reminders-app/` | [`docs/user/reminders-app.md`](../user/reminders-app.md) |
 | `/recovery-key/` | [`docs/user/recovery-key.md`](../user/recovery-key.md) |
 | `/app-lock/` | [`docs/user/app-lock.md`](../user/app-lock.md) |
 | `/backup/` | [`docs/user/backup.md`](../user/backup.md) |
 | `/reminders/` | [`docs/user/reminders.md`](../user/reminders.md) |
 | Any other address | [`site/404.md`](../../site/404.md) |
 
-The menu shows Apps, Install, Verify, Privacy and Water. The pages of
-the recovery key, the app lock, backups and reminders are not in the
-menu: Water's page and the other guides link to them. On the verify
-page, the box for AppVerifier copies as exactly two lines.
+The menu shows Apps, Install, Verify, Privacy, Water and Reminders. The
+pages of the recovery key, the app lock, backups and reminders are not
+in the menu: the pages of Water and Reminders and the other guides link
+to them. On the verify page, the box for AppVerifier copies as exactly
+two lines.
 
 Every page has a link to the source code on GitHub. A link in a page to
 another page of the site stays on the site. A link to any other file of

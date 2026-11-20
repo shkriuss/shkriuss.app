@@ -13,11 +13,10 @@ does not. It ends with the OWASP MASVS controls and every open question.
   the [end](#open-questions).
 - What exists today: Catalog, Water, Reminders and the core modules
   ([modules.md](../architecture/modules.md)). Water is the first data
-  app and Reminders the second; Reminders has no release yet. There is
-  no Sync app and no sync server yet. Where this page
-  speaks of sync or of the handover between apps, it describes what is
-  decided for them, not what is built. What each app stores is in the
-  [data inventory](data-inventory.md).
+  app and Reminders the second. There is no Sync app and no sync server
+  yet. Where this page speaks of sync or of the handover between apps,
+  it describes what is decided for them, not what is built. What each
+  app stores is in the [data inventory](data-inventory.md).
 
 ## At a glance
 
