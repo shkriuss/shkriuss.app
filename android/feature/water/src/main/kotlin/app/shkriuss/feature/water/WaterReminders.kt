@@ -182,25 +182,27 @@ class WaterReminders(
     /**
      * Looks at Water's reminder on screen, at every start and after a
      * change of the clock or the time zone (spec, "What a reminder shows",
-     * point 6). One of another day goes, and so does one that no reminder
-     * showing names: Water stopped between taking it and removing it.
-     * After a change of the time, one of today is shown again, quietly,
-     * with the numbers of now, so that it ends at the new midnight. The
-     * notice of a failed reminder, which has no end, stays as it is.
+     * point 6). One that is not the reminder showing goes: Water stopped
+     * between taking it and removing it, or between storing a newer one
+     * and showing it. One of another day goes too. After a change of the
+     * time, one of today is shown again, quietly, with the numbers of now,
+     * so that it ends at the new midnight. The notice of a failed
+     * reminder, the only one with no end, stays until the next reminder
+     * replaces it (spec, "How Water uses core/notify", point 5).
      */
     override fun review(onScreen: List<OnScreen>, notifications: Notifications, timeChanged: Boolean) {
-        val shown = onScreen.firstOrNull { it.key == KEY } ?: return
+        val shown = onScreen.firstOrNull { it.key == KEY && it.endsAtMillis != null } ?: return
         runBlocking {
             lock.withLock {
-                val showing = book.entries.value.showing
+                val current = book.entries.value.showing == shown.atMillis
                 val today = time.today()
                 when {
-                    showing == null || time.local(shown.atMillis).toLocalDate() != today -> {
-                        if (showing == shown.atMillis) book.update { it.copy(showing = null) }
+                    !current -> notifications.cancel(KEY)
+                    time.local(shown.atMillis).toLocalDate() != today -> {
+                        book.update { it.copy(showing = null) }
                         notifications.cancel(KEY)
                     }
-                    timeChanged && showing == shown.atMillis && shown.endsAtMillis != null &&
-                        shown.endsAtMillis != time.nextMidnightMillis() ->
+                    timeChanged && shown.endsAtMillis != time.nextMidnightMillis() ->
                         notifications.show(reminderOf(shown.atMillis, repository.settingsNow(), repository.factsOf(today), quiet = true))
                 }
             }

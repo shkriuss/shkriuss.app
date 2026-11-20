@@ -76,7 +76,9 @@ Fixed:
 - **The night the clocks change.** Reminders count real minutes from
   the start of the day. In the hour that comes twice when summer time
   ends, a reminder no longer comes too early, and **Later** waits 15
-  minutes. On every other day nothing changes.
+  minutes. On the day the clocks go forward, reminder hours shorter
+  than one interval of real time have no reminder. On every other day
+  nothing changes.
 - **A clock set back at the moment of a reminder.** The reminder comes at
   its time. Before, it came a few minutes early, and not at its time.
 - **A reminder that could not be shown.** If Water cannot read its data
@@ -85,7 +87,10 @@ Fixed:
 - **A new day while a reminder shows.** If the clock or the time zone
   moves past midnight, the reminder with yesterday's total goes. If it
   is still today, it is shown again, with no new sound, with today's
-  numbers, and it ends at the new midnight.
+  numbers, and it ends at the new midnight. A reminder left on screen
+  when Water stopped before it showed the next one goes when Water
+  starts again. The notice "A reminder could not be shown" stays until
+  the next reminder.
 - **Hiding the text of reminders.** Reminders that are due meanwhile
   are not held up.
 - **Restore a backup.** The temporary copy of the drinks is emptied

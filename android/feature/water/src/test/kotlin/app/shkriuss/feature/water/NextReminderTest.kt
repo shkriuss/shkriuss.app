@@ -287,6 +287,18 @@ class NextReminderTest {
     }
 
     @Test
+    fun aDayTheClocksGoForwardWhoseHoursHoldNoIntervalHasNoReminder() {
+        // From 01:00 until 03:00, every 2 hours. On the spring day only 1 real hour lies between them.
+        val shortNight = WaterSettings(remindersOn = true, intervalMinutes = 120, fromMinute = 60, untilMinute = 3 * 60)
+        val dayBefore = spring.minusDays(1)
+        val facts = ReminderFacts(dayBefore, latestDrinkMinute = null, goalMet = false)
+
+        val next = next(dayBefore.atTime(5, 0).atZone(berlin), facts, shortNight)
+
+        assertEquals(spring.plusDays(1).atTime(3, 0).atZone(berlin), next)
+    }
+
+    @Test
     fun onTheDayTheClocksGoBackRemindersAfterTheNightKeepTheirClockTimes() {
         // From 08:00, every hour: the change at night moves nothing in the reminder hours.
         val facts = ReminderFacts(autumn, latestDrinkMinute = 9 * 60 + 20, goalMet = false)

@@ -36,6 +36,13 @@ internal class RemindersSetup(val clock: TestClock) {
     /** The phone's time zone. A test moves it, as a trip does. */
     var zone: ZoneId = UTC
 
+    /**
+     * True makes the next read of [zone] fail, once. The alarm handler
+     * reads it first after its first write, so this makes the handler
+     * fail inside, and the reads after it work again.
+     */
+    var nextZoneReadFails = false
+
     /** True while no record can be saved, as when the phone has no room. A save then fails before it writes. */
     var savingFails = false
 
@@ -94,7 +101,15 @@ internal class RemindersSetup(val clock: TestClock) {
     }
 
     private fun newServices() =
-        WaterServices(app, database, clock, ids, open, notify = { app.notify }, crypto = keys.crypto, zone = { zone }, work = Dispatchers.Unconfined)
+        WaterServices(app, database, clock, ids, open, notify = { app.notify }, crypto = keys.crypto, zone = ::readZone, work = Dispatchers.Unconfined)
+
+    private fun readZone(): ZoneId {
+        if (nextZoneReadFails) {
+            nextZoneReadFails = false
+            error("The time zone cannot be read")
+        }
+        return zone
+    }
 
     /** The moment of [time] in [zone]. */
     fun millisOf(time: LocalDateTime): Long = this.time.millisOf(time)

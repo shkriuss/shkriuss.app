@@ -304,6 +304,40 @@ class WaterRemindersTest {
     }
 
     @Test
+    fun theNoticeOfAFailedReminderStaysAfterMidnightUntilTheNextReminder() {
+        remindersOn()
+        dueAt(21)
+        clock.setTo(at(21, 0))
+        water.nextZoneReadFails = true
+        water.device.fireTheAlarm()
+        val notice = checkNotNull(water.reminder())
+        assertEquals("the notice has no buttons", emptyList<String>(), notice.buttons)
+        assertEquals(water.millisOf(at(21, 0)), reminders.entries.value.showing)
+
+        clock.setTo(THE_DAY.plusDays(1).atTime(0, 5))
+        water.device.send(Intent.ACTION_TIME_CHANGED)
+        water.startTheApp()
+
+        assertEquals("the notice stays", notice, water.reminder())
+    }
+
+    @Test
+    fun atAStartAReminderThatIsNoLongerTheOneShowingGoes() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        checkNotNull(water.reminder())
+        // The 10:00 handler stored its reminder as the one showing, and Water stopped before it showed it.
+        val ten = water.millisOf(at(10, 0))
+        ReminderBook.of(water.app).update { it.copy(lastAlarm = ten, lastShown = ten, showing = ten, snooze = null) }
+        clock.setTo(at(10, 0, 30))
+
+        water.startTheApp()
+
+        assertNull("the 09:00 reminder, with its old total, goes", water.reminder())
+        assertEquals(ten, reminders.entries.value.showing)
+    }
+
+    @Test
     fun inTheHourThatComesTwiceTheAlarmIsSetForATimeStillToCome() {
         // Berlin, Sunday 31 October 2027: at 03:00 summer time the clocks go back to 02:00.
         water.zone = ZoneId.of("Europe/Berlin")

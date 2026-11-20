@@ -719,7 +719,9 @@ that comes twice counts twice. "From", "Until" and the time of a drink
 are clock times: in the hour that comes twice they are the first of the
 two, and in the hour that does not exist they move forward, as the clock
 does. A press of **Later** at 12:22:40 counts as 12:22, and its snooze
-comes at 12:37.
+comes at 12:37. On the day the clocks go forward, reminder hours that
+hold less real time than one interval have no reminder: the next one
+comes the day after.
 
 "The time of your latest drink" is the latest `minuteOfDay` among
 today's drinks that are not deleted, as you entered it. A reminder
@@ -774,7 +776,8 @@ does not move the count.
    - midnight comes. Android's notification timeout removes it, so
      yesterday's numbers never show as today's,
    - Water starts, or the clock or the time zone changes, and it is from
-     an earlier day.
+     an earlier day, or it is not the reminder Water stored as showing:
+     Water stopped before it removed or replaced it.
 7. While the app lock hides the text of notifications, the reminder
    shows only the channel's name and the fixed text of `core/notify`,
    and no buttons
@@ -901,7 +904,8 @@ says:
 5. **When the handler fails**, `core/notify` shows a notice in place of
    the reminder: "Drink reminders" and "A reminder could not be shown.
    Open the app to see it.", with no buttons and no numbers. A tap opens
-   Water. The next reminder still comes, and replaces the notice. The
+   Water. The next reminder still comes, and replaces the notice. Until
+   then the notice stays, also after midnight. The
    owner decided this, for every app
    ([notifications.md](../../architecture/notifications.md#how-alarms-are-kept-right)).
 6. It is all in `WaterReminders`, in `android/feature/water`. The app

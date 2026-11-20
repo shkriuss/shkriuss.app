@@ -352,8 +352,10 @@ more: the sync still runs.
 
 - Reminders removes a notification whose reminder is deleted or not
   stored.
-- Water removes its reminder when it is from an earlier day, or when no
-  reminder showing names it. After a change of the time, it shows one of
+- Water removes its reminder when it is from an earlier day, or when it
+  is not the reminder Water stored as showing. The notice of a failed
+  reminder, which has no end, stays until the next reminder replaces
+  it. After a change of the time, Water shows one of
   today again with today's numbers and the new midnight as its end.
   It is `quiet`: posted again with `setOnlyAlertOnce`, so no new sound
   or vibration.

@@ -48,7 +48,9 @@ data class ReminderFacts(
  *    drink timed at or after the press ends it. A drink entered with an
  *    earlier time does not (the owner's decision).
  * 4. **Only inside the reminder hours, and only until the goal is met.**
- *    Otherwise the next one is tomorrow at "From" + 1 interval.
+ *    Otherwise the next one is tomorrow at "From" + 1 interval, or the
+ *    day after if tomorrow the clocks go forward and that is after
+ *    "Until".
  * 5. Reminders off: no alarm.
  * 6. If "From" + 1 interval is after "Until", no reminder fits on any day:
  *    no alarm.
@@ -95,7 +97,7 @@ object NextReminder {
     /** The rule of points 1 to 6, for a now in the minute [nowMinute] of [day], in real minutes. */
     private fun afterMinute(nowMinute: Int, settings: WaterSettings, facts: ReminderFacts, day: Day): ZonedDateTime? {
         if (!settings.remindersOn || !settings.reminderFits) return null
-        val tomorrow = firstOf(Day(day.date.plusDays(1), day.zone), settings)
+        val tomorrow = firstAfter(day, settings)
         if (facts.goalMet) return tomorrow
 
         val from = day.minuteOfClock(settings.fromMinute)
@@ -138,9 +140,24 @@ object NextReminder {
     private fun laterIsLatest(later: Int, from: Int, drink: Int?, shown: Int?): Boolean =
         later >= from && (shown == null || later >= shown) && (drink == null || later > drink)
 
-    /** The first reminder of [day]: "From" + 1 interval. */
-    private fun firstOf(day: Day, settings: WaterSettings): ZonedDateTime =
-        day.at(day.minuteOfClock(settings.fromMinute) + settings.intervalMinutes)
+    /**
+     * The first reminder after [day]: "From" + 1 interval of the next day
+     * on which that is not after "Until". On a day the clocks go forward,
+     * reminder hours can hold less real time than one interval: that day
+     * has no reminder. Such days are months apart, so the day after has
+     * one; null only if none of the next [DAYS_TO_LOOK] days has.
+     */
+    private fun firstAfter(day: Day, settings: WaterSettings): ZonedDateTime? {
+        for (ahead in 1L..DAYS_TO_LOOK) {
+            val next = Day(day.date.plusDays(ahead), day.zone)
+            val first = next.minuteOfClock(settings.fromMinute) + settings.intervalMinutes
+            if (first <= next.minuteOfClock(settings.untilMinute)) return next.at(first)
+        }
+        return null
+    }
+
+    /** How many days ahead [firstAfter] looks for a day whose reminder hours hold one interval. */
+    private const val DAYS_TO_LOOK: Long = 7
 
     /**
      * One local day in [zone], counted in whole minutes of real time from
