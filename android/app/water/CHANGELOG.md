@@ -90,7 +90,9 @@ Fixed:
 - **A new day while a reminder shows.** If the clock or the time zone
   moves past midnight, the reminder with yesterday's total goes. If it
   is still today, it is shown again, with no new sound, with today's
-  numbers, and it ends at the new midnight. A reminder left on screen
+  numbers and the same amount on **Drank**, and it ends at midnight,
+  also when the clock was only moved within the day. A button a watch
+  kept from before logs what its label said. A reminder left on screen
   when Water stopped before it showed the next one goes when Water
   starts again. The notice "A reminder could not be shown" stays until
   the next reminder.

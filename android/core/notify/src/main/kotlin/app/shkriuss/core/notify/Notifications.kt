@@ -43,10 +43,17 @@ class ShkNotification(
 
 /**
  * One notification of the app that is on screen: its [key], its time
- * [atMillis], and its end [endsAtMillis] if it has one. Never its text:
- * `core/notify` does not read it back.
+ * [atMillis], its end [endsAtMillis] if it has one, and the value each of
+ * its buttons carries, by the button's action, in [buttonValues]. The
+ * hidden form has no buttons, so none. Never its text: `core/notify`
+ * does not read it back.
  */
-data class OnScreen(val key: String, val atMillis: Long, val endsAtMillis: Long?)
+data class OnScreen(
+    val key: String,
+    val atMillis: Long,
+    val endsAtMillis: Long?,
+    val buttonValues: Map<String, Long> = emptyMap(),
+)
 
 /**
  * Shows and removes the notifications of an app. The only place in the
@@ -119,6 +126,15 @@ class Notifications internal constructor(
         if (notification.quiet) builder.setOnlyAlertOnce(true)
         // No buttons while the text is hidden: a label such as "Drank 250 ml" can show what the app lock hides.
         if (!hidden) notification.buttons.forEach { builder.addAction(action(notification, it)) }
+        if (!hidden && notification.buttons.isNotEmpty()) {
+            // Kept for onScreen, so that the app can show it again with the same buttons.
+            builder.addExtras(
+                Bundle().apply {
+                    putStringArray(EXTRA_BUTTON_ACTIONS, notification.buttons.map { it.action }.toTypedArray())
+                    putLongArray(EXTRA_BUTTON_VALUES, notification.buttons.map { it.value }.toLongArray())
+                },
+            )
+        }
         manager.notify(notification.key, NOTIFICATION_ID, builder.build())
     }
 
@@ -196,12 +212,21 @@ class Notifications internal constructor(
     internal fun onScreen(channels: List<NotifyChannel>): List<OnScreen> = manager.activeNotifications
         .filter { shown -> shown.tag != null && channels.any { it.id == shown.notification.channelId } }
         .map { shown ->
+            val extras = shown.notification.extras
             OnScreen(
                 key = shown.tag,
                 atMillis = shown.notification.`when`,
-                endsAtMillis = shown.notification.extras.getLong(EXTRA_ENDS_AT, 0L).takeIf { it > 0L },
+                endsAtMillis = extras.getLong(EXTRA_ENDS_AT, 0L).takeIf { it > 0L },
+                buttonValues = buttonValuesOf(extras),
             )
         }
+
+    /** The value of each button, by its action, as [show] kept them. None in the hidden form. */
+    private fun buttonValuesOf(extras: Bundle): Map<String, Long> {
+        val actions = extras.getStringArray(EXTRA_BUTTON_ACTIONS) ?: return emptyMap()
+        val values = extras.getLongArray(EXTRA_BUTTON_VALUES) ?: return emptyMap()
+        return actions.zip(values.toList()).toMap()
+    }
 
     /**
      * Shows that the app could not show the reminder of [alarm], in its
@@ -315,6 +340,12 @@ class Notifications internal constructor(
 
         /** Set on a notification posted in the hidden form. A mark, never content. */
         const val EXTRA_HIDDEN = "app.shkriuss.core.notify.HIDDEN"
+
+        /** The actions of a notification's buttons, in order, kept with [EXTRA_BUTTON_VALUES]. Never labels. */
+        const val EXTRA_BUTTON_ACTIONS = "app.shkriuss.core.notify.BUTTON_ACTIONS"
+
+        /** The values the buttons carry, in the order of [EXTRA_BUTTON_ACTIONS]. */
+        const val EXTRA_BUTTON_VALUES = "app.shkriuss.core.notify.BUTTON_VALUES"
 
         /** How far apart [hideShown] posts its notifications: four a second, below Android's limit of about five. */
         const val PACE_MILLIS = 250L

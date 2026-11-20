@@ -305,6 +305,40 @@ class WaterRemindersTest {
     }
 
     @Test
+    fun aReminderShownAgainAfterAChangeOfTheTimeKeepsItsDrankAmount() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        assertEquals("Drank 150 ml", checkNotNull(water.reminder()).buttons.first())
+        runBlocking { repository.changeSettings { it.copy(cup1Ml = 400) } }
+        clock.setTo(at(9, 5))
+
+        water.zone = ZoneOffset.ofHours(-2)
+        water.device.send("android.intent.action.TIMEZONE_CHANGED")
+
+        val shown = checkNotNull(water.reminder())
+        assertTrue("shown again", shown.alertsOnlyOnce)
+        assertEquals("the amount of the moment it was first shown", "Drank 150 ml", shown.buttons.first())
+        water.device.press(WaterReminders.KEY, 0)
+        assertEquals(listOf(150), drinksToday().map { it.amountMl })
+    }
+
+    @Test
+    fun afterTheClockMovesWithinTheDayTheReminderStillEndsAtMidnight() {
+        remindersOn()
+        dueAt(21)
+        alarmComes(at(21, 0))
+        clock.setTo(at(21, 5))
+
+        // The clock is set forward within the day. Android counts the end from the post, in real time.
+        clock.setTo(at(22, 30))
+        water.device.send(Intent.ACTION_TIME_CHANGED)
+
+        val shown = checkNotNull(water.reminder())
+        assertEquals(water.millisOf(THE_DAY.plusDays(1).atStartOfDay()) - clock.nowMillis, shown.timeoutAfterMillis)
+        assertTrue("shown again with no new sound", shown.alertsOnlyOnce)
+    }
+
+    @Test
     fun theNoticeOfAFailedReminderStaysAfterMidnightUntilTheNextReminder() {
         remindersOn()
         dueAt(21)

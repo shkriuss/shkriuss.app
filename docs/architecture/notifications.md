@@ -314,9 +314,11 @@ are in [ADR 0034](../adr/0034-notification-buttons.md).
    stays. The same holds when the state of the app lock cannot be read.
 4. A press is a broadcast to `ButtonReceiver` of this app, which is not
    exported. The button's pending intent is immutable, and Android keeps
-   one for each key, action and time of the notification. So the next
-   notification with the same key gets pending intents of its own, and
-   an older button keeps its own time and value. It carries the
+   one for each key, action and time of the notification and value of
+   the button. So the next notification with the same key gets pending
+   intents of its own, and an older button keeps its own time and value.
+   A notification shown again with another value gets new ones too, so a
+   button kept from before still does what its label said. It carries the
    notification's key, the button's action, the notification's time and
    the button's value. No text.
 5. `ButtonReceiver` hands the press to the app's `ButtonHandler` on the
@@ -341,11 +343,15 @@ in the notification as a time, so a notification posted again in the
 hidden form keeps the same end. A notification whose end has passed is
 not shown.
 
-An end is a moment, so a change of the clock or the time zone does not
-move it. Neither does a stop of the app between a change to a record and
-the removal of its notification. For both, an app can pass a
+Android counts the end from the moment of the post, in real time. So
+after the clock is moved, even within the day, it no longer comes at
+the moment it was meant for, and after a change of the time zone that
+moment is no longer the local midnight. A stop of the app between a
+change to a record and the removal of its notification leaves the
+notification too. For these, an app can pass a
 `ShownReview` to `Notify`. It gets the app's notifications on screen,
-each as `OnScreen`: its key, its time and its end, never its text. It
+each as `OnScreen`: its key, its time, its end, and the value each
+button carries (none in the hidden form), never its text. It
 runs on the worker at every start, and after each of Android's four
 broadcasts with `timeChanged` true. A review that fails changes nothing
 more: the sync still runs.
@@ -355,10 +361,10 @@ more: the sync still runs.
 - Water removes its reminder when it is from an earlier day, or when it
   is not the reminder Water stored as showing. The notice of a failed
   reminder, which has no end, stays until the next reminder replaces
-  it. After a change of the time, Water shows one of
-  today again with today's numbers and the new midnight as its end.
-  It is `quiet`: posted again with `setOnlyAlertOnce`, so no new sound
-  or vibration.
+  it. After every change of the time, Water shows one of today again
+  with today's numbers, the amount its **Drank** button had, and the new
+  midnight as its end. It is `quiet`: posted again with
+  `setOnlyAlertOnce`, so no new sound or vibration.
 
 ## Channels
 

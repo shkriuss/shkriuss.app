@@ -749,7 +749,7 @@ Each case, with reminder hours from 08:00 until 22:00 and every hour:
 | The alarm reaches the handler before its time, because the clock was just set back | Nothing shows and nothing is stored. `core/notify` sets the alarm again, and the reminder comes at its time. | Alarm for 09:00, clock set back to 08:55: the reminder comes at 09:00 |
 | Water was stopped with **Force stop** | The same as a restart, from the moment Water is opened again | |
 | Reminders turned on, or "Every", "From" or "Until" changed | The rule again, from now | Turned on at 14:10, last drink at 13:50: next at 14:50 |
-| The time zone or the clock changed | The rule again, in the new local time. A reminder on screen from an earlier day is removed. One of today is shown again, with no new sound, with today's numbers and the new midnight as its end. | |
+| The time zone or the clock changed | The rule again, in the new local time. A reminder on screen from an earlier day is removed. One of today is shown again, with no new sound, with today's numbers, the amount its **Drank** button had, and the new midnight as its end: also after the clock moved within the day, as Android counts the end from the moment of the post. | |
 | The hour that comes twice when summer time ends | Real minutes: an interval is one interval of real time | Every 30 minutes from 02:00, turned on at the second 02:05: next at the second 02:30 |
 | Midnight | A new day: the count starts at "From" of the new day | |
 

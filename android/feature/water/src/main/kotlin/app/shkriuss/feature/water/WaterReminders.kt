@@ -154,12 +154,19 @@ class WaterReminders(
      * some water", today's total and goal, and the buttons. Drank carries
      * the first quick amount of this moment in millilitres, so it logs what
      * its label says. Android removes it at midnight. A [quiet] one is the
-     * same reminder shown again, with no new sound.
+     * same reminder shown again, with no new sound, and [drankMl] is then
+     * the amount its Drank button carried when it was first shown.
      */
-    private fun reminderOf(atMillis: Long, settings: WaterSettings, day: DayFacts, quiet: Boolean = false): ShkNotification {
+    private fun reminderOf(
+        atMillis: Long,
+        settings: WaterSettings,
+        day: DayFacts,
+        quiet: Boolean = false,
+        drankMl: Int? = null,
+    ): ShkNotification {
         val format = format()
         val unit = settings.unit
-        val drankAmount = settings.cup1Ml
+        val drankAmount = drankMl ?: settings.cup1Ml
         return ShkNotification(
             key = KEY,
             channel = CHANNEL,
@@ -185,10 +192,12 @@ class WaterReminders(
      * point 6). One that is not the reminder showing goes: Water stopped
      * between taking it and removing it, or between storing a newer one
      * and showing it. One of another day goes too. After a change of the
-     * time, one of today is shown again, quietly, with the numbers of now,
-     * so that it ends at the new midnight. The notice of a failed
-     * reminder, the only one with no end, stays until the next reminder
-     * replaces it (spec, "How Water uses core/notify", point 5).
+     * time, one of today is shown again, quietly, with the numbers of now
+     * and the amount its Drank button had, so that it ends at the new
+     * midnight. Android counts the end from the moment of the post, so a
+     * clock moved within the day needs a new post too. The notice of a
+     * failed reminder, the only one with no end, stays until the next
+     * reminder replaces it (spec, "How Water uses core/notify", point 5).
      */
     override fun review(onScreen: List<OnScreen>, notifications: Notifications, timeChanged: Boolean) {
         val shown = onScreen.firstOrNull { it.key == KEY && it.endsAtMillis != null } ?: return
@@ -202,8 +211,10 @@ class WaterReminders(
                         book.update { it.copy(showing = null) }
                         notifications.cancel(KEY)
                     }
-                    timeChanged && shown.endsAtMillis != time.nextMidnightMillis() ->
-                        notifications.show(reminderOf(shown.atMillis, repository.settingsNow(), repository.factsOf(today), quiet = true))
+                    timeChanged -> {
+                        val drankMl = shown.buttonValues[DRANK]?.toInt()
+                        notifications.show(reminderOf(shown.atMillis, repository.settingsNow(), repository.factsOf(today), quiet = true, drankMl = drankMl))
+                    }
                 }
             }
         }

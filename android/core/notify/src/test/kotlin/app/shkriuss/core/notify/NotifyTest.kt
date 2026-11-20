@@ -821,7 +821,7 @@ class NotifyTest {
         val sent = first.savedIntent
         assertEquals(ComponentName(context, ButtonReceiver::class.java), sent.component)
         assertEquals(ButtonReceiver.ACTION_BUTTON, sent.action)
-        assertEquals("next/drank/${start + HOUR}", sent.identifier)
+        assertEquals("next/drank/${start + HOUR}/250", sent.identifier)
         val extras = checkNotNull(sent.extras)
         assertEquals(
             setOf(ButtonReceiver.EXTRA_KEY, ButtonReceiver.EXTRA_ACTION, ButtonReceiver.EXTRA_AT, ButtonReceiver.EXTRA_VALUE),
@@ -833,7 +833,7 @@ class NotifyTest {
         assertEquals(250L, extras.getLong(ButtonReceiver.EXTRA_VALUE))
         // The two buttons are two presses.
         assertNotEquals(actions[0].actionIntent, actions[1].actionIntent)
-        assertEquals("next/later/${start + HOUR}", shadowOf(actions[1].actionIntent).savedIntent.identifier)
+        assertEquals("next/later/${start + HOUR}/0", shadowOf(actions[1].actionIntent).savedIntent.identifier)
     }
 
     @Test
@@ -882,6 +882,40 @@ class NotifyTest {
         shown.send()
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals("the button that shows has its own", listOf(ButtonPress("next", "drank", start + 2 * HOUR, 300)), presses)
+    }
+
+    @Test
+    fun aButtonKeptFromBeforeKeepsItsValueWhenTheSameNotificationIsShownAgainWithAnother() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(withButtons())
+        val kept = actionsOf(shownBy.getNotification("next", 0))[0].actionIntent
+
+        // The same notification, with the same key and time, shown again with another amount.
+        notifications.show(withButtons(listOf(ShkNotificationButton("Drank 300 ml", "drank", 300), later)))
+        kept.send()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals("it does what its label said", listOf(ButtonPress("next", "drank", start + HOUR, 250)), presses)
+    }
+
+    @Test
+    fun onScreenGivesTheValueOfEachButtonAndNoneInTheHiddenForm() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(withButtons(endsAt = start + 2 * HOUR))
+
+        assertEquals(
+            listOf(OnScreen("next", start + HOUR, start + 2 * HOUR, mapOf("drank" to 250L, "later" to 0L))),
+            notifications.onScreen(listOf(reminders, summaries)),
+        )
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        assertEquals(listOf(OnScreen("next", start + HOUR, start + 2 * HOUR)), notifications.onScreen(listOf(reminders, summaries)))
     }
 
     @Test
