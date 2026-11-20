@@ -21,6 +21,7 @@ import app.shkriuss.core.notify.ShownReview
 import app.shkriuss.feature.water.ui.WaterFormat
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZonedDateTime
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -71,14 +72,17 @@ class WaterReminders(
      * the handler yet, for one minute ([NextReminder], point 7).
      */
     override fun alarms(): List<Alarm> {
-        val next = runBlocking { next() }?.let(time::millisOf)
+        val next = runBlocking { nextAt() }?.toInstant()?.toEpochMilli()
         book.update { it.copy(named = next) }
         return listOfNotNull(next?.let { Alarm(ALARM, it) })
     }
 
-    /** The time of the next reminder, as the rule gives it now, or null for none. */
-    suspend fun next(): LocalDateTime? {
-        val now = time.now()
+    /** The local time of the next reminder, as the rule gives it now, or null for none. */
+    suspend fun next(): LocalDateTime? = nextAt()?.toLocalDateTime()
+
+    /** The moment of the next reminder, as the rule gives it now, or null for none. */
+    private suspend fun nextAt(): ZonedDateTime? {
+        val now = time.nowZoned()
         val settings = repository.settingsNow()
         val day = repository.factsOf(now.toLocalDate())
         return NextReminder.after(now, settings, factsOf(now.toLocalDate(), day, entriesNow()))
@@ -129,12 +133,12 @@ class WaterReminders(
                 val before = entriesNow()
                 book.update { it.copy(lastAlarm = alarm.atMillis) }
                 try {
-                    val now = time.now()
+                    val now = time.nowZoned()
                     val today = now.toLocalDate()
                     val settings = repository.settingsNow()
                     val day = repository.factsOf(today)
                     val due = NextReminder.after(now, settings, factsOf(today, day, before))
-                    if (due == null || time.millisOf(due) != alarm.atMillis) return@withLock
+                    if (due == null || due.toInstant().toEpochMilli() != alarm.atMillis) return@withLock
                     book.update { it.copy(lastShown = alarm.atMillis, showing = alarm.atMillis, snooze = null) }
                     notifications.show(reminderOf(alarm.atMillis, settings, day))
                 } catch (failed: Exception) {
@@ -269,9 +273,9 @@ class WaterReminders(
      * that is after "Until".
      */
     private suspend fun laterNow(): Pair<Long, Long?> {
-        val now = time.now()
-        val snooze = NextReminder.snoozeAfter(now, repository.settingsNow())?.let(time::millisOf)
-        return time.millisOf(now) to snooze
+        val now = time.nowZoned()
+        val snooze = NextReminder.snoozeAfter(now, repository.settingsNow())?.toInstant()?.toEpochMilli()
+        return now.toInstant().toEpochMilli() to snooze
     }
 
     // After a change in the app.
@@ -326,10 +330,10 @@ class WaterReminders(
         day = day,
         latestDrinkMinute = facts.latestDrinkMinute,
         goalMet = facts.goalMet,
-        lastShown = entries.lastShown?.let(time::local),
-        lastLater = entries.lastLater?.let(time::local),
-        snooze = entries.snooze?.let(time::local),
-        pending = entries.pending?.let(time::local),
+        lastShown = entries.lastShown?.let(time::zoned),
+        lastLater = entries.lastLater?.let(time::zoned),
+        snooze = entries.snooze?.let(time::zoned),
+        pending = entries.pending?.let(time::zoned),
     )
 
     /** Numbers and amounts as the phone shows them now. */

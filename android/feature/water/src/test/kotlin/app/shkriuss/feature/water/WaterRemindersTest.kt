@@ -6,7 +6,9 @@ import app.shkriuss.core.notify.Alarm
 import app.shkriuss.core.notify.ButtonPress
 import app.shkriuss.core.notify.ChannelImportance
 import app.shkriuss.core.notify.NotifyState
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -299,6 +301,18 @@ class WaterRemindersTest {
         val newMidnight = THE_DAY.plusDays(1).atStartOfDay(west).toInstant().toEpochMilli()
         assertEquals(newMidnight - clock.nowMillis, shown.timeoutAfterMillis)
         assertTrue("shown again with no new sound", shown.alertsOnlyOnce)
+    }
+
+    @Test
+    fun inTheHourThatComesTwiceTheAlarmIsSetForATimeStillToCome() {
+        // Berlin, Sunday 31 October 2027: at 03:00 summer time the clocks go back to 02:00.
+        water.zone = ZoneId.of("Europe/Berlin")
+        val turnedOn = LocalDate.of(2027, 10, 31).atTime(2, 5).atZone(water.zone).withLaterOffsetAtOverlap()
+        clock.nowMillis = turnedOn.toInstant().toEpochMilli()
+
+        remindersOn { it.copy(intervalMinutes = 30, fromMinute = 2 * 60, untilMinute = 5 * 60) }
+
+        assertEquals("the second 02:30, 25 real minutes later", listOf(turnedOn.plusMinutes(25).toInstant().toEpochMilli()), water.waiting())
     }
 
     @Test

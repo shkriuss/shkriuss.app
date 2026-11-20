@@ -5,6 +5,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 
 /**
  * The phone's local day and time, from a [Clock] and a time zone. A day
@@ -29,6 +30,12 @@ class WaterTime(
 
     /** The local date and time of the moment [millis], in milliseconds since 1970. */
     fun local(millis: Long): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), zone())
+
+    /** The moment [millis], in milliseconds since 1970, in the phone's time zone. */
+    fun zoned(millis: Long): ZonedDateTime = Instant.ofEpochMilli(millis).atZone(zone())
+
+    /** Now, in the phone's time zone. The rule of the next reminder counts from it ([NextReminder]). */
+    fun nowZoned(): ZonedDateTime = zoned(clock.nowMillis())
 
     /** The moment of the local date and time [time], in milliseconds since 1970. A time in a gap of summer time moves forward. */
     fun millisOf(time: LocalDateTime): Long = time.atZone(zone()).toInstant().toEpochMilli()
