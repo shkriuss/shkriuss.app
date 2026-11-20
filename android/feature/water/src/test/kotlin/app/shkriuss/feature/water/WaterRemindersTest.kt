@@ -6,6 +6,7 @@ import app.shkriuss.core.notify.Alarm
 import app.shkriuss.core.notify.ButtonPress
 import app.shkriuss.core.notify.ChannelImportance
 import app.shkriuss.core.notify.NotifyState
+import app.shkriuss.core.notify.OnScreen
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -320,6 +321,21 @@ class WaterRemindersTest {
         assertEquals("the amount of the moment it was first shown", "Drank 150 ml", shown.buttons.first())
         water.device.press(WaterReminders.KEY, 0)
         assertEquals(listOf(150), drinksToday().map { it.amountMl })
+    }
+
+    @Test
+    fun aReminderWhoseAmountCannotBeReadBackIsNotShownAgainWithAnother() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        val nine = checkNotNull(water.reminder())
+        runBlocking { repository.changeSettings { it.copy(cup1Ml = 400) } }
+        clock.setTo(at(9, 5))
+
+        // What the review sees after an update: a reminder that an older Water posted, with no amount kept.
+        val olderForm = OnScreen(WaterReminders.KEY, water.millisOf(at(9, 0)), water.millisOf(THE_DAY.plusDays(1).atStartOfDay()))
+        reminders.review(listOf(olderForm), water.app.notify.notifications, timeChanged = true)
+
+        assertEquals("it keeps Drank 150 ml", nine, water.reminder())
     }
 
     @Test
