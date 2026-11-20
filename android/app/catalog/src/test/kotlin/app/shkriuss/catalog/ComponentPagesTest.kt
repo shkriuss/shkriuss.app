@@ -187,6 +187,20 @@ class ComponentPagesTest {
     }
 
     @Test
+    fun textFieldToTryKeepsWhatIsTypedOutOfTheSavedState() {
+        open(CatalogPage.TextFields)
+        compose.onNode(IS_TEXT_FIELD and hasText(text(R.string.sample_name_limit)))
+            .performScrollTo()
+            .performTextInput("Tamar")
+
+        // Android saves the state and makes the screen again, as after it reclaimed the app.
+        compose.activityRule.scenario.recreate()
+
+        compose.onNode(IS_TEXT_FIELD and hasText(text(R.string.sample_name_limit))).performScrollTo()
+        compose.onAllNodes(hasText("Tamar", substring = true)).assertCountEquals(0)
+    }
+
+    @Test
     fun textFieldToTryCountsAnEmojiAsOneCharacter() {
         open(CatalogPage.TextFields)
         val grinning = "\uD83D\uDE00"

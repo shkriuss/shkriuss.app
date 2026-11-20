@@ -8,6 +8,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
@@ -19,11 +20,13 @@ import kotlinx.coroutines.ensureActive
  * the last byte of the backup was checked, and a backup can be larger than
  * memory. So what is read is first put aside here, inside the app's
  * private storage ("Staging" in docs/architecture/backup-format.md).
+ * [remove] deletes one file or empty folder, and says whether it did.
+ * Tests pass one that refuses.
  */
-internal class BackupStaging(private val folder: File) {
-    /** Deletes whatever a stopped restore left behind. */
+internal class BackupStaging(private val folder: File, private val remove: (File) -> Boolean = File::delete) {
+    /** Deletes whatever a stopped restore left behind, or a delete that failed after the last one. */
     fun clear() {
-        folder.listFiles()?.forEach { it.deleteRecursively() }
+        folder.listFiles()?.forEach { wipe(it, remove) }
     }
 
     /** A new, empty folder of its own for one restore. */
@@ -32,13 +35,29 @@ internal class BackupStaging(private val folder: File) {
         try {
             return staging {
                 if (!run.mkdirs()) throw IOException("The staging folder cannot be made")
-                StagedBackup(run)
+                StagedBackup(run, remove)
             }
         } catch (failed: BackupStagingException) {
-            run.deleteRecursively()
+            wipe(run, remove)
             throw failed
         }
     }
+}
+
+/**
+ * Deletes [file], and everything in it if it is a folder. Each file is cut
+ * to zero bytes first: one that the system refuses to delete then holds
+ * nothing of the backup any more. A delete that fails is tried once more.
+ * What still stays is deleted at the next start of the app
+ * ([BackupStaging.clear]).
+ */
+internal fun wipe(file: File, remove: (File) -> Boolean) {
+    if (file.isDirectory) {
+        file.listFiles()?.forEach { wipe(it, remove) }
+    } else {
+        runCatching { RandomAccessFile(file, "rw").use { it.setLength(0) } }
+    }
+    if (!remove(file)) remove(file)
 }
 
 /**
@@ -79,7 +98,7 @@ internal inline fun <T> staging(write: () -> T): T = try {
  * plaintext here, as they are in the database. File streams stay
  * encrypted with their own keys.
  */
-internal class StagedBackup(private val folder: File) : BodySink {
+internal class StagedBackup(private val folder: File, private val remove: (File) -> Boolean = File::delete) : BodySink {
     private val recordFile = FileOutputStream(File(folder, RECORDS))
     private val records = DataOutputStream(BufferedOutputStream(recordFile))
     private val listFile = FileOutputStream(File(folder, FILE_LIST))
@@ -123,11 +142,11 @@ internal class StagedBackup(private val folder: File) : BodySink {
     /** The backup as the app gets it, once the whole file was checked and [finish] was called. */
     fun checked(summary: BackupSummary): CheckedBackup = StagedChecked(summary, folder)
 
-    /** Deletes the folder of this restore. */
+    /** Deletes the folder of this restore, its files cut to zero bytes first ([wipe]). */
     fun delete() {
         runCatching { records.close() }
         runCatching { list.close() }
-        folder.deleteRecursively()
+        wipe(folder, remove)
     }
 
     internal companion object {

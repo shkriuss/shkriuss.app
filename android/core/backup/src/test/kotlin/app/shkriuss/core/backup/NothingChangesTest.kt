@@ -166,4 +166,29 @@ class NothingChangesTest {
         // A staging folder that was never made is nothing to clear.
         BackupStaging(File(folder, "never-made")).clear()
     }
+
+    @Test
+    fun aStagedFileTheSystemRefusesToDeleteIsEmptiedTriedTwiceAndGoesAtTheNextStart() {
+        val folder = temporary.newFolder()
+        val tries = mutableListOf<String>()
+        var refuse = true
+        val staging = BackupStaging(folder) { file ->
+            tries += file.name
+            !refuse && file.delete()
+        }
+        val run = staging.newRun()
+        run.record(record(1))
+        run.finish()
+
+        run.delete()
+
+        val left = folder.walkTopDown().filter { it.isFile }.toList()
+        assertEquals(listOf("files", "records"), left.map { it.name }.sorted())
+        assertTrue("no record is left to read", left.all { it.length() == 0L })
+        assertEquals("each delete is tried twice", 2, tries.count { it == "records" })
+
+        refuse = false
+        staging.clear()
+        assertEquals(emptyList<String>(), folder.list().orEmpty().toList())
+    }
 }
