@@ -575,6 +575,32 @@ class NotifyTest {
     }
 
     @Test
+    fun aBroadcastHandledWhileTheTextIsBeingHiddenEndsOnlyAfterTheLastStep() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+        holdSteps = true
+        hidesText = { true }
+        context.notify.hideShownText()
+        var ended = 0
+
+        // Android started the app for these. Each ends its broadcast with its answer.
+        context.notify.alarmFired(AlarmId("plants")) { ended++ }
+        context.notify.systemEvent { ended++ }
+        context.notify.buttonPressed(ButtonPress("one", "drank", start, 250)) { ended++ }
+
+        assertEquals("the app keeps running while text is left in the shade", 0, ended)
+        heldSteps.removeAt(0)()
+        assertEquals("the check a second later is still to come", 0, ended)
+        heldSteps.removeAt(0)()
+        assertEquals(3, ended)
+
+        context.notify.alarmFired(AlarmId("plants")) { ended++ }
+        assertEquals("with nothing to hide, a broadcast ends at once", 4, ended)
+    }
+
+    @Test
     fun theTimerOfNotifyHandsEachStepOfHidingBackToTheWorker() {
         val worker = Executors.newSingleThreadExecutor()
         try {

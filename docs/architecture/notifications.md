@@ -282,7 +282,10 @@ Decided by the owner, with the app lock
    text leaves the shade, also at the cost of the notification. A
    notification in the hidden form carries a mark that says so, and
    nothing more. One with the mark is not posted again, so a start while
-   the text is hidden waits for nothing.
+   the text is hidden waits for nothing. While steps are still to come,
+   the receivers of `core/notify` end their broadcasts only after the
+   last one. So when Android starts the app for an alarm, a press or one
+   of its broadcasts, it keeps the app running until no text is left.
 4. If the state of the app lock cannot be read, the text is hidden.
    `Notifications.show` also hides it when `hidesText` itself fails.
 5. A notification that is hidden stays hidden after the app lock is

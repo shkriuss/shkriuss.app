@@ -158,19 +158,25 @@ class Notify(
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
         }.putExtra(Settings.EXTRA_APP_PACKAGE, app.packageName)
 
-    /** An alarm fired. [done] runs when the app has handled it. */
+    /**
+     * An alarm fired. [done] runs when the app has handled it, and once
+     * the text of shown notifications is hidden, if that is under way:
+     * the receiver ends its broadcast then, so that Android keeps the app
+     * running until no text the app lock hides is left in the shade.
+     */
     internal fun alarmFired(id: AlarmId, done: () -> Unit) = worker.execute {
         try {
             alarms.fired(id)
         } finally {
-            done()
+            notifications.whenHidden(done)
         }
     }
 
     /**
      * A button on a notification was pressed. [done] runs when the app
-     * has handled it. A press that fails changes nothing more: the
-     * notification stays, so the user can open the app.
+     * has handled it, and once hiding is over, as for [alarmFired]. A
+     * press that fails changes nothing more: the notification stays, so
+     * the user can open the app.
      *
      * While the app lock hides the text there are no buttons (ADR 0034,
      * point 1). A press that comes then, from a button that an app with
@@ -186,21 +192,21 @@ class Notify(
         } catch (_: Exception) {
             // Nothing is logged in core/notify (hard rule 10).
         } finally {
-            done()
+            notifications.whenHidden(done)
         }
     }
 
     /**
      * Android forgot the alarms, or the time moved. [done] runs when they
      * are registered again and the app's [ShownReview] has looked at what
-     * is on screen.
+     * is on screen, and once hiding is over, as for [alarmFired].
      */
     internal fun systemEvent(done: () -> Unit) = worker.execute {
         try {
             alarms.sync(setAll = true)
             reviewShown(timeChanged = true)
         } finally {
-            done()
+            notifications.whenHidden(done)
         }
     }
 

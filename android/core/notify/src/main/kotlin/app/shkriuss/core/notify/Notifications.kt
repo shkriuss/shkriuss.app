@@ -156,22 +156,71 @@ class Notifications internal constructor(
      * also at the cost of the notification. A step finds nothing more to
      * do once the text is no longer to be hidden.
      */
-    internal fun hideShown(channels: List<NotifyChannel>) = hideFrom(manager.activeNotifications.map { it.tag to it.id }, channels, anyPosted = false)
+    internal fun hideShown(channels: List<NotifyChannel>) {
+        hidingRuns++
+        step { hideFrom(manager.activeNotifications.map { it.tag to it.id }, channels, anyPosted = false) }
+    }
 
-    /** The step of [hideShown] that goes on from the first of [keys]. */
-    private fun hideFrom(keys: List<Pair<String?, Int>>, channels: List<NotifyChannel>, anyPosted: Boolean) {
-        if (!mustHide()) return
+    /**
+     * Runs [whenDone] once no run of [hideShown] has a step still to
+     * come: at once, or after the last step. A receiver of `core/notify`
+     * ends its broadcast with it, so that Android keeps the app running
+     * until the text has left the notification shade. On the worker only.
+     */
+    internal fun whenHidden(whenDone: () -> Unit) {
+        if (hidingRuns == 0) whenDone() else waitingForHiding += whenDone
+    }
+
+    /** How many runs of [hideShown] have a step still to come. Read and changed on the worker only. */
+    private var hidingRuns = 0
+
+    /** What [whenHidden] holds back until [hidingRuns] is 0 again. */
+    private val waitingForHiding = mutableListOf<() -> Unit>()
+
+    /** One step of [hideShown] that comes [millis] after the last: [work] gives the next one, or null. */
+    private class HidingStep(val millis: Long, val work: () -> HidingStep?)
+
+    /** Runs [work] and asks for the step it gives. A step that fails ends the run, so nothing waits forever. */
+    private fun step(work: () -> HidingStep?) {
+        val next = try {
+            work()
+        } catch (_: Exception) {
+            // Nothing is logged in core/notify (hard rule 10).
+            null
+        }
+        if (next == null) {
+            hidingEnded()
+            return
+        }
+        try {
+            later(next.millis) { step(next.work) }
+        } catch (_: Exception) {
+            hidingEnded()
+        }
+    }
+
+    /** One run of [hideShown] is over. Once none is left, what waited runs. */
+    private fun hidingEnded() {
+        hidingRuns--
+        if (hidingRuns > 0) return
+        val waiting = waitingForHiding.toList()
+        waitingForHiding.clear()
+        waiting.forEach { it() }
+    }
+
+    /** The step of [hideShown] that goes on from the first of [keys]. It gives the next step, or null. */
+    private fun hideFrom(keys: List<Pair<String?, Int>>, channels: List<NotifyChannel>, anyPosted: Boolean): HidingStep? {
+        if (!mustHide()) return null
         keys.forEachIndexed { index, (tag, id) ->
             if (!hideOne(tag, id, channels)) return@forEachIndexed
             val rest = keys.drop(index + 1)
-            if (rest.isEmpty()) {
-                later(SETTLE_MILLIS) { removeOldForms(channels) }
+            return if (rest.isEmpty()) {
+                HidingStep(SETTLE_MILLIS) { removeOldForms(channels); null }
             } else {
-                later(PACE_MILLIS) { hideFrom(rest, channels, anyPosted = true) }
+                HidingStep(PACE_MILLIS) { hideFrom(rest, channels, anyPosted = true) }
             }
-            return
         }
-        if (anyPosted) later(SETTLE_MILLIS) { removeOldForms(channels) }
+        return if (anyPosted) HidingStep(SETTLE_MILLIS) { removeOldForms(channels); null } else null
     }
 
     /** Posts the notification [tag] again in the hidden form, as it is now. True if it was posted. */
