@@ -712,8 +712,14 @@ The rule:
      next still comes this way. `core/notify` forgets its own fired
      times that lie ahead in the same way.
 
-Times count in whole minutes. A press of **Later** at 12:22:40 counts as
-12:22, and its snooze comes at 12:37.
+Times count in whole minutes of real time since the start of the day. On
+most days that is the clock's minute. On the days the clocks change, an
+interval and the 15 minutes of **Later** are real time, and the hour
+that comes twice counts twice. "From", "Until" and the time of a drink
+are clock times: in the hour that comes twice they are the first of the
+two, and in the hour that does not exist they move forward, as the clock
+does. A press of **Later** at 12:22:40 counts as 12:22, and its snooze
+comes at 12:37.
 
 "The time of your latest drink" is the latest `minuteOfDay` among
 today's drinks that are not deleted, as you entered it. A reminder
@@ -738,9 +744,11 @@ Each case, with reminder hours from 08:00 until 22:00 and every hour:
 | A restart of the phone | Nothing before the first unlock ([ADR 0010](../../adr/0010-exact-alarms-and-reminder-storage.md)). After the unlock, reminders whose time passed more than a minute ago are skipped, and so is such a snooze ([rule 7](#when-the-next-reminder-comes)). The next one is the first "the count + n intervals" after the unlock. | Last reminder at 10:00, phone off from 10:30 to 12:20: no reminder at 11:00 or 12:00, next at 13:00 |
 | The alarm's time comes while Water starts, or while something changes | The reminder still comes, if the change does not answer it ([rule 7](#when-the-next-reminder-comes)) | Alarm for 11:20. Android starts Water for it at 11:20:01: the reminder shows |
 | The alarm reaches the handler more than a minute late | Skipped, as a missed reminder. 1 interval after it. | Alarm for 11:20 comes at 11:21:05: no reminder, next at 12:20 |
+| The alarm reaches the handler before its time, because the clock was just set back | Nothing shows and nothing is stored. `core/notify` sets the alarm again, and the reminder comes at its time. | Alarm for 09:00, clock set back to 08:55: the reminder comes at 09:00 |
 | Water was stopped with **Force stop** | The same as a restart, from the moment Water is opened again | |
 | Reminders turned on, or "Every", "From" or "Until" changed | The rule again, from now | Turned on at 14:10, last drink at 13:50: next at 14:50 |
-| The time zone or the clock changed | The rule again, in the new local time | |
+| The time zone or the clock changed | The rule again, in the new local time. A reminder on screen from an earlier day is removed. One of today is shown again, with no new sound, with today's numbers and the new midnight as its end. | |
+| The hour that comes twice when summer time ends | Real minutes: an interval is one interval of real time | Every 30 minutes from 02:00, turned on at the second 02:05: next at the second 02:30 |
 | Midnight | A new day: the count starts at "From" of the new day | |
 
 "Answered" means **Drank**, **Later**, or a drink logged in the app.
@@ -764,7 +772,9 @@ does not move the count.
    - reminders are turned off,
    - the goal is met,
    - midnight comes. Android's notification timeout removes it, so
-     yesterday's numbers never show as today's.
+     yesterday's numbers never show as today's,
+   - Water starts, or the clock or the time zone changes, and it is from
+     an earlier day.
 7. While the app lock hides the text of notifications, the reminder
    shows only the channel's name and the fixed text of `core/notify`,
    and no buttons
@@ -864,16 +874,23 @@ says:
    except a reminder that is due and has not reached the handler yet, for
    one minute ([rule 7](#when-the-next-reminder-comes)).
 3. **`AlarmHandler`**, when `next-drink` fires at its time T:
-   1. First it writes into the phone-only file: the last alarm that
+   1. If T is still to come by its own reading of the clock, it shows
+      nothing and writes nothing: the clock was set back in that moment,
+      and `core/notify` sets the alarm again for T.
+   2. Then it writes into the phone-only file: the last alarm that
       reached the handler is T. So if anything after this fails, the
       rule never names T again, and the next reminder still comes.
-   2. If the rule no longer gives T, it shows nothing. That is the case
+   3. If the rule no longer gives T, it shows nothing. That is the case
       when reminders are off, today's goal is met, T is outside today's
       reminder hours, something answered the reminder in the same
       moment, or the alarm came more than a minute late.
-   3. Otherwise it writes: last reminder shown at T, the reminder showing
+   4. Otherwise it writes: last reminder shown at T, the reminder showing
       now is T, no snooze. Then it shows the reminder.
-   4. Doing it twice gives the same result: the second time the rule no
+   5. If anything after the first write fails, it writes that the
+      reminder showing now is T, as `core/notify` puts its notice in the
+      reminder's place. A press on an older reminder is then not current,
+      and leaves the notice.
+   6. Doing it twice gives the same result: the second time the rule no
       longer gives T, and the reminder already shows.
 4. Water calls `notify.sync()` after every change that can move the
    alarm:
@@ -888,8 +905,11 @@ says:
    owner decided this, for every app
    ([notifications.md](../../architecture/notifications.md#how-alarms-are-kept-right)).
 6. It is all in `WaterReminders`, in `android/feature/water`. The app
-   class passes it to `Notify` as the `AlarmSource`, the `AlarmHandler`
-   and the `ButtonHandler`. The repository calls it after every write
+   class passes it to `Notify` as the `AlarmSource`, the `AlarmHandler`,
+   the `ButtonHandler` and the `ShownReview`, which looks at the reminder
+   on screen at every start and after a change of the time ([What a
+   reminder shows](#what-a-reminder-shows), point 6). The repository
+   calls it after every write
    that changed something. It removes a reminder that is answered, and
    calls `notify.sync()`. The handler, a press and that call take turns
    on one lock, so a drink logged in the very moment a reminder is due

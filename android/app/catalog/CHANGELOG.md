@@ -10,7 +10,8 @@ development.
   recovery-word field, no longer hands its text to Android's text
   classifier.
 - **Text fields**: the field to try counts characters as you see them.
-  An emoji is one, so 20 emoji show no error.
+  An emoji is one, so 20 emoji show no error. What you type there stays
+  in memory only: it goes when the phone turns or Catalog closes.
 - **Time pickers**: the time chosen under the picker to try shows with
   the phone's 12 or 24-hour setting, as the picker itself does.
 - Catalog needs Android 15 or newer

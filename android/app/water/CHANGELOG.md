@@ -73,6 +73,23 @@ Fixed:
 - **Amounts in your phone's digits.** An amount typed in other digits,
   such as Arabic-Indic digits, is taken. Before, Water said it was
   outside the limits.
+- **The night the clocks change.** Reminders count real minutes from
+  the start of the day. In the hour that comes twice when summer time
+  ends, a reminder no longer comes too early, and **Later** waits 15
+  minutes. On every other day nothing changes.
+- **A clock set back at the moment of a reminder.** The reminder comes at
+  its time. Before, it came a few minutes early, and not at its time.
+- **A reminder that could not be shown.** If Water cannot read its data
+  for a reminder, a late press on the reminder before it no longer
+  removes the notice "A reminder could not be shown".
+- **A new day while a reminder shows.** If the clock or the time zone
+  moves past midnight, the reminder with yesterday's total goes. If it
+  is still today, it is shown again, with no new sound, with today's
+  numbers, and it ends at the new midnight.
+- **Hiding the text of reminders.** Reminders that are due meanwhile
+  are not held up.
+- **Restore a backup.** The temporary copy of the drinks is emptied
+  before it is deleted, so none is left to read if the delete fails.
 
 ## 1.0.1 (2026-11-17)
 

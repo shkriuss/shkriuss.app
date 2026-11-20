@@ -532,7 +532,10 @@ a backup can be larger than memory. So what is read is first put aside.
    private storage and Android's file-based encryption
    ([ADR 0004](../adr/0004-room-on-system-sqlite-no-sqlcipher.md)).
 5. Before the app is called, the staged files are flushed to storage.
-6. The folder is deleted when the restore ends, well or badly.
+6. The folder is deleted when the restore ends, well or badly. Each file
+   is cut to zero bytes before it is deleted, and a delete that fails is
+   tried once more. A file the system refuses to delete then holds no
+   record, and the next start deletes it.
 7. At app start, one call deletes whatever a stop left in the staging
    folder.
 
