@@ -7,6 +7,7 @@ import app.shkriuss.core.notify.ButtonPress
 import app.shkriuss.core.notify.ChannelImportance
 import app.shkriuss.core.notify.NotifyState
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -230,6 +231,74 @@ class WaterRemindersTest {
         assertEquals(1, water.device.shownCount())
         assertEquals(first.atMillis, checkNotNull(water.reminder()).atMillis)
         assertEquals(water.millisOf(at(9, 0)), water.reminders.entries.value.lastShown)
+    }
+
+    @Test
+    fun anAlarmThatReachesTheHandlerBeforeItsTimeShowsNothingAndComesAtItsTime() {
+        remindersOn()
+
+        // The clock was set back to 08:55 after core/notify found 09:00 due.
+        alarmComes(at(9, 0), arrives = at(8, 55))
+
+        assertNull(water.reminder())
+        assertNull("nothing is written", reminders.entries.value.lastAlarm)
+        assertEquals(listOf(water.millisOf(at(9, 0))), water.waiting())
+        alarmComes(at(9, 0))
+        assertEquals(water.millisOf(at(9, 0)), checkNotNull(water.reminder()).atMillis)
+    }
+
+    @Test
+    fun whenReadingFailsAnOlderPressNoLongerCounts() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        val later = water.device.keepButton(WaterReminders.KEY, 1)
+        val nine = checkNotNull(water.reminder())
+        // The 10:00 reminder cannot read the settings. core/notify then puts its notice in the reminder's place.
+        water.database.close()
+        clock.setTo(at(10, 0))
+        assertThrows(Exception::class.java) { reminders.onAlarm(alarm(at(10, 0)), water.app.notify.notifications) }
+        assertEquals(water.millisOf(at(10, 0)), reminders.entries.value.showing)
+
+        // The press of Later on the 09:00 reminder arrives now.
+        later()
+
+        assertEquals("the press is not current, so it removes nothing", nine, water.reminder())
+        assertEquals(water.millisOf(at(10, 0)), reminders.entries.value.showing)
+        assertNull(reminders.entries.value.snooze)
+    }
+
+    @Test
+    fun aReminderOfAnEarlierDayGoesWhenTheClockMovesPastMidnight() {
+        remindersOn()
+        dueAt(21)
+        alarmComes(at(21, 0))
+        checkNotNull(water.reminder())
+
+        clock.setTo(THE_DAY.plusDays(1).atTime(0, 5))
+        water.device.send("android.intent.action.TIME_SET")
+
+        assertNull("yesterday's total no longer shows", water.reminder())
+        assertNull(reminders.entries.value.showing)
+    }
+
+    @Test
+    fun afterANewTimeZoneAReminderOfTodayEndsAtTheNewMidnightWithNoNewSound() {
+        remindersOn()
+        dueAt(21)
+        alarmComes(at(21, 0))
+        val shownAt = water.millisOf(at(21, 0))
+        clock.setTo(at(21, 5))
+
+        // A trip west: it is 19:05 there, the same day, and midnight comes two hours later.
+        val west = ZoneOffset.ofHours(-2)
+        water.zone = west
+        water.device.send("android.intent.action.TIMEZONE_CHANGED")
+
+        val shown = checkNotNull(water.reminder())
+        assertEquals(shownAt, shown.atMillis)
+        val newMidnight = THE_DAY.plusDays(1).atStartOfDay(west).toInstant().toEpochMilli()
+        assertEquals(newMidnight - clock.nowMillis, shown.timeoutAfterMillis)
+        assertTrue("shown again with no new sound", shown.alertsOnlyOnce)
     }
 
     @Test

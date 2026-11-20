@@ -14,8 +14,10 @@ import app.shkriuss.core.notify.Notifications
 import app.shkriuss.core.notify.Notify
 import app.shkriuss.core.notify.NotifyChannel
 import app.shkriuss.core.notify.NotifyState
+import app.shkriuss.core.notify.OnScreen
 import app.shkriuss.core.notify.ShkNotification
 import app.shkriuss.core.notify.ShkNotificationButton
+import app.shkriuss.core.notify.ShownReview
 import app.shkriuss.feature.reminders.ui.RemindersFormat
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -61,7 +63,7 @@ class RemindersAlarms(
     private val open: Intent,
     private val notify: () -> Notify,
     private val work: CoroutineContext = Dispatchers.IO,
-) : AlarmSource, AlarmHandler, ButtonHandler {
+) : AlarmSource, AlarmHandler, ButtonHandler, ShownReview {
     // As the AlarmSource.
 
     /**
@@ -243,6 +245,21 @@ class RemindersAlarms(
             }
         }
         notify().sync()
+    }
+
+    // As the ShownReview.
+
+    /**
+     * Removes a notification whose reminder is deleted or not stored. A
+     * delete takes the notification away (spec, "The notification"), but
+     * Reminders may stop between the delete and the removal. Then the
+     * next start takes the title out of the notification shade. The
+     * check takes its turn on [turns], as a press does.
+     */
+    override fun review(onScreen: List<OnScreen>, notifications: Notifications, timeChanged: Boolean) = runBlocking {
+        turns.withLock {
+            onScreen.filter { repository.find(it.key) == null }.forEach { notifications.cancel(it.key) }
+        }
     }
 
     // For the screens.

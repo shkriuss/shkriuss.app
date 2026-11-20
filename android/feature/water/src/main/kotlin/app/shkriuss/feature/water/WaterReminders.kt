@@ -14,8 +14,10 @@ import app.shkriuss.core.notify.Notifications
 import app.shkriuss.core.notify.Notify
 import app.shkriuss.core.notify.NotifyChannel
 import app.shkriuss.core.notify.NotifyState
+import app.shkriuss.core.notify.OnScreen
 import app.shkriuss.core.notify.ShkNotification
 import app.shkriuss.core.notify.ShkNotificationButton
+import app.shkriuss.core.notify.ShownReview
 import app.shkriuss.feature.water.ui.WaterFormat
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -55,7 +57,7 @@ class WaterReminders(
     private val open: Intent,
     private val notify: () -> Notify,
     private val work: CoroutineContext = Dispatchers.IO,
-) : AlarmSource, AlarmHandler, ButtonHandler {
+) : AlarmSource, AlarmHandler, ButtonHandler, ShownReview {
     private val lock = Mutex()
 
     /** What the book holds now, for the reminder line. It changes when a reminder is shown, and after Later. */
@@ -110,22 +112,35 @@ class WaterReminders(
      * it again. Then, when it shows: last reminder shown at T, the
      * reminder showing now is T, no snooze. Doing it twice gives the same
      * result: the second time, the rule no longer gives T.
+     *
+     * A T that is still to come by this reading of the clock shows nothing
+     * and writes nothing, as in Reminders: the clock was set back after
+     * `core/notify` found T due, and it sets the alarm again for T. If the
+     * handler fails, `core/notify` puts its notice in the reminder's place,
+     * so T is stored as the reminder showing: a press on an older reminder
+     * is then not current, and leaves the notice.
      */
     override fun onAlarm(alarm: Alarm, notifications: Notifications) {
         if (alarm.id != ALARM) return
         runBlocking {
             lock.withLock {
+                if (alarm.atMillis > time.nowMillis()) return@withLock
                 // The rule sees the book as it was when the alarm came: this alarm still pending.
                 val before = entriesNow()
                 book.update { it.copy(lastAlarm = alarm.atMillis) }
-                val now = time.now()
-                val today = now.toLocalDate()
-                val settings = repository.settingsNow()
-                val day = repository.factsOf(today)
-                val due = NextReminder.after(now, settings, factsOf(today, day, before))
-                if (due == null || time.millisOf(due) != alarm.atMillis) return@withLock
-                book.update { it.copy(lastShown = alarm.atMillis, showing = alarm.atMillis, snooze = null) }
-                notifications.show(reminderOf(alarm.atMillis, settings, day))
+                try {
+                    val now = time.now()
+                    val today = now.toLocalDate()
+                    val settings = repository.settingsNow()
+                    val day = repository.factsOf(today)
+                    val due = NextReminder.after(now, settings, factsOf(today, day, before))
+                    if (due == null || time.millisOf(due) != alarm.atMillis) return@withLock
+                    book.update { it.copy(lastShown = alarm.atMillis, showing = alarm.atMillis, snooze = null) }
+                    notifications.show(reminderOf(alarm.atMillis, settings, day))
+                } catch (failed: Exception) {
+                    book.update { it.copy(showing = alarm.atMillis) }
+                    throw failed
+                }
             }
         }
     }
@@ -134,9 +149,10 @@ class WaterReminders(
      * The reminder of [atMillis] (spec, "What a reminder shows"): "Time for
      * some water", today's total and goal, and the buttons. Drank carries
      * the first quick amount of this moment in millilitres, so it logs what
-     * its label says. Android removes it at midnight.
+     * its label says. Android removes it at midnight. A [quiet] one is the
+     * same reminder shown again, with no new sound.
      */
-    private fun reminderOf(atMillis: Long, settings: WaterSettings, day: DayFacts): ShkNotification {
+    private fun reminderOf(atMillis: Long, settings: WaterSettings, day: DayFacts, quiet: Boolean = false): ShkNotification {
         val format = format()
         val unit = settings.unit
         val drankAmount = settings.cup1Ml
@@ -153,7 +169,38 @@ class WaterReminders(
                 ShkNotificationButton(context.getString(R.string.water_reminder_later), LATER),
             ),
             endsAtMillis = time.nextMidnightMillis(),
+            quiet = quiet,
         )
+    }
+
+    // As the ShownReview.
+
+    /**
+     * Looks at Water's reminder on screen, at every start and after a
+     * change of the clock or the time zone (spec, "What a reminder shows",
+     * point 6). One of another day goes, and so does one that no reminder
+     * showing names: Water stopped between taking it and removing it.
+     * After a change of the time, one of today is shown again, quietly,
+     * with the numbers of now, so that it ends at the new midnight. The
+     * notice of a failed reminder, which has no end, stays as it is.
+     */
+    override fun review(onScreen: List<OnScreen>, notifications: Notifications, timeChanged: Boolean) {
+        val shown = onScreen.firstOrNull { it.key == KEY } ?: return
+        runBlocking {
+            lock.withLock {
+                val showing = book.entries.value.showing
+                val today = time.today()
+                when {
+                    showing == null || time.local(shown.atMillis).toLocalDate() != today -> {
+                        if (showing == shown.atMillis) book.update { it.copy(showing = null) }
+                        notifications.cancel(KEY)
+                    }
+                    timeChanged && showing == shown.atMillis && shown.endsAtMillis != null &&
+                        shown.endsAtMillis != time.nextMidnightMillis() ->
+                        notifications.show(reminderOf(shown.atMillis, repository.settingsNow(), repository.factsOf(today), quiet = true))
+                }
+            }
+        }
     }
 
     // As the ButtonHandler.

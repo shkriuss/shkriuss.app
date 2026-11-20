@@ -72,8 +72,9 @@ class TestReminders(
         hidesText = { (app as SecurityHost).appLock.hidesNotificationText() },
         worker = Executor { it.run() },
         buttons = services.alarms,
-        // Hiding the text of notifications does not wait between its posts here.
-        pause = {},
+        review = services.alarms,
+        // The spaced steps of hiding the text of notifications run at once here.
+        later = { _, step -> step() },
     )
 
     init {

@@ -77,8 +77,9 @@ internal class AlarmsSetup(var zone: ZoneId = TBILISI) {
             hidesText = { hidesText },
             worker = Executor { it.run() },
             buttons = built.alarms,
-            // Hiding the text of notifications does not wait between its posts here.
-            pause = {},
+            review = built.alarms,
+            // The spaced steps of hiding the text of notifications run at once here.
+            later = { _, step -> step() },
         )
         app.notify.start()
     }
