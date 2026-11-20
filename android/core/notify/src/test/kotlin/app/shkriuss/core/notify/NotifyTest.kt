@@ -13,7 +13,11 @@ import android.os.Looper
 import android.provider.Settings
 import app.shkriuss.core.testing.TestClock
 import java.time.LocalTime
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -73,11 +77,30 @@ class NotifyTest {
     /** What the app lock answers about the text of notifications: hide it, show it, or fail. */
     private var hidesText: () -> Boolean = { false }
 
-    /** Every pause of the worker, in milliseconds, in order. */
+    /** How long each step of hiding the text waited for, in milliseconds, in order. */
     private val pauses = mutableListOf<Long>()
 
-    /** What happens during a pause, besides being counted. Nothing waits. */
+    /** What happens while a step waits, besides being counted. Nothing waits for real. */
     private var duringPause: (Long) -> Unit = {}
+
+    /** True to keep the steps in [heldSteps] instead of running them, as the timer of core/notify does. */
+    private var holdSteps = false
+
+    /** The steps that wait, in order, while [holdSteps] is true. */
+    private val heldSteps = mutableListOf<() -> Unit>()
+
+    /** What the tests' Notify does for a step that comes later: it counts the wait, and runs the step at once or holds it. */
+    private val testLater: (Long, () -> Unit) -> Unit = { millis, step ->
+        pauses += millis
+        duringPause(millis)
+        if (holdSteps) heldSteps += step else step()
+    }
+
+    /** What the app reviews on screen, and whether the time changed, for each call of its review. */
+    private val reviews = mutableListOf<Pair<List<OnScreen>, Boolean>>()
+
+    /** What the app does with its notifications on screen when asked. */
+    private var onReview: (List<OnScreen>, Notifications) -> Unit = { _, _ -> }
 
     /** What the app class builds when the app starts. The worker runs each piece at once, so a test needs no waiting. */
     private fun newNotify() = Notify(
@@ -88,10 +111,11 @@ class NotifyTest {
         clock,
         hidesText = { hidesText() },
         worker = Executor { it.run() },
-        pause = { millis ->
-            pauses += millis
-            duringPause(millis)
+        review = { onScreen, notifications, timeChanged ->
+            reviews += onScreen to timeChanged
+            onReview(onScreen, notifications)
         },
+        later = testLater,
     )
 
     private fun waiting() = alarmManager.waiting()
@@ -529,6 +553,138 @@ class NotifyTest {
     }
 
     @Test
+    fun hidingTheTextDoesNotHoldTheWorkerBetweenItsPosts() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+        holdSteps = true
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        // One is posted again, and the next waits for the timer: the worker is free for alarms and presses meanwhile.
+        val hidden = listOf("one", "two").filter { shownBy.getNotification(it, 0).extras.getBoolean(Notifications.EXTRA_HIDDEN, false) }
+        assertEquals(1, hidden.size)
+        assertEquals(listOf(250L), pauses)
+        assertEquals(1, heldSteps.size)
+
+        while (heldSteps.isNotEmpty()) heldSteps.removeAt(0)()
+        assertEquals(listOf(250L, 1_000L), pauses)
+        listOf("one", "two").forEach { assertHidden(shownBy.getNotification(it, 0), context.getString(android.R.string.ok)) }
+    }
+
+    @Test
+    fun aBroadcastHandledWhileTheTextIsBeingHiddenEndsOnlyAfterTheLastStep() {
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+        holdSteps = true
+        hidesText = { true }
+        context.notify.hideShownText()
+        var ended = 0
+
+        // Android started the app for these. Each ends its broadcast with its answer.
+        context.notify.alarmFired(AlarmId("plants")) { ended++ }
+        context.notify.systemEvent { ended++ }
+        context.notify.buttonPressed(ButtonPress("one", "drank", start, 250)) { ended++ }
+
+        assertEquals("the app keeps running while text is left in the shade", 0, ended)
+        heldSteps.removeAt(0)()
+        assertEquals("the check a second later is still to come", 0, ended)
+        heldSteps.removeAt(0)()
+        assertEquals(3, ended)
+
+        context.notify.alarmFired(AlarmId("plants")) { ended++ }
+        assertEquals("with nothing to hide, a broadcast ends at once", 4, ended)
+    }
+
+    @Test
+    fun theTimerOfNotifyHandsEachStepOfHidingBackToTheWorker() {
+        val worker = Executors.newSingleThreadExecutor()
+        try {
+            // As the apps build it: the real timer of core/notify, and a worker thread of its own.
+            val notify = Notify(context, listOf(reminders, summaries), app, handler, clock, hidesText = { hidesText() }, worker = worker)
+            notify.start()
+            worker.submit {}.get()
+            notify.notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+            notify.notifications.show(ShkNotification("two", reminders, "Two plants", null, android.R.drawable.ic_dialog_info, open, start))
+            hidesText = { true }
+            val busy = CountDownLatch(1)
+
+            notify.hideShownText()
+            // An alarm or a press that takes long holds the worker, past the time of the next step.
+            worker.execute { busy.await() }
+            Thread.sleep(PAST_THE_NEXT_STEP_MILLIS)
+
+            assertEquals("the next post waits for the worker", 1, hidden("one", "two"))
+            busy.countDown()
+            assertTrue("then it comes, on the worker", hiddenOnTheWorker(worker, expected = 2))
+        } finally {
+            worker.shutdownNow()
+        }
+    }
+
+    /** How many of [keys] show the hidden form now. */
+    private fun hidden(vararg keys: String): Int =
+        keys.count { shownBy.getNotification(it, 0).extras.getBoolean(Notifications.EXTRA_HIDDEN, false) }
+
+    /** True once [expected] notifications show the hidden form, as read on [worker], within two seconds. */
+    private fun hiddenOnTheWorker(worker: ExecutorService, expected: Int): Boolean {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        while (System.nanoTime() < deadline) {
+            if (worker.submit<Int> { hidden("one", "two") }.get() == expected) return true
+            Thread.sleep(20)
+        }
+        return false
+    }
+
+    @Test
+    fun theAppReviewsWhatIsOnScreenAtStartAndAfterTheTimeChanged() {
+        context.notify.start()
+        context.notify.notifications.show(
+            ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start, endsAtMillis = start + HOUR),
+        )
+        reviews.clear()
+
+        context.notify = newNotify()
+        context.notify.start()
+        androidSends("android.intent.action.TIMEZONE_CHANGED")
+
+        val seen = listOf(OnScreen("one", start, start + HOUR))
+        assertEquals(listOf(seen to false, seen to true), reviews)
+    }
+
+    @Test
+    fun theReviewCanRemoveANotificationAndOneThatFailsLeavesTheAlarms() {
+        context.notify.start()
+        context.notify.notifications.show(ShkNotification("gone", reminders, "Old", null, android.R.drawable.ic_dialog_info, open, start))
+        onReview = { onScreen, notifications -> onScreen.forEach { notifications.cancel(it.key) } }
+
+        androidSends("android.intent.action.TIME_SET")
+        assertNull(shownBy.getNotification("gone", 0))
+
+        // A new reminder, and at the next start a review that fails: the alarms are registered all the same.
+        app.reminders += TestReminder.Once(a, start + HOUR)
+        onReview = { _, _ -> error("the records cannot be read") }
+        context.notify = newNotify()
+        context.notify.start()
+        assertEquals(listOf(start + HOUR), waiting().values.toList())
+    }
+
+    @Test
+    fun aQuietNotificationMakesNoNewSound() {
+        val notifications = context.notify.notifications
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start))
+        assertTrue("an ordinary one alerts", shownBy.getNotification("one", 0).flags and Notification.FLAG_ONLY_ALERT_ONCE == 0)
+
+        notifications.show(ShkNotification("one", reminders, "Water the plants", null, android.R.drawable.ic_dialog_info, open, start, quiet = true))
+
+        assertTrue(shownBy.getNotification("one", 0).flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
+    }
+
+    @Test
     fun aNotificationTheAppRemovesDuringAPauseDoesNotComeBack() {
         context.notify.start()
         val notifications = context.notify.notifications
@@ -649,6 +805,7 @@ class NotifyTest {
         hidesText = { hidesText() },
         worker = Executor { it.run() },
         buttons = { press, notifications -> onPress(press, notifications) },
+        later = testLater,
     )
 
     private val drank = ShkNotificationButton("Drank 250 ml", "drank", 250)
@@ -690,7 +847,7 @@ class NotifyTest {
         val sent = first.savedIntent
         assertEquals(ComponentName(context, ButtonReceiver::class.java), sent.component)
         assertEquals(ButtonReceiver.ACTION_BUTTON, sent.action)
-        assertEquals("next/drank/${start + HOUR}", sent.identifier)
+        assertEquals("next/drank/${start + HOUR}/250", sent.identifier)
         val extras = checkNotNull(sent.extras)
         assertEquals(
             setOf(ButtonReceiver.EXTRA_KEY, ButtonReceiver.EXTRA_ACTION, ButtonReceiver.EXTRA_AT, ButtonReceiver.EXTRA_VALUE),
@@ -702,7 +859,7 @@ class NotifyTest {
         assertEquals(250L, extras.getLong(ButtonReceiver.EXTRA_VALUE))
         // The two buttons are two presses.
         assertNotEquals(actions[0].actionIntent, actions[1].actionIntent)
-        assertEquals("next/later/${start + HOUR}", shadowOf(actions[1].actionIntent).savedIntent.identifier)
+        assertEquals("next/later/${start + HOUR}/0", shadowOf(actions[1].actionIntent).savedIntent.identifier)
     }
 
     @Test
@@ -751,6 +908,40 @@ class NotifyTest {
         shown.send()
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals("the button that shows has its own", listOf(ButtonPress("next", "drank", start + 2 * HOUR, 300)), presses)
+    }
+
+    @Test
+    fun aButtonKeptFromBeforeKeepsItsValueWhenTheSameNotificationIsShownAgainWithAnother() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(withButtons())
+        val kept = actionsOf(shownBy.getNotification("next", 0))[0].actionIntent
+
+        // The same notification, with the same key and time, shown again with another amount.
+        notifications.show(withButtons(listOf(ShkNotificationButton("Drank 300 ml", "drank", 300), later)))
+        kept.send()
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals("it does what its label said", listOf(ButtonPress("next", "drank", start + HOUR, 250)), presses)
+    }
+
+    @Test
+    fun onScreenGivesTheValueOfEachButtonAndNoneInTheHiddenForm() {
+        context.notify = newNotifyWithButtons()
+        context.notify.start()
+        val notifications = context.notify.notifications
+        notifications.show(withButtons(endsAt = start + 2 * HOUR))
+
+        assertEquals(
+            listOf(OnScreen("next", start + HOUR, start + 2 * HOUR, mapOf("drank" to 250L, "later" to 0L))),
+            notifications.onScreen(listOf(reminders, summaries)),
+        )
+
+        hidesText = { true }
+        context.notify.hideShownText()
+
+        assertEquals(listOf(OnScreen("next", start + HOUR, start + 2 * HOUR, hidden = true)), notifications.onScreen(listOf(reminders, summaries)))
     }
 
     @Test
@@ -1017,3 +1208,6 @@ class NotifyTest {
         }
     }
 }
+
+/** Longer than the 250 ms between two posts of the hidden form, so the next step is due by then. */
+private const val PAST_THE_NEXT_STEP_MILLIS = 600L

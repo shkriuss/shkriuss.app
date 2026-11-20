@@ -7,7 +7,9 @@ import app.shkriuss.core.notify.AlarmId
 import app.shkriuss.core.notify.ButtonPress
 import app.shkriuss.core.notify.ChannelImportance
 import app.shkriuss.core.notify.R as NotifyR
+import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.notify.ShkNotification
+import app.shkriuss.core.testing.TestIdSource
 import java.time.LocalDate
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -402,6 +404,31 @@ class RemindersAlarmsTest {
         setup.device.fireTheAlarm()
 
         assertEquals("Missed: 09:00", shownOf(pills).text)
+    }
+
+    @Test
+    fun aNotificationOfAReminderDeletedJustBeforeAStopGoesAtTheNextStart() {
+        val bank = saveCallTheBank()
+        setup.fireAt(monday(14))
+        shownOf(bank)
+
+        // The delete is stored, and Reminders stops before it removes the notification.
+        val writer = RecordWriter(setup.database, setup.database.reminders(), setup.clock, TestIdSource())
+        runBlocking { writer.markDeleted(bank.id) }
+        shownOf(bank)
+        setup.startTheApp()
+
+        assertNull("the title left the notification shade", setup.shown(bank))
+    }
+
+    @Test
+    fun theNotificationOfALiveReminderStaysAtTheNextStart() {
+        val bank = saveCallTheBank()
+        setup.fireAt(monday(14))
+
+        setup.startTheApp()
+
+        assertEquals("Call the bank", shownOf(bank).title)
     }
 
     @Test

@@ -286,35 +286,32 @@ Limits of reminders:
 6. With the app lock off, the lock screen shows a reminder's text if
    your phone's setting allows it.
 7. When the clocks go back at the end of summer time, one hour of the
-   night comes twice. A reminder or a snooze in that hour can come too
-   early or too late, that one night.
-8. If the phone's clock or time zone moves past midnight while a
-   reminder shows, the reminder can keep yesterday's total until the
-   old midnight has passed. A press on it then only takes it away:
-   **Drank** logs no drink and **Later** sets no snooze.
+   night comes twice. A drink you log in the second of the two counts
+   as if you logged it in the first, so the next reminder can come up
+   to an hour early, that one night.
 
 Limits of the app lock:
 
-9. If you choose a time in **Lock the app** and turn the screen off
+8. If you choose a time in **Lock the app** and turn the screen off
    from another app, Water may stay unlocked until that time has passed
    ([The app lock](app-lock.md#when-the-app-locks)).
-10. The app lock hides your drinks. It does not encrypt them. Android's
-    own encryption protects them, with your screen lock.
+9. The app lock hides your drinks. It does not encrypt them. Android's
+   own encryption protects them, with your screen lock.
 
 Limits of backups:
 
-11. A restore keeps the newest edit of each drink, goal and setting. It
+10. A restore keeps the newest edit of each drink, goal and setting. It
     cannot bring back exactly how Water was on the day of the backup.
-12. Some storage apps do not let Water read a file again right away,
+11. Some storage apps do not let Water read a file again right away,
     or hand back an older copy. Water then says "Backup written, not
     checked". Check such a file with **Restore a backup**, and tap
     **Cancel** at the question.
 
 Other:
 
-13. Never type your real recovery words into a preview build of a pull
+12. Never type your real recovery words into a preview build of a pull
     request. Use test words.
-14. No accessibility checks run on an emulator for Water. A TalkBack
+13. No accessibility checks run on an emulator for Water. A TalkBack
     pass on a phone stands in for them.
 
 Not in version 1.0.1:

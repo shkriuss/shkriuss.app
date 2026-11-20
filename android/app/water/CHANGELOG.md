@@ -73,6 +73,33 @@ Fixed:
 - **Amounts in your phone's digits.** An amount typed in other digits,
   such as Arabic-Indic digits, is taken. Before, Water said it was
   outside the limits.
+- **The night the clocks change.** Reminders count real minutes from
+  the start of the day. In the hour that comes twice when summer time
+  ends, an interval and the 15 minutes of **Later** are real time, so a
+  reminder turned on or snoozed in that hour no longer comes too early.
+  A drink you log in that hour still counts as the first of the two
+  hours ([Known problems](../../../docs/user/water.md#known-problems)).
+  On the day the clocks go forward, reminder hours shorter
+  than one interval of real time have no reminder. On every other day
+  nothing changes.
+- **A clock set back at the moment of a reminder.** The reminder comes at
+  its time. Before, it came a few minutes early, and not at its time.
+- **A reminder that could not be shown.** If Water cannot read its data
+  for a reminder, a late press on the reminder before it no longer
+  removes the notice "A reminder could not be shown".
+- **A new day while a reminder shows.** If the clock or the time zone
+  moves past midnight, the reminder with yesterday's total goes. If it
+  is still today, it is shown again, with no new sound, with today's
+  numbers and the same amount on **Drank**, and it ends at midnight,
+  also when the clock was only moved within the day. A button a watch
+  kept from before logs what its label said. A reminder left on screen
+  when Water stopped before it showed the next one goes when Water
+  starts again. The notice "A reminder could not be shown" stays until
+  the next reminder.
+- **Hiding the text of reminders.** Reminders that are due meanwhile
+  are not held up.
+- **Restore a backup.** The temporary copy of the drinks is emptied
+  before it is deleted, so none is left to read if the delete fails.
 
 ## 1.0.1 (2026-11-17)
 

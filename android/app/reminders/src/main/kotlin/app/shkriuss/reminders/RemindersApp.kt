@@ -53,6 +53,7 @@ class RemindersApp : Application(), SecurityHost, RemindersHost, NotifyHost {
             Clock.System,
             hidesText = appLock::hidesNotificationText,
             buttons = reminders.alarms,
+            review = reminders.alarms,
         )
     }
 

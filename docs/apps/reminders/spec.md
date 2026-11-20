@@ -308,8 +308,10 @@ When the alarm for time T reaches the handler:
 As [Water does](../water/spec.md#how-water-uses-corenotify), except:
 
 1. One `Notify` with the channel `reminders`. One class of
-   `feature/reminders` is its `AlarmSource`, `AlarmHandler` and
-   `ButtonHandler`.
+   `feature/reminders` is its `AlarmSource`, `AlarmHandler`,
+   `ButtonHandler` and `ShownReview`. The review removes, at every start,
+   a notification whose reminder is deleted: Reminders may stop between
+   the delete and the removal of the notification.
 2. The `AlarmSource` names one alarm per upcoming reminder, at the time
    of [the rule](#the-rule), and writes the mark of a reminder it sees
    first.

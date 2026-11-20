@@ -45,6 +45,7 @@ class WaterApp : Application(), SecurityHost, WaterHost, NotifyHost {
             Clock.System,
             hidesText = appLock::hidesNotificationText,
             buttons = water.reminders,
+            review = water.reminders,
         )
     }
 

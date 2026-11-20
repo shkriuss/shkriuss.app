@@ -94,17 +94,20 @@ class ButtonReceiver : BroadcastReceiver() {
 
         /**
          * The broadcast of [press]. Two buttons differ in the identifier,
-         * so Android keeps one pending intent for each key, action and
-         * time. The time is part of it, so that the next notification
+         * so Android keeps one pending intent for each key, action, time
+         * and value. The time is part of it, so that the next notification
          * with the same key gets pending intents of its own. Otherwise
          * Android would give the buttons of the old notification the time
          * and the value of the new one, and an old button that is pressed
-         * late would act as the new one.
+         * late would act as the new one. The value is part of it, so that
+         * a notification shown again with another value never changes
+         * what a button kept from before does: it always does what its
+         * label said.
          */
         fun intentFor(context: Context, press: ButtonPress): Intent =
             Intent(context, ButtonReceiver::class.java)
                 .setAction(ACTION_BUTTON)
-                .setIdentifier("${press.key}/${press.action}/${press.atMillis}")
+                .setIdentifier("${press.key}/${press.action}/${press.atMillis}/${press.value}")
                 .putExtra(EXTRA_KEY, press.key)
                 .putExtra(EXTRA_ACTION, press.action)
                 .putExtra(EXTRA_AT, press.atMillis)

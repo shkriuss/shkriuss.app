@@ -1,6 +1,9 @@
 package app.shkriuss.feature.water
 
-import java.time.LocalDateTime
+import java.time.Duration
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -9,21 +12,26 @@ import org.junit.Test
 /**
  * The rule of the next reminder, one test for each row of the table in
  * docs/apps/water/spec.md, "When the next reminder comes", with its
- * example: reminder hours from 08:00 until 22:00, every hour.
+ * example: reminder hours from 08:00 until 22:00, every hour. The times
+ * are in UTC, where a minute of real time is the clock's minute, except
+ * in the tests of the days the clocks change, in Berlin.
  */
 class NextReminderTest {
     private val hourly = WaterSettings(remindersOn = true, intervalMinutes = 60, fromMinute = 8 * 60, untilMinute = 22 * 60)
-    private val tomorrowAtNine: LocalDateTime = THE_DAY.plusDays(1).atTime(9, 0)
+    private val tomorrowAtNine: ZonedDateTime = THE_DAY.plusDays(1).atTime(9, 0).atZone(UTC)
+
+    /** [hour]:[minute] on the day of the tests, in UTC. */
+    private fun at(hour: Int, minute: Int, second: Int = 0): ZonedDateTime = THE_DAY.atTime(hour, minute, second).atZone(UTC)
 
     private fun facts(
         latestDrink: Int? = null,
         goalMet: Boolean = false,
-        lastShown: LocalDateTime? = null,
-        lastLater: LocalDateTime? = null,
-        snooze: LocalDateTime? = null,
+        lastShown: ZonedDateTime? = null,
+        lastLater: ZonedDateTime? = null,
+        snooze: ZonedDateTime? = null,
     ) = ReminderFacts(THE_DAY, latestDrink, goalMet, lastShown, lastLater, snooze)
 
-    private fun next(now: LocalDateTime, facts: ReminderFacts = facts(), settings: WaterSettings = hourly) =
+    private fun next(now: ZonedDateTime, facts: ReminderFacts = facts(), settings: WaterSettings = hourly) =
         NextReminder.after(now, settings, facts)
 
     private fun minute(hour: Int, minute: Int) = hour * 60 + minute
@@ -148,7 +156,7 @@ class NextReminderTest {
     fun atMidnightTheCountStartsAtFromOfTheNewDay() {
         val newDay = THE_DAY.plusDays(1)
         val facts = ReminderFacts(newDay, latestDrinkMinute = null, goalMet = false, lastShown = at(21, 0), lastLater = at(21, 50))
-        assertEquals(newDay.atTime(9, 0), NextReminder.after(newDay.atTime(0, 1), hourly, facts))
+        assertEquals(newDay.atTime(9, 0).atZone(UTC), NextReminder.after(newDay.atTime(0, 1).atZone(UTC), hourly, facts))
     }
 
     @Test
@@ -166,7 +174,7 @@ class NextReminderTest {
     @Test
     fun theFactsMustBeAboutTheDayOfNow() {
         assertThrows(IllegalArgumentException::class.java) {
-            NextReminder.after(THE_DAY.plusDays(1).atTime(9, 0), hourly, facts())
+            NextReminder.after(THE_DAY.plusDays(1).atTime(9, 0).atZone(UTC), hourly, facts())
         }
     }
 
@@ -216,7 +224,7 @@ class NextReminderTest {
     @Test
     fun aPendingTimeAheadOrOnAnotherDayChangesNothing() {
         assertEquals(at(11, 20), next(at(10, 30), facts(latestDrink = minute(10, 20)).copy(pending = at(11, 20))))
-        val yesterday = THE_DAY.minusDays(1).atTime(11, 20)
+        val yesterday = THE_DAY.minusDays(1).atTime(11, 20).atZone(UTC)
         assertEquals(at(12, 20), next(at(11, 20, 30), facts(latestDrink = minute(10, 20)).copy(pending = yesterday)))
     }
 
@@ -226,5 +234,75 @@ class NextReminderTest {
         assertEquals(at(13, 0), next(at(12, 20), facts(lastShown = at(10, 0)).copy(pending = at(11, 0))))
         // Unlocked 30 seconds after the time: it still comes, half a minute late.
         assertEquals(at(11, 0), next(at(11, 0, 30), facts(lastShown = at(10, 0)).copy(pending = at(11, 0))))
+    }
+
+    // The days the clocks change, in Berlin: the rule counts real minutes from the start of the day.
+
+    private val berlin = ZoneId.of("Europe/Berlin")
+
+    /** Sunday 31 October 2027: at 03:00 summer time the clocks go back to 02:00, and the hour from 02:00 comes twice. */
+    private val autumn = LocalDate.of(2027, 10, 31)
+
+    /** Sunday 28 March 2027: at 02:00 the clocks go forward to 03:00, and the hour from 02:00 does not exist. */
+    private val spring = LocalDate.of(2027, 3, 28)
+
+    /** [hour]:[minute] of the autumn day in Berlin: the first of the two in the hour that comes twice, or the [second]. */
+    private fun autumnAt(hour: Int, minute: Int, second: Boolean = false): ZonedDateTime =
+        autumn.atTime(hour, minute).atZone(berlin).let { if (second) it.withLaterOffsetAtOverlap() else it.withEarlierOffsetAtOverlap() }
+
+    /** Reminders every 30 minutes from 02:00 until 05:00, at night. */
+    private val night = WaterSettings(remindersOn = true, intervalMinutes = 30, fromMinute = 2 * 60, untilMinute = 5 * 60)
+
+    @Test
+    fun inTheHourThatComesTwiceTheNextReminderIsNeverInThePast() {
+        // Turned on at the second 02:05. "From" is the first 02:00, so 02:30 has come once already.
+        val turnedOn = autumnAt(2, 5, second = true)
+
+        val next = next(turnedOn, ReminderFacts(autumn, latestDrinkMinute = null, goalMet = false), night)
+
+        assertEquals(autumnAt(2, 30, second = true), next)
+        assertEquals(Duration.ofMinutes(25), Duration.between(turnedOn, next))
+    }
+
+    @Test
+    fun inTheHourThatComesTwiceLaterWaitsFifteenRealMinutes() {
+        val pressed = autumnAt(2, 55)
+        val snooze = NextReminder.snoozeAfter(pressed, night)
+        assertEquals(autumnAt(2, 10, second = true), snooze)
+        assertEquals(Duration.ofMinutes(15), Duration.between(pressed, snooze))
+
+        val facts = ReminderFacts(autumn, latestDrinkMinute = null, goalMet = false, lastShown = autumnAt(2, 30), lastLater = pressed, snooze = snooze)
+        assertEquals(snooze, next(pressed, facts, night))
+        // The snoozed reminder is shown and not answered: one interval of real time after it.
+        assertEquals(autumnAt(2, 40, second = true), next(snooze!!, facts.copy(lastShown = snooze, snooze = null), night))
+    }
+
+    @Test
+    fun onTheDayTheClocksGoForwardAnIntervalIsRealTime() {
+        // From 01:00 every 2 hours. The hour from 02:00 does not exist, so 2 real hours after 01:00 is 04:00.
+        val everyTwoHours = WaterSettings(remindersOn = true, intervalMinutes = 120, fromMinute = 60, untilMinute = 22 * 60)
+        val facts = ReminderFacts(spring, latestDrinkMinute = null, goalMet = false)
+
+        assertEquals(spring.atTime(4, 0).atZone(berlin), next(spring.atTime(0, 30).atZone(berlin), facts, everyTwoHours))
+    }
+
+    @Test
+    fun aDayTheClocksGoForwardWhoseHoursHoldNoIntervalHasNoReminder() {
+        // From 01:00 until 03:00, every 2 hours. On the spring day only 1 real hour lies between them.
+        val shortNight = WaterSettings(remindersOn = true, intervalMinutes = 120, fromMinute = 60, untilMinute = 3 * 60)
+        val dayBefore = spring.minusDays(1)
+        val facts = ReminderFacts(dayBefore, latestDrinkMinute = null, goalMet = false)
+
+        val next = next(dayBefore.atTime(5, 0).atZone(berlin), facts, shortNight)
+
+        assertEquals(spring.plusDays(1).atTime(3, 0).atZone(berlin), next)
+    }
+
+    @Test
+    fun onTheDayTheClocksGoBackRemindersAfterTheNightKeepTheirClockTimes() {
+        // From 08:00, every hour: the change at night moves nothing in the reminder hours.
+        val facts = ReminderFacts(autumn, latestDrinkMinute = 9 * 60 + 20, goalMet = false)
+
+        assertEquals(autumnAt(10, 20), next(autumnAt(9, 30), facts, hourly))
     }
 }

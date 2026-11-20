@@ -121,8 +121,13 @@ Not released yet.
   the word to Android's text classifier.
 - When the text of notifications is hidden, Reminders posts the shown
   ones again a quarter of a second apart, and removes any that Android
-  left with its title. The text is also hidden while Android cannot say
-  whether the key file of the app lock is there.
+  left with its title. Reminders that are due meanwhile still come on
+  time. The text is also hidden while Android cannot say whether the key
+  file of the app lock is there.
+- If Reminders stops right after a reminder is deleted, before its
+  notification goes, the next start removes the notification.
+- After a restore, the temporary copy of the records is emptied before
+  it is deleted, so none is left to read if the delete fails.
 - If the screen stops just as Reminders reads your kept recovery key to
   turn the app lock on, the key is not kept, and the prompt asks again
   when you come back.

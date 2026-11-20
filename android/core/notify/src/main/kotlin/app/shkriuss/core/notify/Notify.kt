@@ -7,6 +7,7 @@ import android.provider.Settings
 import app.shkriuss.core.data.Clock
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * The app class of an app that uses `core/notify` implements this.
@@ -41,8 +42,12 @@ interface NotifyHost {
  * that reads the app's records, one piece at a time. The default is one
  * background thread. [buttons] gets the presses of the buttons on the
  * app's notifications (ADR 0034). An app without buttons leaves it out.
- * [pause] waits on [worker] between the posts of [hideShownText]. Tests
- * pass one that does not wait.
+ * [review] looks at the app's notifications on screen at every start and
+ * after a change of the time (see [ShownReview]). An app that needs no
+ * such look leaves it out. [later] runs a step on [worker] after a
+ * number of milliseconds, as the posts of [hideShownText] are spaced:
+ * one timer thread waits, so [worker] runs alarms and presses in between.
+ * Tests pass one that does not wait.
  * The design is in docs/architecture/notifications.md.
  *
  * The first of [channels] is also where `core/notify` shows that the app
@@ -58,7 +63,8 @@ class Notify(
     scheduler: AlarmScheduler = AlarmManagerScheduler(context.applicationContext),
     private val worker: Executor = Executors.newSingleThreadExecutor { Thread(it, "core-notify") },
     private val buttons: ButtonHandler? = null,
-    pause: (millis: Long) -> Unit = Thread::sleep,
+    private val review: ShownReview? = null,
+    later: (millis: Long, step: () -> Unit) -> Unit = laterOn(worker),
 ) {
     init {
         require(channels.isNotEmpty()) { "An app with notifications has at least one channel" }
@@ -68,7 +74,7 @@ class Notify(
     private val preferences = app.getSharedPreferences(STORE, Context.MODE_PRIVATE)
 
     /** Shows and removes notifications. */
-    val notifications = Notifications(app, hidesText, clock, takesPresses = buttons != null, pause = pause)
+    val notifications = Notifications(app, hidesText, clock, takesPresses = buttons != null, later = later)
 
     private val alarms = AlarmSync(source, handler, notifications, scheduler, AlarmRegistry(preferences), clock) { alarm ->
         notifications.showFailure(channels.first(), alarm)
@@ -83,7 +89,7 @@ class Notify(
      * in the hidden form if `hidesText` says so now, as [hideShownText]
      * does. The app may have stopped after the app lock was turned on and
      * before it hid them: their text must not stay in the notification
-     * shade.
+     * shade. The app's [ShownReview] then looks at what is on screen.
      *
      * It fails if the app class is no [NotifyHost]: the receivers could
      * not find this object then.
@@ -93,8 +99,19 @@ class Notify(
         notifications.createChannels(channels)
         worker.execute {
             notifications.hideShown(channels)
+            reviewShown(timeChanged = false)
             // Android may have dropped the alarms since the app last ran.
             alarms.sync(setAll = true)
+        }
+    }
+
+    /** Lets the app look at its notifications on screen. A review that fails changes nothing more. */
+    private fun reviewShown(timeChanged: Boolean) {
+        val look = review ?: return
+        try {
+            look.review(notifications.onScreen(channels), notifications, timeChanged)
+        } catch (_: Exception) {
+            // Nothing is logged in core/notify (hard rule 10).
         }
     }
 
@@ -141,19 +158,25 @@ class Notify(
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
         }.putExtra(Settings.EXTRA_APP_PACKAGE, app.packageName)
 
-    /** An alarm fired. [done] runs when the app has handled it. */
+    /**
+     * An alarm fired. [done] runs when the app has handled it, and once
+     * the text of shown notifications is hidden, if that is under way:
+     * the receiver ends its broadcast then, so that Android keeps the app
+     * running until no text the app lock hides is left in the shade.
+     */
     internal fun alarmFired(id: AlarmId, done: () -> Unit) = worker.execute {
         try {
             alarms.fired(id)
         } finally {
-            done()
+            notifications.whenHidden(done)
         }
     }
 
     /**
      * A button on a notification was pressed. [done] runs when the app
-     * has handled it. A press that fails changes nothing more: the
-     * notification stays, so the user can open the app.
+     * has handled it, and once hiding is over, as for [alarmFired]. A
+     * press that fails changes nothing more: the notification stays, so
+     * the user can open the app.
      *
      * While the app lock hides the text there are no buttons (ADR 0034,
      * point 1). A press that comes then, from a button that an app with
@@ -169,16 +192,21 @@ class Notify(
         } catch (_: Exception) {
             // Nothing is logged in core/notify (hard rule 10).
         } finally {
-            done()
+            notifications.whenHidden(done)
         }
     }
 
-    /** Android forgot the alarms, or the time moved. [done] runs when they are registered again. */
+    /**
+     * Android forgot the alarms, or the time moved. [done] runs when they
+     * are registered again and the app's [ShownReview] has looked at what
+     * is on screen, and once hiding is over, as for [alarmFired].
+     */
     internal fun systemEvent(done: () -> Unit) = worker.execute {
         try {
             alarms.sync(setAll = true)
+            reviewShown(timeChanged = true)
         } finally {
-            done()
+            notifications.whenHidden(done)
         }
     }
 
@@ -194,4 +222,13 @@ class Notify(
         private const val STORE = "app.shkriuss.core.notify"
         private const val ASKED = "permission-asked"
     }
+}
+
+/**
+ * Runs a step on [worker] after a number of milliseconds. One timer thread
+ * of its own waits; [worker] never does.
+ */
+private fun laterOn(worker: Executor): (Long, () -> Unit) -> Unit {
+    val timer = Executors.newSingleThreadScheduledExecutor { Thread(it, "core-notify-timer").apply { isDaemon = true } }
+    return { millis, step -> timer.schedule({ worker.execute(step) }, millis, TimeUnit.MILLISECONDS) }
 }

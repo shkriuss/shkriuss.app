@@ -13,6 +13,7 @@ import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
 import java.io.File
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.concurrent.Executor
 import kotlinx.coroutines.Dispatchers
 import org.robolectric.RuntimeEnvironment
@@ -31,6 +32,16 @@ class RemindersTestApp : Application(), NotifyHost {
 internal class RemindersSetup(val clock: TestClock) {
     val app = RuntimeEnvironment.getApplication() as RemindersTestApp
     val database = memoryDatabase()
+
+    /** The phone's time zone. A test moves it, as a trip does. */
+    var zone: ZoneId = UTC
+
+    /**
+     * True makes the next read of [zone] fail, once. The alarm handler
+     * reads it first after its first write, so this makes the handler
+     * fail inside, and the reads after it work again.
+     */
+    var nextZoneReadFails = false
 
     /** True while no record can be saved, as when the phone has no room. A save then fails before it writes. */
     var savingFails = false
@@ -82,16 +93,25 @@ internal class RemindersSetup(val clock: TestClock) {
             hidesText = { hidesText },
             worker = Executor { it.run() },
             buttons = built.reminders,
-            // Hiding the text of notifications does not wait between its posts here.
-            pause = {},
+            review = built.reminders,
+            // The spaced steps of hiding the text of notifications run at once here.
+            later = { _, step -> step() },
         )
         app.notify.start()
     }
 
     private fun newServices() =
-        WaterServices(app, database, clock, ids, open, notify = { app.notify }, crypto = keys.crypto, zone = { UTC }, work = Dispatchers.Unconfined)
+        WaterServices(app, database, clock, ids, open, notify = { app.notify }, crypto = keys.crypto, zone = ::readZone, work = Dispatchers.Unconfined)
 
-    /** The moment of [time] in UTC. */
+    private fun readZone(): ZoneId {
+        if (nextZoneReadFails) {
+            nextZoneReadFails = false
+            error("The time zone cannot be read")
+        }
+        return zone
+    }
+
+    /** The moment of [time] in [zone]. */
     fun millisOf(time: LocalDateTime): Long = this.time.millisOf(time)
 
     /** The times of the alarms that wait at Android. Water has one at most. */

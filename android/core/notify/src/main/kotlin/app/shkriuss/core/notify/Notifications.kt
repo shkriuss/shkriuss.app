@@ -24,7 +24,9 @@ import app.shkriuss.core.data.Clock
  * [buttons] are at most three buttons (ADR 0034). They show only while
  * the text is shown. [endsAtMillis], if set, is the moment Android
  * removes the notification by itself, such as the next midnight, so that
- * yesterday's numbers never show as today's.
+ * yesterday's numbers never show as today's. A [quiet] one makes no new
+ * sound or vibration when it replaces one with the same key: it is the
+ * same notification shown again, for example with a new end.
  */
 class ShkNotification(
     val key: String,
@@ -36,6 +38,23 @@ class ShkNotification(
     val atMillis: Long,
     val buttons: List<ShkNotificationButton> = emptyList(),
     val endsAtMillis: Long? = null,
+    val quiet: Boolean = false,
+)
+
+/**
+ * One notification of the app that is on screen: its [key], its time
+ * [atMillis], its end [endsAtMillis] if it has one, and the value each of
+ * its buttons carries, by the button's action, in [buttonValues]. It is
+ * [hidden] while it shows the hidden form, which has no buttons, so
+ * none. A hidden one stays hidden: the app does not show it again with
+ * its text. Never its text: `core/notify` does not read it back.
+ */
+data class OnScreen(
+    val key: String,
+    val atMillis: Long,
+    val endsAtMillis: Long?,
+    val buttonValues: Map<String, Long> = emptyMap(),
+    val hidden: Boolean = false,
 )
 
 /**
@@ -51,15 +70,16 @@ class ShkNotification(
  * no buttons (docs/architecture/notifications.md, ADR 0034). If
  * [hidesText] fails, the text is hidden too. [takesPresses] is true when
  * the app gave `Notify` a [ButtonHandler]: only then may a notification
- * have buttons. [pause] waits for a number of milliseconds, between the
- * posts of [hideShown].
+ * have buttons. [later] runs a step of [hideShown] after a number of
+ * milliseconds, on the worker of `core/notify`, which does not wait in
+ * between.
  */
 class Notifications internal constructor(
     private val context: Context,
     private val hidesText: () -> Boolean,
     private val clock: Clock,
     private val takesPresses: Boolean = false,
-    private val pause: (millis: Long) -> Unit = Thread::sleep,
+    private val later: (millis: Long, step: () -> Unit) -> Unit,
 ) {
     private val manager = context.getSystemService(NotificationManager::class.java)
 
@@ -105,8 +125,18 @@ class Notifications internal constructor(
             .setContentTitle(if (hidden) context.getString(notification.channel.name) else notification.title)
             .setContentText(if (hidden) context.getString(R.string.notify_text_hidden) else notification.text)
         if (hidden) builder.addExtras(Bundle().apply { putBoolean(EXTRA_HIDDEN, true) })
+        if (notification.quiet) builder.setOnlyAlertOnce(true)
         // No buttons while the text is hidden: a label such as "Drank 250 ml" can show what the app lock hides.
         if (!hidden) notification.buttons.forEach { builder.addAction(action(notification, it)) }
+        if (!hidden && notification.buttons.isNotEmpty()) {
+            // Kept for onScreen, so that the app can show it again with the same buttons.
+            builder.addExtras(
+                Bundle().apply {
+                    putStringArray(EXTRA_BUTTON_ACTIONS, notification.buttons.map { it.action }.toTypedArray())
+                    putLongArray(EXTRA_BUTTON_VALUES, notification.buttons.map { it.value }.toLongArray())
+                },
+            )
+        }
         manager.notify(notification.key, NOTIFICATION_ID, builder.build())
     }
 
@@ -119,48 +149,135 @@ class Notifications internal constructor(
      *
      * Android drops an update of a notification that comes when an app
      * posts more than about five a second, and the old text stays. So the
-     * posts come [PACE_MILLIS] apart. Each is read again just before it is
-     * posted: during a pause the app may have removed it, for example for
-     * a deleted reminder, and it must not come back. Then, after
-     * [SETTLE_MILLIS], any of them that still shows the old form is
-     * removed: the text must leave the notification shade, also at the
-     * cost of the notification.
+     * posts come [PACE_MILLIS] apart, each as a step of its own through
+     * [later]: alarms and presses run on the worker in between. Each is
+     * read again just before it is posted: meanwhile the app may have
+     * removed it, for example for a deleted reminder, and it must not come
+     * back. Then, after [SETTLE_MILLIS], any of them that still shows the
+     * old form is removed: the text must leave the notification shade,
+     * also at the cost of the notification. A step finds nothing more to
+     * do once the text is no longer to be hidden.
      */
     internal fun hideShown(channels: List<NotifyChannel>) {
-        if (!mustHide()) return
-        var posted = 0
-        val keys = manager.activeNotifications.map { it.tag to it.id }
-        keys.forEach { (tag, id) ->
-            if (posted > 0) pause(PACE_MILLIS)
-            val shown = manager.activeNotifications.firstOrNull { it.tag == tag && it.id == id } ?: return@forEach
-            val old = shown.notification
-            val channel = channels.firstOrNull { it.id == old.channelId } ?: return@forEach
-            val endsAt = old.extras.getLong(EXTRA_ENDS_AT, 0L).takeIf { it > 0L }
-            if (endsAt != null && endsAt <= clock.nowMillis()) {
-                manager.cancel(shown.tag, shown.id)
-                return@forEach
-            }
-            // Already hidden: nothing to post, and nothing to wait for. A start while the text is hidden waits for none.
-            if (old.extras.getBoolean(EXTRA_HIDDEN, false)) return@forEach
-            // A new builder carries no button of the old notification.
-            val built = builder(channel.id, old.`when`, old.contentIntent, endsAt)
-                .setSmallIcon(old.smallIcon)
-                .setContentTitle(context.getString(channel.name))
-                .setContentText(context.getString(R.string.notify_text_hidden))
-                .setOnlyAlertOnce(true)
-                .addExtras(Bundle().apply { putBoolean(EXTRA_HIDDEN, true) })
-                .build()
-            manager.notify(shown.tag, shown.id, built)
-            posted++
+        hidingRuns++
+        step { hideFrom(manager.activeNotifications.map { it.tag to it.id }, channels, anyPosted = false) }
+    }
+
+    /**
+     * Runs [whenDone] once no run of [hideShown] has a step still to
+     * come: at once, or after the last step. A receiver of `core/notify`
+     * ends its broadcast with it, so that Android keeps the app running
+     * until the text has left the notification shade. On the worker only.
+     */
+    internal fun whenHidden(whenDone: () -> Unit) {
+        if (hidingRuns == 0) whenDone() else waitingForHiding += whenDone
+    }
+
+    /** How many runs of [hideShown] have a step still to come. Read and changed on the worker only. */
+    private var hidingRuns = 0
+
+    /** What [whenHidden] holds back until [hidingRuns] is 0 again. */
+    private val waitingForHiding = mutableListOf<() -> Unit>()
+
+    /** One step of [hideShown] that comes [millis] after the last: [work] gives the next one, or null. */
+    private class HidingStep(val millis: Long, val work: () -> HidingStep?)
+
+    /** Runs [work] and asks for the step it gives. A step that fails ends the run, so nothing waits forever. */
+    private fun step(work: () -> HidingStep?) {
+        val next = try {
+            work()
+        } catch (_: Exception) {
+            // Nothing is logged in core/notify (hard rule 10).
+            null
         }
-        if (posted == 0) return
-        pause(SETTLE_MILLIS)
+        if (next == null) {
+            hidingEnded()
+            return
+        }
+        try {
+            later(next.millis) { step(next.work) }
+        } catch (_: Exception) {
+            hidingEnded()
+        }
+    }
+
+    /** One run of [hideShown] is over. Once none is left, what waited runs. */
+    private fun hidingEnded() {
+        hidingRuns--
+        if (hidingRuns > 0) return
+        val waiting = waitingForHiding.toList()
+        waitingForHiding.clear()
+        waiting.forEach { it() }
+    }
+
+    /** The step of [hideShown] that goes on from the first of [keys]. It gives the next step, or null. */
+    private fun hideFrom(keys: List<Pair<String?, Int>>, channels: List<NotifyChannel>, anyPosted: Boolean): HidingStep? {
+        if (!mustHide()) return null
+        keys.forEachIndexed { index, (tag, id) ->
+            if (!hideOne(tag, id, channels)) return@forEachIndexed
+            val rest = keys.drop(index + 1)
+            return if (rest.isEmpty()) {
+                HidingStep(SETTLE_MILLIS) { removeOldForms(channels); null }
+            } else {
+                HidingStep(PACE_MILLIS) { hideFrom(rest, channels, anyPosted = true) }
+            }
+        }
+        return if (anyPosted) HidingStep(SETTLE_MILLIS) { removeOldForms(channels); null } else null
+    }
+
+    /** Posts the notification [tag] again in the hidden form, as it is now. True if it was posted. */
+    private fun hideOne(tag: String?, id: Int, channels: List<NotifyChannel>): Boolean {
+        val shown = manager.activeNotifications.firstOrNull { it.tag == tag && it.id == id } ?: return false
+        val old = shown.notification
+        val channel = channels.firstOrNull { it.id == old.channelId } ?: return false
+        val endsAt = old.extras.getLong(EXTRA_ENDS_AT, 0L).takeIf { it > 0L }
+        if (endsAt != null && endsAt <= clock.nowMillis()) {
+            manager.cancel(shown.tag, shown.id)
+            return false
+        }
+        // Already hidden: nothing to post, and nothing to wait for. A start while the text is hidden waits for none.
+        if (old.extras.getBoolean(EXTRA_HIDDEN, false)) return false
+        // A new builder carries no button of the old notification.
+        val built = builder(channel.id, old.`when`, old.contentIntent, endsAt)
+            .setSmallIcon(old.smallIcon)
+            .setContentTitle(context.getString(channel.name))
+            .setContentText(context.getString(R.string.notify_text_hidden))
+            .setOnlyAlertOnce(true)
+            .addExtras(Bundle().apply { putBoolean(EXTRA_HIDDEN, true) })
+            .build()
+        manager.notify(shown.tag, shown.id, built)
+        return true
+    }
+
+    /** Removes every notification of [channels] that still shows its old form, while the text is to be hidden. */
+    private fun removeOldForms(channels: List<NotifyChannel>) {
         // Only while the text is still to be hidden: a notification shown since, with its text, stays.
         if (!mustHide()) return
         manager.activeNotifications
             .filter { shown -> channels.any { it.id == shown.notification.channelId } }
             .filterNot { it.notification.extras.getBoolean(EXTRA_HIDDEN, false) }
             .forEach { manager.cancel(it.tag, it.id) }
+    }
+
+    /** The notifications of [channels] that are on screen now, without their text. */
+    internal fun onScreen(channels: List<NotifyChannel>): List<OnScreen> = manager.activeNotifications
+        .filter { shown -> shown.tag != null && channels.any { it.id == shown.notification.channelId } }
+        .map { shown ->
+            val extras = shown.notification.extras
+            OnScreen(
+                key = shown.tag,
+                atMillis = shown.notification.`when`,
+                endsAtMillis = extras.getLong(EXTRA_ENDS_AT, 0L).takeIf { it > 0L },
+                buttonValues = buttonValuesOf(extras),
+                hidden = extras.getBoolean(EXTRA_HIDDEN, false),
+            )
+        }
+
+    /** The value of each button, by its action, as [show] kept them. None in the hidden form. */
+    private fun buttonValuesOf(extras: Bundle): Map<String, Long> {
+        val actions = extras.getStringArray(EXTRA_BUTTON_ACTIONS) ?: return emptyMap()
+        val values = extras.getLongArray(EXTRA_BUTTON_VALUES) ?: return emptyMap()
+        return actions.zip(values.toList()).toMap()
     }
 
     /**
@@ -275,6 +392,12 @@ class Notifications internal constructor(
 
         /** Set on a notification posted in the hidden form. A mark, never content. */
         const val EXTRA_HIDDEN = "app.shkriuss.core.notify.HIDDEN"
+
+        /** The actions of a notification's buttons, in order, kept with [EXTRA_BUTTON_VALUES]. Never labels. */
+        const val EXTRA_BUTTON_ACTIONS = "app.shkriuss.core.notify.BUTTON_ACTIONS"
+
+        /** The values the buttons carry, in the order of [EXTRA_BUTTON_ACTIONS]. */
+        const val EXTRA_BUTTON_VALUES = "app.shkriuss.core.notify.BUTTON_VALUES"
 
         /** How far apart [hideShown] posts its notifications: four a second, below Android's limit of about five. */
         const val PACE_MILLIS = 250L

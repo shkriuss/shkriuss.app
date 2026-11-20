@@ -43,7 +43,7 @@ class AlarmSyncTest {
     /** What a new start of the app builds: the same file, nothing kept in memory. */
     private fun newSync(): AlarmSync {
         val context = RuntimeEnvironment.getApplication()
-        return AlarmSync(app, app, Notifications(context, hidesText = { false }, clock), android, AlarmRegistry(context.notifyStore()), clock) {
+        return AlarmSync(app, app, Notifications(context, hidesText = { false }, clock, later = { _, step -> step() }), android, AlarmRegistry(context.notifyStore()), clock) {
             failures += it
         }
     }

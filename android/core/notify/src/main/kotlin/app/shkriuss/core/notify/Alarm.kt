@@ -69,3 +69,20 @@ fun interface AlarmHandler {
      */
     fun onAlarm(alarm: Alarm, notifications: Notifications)
 }
+
+/**
+ * An app's look at its own notifications that are on screen, for what an
+ * alarm handler and a press cannot see: the app stopped between deleting
+ * a record and removing its notification, or the clock or the time zone
+ * moved past the end of a notification's day.
+ */
+fun interface ShownReview {
+    /**
+     * [onScreen] are the app's notifications on screen now. Remove,
+     * through [notifications], each that is no longer right, or show it
+     * again. Called on a background thread, so it may read the database:
+     * at every start of the app, and after a change of the time or the
+     * time zone, a reboot or an app update, with [timeChanged] true.
+     */
+    fun review(onScreen: List<OnScreen>, notifications: Notifications, timeChanged: Boolean)
+}

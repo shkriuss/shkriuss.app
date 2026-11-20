@@ -4,7 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -87,11 +87,13 @@ private fun FixedField(
 
 /**
  * A text field that takes typing, as in an app. Past 20 characters it
- * shows an error, so the owner can see the error state come and go.
+ * shows an error, so the owner can see the error state come and go. What
+ * is typed stays in memory only, never in Android's saved state: it goes
+ * when the phone turns or Catalog closes.
  */
 @Composable
 private fun TextFieldToTry() {
-    var value by rememberSaveable { mutableStateOf("") }
+    var value by remember { mutableStateOf("") }
     ShkTextField(
         value = value,
         onValueChange = { value = it },

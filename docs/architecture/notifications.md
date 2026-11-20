@@ -208,13 +208,13 @@ Two more rules:
 
 | Moment | What Android does | What `core/notify` does |
 |---|---|---|
-| The app starts | | `Notify.start()` makes the channels, posts the shown notifications again in the hidden form if the text must be hidden, and runs a sync that sets all alarms again. |
+| The app starts | | `Notify.start()` makes the channels, posts the shown notifications again in the hidden form if the text must be hidden, lets the app review what is on screen ([The end of a notification](#the-end-of-a-notification)), and runs a sync that sets all alarms again. |
 | The app changes a reminder | | The app calls `Notify.sync()`. New and changed alarms are set. |
 | An alarm fired | The alarm is gone. | The handler runs, then a sync as after a change. |
 | Reboot | Every alarm is forgotten. After the first unlock, Android sends `BOOT_COMPLETED`. | `SystemEventReceiver` runs a sync that sets all alarms again. |
 | The profile of the app starts (a secondary user, Private Space unlocked) | The same as a reboot, for that profile. | The same. |
 | App update | The app is stopped, and its alarms can be lost with it. Android sends `MY_PACKAGE_REPLACED`. | The same. |
-| The time changed | Android sends `TIME_SET`, and fires what is now due. | The same. |
+| The time changed | Android sends `TIME_SET`, and fires what is now due. | The same, and the app reviews what is on screen, with `timeChanged`. |
 | The time zone changed | Android sends `TIMEZONE_CHANGED`. | The same. The app works out its times again. |
 | "Force stop" in Android's settings | Every alarm is dropped, and the app gets no broadcast until the user opens it. | Nothing can be done. The next start of the app runs a sync. |
 
@@ -274,12 +274,18 @@ Decided by the owner, with the app lock
    case the app stopped between storing the choice and hiding the text.
    Android drops an update of a notification when an app posts more
    than about five a second, and the old text then stays. So the posts
-   come a quarter of a second apart. A second after the last one, any
+   come a quarter of a second apart, each as a step of its own on the
+   worker: a timer thread of the module waits, so alarms and presses run
+   in between. Each is read again just before it is posted, and one the
+   app removed meanwhile stays removed. A second after the last one, any
    notification of the app that still shows its old form is removed: the
    text leaves the shade, also at the cost of the notification. A
    notification in the hidden form carries a mark that says so, and
    nothing more. One with the mark is not posted again, so a start while
-   the text is hidden waits for nothing.
+   the text is hidden waits for nothing. While steps are still to come,
+   the receivers of `core/notify` end their broadcasts only after the
+   last one. So when Android starts the app for an alarm, a press or one
+   of its broadcasts, it keeps the app running until no text is left.
 4. If the state of the app lock cannot be read, the text is hidden.
    `Notifications.show` also hides it when `hidesText` itself fails.
 5. A notification that is hidden stays hidden after the app lock is
@@ -311,9 +317,11 @@ are in [ADR 0034](../adr/0034-notification-buttons.md).
    stays. The same holds when the state of the app lock cannot be read.
 4. A press is a broadcast to `ButtonReceiver` of this app, which is not
    exported. The button's pending intent is immutable, and Android keeps
-   one for each key, action and time of the notification. So the next
-   notification with the same key gets pending intents of its own, and
-   an older button keeps its own time and value. It carries the
+   one for each key, action and time of the notification and value of
+   the button. So the next notification with the same key gets pending
+   intents of its own, and an older button keeps its own time and value.
+   A notification shown again with another value gets new ones too, so a
+   button kept from before still does what its label said. It carries the
    notification's key, the button's action, the notification's time and
    the button's value. No text.
 5. `ButtonReceiver` hands the press to the app's `ButtonHandler` on the
@@ -337,6 +345,33 @@ midnight, so yesterday's numbers never show as today's. The end is kept
 in the notification as a time, so a notification posted again in the
 hidden form keeps the same end. A notification whose end has passed is
 not shown.
+
+Android counts the end from the moment of the post, in real time. So
+after the clock is moved, even within the day, it no longer comes at
+the moment it was meant for, and after a change of the time zone that
+moment is no longer the local midnight. A stop of the app between a
+change to a record and the removal of its notification leaves the
+notification too. For these, an app can pass a
+`ShownReview` to `Notify`. It gets the app's notifications on screen,
+each as `OnScreen`: its key, its time, its end, the value each button
+carries (none in the hidden form, nor in one posted before an update
+of the app that kept no values), and whether it shows the hidden
+form, never its text. An app never shows a hidden one again with its
+text (point 5 of "While the app lock is on"). It
+runs on the worker at every start, and after each of Android's four
+broadcasts with `timeChanged` true. A review that fails changes nothing
+more: the sync still runs.
+
+- Reminders removes a notification whose reminder is deleted or not
+  stored.
+- Water removes its reminder when it is from an earlier day, or when it
+  is not the reminder Water stored as showing. The notice of a failed
+  reminder, which has no end, stays until the next reminder replaces
+  it. After every change of the time, Water shows one of today again
+  with today's numbers, the amount its **Drank** button had, and the new
+  midnight as its end, unless it shows the hidden form, which has no
+  numbers, or its **Drank** amount cannot be read back. It is `quiet`:
+  posted again with `setOnlyAlertOnce`, so no new sound or vibration.
 
 ## Channels
 

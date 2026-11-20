@@ -16,7 +16,8 @@ import org.robolectric.Shadows.shadowOf
  * What a notification shows, as a test reads it. [tap] is the screen a tap
  * opens. [timeoutAfterMillis] is how long after it was posted Android
  * removes it, or 0 for never. [buttonsNeedUnlock] is true if every button
- * asks for the phone's unlock first.
+ * asks for the phone's unlock first. [alertsOnlyOnce] is true if posting
+ * it again makes no new sound or vibration.
  */
 data class ShownNotification(
     val channelId: String,
@@ -27,6 +28,7 @@ data class ShownNotification(
     val atMillis: Long,
     val timeoutAfterMillis: Long,
     val tap: Intent?,
+    val alertsOnlyOnce: Boolean,
 )
 
 /** A channel of the app, as Android's settings show it. */
@@ -83,6 +85,7 @@ class NotifyTestDevice(private val context: Context) {
             atMillis = shown.`when`,
             timeoutAfterMillis = shown.timeoutAfter,
             tap = shown.contentIntent?.let { shadowOf(it).savedIntent },
+            alertsOnlyOnce = shown.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0,
         )
     }
 
