@@ -323,6 +323,24 @@ class WaterRemindersTest {
     }
 
     @Test
+    fun aHiddenReminderStaysHiddenAfterTheAppLockIsOffAndTheTimeChanges() {
+        remindersOn()
+        alarmComes(at(9, 0))
+        water.hidesText = true
+        water.app.notify.hideShownText()
+        val hidden = checkNotNull(water.reminder())
+        assertEquals("Drink reminders", hidden.title)
+
+        // The app lock is turned off, then the time zone changes.
+        water.hidesText = false
+        clock.setTo(at(9, 5))
+        water.zone = ZoneOffset.ofHours(-2)
+        water.device.send("android.intent.action.TIMEZONE_CHANGED")
+
+        assertEquals("it keeps the hidden form, with no total and no buttons", hidden, water.reminder())
+    }
+
+    @Test
     fun afterTheClockMovesWithinTheDayTheReminderStillEndsAtMidnight() {
         remindersOn()
         dueAt(21)

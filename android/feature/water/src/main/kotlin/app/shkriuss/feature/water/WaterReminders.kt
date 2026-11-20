@@ -195,7 +195,8 @@ class WaterReminders(
      * time, one of today is shown again, quietly, with the numbers of now
      * and the amount its Drank button had, so that it ends at the new
      * midnight. Android counts the end from the moment of the post, so a
-     * clock moved within the day needs a new post too. The notice of a
+     * clock moved within the day needs a new post too. One in the hidden
+     * form stays as it is: it shows no numbers. The notice of a
      * failed reminder, the only one with no end, stays until the next
      * reminder replaces it (spec, "How Water uses core/notify", point 5).
      */
@@ -211,7 +212,8 @@ class WaterReminders(
                         book.update { it.copy(showing = null) }
                         notifications.cancel(KEY)
                     }
-                    timeChanged -> {
+                    // A hidden one stays hidden (notifications.md), and shows no numbers that could be yesterday's.
+                    timeChanged && !shown.hidden -> {
                         val drankMl = shown.buttonValues[DRANK]?.toInt()
                         notifications.show(reminderOf(shown.atMillis, repository.settingsNow(), repository.factsOf(today), quiet = true, drankMl = drankMl))
                     }

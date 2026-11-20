@@ -941,7 +941,7 @@ class NotifyTest {
         hidesText = { true }
         context.notify.hideShownText()
 
-        assertEquals(listOf(OnScreen("next", start + HOUR, start + 2 * HOUR)), notifications.onScreen(listOf(reminders, summaries)))
+        assertEquals(listOf(OnScreen("next", start + HOUR, start + 2 * HOUR, hidden = true)), notifications.onScreen(listOf(reminders, summaries)))
     }
 
     @Test

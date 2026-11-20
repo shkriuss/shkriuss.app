@@ -353,8 +353,10 @@ moment is no longer the local midnight. A stop of the app between a
 change to a record and the removal of its notification leaves the
 notification too. For these, an app can pass a
 `ShownReview` to `Notify`. It gets the app's notifications on screen,
-each as `OnScreen`: its key, its time, its end, and the value each
-button carries (none in the hidden form), never its text. It
+each as `OnScreen`: its key, its time, its end, the value each button
+carries (none in the hidden form), and whether it shows the hidden
+form, never its text. An app never shows a hidden one again with its
+text (point 5 of "While the app lock is on"). It
 runs on the worker at every start, and after each of Android's four
 broadcasts with `timeChanged` true. A review that fails changes nothing
 more: the sync still runs.
@@ -366,7 +368,8 @@ more: the sync still runs.
   reminder, which has no end, stays until the next reminder replaces
   it. After every change of the time, Water shows one of today again
   with today's numbers, the amount its **Drank** button had, and the new
-  midnight as its end. It is `quiet`: posted again with
+  midnight as its end, unless it shows the hidden form, which has no
+  numbers. It is `quiet`: posted again with
   `setOnlyAlertOnce`, so no new sound or vibration.
 
 ## Channels

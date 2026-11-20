@@ -44,15 +44,17 @@ class ShkNotification(
 /**
  * One notification of the app that is on screen: its [key], its time
  * [atMillis], its end [endsAtMillis] if it has one, and the value each of
- * its buttons carries, by the button's action, in [buttonValues]. The
- * hidden form has no buttons, so none. Never its text: `core/notify`
- * does not read it back.
+ * its buttons carries, by the button's action, in [buttonValues]. It is
+ * [hidden] while it shows the hidden form, which has no buttons, so
+ * none. A hidden one stays hidden: the app does not show it again with
+ * its text. Never its text: `core/notify` does not read it back.
  */
 data class OnScreen(
     val key: String,
     val atMillis: Long,
     val endsAtMillis: Long?,
     val buttonValues: Map<String, Long> = emptyMap(),
+    val hidden: Boolean = false,
 )
 
 /**
@@ -267,6 +269,7 @@ class Notifications internal constructor(
                 atMillis = shown.notification.`when`,
                 endsAtMillis = extras.getLong(EXTRA_ENDS_AT, 0L).takeIf { it > 0L },
                 buttonValues = buttonValuesOf(extras),
+                hidden = extras.getBoolean(EXTRA_HIDDEN, false),
             )
         }
 
