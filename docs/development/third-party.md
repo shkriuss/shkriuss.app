@@ -4,7 +4,7 @@ What others made and the apps contain: where it comes from, its licence
 and its notice.
 
 - Status: complete for Water and Reminders: everything that ships in
-  the release APK of Water `1.0.1` and of Reminders `1.0.0-alpha.1`, and
+  the release APK of Water `1.0.1` and of Reminders `1.0.0`, and
   the screen that shows it in each app.
   [How to check again](#how-to-check-again) says how to keep it right.
 - The project's own licences are in
@@ -42,7 +42,7 @@ text.
 ## What ships in Reminders
 
 The same seven parts, in the same versions, in the release APK of
-Reminders `1.0.0-alpha.1`. Its release runtime class path is the same as
+Reminders `1.0.0`. Its release runtime class path is the same as
 Water's, and so is what R8 removes
 ([How the list is made](#how-the-list-is-made)).
 
@@ -374,7 +374,7 @@ What steps 1 and 2 give for version `1.0.1`, to compare with:
   1.4.0 and kotlinx.coroutines 1.9.0.
 - The three licence texts are in it, by their SHA-256.
 
-### What the APK of Reminders 1.0.0-alpha.1 holds
+### What the APK of Reminders 1.0.0 holds
 
 The same as Water's: the 110 modules on the class path, one dex file
 with classes of the seven parts and of none of the seven libraries that
