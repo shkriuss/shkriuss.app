@@ -332,6 +332,17 @@ jobs:
               exit 1
             fi
 
+            # One key signs every preview of the run, so an APK built as
+            # another app's preview would update that app's preview and take
+            # its data. Each APK must be its own app's preview, as the APK
+            # itself says, not only as the build's list says.
+            expected="app.shkriuss.$app.preview"
+            apk_id="$("$build_tools/aapt2" dump packagename "$unsigned")"
+            if [ "$app_id" != "$expected" ] || [ "$apk_id" != "$expected" ]; then
+              echo "::error::The preview APK of $app is not $expected."
+              exit 1
+            fi
+
             name="$app-preview-pr$PR_NUMBER-${HEAD_SHA:0:7}.apk"
             signed="$out_dir/$name"
             "$build_tools/apksigner" sign \
