@@ -1,8 +1,9 @@
 # Permissions
 
-Every permission each app declares, and why, and every receiver a module
-adds to an app. A pull request that adds a permission updates this page
-and has its own decision record ([CLAUDE.md](../../CLAUDE.md)).
+Every permission each app declares, and why, and every receiver, screen
+and provider a module adds to an app. A pull request that adds a
+permission updates this page and has its own decision record
+([CLAUDE.md](../../CLAUDE.md)).
 
 ## Rules
 
@@ -38,10 +39,13 @@ did:
 
 Other components that libraries add, none of them a permission:
 
-- The six screens of `core/security`: removed in Catalog's manifest,
-  for the same reason. Catalog draws their content on two pages of its
-  own. Catalog has no app lock, so nothing registers the screen-off
-  receiver of the app lock either.
+- The eight screens of `core/security`, its status provider and its
+  `<queries>`: removed in Catalog's manifest, for the same reason.
+  Catalog holds no keys and takes no part in the handover between apps
+  ([The handover between apps](#the-handover-between-apps)). Catalog
+  draws the screens' content on two pages of its own. Catalog has no app
+  lock, so nothing registers the screen-off receiver of the app lock
+  either.
 
 - `androidx.startup.InitializationProvider`: not exported. Starts
   libraries when the app starts.
@@ -92,17 +96,24 @@ Other components that libraries add, none of them a permission:
   zone, and `ButtonReceiver` for **Drank** and **Later** on a reminder.
   `WaterManifestTest` checks that these three are Water's receivers.
 
-- The six screens of `core/security`, none exported
-  ([Screens](#screens)). Only Water itself opens them: from "Recovery
-  key" and "App lock" in Settings, and from the dialog that shows when
-  the recovery key is first needed
+- The eight screens of `core/security` ([Screens](#screens)). Only
+  Water itself opens seven of them: from "Recovery key" and "App lock"
+  in Settings, and from the dialog that shows when the recovery key is
+  first needed
   ([spec.md](../apps/water/spec.md#the-recovery-key-when-first-needed)).
-  A screen of the module needs both permissions
+  The eighth, the handover screen, is exported with no permission. It
+  checks the calling app first
+  ([The handover between apps](#the-handover-between-apps)). A screen of
+  the module needs both permissions
   ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
   point 5), and the APK rules check fails a build of Water without
   them. `WaterManifestTest` checks that Water's screens are its own and
-  these six, that none of the six is exported, and that none has an
-  intent filter.
+  these eight, and that none but the handover screen is exported or has
+  an intent filter.
+- The status provider of `core/security`, authority
+  `app.shkriuss.water.keeper`, exported with no permission. It checks
+  the calling app first
+  ([The handover between apps](#the-handover-between-apps)).
 - `androidx.room3.MultiInstanceInvalidationService`: added by Room, not
   exported. Room starts it only for a database opened with
   multi-instance invalidation, which Water does not use.
@@ -114,15 +125,19 @@ Other components that libraries add, none of them a permission:
   callers with `android.permission.DUMP`, the system and the developer
   shell, so that developer tools can install or save the start-up
   profile from outside the app. Water lets no other app reach any part
-  of it but its screen. The start-up profile is still installed when the
+  of it but its screen and the two parts of the handover. The start-up
+  profile is still installed when the
   app starts, by the profile installer's initializer in
   `androidx.startup`.
 - The app lock's screen-off receiver, registered while the app runs,
   not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
   Water starts its `AppLockWatcher`.
-- `WaterManifestTest` fails unless `WaterActivity` is the only exported
-  part of Water's merged manifest, so a library that adds another fails
-  the tests.
+- `<queries>` for the action `app.shkriuss.action.HANDOVER`, from
+  `core/security`: Water sees the other apps with a handover screen.
+- `WaterManifestTest` fails unless `WaterActivity`, the handover screen
+  and the status provider are the only exported parts of Water's merged
+  manifest, and unless the two parts of the handover have no permission.
+  So a library that adds another exported part fails the tests.
 
 Water stores its data in its own database and backs it up only into the
 backup file of the suite, so Android backup and device-to-device transfer
@@ -166,14 +181,18 @@ Other components that libraries add, none of them a permission:
   time or time zone, and `ButtonReceiver` for **Done** and **Snooze 10
   min** on a reminder. `RemindersManifestTest` checks that these three
   are Reminders' receivers.
-- The six screens of `core/security`, none exported
-  ([Screens](#screens)). Reminders' Settings opens them from **Recovery
-  key** and **App lock**, and from the dialog for the moment the
-  recovery key is first needed. A screen of the module needs both
+- The eight screens of `core/security` ([Screens](#screens)).
+  Reminders' Settings opens seven of them from **Recovery key** and
+  **App lock**, and from the dialog for the moment the recovery key is
+  first needed. The eighth, the handover screen, is exported with no
+  permission, as in Water. A screen of the module needs both
   permissions, and the APK rules check fails a build of Reminders
-  without them. `RemindersManifestTest`
-  checks that Reminders' screens are its own and these six, that none
-  of the six is exported, and that none has an intent filter.
+  without them. `RemindersManifestTest` checks that Reminders' screens
+  are its own and these eight, and that none but the handover screen is
+  exported or has an intent filter.
+- The status provider of `core/security`, authority
+  `app.shkriuss.reminders.keeper`, exported with no permission, as in
+  Water.
 - `androidx.room3.MultiInstanceInvalidationService`: added by Room, not
   exported. Reminders does not use multi-instance invalidation.
 - `androidx.startup.InitializationProvider`: not exported. The emoji
@@ -183,8 +202,12 @@ Other components that libraries add, none of them a permission:
 - The app lock's screen-off receiver, registered while the app runs,
   not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
   Reminders starts its `AppLockWatcher`.
-- `RemindersManifestTest` fails unless `RemindersActivity` is the only
-  exported part of Reminders' merged manifest.
+- `<queries>` for the action `app.shkriuss.action.HANDOVER`, as in
+  Water.
+- `RemindersManifestTest` fails unless `RemindersActivity`, the
+  handover screen and the status provider are the only exported parts
+  of Reminders' merged manifest, and unless the two parts of the
+  handover have no permission.
 - A tap on a reminder starts `RemindersActivity` with the reminder's
   random ID as the intent's identifier, and its form opens behind the
   app lock. Another app can start the screen with an identifier too.
@@ -266,9 +289,10 @@ intent filter on the receiver of alarms or of buttons.
 
 `core/security` holds the recovery key screens, the security screen and
 the app lock ([security-screens.md](../architecture/security-screens.md)).
-Its manifest declares two permissions and six screens. Every app that
-uses the module gets them when the app is built. Water and Reminders
-have them ([Water](#water-appshkriusswater),
+Its manifest declares two permissions, eight screens, one status
+provider and one `<queries>` entry. It defines no permission. Every app
+that uses the module gets them when the app is built. Water and
+Reminders have them ([Water](#water-appshkriusswater),
 [Reminders](#reminders-appshkriussreminders)). Catalog removes them for
 good.
 
@@ -279,7 +303,9 @@ lists them under the app.
 An app does not lose them unnoticed either:
 
 1. The unit test `ManifestTest` in `core/security` fails unless the
-   module's manifest asks for exactly these two permissions.
+   module's manifest asks for exactly these two permissions, defines
+   none, and exports only the handover screen and the status provider,
+   both with no permission.
 2. The APK rules check fails an app whose merged manifest declares a
    screen of `core/security` but does not request both
    ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md);
@@ -314,9 +340,12 @@ What they do not allow:
 | `app.shkriuss.core.security.EnterRecoveryKeyActivity` | No | Entering the 24 words. |
 | `app.shkriuss.core.security.ShowRecoveryKeyActivity` | No | Showing the kept recovery key again, after the system prompt. |
 | `app.shkriuss.core.security.AppLockActivity` | No | The app lock screen. It asks for the system prompt first while the app lock is on. |
-| `app.shkriuss.core.security.TurnOnAppLockActivity` | No | Turning the app lock on: the warning, the recovery words, the system prompt. |
+| `app.shkriuss.core.security.TurnOnAppLockActivity` | No | Turning the app lock on: the warning, the recovery words or the check in a keeper, the system prompt. |
+| `app.shkriuss.core.security.HandoverActivity` | Yes, with no permission. It checks the caller first ([The handover between apps](#the-handover-between-apps)). | A keeper's handover screen: another app of the suite asks for its own keys, or for four of the words to be checked. |
+| `app.shkriuss.core.security.GetKeysActivity` | No | Getting this app's keys from a keeper: it opens the keeper's handover screen and stores what comes back. |
 
-- No screen is exported. Only the app itself can open them.
+- Only the handover screen is exported. The app itself opens the
+  others.
 - Every screen that shows or takes the words blocks screenshots, screen
   recording and the recent-apps preview, and keeps autofill and content
   capture away. The app lock screen follows the app's own setting, as
@@ -324,6 +353,46 @@ What they do not allow:
 - Every screen hides other apps' windows, ignores a tap under another
   app's window, and speaks only to accessibility tools
   ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
+
+### The handover between apps
+
+A keeper, an app that keeps the recovery key, gives another app of the
+suite on the same phone that app's own keys, never the recovery key
+([ADR 0041](../adr/0041-the-handover-between-apps.md)). The parts below
+come with `core/security`, in every data app.
+
+1. No permission. The suite defines none for the handover, and no app
+   asks for one. A permission that every data app defines would break
+   every update after a signing-key rotation, and would be dropped, and
+   its name freed for any app, when the first app that defined it is
+   uninstalled (ADR 0041, point 6). So the apps can be installed,
+   updated and uninstalled in any order.
+2. Two parts are exported, and any app may reach them. Each checks the
+   calling app itself before it reads or shows anything:
+
+   | Part | What it does | A caller that fails the check gets |
+   |---|---|---|
+   | `HandoverActivity`, the handover screen, with an intent filter for `app.shkriuss.action.HANDOVER` and no category | A keeper gives the calling app its own keys, after the user taps **Allow** and answers the system prompt. Or it checks four of the words for the calling app's app lock. | A cancelled result that says `REFUSED`. The screen closes at once and shows nothing. |
+   | `KeeperStatusProvider`, authority `<application ID>.keeper` | One call: whether the app keeps the recovery key now, and the short name of that key. No data, no files, no query, no other call. | No answer. |
+
+3. The check: the calling app, as Android names it, is not this app. Its
+   package name is `app.shkriuss.<name>`, with `.preview` exactly when
+   this app is a preview, and `<name>` is an app that holds data keys:
+   not Sync, not Catalog. It has exactly one signer, and that
+   certificate's bytes are the same as this app's own current
+   certificate. The lineage is not compared (ADR 0041, points 9 and
+   10).
+4. The handover screen checks the caller once more just before it gives
+   the keys. The asking app checks the keeper the same way before it
+   opens its screen, and again when the keys come back.
+5. `<queries>` for the action `app.shkriuss.action.HANDOVER`: the app
+   sees the other apps with a handover screen, and no other app. No
+   `QUERY_ALL_PACKAGES`.
+6. Neither part gives any data by itself. The keys come only after the
+   user allowed it on the keeper's screen and answered the system
+   prompt. They are only the calling app's own keys.
+7. Catalog removes both parts and the `<queries>`. Sync will remove them
+   too (ADR 0041, point 7).
 
 ### A receiver registered at runtime
 

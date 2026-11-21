@@ -184,7 +184,10 @@ Make a backup:
 
 1. In **Settings**, tap **Make a backup**.
 2. The first time, Water asks you to set up your recovery key. Tap
-   **Create a recovery key**, or **I already have one**.
+   **Create a recovery key**, or **I already have one**. If another app
+   of the suite keeps your recovery key on this phone, you can tap **Get
+   the keys from** that app instead, and type no words
+   ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
 3. Android's file picker opens, with a name such as
    `water-2026-11-15.shkbackup`. Pick a place and tap **Save**.
 4. Water writes the file, reads it again and checks it. It says "Backup
@@ -219,7 +222,8 @@ settings, the times of past reminders, and your recovery key.
 ## The recovery key and the app lock
 
 - **Recovery key** opens the security screen. Create your 24 words
-  there, enter them, or see them again
+  there, enter them, get the keys from another app that keeps them, or
+  see them again
   ([Your recovery key](recovery-key.md)).
 - **App lock** makes Water ask for your fingerprint, or your phone's
   PIN, pattern or password, before it shows anything

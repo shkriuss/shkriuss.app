@@ -526,9 +526,12 @@ second build must write the same mapping file, or the release stops. See
     progress dialog, held open by the test. It covers the Licences list
     and a notice too.
   - `WaterManifestTest` names everything Water's merged manifest lets
-    another app reach: five permissions, Water's screen and the six of
-    `core/security`, none of the six exported, and Water's screen the
-    only exported part.
+    another app reach: five permissions and none that it defines;
+    Water's screen and the eight of `core/security`; and as the only
+    exported parts Water's screen and the two parts of the handover
+    between apps, the handover screen and the status provider, both
+    with no permission ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+    It also checks the `<queries>`.
   - `WaterRemindersTest`: the reminders from end to end through
     Robolectric's `AlarmManager`, the receivers of the merged manifest
     and the buttons' pending intents. After a restore the alarm moves,
@@ -577,9 +580,10 @@ second build must write the same mapping file, or the release stops. See
     notifications, the dialogs of backup and restore and the progress
     dialog, held open by the test, and the Licences list and a notice.
   - `RemindersManifestTest` names everything Reminders' merged manifest
-    lets another app reach: two permissions, Reminders' screen and the
-    six of `core/security`, none of the six exported, no receiver, and
-    Reminders' screen the only exported part.
+    lets another app reach, as `WaterManifestTest` does for Water: five
+    permissions and none that it defines, Reminders' screen and the
+    eight of `core/security`, and as the only exported parts Reminders'
+    screen and the two parts of the handover.
   - `RemindersScreensTest`: what the screens do and what TalkBack hears,
     on a phone and on a tablet.
   - `RemindersBackupScreensTest`, a copy of Water's
@@ -671,7 +675,7 @@ an app is behind the app lock
 The app lock check is three parts:
 
 1. `AppLockCheck.checkEveryScreen` starts every activity of the app's
-   merged manifest, except the six screens of `core/security`, and
+   merged manifest, except the eight screens of `core/security`, and
    fails unless each shows the lock screen and nothing of its own.
 2. `LockedAppForTests` is the app class of that test: real keys on the
    stand-in for the Keystore, with the app lock on and locked before any
@@ -1079,8 +1083,8 @@ each catches.
 ## Lint
 
 1. Android Lint runs in `check`. Warnings are errors.
-2. Lint findings are fixed, not hidden. Two single places are suppressed,
-   each with its reason next to it:
+2. Lint findings are fixed, not hidden. Three single places are
+   suppressed, each with its reason next to it:
    - `MissingClass` on `androidx.startup.InitializationProvider` in
      Catalog's manifest. The class comes from a library Compose uses only
      at run time, so lint cannot see it. It is in the APK.
@@ -1093,6 +1097,14 @@ each catches.
      10). `ManifestTest` and the emulator tests check the permission
      instead. After an update of the Android Gradle Plugin, the build is
      tried without it (prompt R5 in [PROMPTS.md](PROMPTS.md)).
+   - `ExportedContentProvider` on `KeeperStatusProvider` in
+     `core/security`'s manifest. Lint asks a content provider for a
+     permission or for no export.
+     [ADR 0041](../adr/0041-the-handover-between-apps.md) exports it with
+     no permission: its own check of the caller is the gate, and its one
+     answer is a public short name. The owner decided this.
+     `ManifestTest` checks the provider's attributes, and that nothing
+     else in that manifest is ignored.
 3. Compose and Activity ask for Lifecycle 2.9. Its built-in lint checks no
    longer load in this version of lint ("Library lint checks reference
    invalid APIs"). A version constraint lifts Lifecycle to 2.11.0, whose
@@ -1404,7 +1416,7 @@ point 5).
 3. One problem is reported for each missing permission. It names the
    first screen, says how many more there are, and names ADR 0033.
 4. An app with no such screen needs neither permission. Catalog's
-   manifest removes the six screens and both permissions, and passes.
+   manifest removes the eight screens and both permissions, and passes.
 
 Why: without `HIDE_OVERLAY_WINDOWS` a screen still starts, but hides no
 other app's window. Without `USE_BIOMETRIC` the system prompt cannot
@@ -1859,8 +1871,8 @@ two:
    font.
 
 Every new app must remove the same two. The APK rules check fails until it
-does. Water removes them too. It keeps the two permissions and the six
-screens of `core/security`, which Catalog removes
+does. Water removes them too. It keeps the two permissions, the eight
+screens and the status provider of `core/security`, which Catalog removes
 ([permissions.md](../security/permissions.md#water-appshkriusswater)).
 Water also removes the receiver of `androidx.profileinstaller`, which is
 exported to developer tools. Catalog still has it, until its next change
