@@ -202,7 +202,9 @@ class NoSecretsTest {
             if (stored is Stored.Open) show(stored.keyset)
         }
         show(app.vault.fileKeysets(create = false))
-        File(app.folder, "record").let { it.writeBytes(it.readBytes().also { bytes -> bytes[bytes.size - 2] = 0 }) }
+        File(app.folder, "record").let { file ->
+            file.writeBytes(file.readBytes().also { it[it.size - 2] = (it[it.size - 2].toInt() xor 1).toByte() })
+        }
         failing { app.open().records.seal(recordId, plaintext.toByteArray()) }
         // The words repair the damaged file. What it says, and the refusals around it.
         show(app.open().setup.storeDerivedKeys(key))
