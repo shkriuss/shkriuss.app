@@ -159,8 +159,8 @@
 13. Each data app has a status provider, `<application ID>.keeper`,
     exported. It answers one call, and only to a caller that passes
     point 9: whether the app keeps the recovery key now, and the key ID
-    of its keys. The answer is live: a keeper whose Recovery guard went
-    with the screen lock answers "no".
+    of its current key. The answer is live: a keeper whose Recovery
+    guard went with the screen lock answers "no".
 14. The asking app lists the apps with the handover action, keeps those
     that pass point 9, and asks each one's provider. Which keepers each
     choice lists:
@@ -170,6 +170,15 @@
       when it is known, and every keeper when it is not: no recovery key
       yet, a setup that stopped, or a damaged `record`. Storing refuses
       keys of another recovery key anyway (point 17).
+
+    A key ID here is always the current one, on both sides. After a new
+    recovery key, the keeper's keys have the new key as their primary.
+    An app whose current key is the older one would refuse them (point
+    17), as it refuses the words of another recovery key, so the keeper
+    is not offered to it. How the apps on a phone take a new recovery key
+    is part of that flow, which is open
+    ([crypto-design.md](../security/crypto-design.md#open-questions),
+    question 6).
 
 ### What is handed over
 
@@ -235,9 +244,11 @@
     the phone. Water's handover screen then shows the prompt, asks four
     words at random positions against the kept key, and hands over the
     keys marked "words checked". The asking app takes that as the proof
-    only if the `record` keyset that comes back is exactly its own. The
-    check stores nothing. With no such keeper, the app asks for all 24
-    words, as before.
+    only if the one `record` key that comes back is the current key of
+    its own stored `record`, the same key under the same ID, as with all
+    24 words. Older keys that its `record` holds after a new recovery key
+    do not count. The check stores nothing. With no such keeper, the app
+    asks for all 24 words, as before.
     - The keeper does the check as it does its own, before its own app
       lock ([security-screens.md](../architecture/security-screens.md#turning-it-on),
       point 2). The prompt reads the kept key into the screen. The key,
