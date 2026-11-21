@@ -387,7 +387,7 @@ class RealSiteTest(unittest.TestCase):
         config = json.loads((build.ROOT / build.CONFIG).read_text(encoding="utf-8"))
         files = build.Site(build.ROOT, config).build()
         water = files["water/index.html"].decode()
-        for name in ("recovery-key", "app-lock", "backup", "reminders"):
+        for name in ("recovery-key", "app-lock", "backup", "notifications"):
             with self.subTest(name=name):
                 self.assertIn(f"{name}/index.html", files)
                 self.assertIn(f'href="/{name}/"', water)
@@ -396,13 +396,13 @@ class RealSiteTest(unittest.TestCase):
     def test_the_guides_of_reminders_are_on_the_site(self):
         config = json.loads((build.ROOT / build.CONFIG).read_text(encoding="utf-8"))
         files = build.Site(build.ROOT, config).build()
-        reminders = files["reminders-app/index.html"].decode()
-        for name in ("recovery-key", "app-lock", "backup", "reminders"):
+        reminders = files["reminders/index.html"].decode()
+        for name in ("recovery-key", "app-lock", "backup", "notifications"):
             with self.subTest(name=name):
                 self.assertIn(f"{name}/index.html", files)
                 self.assertIn(f'href="/{name}/"', reminders)
-        self.assertIn('href="/reminders-app/"', files["apps/index.html"].decode())
-        self.assertIn('href="/reminders-app/"', files["reminders/index.html"].decode())
+        self.assertIn('href="/reminders/"', files["apps/index.html"].decode())
+        self.assertIn('href="/reminders/"', files["notifications/index.html"].decode())
 
 
 if __name__ == "__main__":
