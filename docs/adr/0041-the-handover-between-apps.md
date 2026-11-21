@@ -223,7 +223,11 @@
       extra layer would be a construction of our own, and would protect
       only against Android itself.
     - The keys are never in a broadcast, a file, the clipboard, a
-      notification, saved state or a log.
+      notification, saved state or a log. The asking screen takes the
+      result through a callback that stays registered for as long as
+      the screen exists. So the result is handed to it at once, and
+      AndroidX never holds it back as a pending result, which would go
+      into the screen's saved state.
     - The keeper's own certificate check is the real gate. The
       permission stops other apps sooner.
 
@@ -286,6 +290,13 @@
   screen and the status provider. Both need the permission, and both
   check the caller's certificate themselves. permissions.md,
   threat-model.md and data-inventory.md must say so.
+- The approved specifications of Water and Reminders say that only the
+  launcher screen is exported, list five permissions, and say that the
+  handover comes later
+  ([Water](../apps/water/spec.md#permissions),
+  [Reminders](../apps/reminders/spec.md)). The build changes both
+  apps, so those specifications change with it, and the owner approves
+  the change.
 - An app set up by a handover cannot show the words. Its security screen
   names the app that keeps them.
 - When the last keeper on a phone loses its copy, no app can hand over
