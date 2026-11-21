@@ -1,6 +1,7 @@
 # 0007 Recovery key instead of passwords
 
-- Status: Accepted
+- Status: Accepted; point 12 decided in detail by
+  [0041](0041-the-handover-between-apps.md)
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decisions 3 and 12), 6
   and 7, and the owner's review of
@@ -116,8 +117,9 @@ owner chose words only for now, and one random key per file, on
   The other apps keep working. No app can show the key or set up a new
   app until the words are entered again in some app.
 - Removing the screen lock deletes the kept copy in every keeper.
-- Until the handover between apps is built, every app is set up by
-  entering the words, so every such app is a keeper.
+- An app set up by entering the words is a keeper. An app set up by the
+  handover between apps is not
+  ([0041](0041-the-handover-between-apps.md)).
 - The app needs the BIP-39 English word list, 2048 words. It is data, not
   a library. Its source and its MIT notice are recorded in
   `docs/development/third-party.md`, which session B creates, and the
@@ -125,8 +127,10 @@ owner chose words only for now, and one random key per file, on
 - A preview build makes the same keys from the same words as its app.
   Testers never type real recovery words into a preview
   ([test-a-pull-request.md](../development/test-a-pull-request.md#safety)).
+- Point 12 is decided in [0041](0041-the-handover-between-apps.md): the
+  handover's screen, its signature permission, the keeper's own check of
+  the caller, and how an app that is not a keeper checks the paper copy.
 - Open: the points listed under "Open questions" in
   [crypto-design.md](../security/crypto-design.md#open-questions). Those
-  that touch this record are the handover interface and how an app that
-  is not a keeper checks the paper copy (the handover step), the QR
-  code (step 1.7), and a new recovery key across devices (Phase 5).
+  that touch this record are the QR code (step 1.7), and a new recovery
+  key across devices (Phase 5).

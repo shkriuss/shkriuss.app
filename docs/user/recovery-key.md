@@ -31,6 +31,12 @@ comes when you first need it:
 Under the reason, the first two say: "If another shkriuss app already
 has your recovery key, tap I already have one and enter the same words."
 
+If another app of the suite on this phone keeps your recovery key, the
+first two and **Restore a backup** also offer **Get the keys from**
+that app, for example **Get the keys from Water**. Tap it to set this
+app up with no words to type
+([Get the keys from another app](#get-the-keys-from-another-app)).
+
 1. A button opens the screens below.
 2. When you are done there, the app goes on with what you tapped: the
    file picker for a backup or a restore, or the app lock screen.
@@ -41,21 +47,58 @@ has your recovery key, tap I already have one and enter the same words."
 
 ## One key for every app
 
-Use the same 24 words in every app of the suite. Each app is set up on
-its own:
+Use the same recovery key in every app of the suite. Each app is set up
+on its own:
 
-1. Create the key in the first app you set up, for example Water.
-2. In the next app, for example Reminders, tap **I already have one**
-   when it asks for the key. On its security screen, the button is **I
-   have a recovery key**. The screen says so too: "If another shkriuss
-   app already has your recovery key, tap I have a recovery key and
-   enter the same words."
-3. Enter the same 24 words ([Enter your recovery key](#enter-your-recovery-key)).
-4. Both apps then have their keys from the same recovery key, and each
-   can keep it. Their short name is the same.
+1. Create the key in the first app you set up, for example Water, and
+   let the phone keep it.
+2. In the next app, for example Reminders, tap **Get the keys from
+   Water** when it asks for the key, or on its security screen
+   ([Get the keys from another app](#get-the-keys-from-another-app)).
+   You type no words.
+3. Or enter the same 24 words in it: tap **I already have one** when it
+   asks for the key. On its security screen, the button is **I have a
+   recovery key**. The screen says so too: "If another shkriuss app
+   already has your recovery key, tap I have a recovery key and enter
+   the same words." Then it can keep the key too.
+4. Both apps then have their keys from the same recovery key. Their
+   short name is the same.
 
 Do not create a second key in the next app. A backup opens only with the
 words it was made with, so two keys mean two papers to keep.
+
+## Get the keys from another app
+
+An app that keeps your recovery key on this phone can give another app
+of the suite its own keys. That app never gets the 24 words.
+
+1. In the new app, tap **Get the keys from Water**. It shows on the
+   security screen, and when the app first asks for the key. It shows
+   only when Water keeps the key on this phone.
+2. Water opens and says which app asks, and the short name of your
+   recovery key. Check that both are right.
+3. Tap **Allow**, and answer the system prompt. Tap **Do not allow** to
+   give nothing.
+4. You are back in the new app. It says **This app has its keys**, with
+   the same short name. Tap **Done**.
+
+What this means:
+
+- The new app gets only its own keys. It cannot show the words. Its
+  security screen says "The recovery key is kept in Water", with **Open
+  Water**.
+- Its backups open with the same 24 words, in this app on any phone.
+- The same button also repairs a damaged key file and opens the files
+  again after the screen lock was removed, when Water keeps the same
+  recovery key.
+- If the new app already has keys of another recovery key, it says so
+  and changes nothing.
+- Only apps of the suite signed like Water can ask it. Water checks this
+  itself, every time.
+- Update all apps of the suite together. An app that is not up to date
+  may not show the button, or may say that the two apps are not of the
+  same version.
+
 
 ## What it is
 
@@ -113,7 +156,9 @@ this phone again:
    - "These words do not belong together": a word is wrong, or two are
      swapped. Check each word.
 5. The app stores its keys, and asks to keep the recovery key, as when
-   you create one.
+   you create one. If another app on this phone keeps the same key, it
+   first asks **Keep it here too?** Tap **Keep it here too** to keep it
+   in this app as well, or **Not now**.
 6. If the app lock was on and these words repaired its key file, or the
    app lock was reset because the screen lock was removed, the end of
    the screen says that the app lock is off now. Tap **App lock** to
@@ -143,7 +188,8 @@ It shows:
 - Whether the app has a recovery key, and its short name: eight letters
   and digits. The short name is not secret and opens nothing. It helps
   you tell two recovery keys apart.
-- Whether this phone keeps the recovery key.
+- Whether this phone keeps the recovery key, or which app keeps it:
+  "The recovery key is kept in Water", with **Open Water**.
 - Whether the phone has a screen lock. Without one, the phone cannot keep
   the recovery key or show it again, and the app lock cannot be turned
   on. Backup, sync and files still work.
@@ -213,3 +259,6 @@ The security screen says when a key file of the app is damaged.
 A preview build is an app from a pull request, for testing. Never type
 your real recovery words into one. It shows a warning on these screens.
 Make a new recovery key in it for testing.
+
+A preview takes part in **Get the keys from another app** only with
+another preview of the same pull request, never with a real app.

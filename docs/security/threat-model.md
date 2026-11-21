@@ -14,8 +14,8 @@ does not. It ends with the OWASP MASVS controls and every open question.
 - What exists today: Catalog, Water, Reminders and the core modules
   ([modules.md](../architecture/modules.md)). Water is the first data
   app and Reminders the second. There is no Sync app and no sync server
-  yet. Where this page speaks of sync or of the handover between apps,
-  it describes what is decided for them, not what is built. What each
+  yet. Where this page speaks of sync, it describes what is decided for
+  it, not what is built. The handover between apps is built. What each
   app stores is in the [data inventory](data-inventory.md).
 
 ## At a glance
@@ -217,8 +217,10 @@ What stops it:
 2. Each app has its own hardware keys, and its own keys derived from the
    recovery key. One app cannot compute the keys of another
    ([crypto-design.md](crypto-design.md#deriving-keys)).
-3. Nothing is exported except each app's launcher screen. The alarm
-   receivers and the security screens are not exported. The screen-off
+3. Nothing is exported except each app's launcher screen and the two
+   parts of the handover between apps, which need the signature
+   permission (point 8). The alarm receivers and the other security
+   screens are not exported. The screen-off
    receiver is registered as not exported. A tap on a notification opens
    only the same app, through an explicit, immutable intent
    ([permissions.md](permissions.md)).
@@ -236,8 +238,10 @@ What stops it:
      shell hold. Water and Reminders remove it (owner's decision).
      Open, for the next change to Catalog: remove it there too
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
-4. There is no content provider of our own, no file provider and no deep
-   link.
+4. There is one content provider of our own, the status provider of the
+   handover: it answers one call, holds no data and opens no file, and
+   only apps signed with the suite's key may call it. There is no file
+   provider and no deep link.
 5. Files enter and leave only through the system pickers. No app of the
    suite has a storage permission
    ([permissions.md](permissions.md#rules)).
@@ -247,15 +251,35 @@ What stops it:
    ([security-screens.md](../architecture/security-screens.md#what-protects-the-words)).
 7. The screens of `core/security` hide other apps' windows while they
    show. So does every screen of an app while the app is locked. A tap
-   under another app's window does nothing on those six screens. Only
+   under another app's window does nothing on those eight screens. Only
    accessibility services that declare themselves accessibility tools
    can read them or act on them
    ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
-8. Apps of the suite are to share keys and data only through screens and
+8. Apps of the suite share keys and data only through screens and
    interfaces that only apps signed with the suite key can open: the
-   handover between apps and the courier interface of sync
+   handover between apps
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)) and, once it
+   is built, the courier interface of sync
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
-   Neither is built.
+   The handover:
+   - Its screen and its status provider need the permission
+     `app.shkriuss.permission.HANDOVER`, protection level `signature`.
+     Android refuses them to every other app.
+   - Each also checks the caller itself: a data app of the suite, of the
+     same build kind, with exactly one signer whose certificate is the
+     same as its own current one. Not the lineage, so an app on an old
+     signing key fails.
+   - The keeper takes the asking app's name only from Android, never
+     from the request. So an app can only ever get its own keys.
+   - The keys come only after the user allows it on the keeper's screen
+     and answers the system prompt of the Recovery guard. The screen
+     hides other apps' windows and drops a tap under them.
+   - The asking app checks the keeper in the same way before and after,
+     so an app that took a keeper's name on a phone without that keeper
+     cannot plant keys it knows.
+   - Every way an app could try to get keys, and how each fails, is in
+     [ADR 0041](../adr/0041-the-handover-between-apps.md), section
+     "Every way another app could try to get keys".
 
 What does not:
 
@@ -299,15 +323,22 @@ What does not:
    preview ([crypto-design.md](crypto-design.md#the-owners-decisions)).
 5. The signature-protected interfaces trust every app signed with the
    suite key. Whoever has that key can build an app that passes them
-   ([The owner's GitHub account](#the-owners-github-account)).
+   ([The owner's GitHub account](#the-owners-github-account)). With the
+   handover, such an app could ask a keeper for keys; the user would
+   still have to allow it and answer the prompt.
 6. An app that draws over other apps can still draw over the other
    screens of the apps, which show records, not keys. An accepted
    deviation ([PLATFORM-3](#platform)).
+7. A malicious library inside an app of the suite can ask a keeper for
+   that app's own keys, which it can reach anyway once the app is set
+   up. It needs the user to allow it and answer the prompt.
+8. The handover rests on Android keeping the same permission defined
+   while any app that defines it is installed. Read in Android's
+   reference, not checked on an emulator. If Android dropped it, the
+   handover would fail closed until an app is updated.
 
 Open:
 
-- The handover: its screen, its signature permission and what it checks
-  (crypto-design.md, open questions 1 and 2).
 - The courier interface (ADR 0005).
 
 ### A network attacker
@@ -1106,7 +1137,9 @@ Status: **Open (the sync design).**
   ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). The
   protocol is Open.
 - MASWE-0018, components: met for what is built. Nothing is exported
-  except the launcher screen. Open: Catalog still exports the receiver of
+  except the launcher screen and the two parts of the handover, which
+  need the suite's signature permission and check the caller's
+  certificate themselves. Open: Catalog still exports the receiver of
   `androidx.profileinstaller` to callers with `android.permission.DUMP`,
   until its next change. Water and Reminders remove it
   ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
@@ -1145,8 +1178,9 @@ Status: **Partly met.**
     ([crypto-design.md](crypto-design.md#showing-it-again)).
   - The app lock screen asks for the prompt each time it opens.
   - Turning the app lock on needs the words and a prompt.
-  - Setting up another app from a keeper will need a prompt (the
-    handover between apps, not built).
+  - Setting up another app from a keeper needs the user's Allow and the
+    prompt of the keeper's Recovery guard
+    ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
   - With the app lock off, opening a file needs nothing more than the
     unlocked phone. The app lock is optional
     ([crypto-design.md](crypto-design.md#the-app-lock)).
@@ -1184,7 +1218,11 @@ Status: **Open (the sync design).**
 Status: **Met for what is built.**
 
 - MASWE-0018 and 0032, components and intents: met. Only the launcher
-  screen is exported. Of the intent that starts it, only Reminders reads
+  screen and the two parts of the handover are exported. The handover
+  screen and the status provider need the signature permission, check
+  the caller's certificate themselves, take the asking app's name only
+  from Android, and read nothing else from the request than its version
+  and mode, inside a catch ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Of the intent that starts it, only Reminders reads
   anything: its identifier, a reminder's ID. Receivers are not exported
   and ignore actions they do not expect. A notification opens only the
   same app, through an explicit, immutable intent ([permissions.md](permissions.md),
@@ -1198,9 +1236,13 @@ Status: **Met for what is built.**
   user copies there goes to the clipboard.
 - MASWE-0031, app extensions: does not apply. The apps offer no
   extension points.
-- Open: the handover between apps and the courier interface
-  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
-  Both are to be signature-protected. Both will carry keys or data.
+- The handover between apps carries keys, with no further encryption,
+  only to an app that Android names as the receiver of the result and
+  that passed the checks (MASWE-0032). Decided and built
+  ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+- Open: the courier interface
+  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). It is
+  to be signature-protected, and will carry data.
 
 **MASVS-PLATFORM-2: The app uses WebViews securely.**
 Status: **Does not apply.**
@@ -1556,11 +1598,10 @@ The first app that stores files:
 
 The handover between apps:
 
-9. The handover interface, its signature permission, and what happens
-   when the asking app already has keys. Whether a keeper can check the
-   words for another app
-   ([crypto-design.md](crypto-design.md#open-questions), questions 1
-   and 2).
+9. Decided ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+   Left: whether an emulator test should show that the handover
+   permission stays defined when the first app that defined it is
+   uninstalled. It needs two app APKs on the emulator.
 
 Sync:
 

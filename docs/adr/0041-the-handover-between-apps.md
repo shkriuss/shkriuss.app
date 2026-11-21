@@ -68,9 +68,9 @@
 
 3. In the asking app, wherever it offers to enter the words today, and
    only when a keeper is on the phone:
-   - the security screen offers **Get the keys from Water**, or with
-     several keepers **Get the keys from another app**, which lists them
-     with their key's short name;
+   - the security screen offers **Get the keys from Water**: one button
+     for each keeper, which also names its key's short name when the
+     keepers keep different keys;
    - the first-need dialog of 0035 gets the fourth choice **Get the keys
      from Water** in its "set up" and "restore" forms;
    - a setup that stopped, a damaged key file, and keys lost with the
@@ -80,8 +80,8 @@
    name of the app that keeps the words. Or why not.
 5. The keeper's handover screen is a security screen: no screenshots,
    other apps' windows hidden, taps under them dropped. It names the
-   asking app, with its name and icon from Android, and the short name
-   of the recovery key. It says that the asking app gets its own keys
+   asking app, with its name from Android, and the short name of the
+   recovery key. It says that the asking app gets its own keys
    only, never the words, and cannot show them.
    - **Allow** opens the system prompt of the Recovery guard. So the
      hardware enforces the user's consent. **Do not allow** closes it.

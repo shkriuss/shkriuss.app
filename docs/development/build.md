@@ -169,10 +169,10 @@ too.
 
 | Plugin | What it does |
 |---|---|
-| `shkriuss.android.application` | Apps: SDK levels, build types, lint, warnings as errors, reproducible-build settings, the APK rules check and the graphics-path check. `check` also runs the [tests of the build checks](#tests-of-the-build-checks). |
+| `shkriuss.android.application` | Apps: SDK levels, build types and the name of the handover permission for each, lint, warnings as errors, reproducible-build settings, the APK rules check and the graphics-path check. `check` also runs the [tests of the build checks](#tests-of-the-build-checks). |
 | `shkriuss.android.library` | Libraries: SDK levels, lint, warnings as errors. |
 | `shkriuss.android.compose` | Compose compiler, Compose BOM, Compose test library. |
-| `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. In an app, it tells the tests where the app's merged manifest is ([Shared test helpers](#shared-test-helpers)). |
+| `shkriuss.android.unit-test` | JUnit 4 and Robolectric, offline. In an app, it tells the tests where the app's merged manifest is ([Shared test helpers](#shared-test-helpers)). In a library, it names the handover permission of `core/security` in the tests' manifest ([Build types](#build-types)). |
 | `shkriuss.android.screenshot-test` | Roborazzi. Applies the unit-test plugin too. |
 | `shkriuss.android.instrumented-test` | Tests on an emulator, in `src/androidTest/`: the project's own test runner, JUnit 4 and `core/testing`. Tests in `src/sharedTest/` run on the JVM and on the emulator ([emulator-tests.md](emulator-tests.md), [ADR 0028](../adr/0028-instrumented-tests-own-runner-and-shell-steps.md)). The [instrumented test suite check](#instrumented-test-suite-check). |
 | `shkriuss.android.test-fixtures` | Test helpers that the tests of other modules may use, in `src/testFixtures/` ([Test fixtures](#test-fixtures), [ADR 0029](../adr/0029-test-fixtures-for-the-keystore-stand-in.md)). |
@@ -204,6 +204,15 @@ KSP's warnings, which include Room's, are errors too.
   `apksigner` (plan section 13, [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)).
 - R8 uses the default `proguard-android-optimize.txt` rules plus
   `build-logic/r8/app-rules.pro`. See [R8](#r8).
+- The handover permission of `core/security` is named by the manifest
+  placeholder `shkHandoverPermission`
+  ([ADR 0041](../adr/0041-the-handover-between-apps.md)). The application
+  plugin sets it: `app.shkriuss.permission.HANDOVER` for `debug` and
+  `release`, `app.shkriuss.permission.HANDOVER_PREVIEW` for `preview`.
+  So a preview, signed with another key, installs next to the real app:
+  Android refuses an app that defines a permission another key defined
+  first. The unit tests of a library set the `debug` name. The names are
+  in `ShkBuild.kt`.
 
 ## R8
 
@@ -526,9 +535,11 @@ second build must write the same mapping file, or the release stops. See
     progress dialog, held open by the test. It covers the Licences list
     and a notice too.
   - `WaterManifestTest` names everything Water's merged manifest lets
-    another app reach: five permissions, Water's screen and the six of
-    `core/security`, none of the six exported, and Water's screen the
-    only exported part.
+    another app reach: six permissions and the one it defines, the
+    handover permission with protection level `signature`; Water's
+    screen and the eight of `core/security`; and as the only exported
+    parts Water's screen and the handover screen and status provider,
+    both behind the handover permission. It also checks the `<queries>`.
   - `WaterRemindersTest`: the reminders from end to end through
     Robolectric's `AlarmManager`, the receivers of the merged manifest
     and the buttons' pending intents. After a restore the alarm moves,
@@ -577,9 +588,10 @@ second build must write the same mapping file, or the release stops. See
     notifications, the dialogs of backup and restore and the progress
     dialog, held open by the test, and the Licences list and a notice.
   - `RemindersManifestTest` names everything Reminders' merged manifest
-    lets another app reach: two permissions, Reminders' screen and the
-    six of `core/security`, none of the six exported, no receiver, and
-    Reminders' screen the only exported part.
+    lets another app reach, as `WaterManifestTest` does for Water: six
+    permissions and the handover permission it defines, Reminders' screen
+    and the eight of `core/security`, and as the only exported parts
+    Reminders' screen and the two parts of the handover.
   - `RemindersScreensTest`: what the screens do and what TalkBack hears,
     on a phone and on a tablet.
   - `RemindersBackupScreensTest`, a copy of Water's
@@ -671,7 +683,7 @@ an app is behind the app lock
 The app lock check is three parts:
 
 1. `AppLockCheck.checkEveryScreen` starts every activity of the app's
-   merged manifest, except the six screens of `core/security`, and
+   merged manifest, except the eight screens of `core/security`, and
    fails unless each shows the lock screen and nothing of its own.
 2. `LockedAppForTests` is the app class of that test: real keys on the
    stand-in for the Keystore, with the app lock on and locked before any
@@ -1324,13 +1336,18 @@ Every time an APK is assembled, the task `check<Variant>ApkRules` reads it
 and fails the build if:
 
 1. it contains a native library (hard rule 2),
-2. its manifest declares any permission, or requests one that is not on
-   the app's allow list (hard rule 4). The list is per app, by module
-   name, the same for every build type. Water's list and Reminders'
-   list hold the same five: the three permissions of `core/notify`, and
-   the two of `core/security`, `USE_BIOMETRIC` and
-   `HIDE_OVERLAY_WINDOWS`. Every other app's list is empty.
-   Only the owner changes it ([permissions.md](../security/permissions.md)).
+2. its manifest requests a permission that is not on the app's allow
+   list, or declares any permission but the handover permission of
+   `core/security` in an app allowed to (hard rule 4). The list is per
+   app, by module name, the same for every build type. Water's list and
+   Reminders' list hold the same six: the three permissions of
+   `core/notify`, and the three of `core/security`, `USE_BIOMETRIC`,
+   `HIDE_OVERLAY_WINDOWS` and the handover permission, under its name for
+   the build type. Only those two apps may declare the handover
+   permission, only with protection level `signature`
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Every other
+   app's list is empty. Only the owner changes it
+   ([permissions.md](../security/permissions.md)).
    The report of a build that passes names the allowed permissions,
 3. its manifest still starts the emoji font loader (hard rule 3, see below),
 4. one of its dex files names a class under `com.google.android.gms`, the
@@ -1376,7 +1393,7 @@ point 5).
 3. One problem is reported for each missing permission. It names the
    first screen, says how many more there are, and names ADR 0033.
 4. An app with no such screen needs neither permission. Catalog's
-   manifest removes the six screens and both permissions, and passes.
+   manifest removes the eight screens and both permissions, and passes.
 
 Why: without `HIDE_OVERLAY_WINDOWS` a screen still starts, but hides no
 other app's window. Without `USE_BIOMETRIC` the system prompt cannot
@@ -1831,8 +1848,9 @@ two:
    font.
 
 Every new app must remove the same two. The APK rules check fails until it
-does. Water removes them too. It keeps the two permissions and the six
-screens of `core/security`, which Catalog removes
+does. Water removes them too. It keeps the three permissions, the
+handover permission it defines, the eight screens and the status provider
+of `core/security`, which Catalog removes
 ([permissions.md](../security/permissions.md#water-appshkriusswater)).
 Water also removes the receiver of `androidx.profileinstaller`, which is
 exported to developer tools. Catalog still has it, until its next change

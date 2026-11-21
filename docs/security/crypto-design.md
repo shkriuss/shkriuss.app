@@ -12,16 +12,17 @@ follows this page.
 - The recovery key screens and the app lock screens are in
   `android/core/security`
   ([security-screens.md](../architecture/security-screens.md)).
-- Not built yet: the handover between apps, sealing file keys again in
-  the database (the first app that stores files), and a new recovery key
-  (the sync design).
+- Not built yet: sealing file keys again in the database (the first app
+  that stores files), and a new recovery key (the sync design).
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
 - Decisions: [ADR 0006](../adr/0006-tink-and-key-hierarchy.md) (Tink and
   the key hierarchy) and
   [ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md) (the
-  recovery key). Related:
+  recovery key), and
+  [ADR 0041](../adr/0041-the-handover-between-apps.md) (the handover
+  between apps). Related:
   [0004](../adr/0004-room-on-system-sqlite-no-sqlcipher.md),
   [0005](../adr/0005-no-network-permission-in-data-apps.md),
   [0008](../adr/0008-backup-file-format.md) and
@@ -95,7 +96,7 @@ is the part of it that the keys on this page answer.
 | Against | What protects the data |
 |---|---|
 | A lost or stolen phone | Android's file-based encryption. Keys are wrapped by hardware keys that never leave the phone, where the phone has key hardware ([StrongBox and other hardware](#strongbox-and-other-hardware)). With the app lock on, file keys also need the system prompt. The prompt also takes the phone's PIN, pattern or password, so all of it is as strong as the screen lock. |
-| Other apps on the phone | The app sandbox. Each app has its own hardware keys and its own derived keys. Android's own backup is off. Today a key reaches another app of the suite only when the user types the words there. The handover between apps is planned: a signature-protected screen, after a system prompt (not built). |
+| Other apps on the phone | The app sandbox. Each app has its own hardware keys and its own derived keys. Android's own backup is off. A key reaches another app of the suite only when the user types the words there, or through the handover: a keeper's screen that only apps signed with the suite's key can open, which checks the caller's certificate itself, and gives that app its own keys after the user allows it and the system prompt ([Setting up a second app on the same phone](#setting-up-a-second-app-on-the-same-phone)). |
 | A network attacker, a curious or hostile sync server | They see only sealed records and encrypted files, with the key ID in the clear. A changed, cut or swapped blob does not open. What else they learn is in [threat-model.md](threat-model.md#what-the-sync-server-and-the-network-can-still-learn). |
 | A malicious library inside one app | It can reach that app's data and derived keys. It can read the recovery key while it is in that app's memory: while it is created, entered or shown. With it, it could make the keys of every app. It cannot read the kept copy without a system prompt. It cannot connect to the network itself: a data app has no network permission. |
 | Someone who gets a backup file | The stream under the `backup` key. The file shows its app, the key ID, the format version and its size ([backup-format.md](../architecture/backup-format.md#what-a-changed-or-cut-file-does)). |
@@ -643,8 +644,9 @@ When the app gets its recovery-key-derived keys:
 ### Keys in memory
 
 1. The recovery key is in memory only while it is created, entered,
-   shown, used to derive keys, or checked before the app lock is turned
-   on. Then every reference is dropped.
+   shown, used to derive keys (also for another app, in a handover), or
+   checked before the app lock is turned on (also, in a keeper, four
+   words for another app). Then every reference is dropped.
 2. The `record` keyset is loaded when needed and may stay for the life of
    the process.
 3. The `backup` keyset is loaded for one backup or restore and then
@@ -976,8 +978,15 @@ with no files. So the prompt always unlocks a real hardware key.
      words leaves memory when the screen stops, as on the screen that
      shows the words. A turn of the phone does not count. The prompt asks
      again on the way back.
-   - Whether a keeper can do the check for another app is decided with
-     the handover between apps.
+   - An app that does not keep the key can let a keeper check four words
+     for it instead, when a keeper of its recovery key is on the phone
+     ([ADR 0041](../adr/0041-the-handover-between-apps.md), point 19).
+     The keeper shows the prompt of its Recovery guard, asks four words
+     at random positions against its kept key, and hands over the asking
+     app's keys marked "words checked". The asking app takes that as the
+     proof only if the `record` that comes back is its own stored
+     `record`: `KeySetup.checkWordsAtKeeper` makes the third kind of
+     `WordsProof`. Nothing is stored by the check.
 3. Why rule 1: the Lock key is removed when the screen lock is removed.
    The `file-key` keyset is then gone from the phone. Because it derives
    from the recovery key, the words bring it back. A random keyset could
@@ -1002,7 +1011,8 @@ Turn on:
 1. Check the recovery words (rule 2). In a keeper app this reads the
    kept recovery key, so it is one prompt of the Recovery guard, and
    then four words. In an app that does not keep the key, it is all 24
-   words and no prompt.
+   words and no prompt, or the prompt and four words in a keeper of the
+   same key.
 2. Make a new key of the kind that wraps `file-key` now, the Unlocked
    key. Move the other keysets of the old one to it. `file-key` stays under the old key for
    now.
@@ -1015,7 +1025,7 @@ Turn on:
    be opened without the prompt.
 
 So turning the lock on shows two prompts in a keeper app, and one in an
-app that does not keep the key.
+app that does not keep the key: two when a keeper checks its words.
 
 The order is the owner's decision. Making the Lock key and wrapping
 `file-key` first, and replacing the old key only then, would not be
@@ -1131,11 +1141,11 @@ when the phone is lost. The paper copy is the backup.
    keeps only the current recovery key of its stored `record`. Any other
    key is refused, so the words it shows again are always the ones its
    keys come from.
-6. Before step 5, if another keeper app is already on the phone, the app
-   asks whether to keep the key here too. With no other keeper it keeps
-   the key without asking. An app can learn of other keepers only through
-   the handover between apps. Until that exists, it keeps the key without
-   asking.
+6. Before step 5, if another app of the suite on the phone keeps the
+   same recovery key, the app asks whether to keep the key here too:
+   "Water already keeps this recovery key." With no such keeper it keeps
+   the key without asking. It learns of the keepers from their status
+   providers ([Setting up a second app on the same phone](#setting-up-a-second-app-on-the-same-phone)).
 7. The recovery key is dropped from memory.
 
 If the user leaves before step 4, nothing was stored and the key is
@@ -1283,41 +1293,120 @@ entered, on a phone with a screen lock. Several apps can be keepers.
 
 | Question | Answer |
 |---|---|
-| What does an app that is not a keeper show? | If a keeper is on the phone: "The recovery key is kept in Water", with a button that opens Water. If none is: "The recovery key is not kept on this phone", with the choice to enter the words. |
+| What does an app that is not a keeper show? | If a keeper of its recovery key is on the phone: "The recovery key is kept in Water", with a button that opens Water. If none is: that this phone does not keep it, with the choice to enter the words. |
 | The keeper is uninstalled, or its data is cleared | Its copy is gone. The other apps keep working with their own keys. No app can show the key or set up a new app until the words are entered in some app. Nothing else is lost. |
-| How does another app become a keeper? | The user enters the 24 words in that app. It derives the `record` key from them and compares it with its own, then stores the recovery key under its own Recovery guard after the prompt. |
-| The words are entered in an app while another keeper is on the phone | The app asks whether to keep the key here too. With no other keeper it keeps it without asking. |
-| How are apps set up before the handover below exists? | By entering the words in each app. Each such app is a keeper, and keeps the key without asking. Nothing changes for them when the handover arrives. |
+| How does another app become a keeper? | The user enters the 24 words in that app. It derives the `record` key from them and compares it with its own, then stores the recovery key under its own Recovery guard after the prompt. An app set up by the handover becomes a keeper only this way. |
+| The words are entered in an app while another keeper of the same key is on the phone | The app asks whether to keep the key here too. With no such keeper it keeps it without asking. |
+| How is a second app set up? | From a keeper, through the handover below, with no words to type. Or by entering the words, as before; such an app is a keeper. |
 
 ### Setting up a second app on the same phone
 
 Decided by the owner: the second app gets its own derived keys and
-never the recovery key. This handover is not built yet. It is a piece
-of work of its own, with its own decision record
-([PROMPTS.md](../development/PROMPTS.md#30-handover)), which confirms
-the points below.
+never the recovery key. The whole decision is
+[ADR 0041](../adr/0041-the-handover-between-apps.md). The screens are in
+[security-screens.md](../architecture/security-screens.md#the-handover-between-apps).
 
-1. The new app opens a screen of a keeper app. That screen can be opened
-   only by apps signed with the suite's key. The keeper also checks the
-   caller's signing certificate itself.
-2. The keeper names the asking app and asks the user to allow it.
-3. The keeper shows the system prompt. Its Recovery guard needs it, so
+1. The asking app, for example Reminders, opens the handover screen of a
+   keeper, for example Water, for a result. Only apps signed with the
+   suite's key can open that screen: it needs the signature permission
+   `app.shkriuss.permission.HANDOVER`.
+2. The keeper checks the caller itself, before it shows anything and
+   again before it gives the keys:
+   - Android's calling package, the app that gets the result, is not
+     the keeper, is `app.shkriuss.<name>` with `.preview` exactly when
+     the keeper is a preview, and `<name>` holds data keys;
+   - it has exactly one signer, whose certificate bytes are the same as
+     the keeper's own current certificate. Not the lineage: during a key
+     rotation an updated and a not-updated app refuse each other.
+3. The keeper names the asking app and the short name of its recovery
+   key, and asks the user to allow it.
+4. The keeper shows the system prompt. Its Recovery guard needs it, so
    the hardware enforces this step.
-4. The keeper derives the three keysets for the asking app's name. It
-   takes the name from the application ID that Android reports for the
-   caller, never from what the caller says.
-5. It returns the three keysets. The new app wraps and stores them. It is
-   not a keeper.
-6. The keeper drops the recovery key from memory.
+5. Inside the prompt step, `core/crypto` derives the three keysets for
+   the asking app's name from the `recovery` keyset
+   (`KeySetup.beginHandOver`). The name comes from the calling package,
+   never from what the caller says. The recovery key is dropped at once;
+   the screen code never holds it.
+6. The keeper returns the three keysets in the activity result, as
+   version 1 of the handover format below, and closes.
+7. The asking app checks the keeper in the same way, before it opens it
+   and when the keys come back. It reads the keysets and stores them
+   with `KeySetup.storeHandedOverKeys`: exactly as "Entering it" stores
+   the keysets of entered words, with the same checks against what is
+   stored, the same order and the same results. It is not a keeper.
 
 So an app set up this way never holds the root, even for a moment.
 
+What a handover does in an app that already has keys, or has its app
+lock on, follows from step 7. Keys of the same recovery key change
+nothing, or finish a setup that stopped, repair a damaged keyset file
+when another stored keyset is exactly the one handed over, and store
+again a keyset whose hardware key is gone: the `file-key` of an app lock
+that was reset, for example. Keys of another recovery key are refused,
+and nothing is stored. A `file-key` under a Lock key is left as it is.
+Starting over takes words only.
+
 The keysets go from app to app through Android's own call, with no
 further encryption. Only Android itself can see them, and a compromised
-Android is out of scope.
+Android is out of scope. To encrypt them for the receiver, the keeper
+would need a key it knows to be the receiver's; Android's name of the
+receiver, with the certificate check, is that knowledge already.
 
-A preview build is signed with a throwaway key. So it can never take part
-in a handover with a real app.
+#### The handover format, version 1
+
+The result of the keeper's screen is an intent whose extras hold:
+
+| Key | Type | Value |
+|---|---|---|
+| `app.shkriuss.handover.VERSION` | int | `1` |
+| `app.shkriuss.handover.RECORD` | bytes | The `record` keyset, as Tink's binary keyset |
+| `app.shkriuss.handover.BACKUP` | bytes | The `backup` keyset, as Tink's binary keyset |
+| `app.shkriuss.handover.FILE_KEY` | bytes | The `file-key` keyset, as Tink's binary keyset |
+| `app.shkriuss.handover.WORDS_CHECKED` | boolean | True if the keeper checked four words just before (the check for the app lock). Missing means false. |
+
+1. `core/crypto` writes and reads it (`HandedOverKeys.writeTo` and
+   `readFrom`). Nothing else touches the keysets.
+2. A reader takes it only if the version is 1, each keyset holds only
+   keys of its type and parameters of the table "Keysets", each under
+   its own ID, and all three hold the same key IDs with the same
+   primary. A higher version is "made by a newer version". Anything
+   else is "damaged or changed". Other extras are ignored.
+3. The keysets are in the clear. A bundle's own text form lists the
+   bytes it holds, so the result is never shown or logged.
+4. The request carries `app.shkriuss.handover.REQUEST_VERSION`, the int
+   `1`, and `app.shkriuss.handover.MODE`, `KEYS` or `CHECK_WORDS`. It
+   names no app. A keeper that gives no keys says why in
+   `app.shkriuss.handover.REFUSAL`: `NOT_KEEPER` or `UPDATE`, or nothing
+   when the user did not allow it.
+5. A change to any of these names or values is a format change: a new
+   version, and readers for every older one ("Changing formats" in
+   [CLAUDE.md](../../CLAUDE.md)).
+
+#### How an app finds the keepers
+
+1. Every data app's handover screen has an intent filter for the action
+   `app.shkriuss.action.HANDOVER`, with no category, so it opens only
+   when it is named. `core/security` asks for that action in
+   `<queries>`, so the suite's apps see each other.
+2. Every data app has a status provider, `<application ID>.keeper`,
+   exported and protected by the same permission. Its one call,
+   `status`, answers whether the app keeps the recovery key now, and the
+   key ID of its `record`: the ID of the kept key, because a keeper keeps
+   only that key. It checks its caller as in step 2.
+3. The answer is live: a keeper whose Recovery guard went with the
+   screen lock answers "no" at once.
+
+#### Preview builds
+
+1. A preview's permission is `app.shkriuss.permission.HANDOVER_PREVIEW`,
+   so a preview installs next to the real app.
+2. A preview never takes part in a handover with a real app: another
+   name, another certificate, and step 2.
+3. The preview workflow signs every preview of one run with one
+   throwaway key, so two previews of the same pull request take part
+   with each other.
+4. A preview makes the same keys as the real app from the same words.
+   Testers make a new test key in a preview, never type real words.
 
 ### A phone with no screen lock
 
@@ -1785,7 +1874,7 @@ de01854b108f58a9ff8768fca193f7fce8d937f5dc0b2efa4402b2edb7
 
 ## What the tests must cover
 
-Items 1 to 8 and 10 to 13 are unit tests
+Items 1 to 8 and 10 to 14 are unit tests
 ([build.md](../development/build.md#unit-tests)). Item 9 runs on
 emulators, in the emulator job of CI. Those tests and what they showed
 are in
@@ -1843,6 +1932,15 @@ constructor, and the tests pass a software one with the same byte layout.
     key and changes nothing. In `WordsProofTest`. When the app locks, and the screens, are tested in
     `core/security`
     ([security-screens.md](../architecture/security-screens.md#tests)).
+14. The handover between apps. A keeper derives exactly the keysets that
+    the words would give the asking app, behind the prompt of its
+    Recovery guard, only for another data app; the keysets travel
+    through a bundle unchanged; every way a bundle is refused; the
+    asking app stores them as entered words, in an app with no keys, with
+    the same keys, with another recovery key, after a setup that stopped,
+    with a damaged keyset file, with the app lock on and after it was
+    reset; four words checked by a keeper are the proof for the app lock
+    only with the asking app's own `record`. In `HandoverTest`.
 
 ## Assumptions
 
@@ -1991,8 +2089,11 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 |---|---|
 | App lock on, screen lock removed, words lost | Accepted. The app-lock screen and the user guide say it plainly. |
 | When the handover between apps is built | A piece of work of its own, with its decision record ([PROMPTS.md](../development/PROMPTS.md#30-handover)). |
-| Protecting the handover on its way | No extra encryption. The keeper also checks the caller's signing certificate itself. The handover's decision record confirms both. |
-| Entering the words in a second app | It asks "keep it here too" only when another keeper is already on the phone. Otherwise it keeps the key without asking. |
+| Protecting the handover on its way | No extra encryption. The keeper also checks the caller's signing certificate itself. [ADR 0041](../adr/0041-the-handover-between-apps.md) confirms both. |
+| Entering the words in a second app | It asks "keep it here too" only when another keeper of the same recovery key is on the phone. Otherwise it keeps the key without asking. |
+| The handover in preview builds | Previews of one run take part with each other, under a permission name of their own. Never with a real app ([ADR 0041](../adr/0041-the-handover-between-apps.md), points 21 and 22). |
+| How an app finds the keepers | A status provider in each data app, protected by the handover permission, with a live answer and the key ID. |
+| A handover in an app that already has keys (open question 2) | It does what the words do, except keeping and starting over. |
 | The word list | `english.txt` from Trezor's python-mnemonic, MIT licence, the same SHA-256. Source and licence are recorded with the project's third-party material. |
 | The QR code (open question 3) | Words only for now. Nothing draws or scans a QR code. Decided again in the sync design ([The QR code](#the-qr-code)). |
 | Pasting the words | Not offered. |
@@ -2015,7 +2116,7 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 | `file-key` damaged under the app lock | Repaired under a key that needs no prompt. The app lock is then off, and the app lock screens tell the user. |
 | The permission `USE_BIOMETRIC` (open question 4) | [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md): `core/security` declares it, Catalog removes it, and the APK rules check allows it per app. |
 | AndroidX Biometric (open question 5) | Used nowhere. The app lock uses Android's own prompt too. ADR 0003, point 4, says so. |
-| Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. Whether a keeper can check for another app stays open for the handover between apps. |
+| Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. A keeper of the same key can also check four words for it ([ADR 0041](../adr/0041-the-handover-between-apps.md), point 19). |
 | Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. It names the key ID of the `record` key it was checked against, and `beginTurnOn` refuses a proof for another key. |
 | A keeper app that cannot read its kept recovery key | It asks for all 24 words instead: the same check as an app that does not keep the key. |
 | The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words, and when an error ends the turn-on. A turn of the phone does not count. The prompt asks again on the way back. |
@@ -2054,14 +2155,12 @@ Where the page was silent, the owner approved these readings of it:
 What is left, with what decides it.
 
 1. **Checking the paper copy in an app that is not a keeper**, before
-   the app lock is turned on. Decided for an app that does not keep the
-   key: it asks for all 24 words, and words that give its own `record`
-   key are the proof (rule 2 of "The app lock"). Still open for the
-   handover between apps: whether a keeper can do the check for another
-   app.
-2. **The handover interface**: its screen, its signature permission and
-   its decision record. Also what happens when the asking app already
-   has keys, or has its app lock on. The handover between apps.
+   the app lock is turned on. Decided: all 24 words, or four words in a
+   keeper of the same key (rule 2 of "The app lock",
+   [ADR 0041](../adr/0041-the-handover-between-apps.md)).
+2. **The handover interface.** Decided
+   ([Setting up a second app on the same phone](#setting-up-a-second-app-on-the-same-phone),
+   [ADR 0041](../adr/0041-the-handover-between-apps.md)).
 3. **The QR code.** Decided: words only for now, decided again in the
    sync design ([The QR code](#the-qr-code)).
 4. **The permission `USE_BIOMETRIC`.** Decided

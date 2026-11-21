@@ -7,9 +7,11 @@ them. They build on `core/crypto` and follow
 "The app lock".
 
 The module also holds the protection against other apps
-([Overlays and accessibility services](#overlays-and-accessibility-services))
-and the dialog for the moment the key is first needed
-([The recovery key when first needed](#the-recovery-key-when-first-needed)).
+([Overlays and accessibility services](#overlays-and-accessibility-services)),
+the dialog for the moment the key is first needed
+([The recovery key when first needed](#the-recovery-key-when-first-needed))
+and the handover between apps
+([The handover between apps](#the-handover-between-apps)).
 Water is the first app that uses the module.
 
 ## What an app does
@@ -31,28 +33,36 @@ Water is the first app that uses the module.
    `RecoveryKeyFirstNeed`, so that the recovery key comes when it is
    first needed
    ([The recovery key when first needed](#the-recovery-key-when-first-needed)).
-4. It gets the permissions `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`
-   and the six screens through the module's manifest
+4. It gets the permissions `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`,
+   the handover permission, the eight screens, the status provider and
+   the `<queries>` of the handover through the module's manifest
    ([permissions.md](../security/permissions.md#apps-that-use-coresecurity),
    [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md),
-   [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
+   [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md),
+   [ADR 0041](../adr/0041-the-handover-between-apps.md)).
+5. Its build names the handover permission: the application convention
+   plugin sets the manifest placeholder `shkHandoverPermission` per build
+   type, so the app does nothing for it.
 
 The APK rules check fails the build of an app whose merged manifest has
-one of the six screens without both permissions
+one of the eight screens without both permissions
 ([build.md](../development/build.md#apk-rules-check)).
 
 ## The screens
 
-Each flow is an activity of its own. None is exported.
+Each flow is an activity of its own. Only the handover screen is
+exported, and only to apps that hold the handover permission.
 
 | Screen | What it shows |
 |---|---|
-| `SecurityActivity` | Where the recovery key stands: none, a setup that stopped, or set up with its key ID. With none, it says how to use a key that another app of the suite has: "If another shkriuss app already has your recovery key, tap I have a recovery key and enter the same words." Whether this phone keeps it. The screen lock. Each hardware key and where it lives: StrongBox, TEE, secure hardware of an unnamed kind, or software only. A repair notice, and "Give up these files" when a keyset no words can bring back is damaged. |
+| `SecurityActivity` | Where the recovery key stands: none, a setup that stopped, or set up with its key ID. With none, it says how to use a key that another app of the suite has: "If another shkriuss app already has your recovery key, tap I have a recovery key and enter the same words." With a keeper on the phone, also **Get the keys from Water**. Whether this phone keeps it, or which app does: "The recovery key is kept in Water", with **Open Water**. The screen lock. Each hardware key and where it lives: StrongBox, TEE, secure hardware of an unnamed kind, or software only. A repair notice, and "Give up these files" when a keyset no words can bring back is damaged. |
 | `CreateRecoveryKeyActivity` | Before the words; the 24 words; four of them to confirm at positions picked at random; storing; keeping the key with the system prompt; done. With the start-over extra, the new key starts a stopped setup over. |
 | `EnterRecoveryKeyActivity` | The 24 words, typed one at a time; the check; storing, which also repairs a damaged keyset; keeping; done. Other words in a stopped setup offer to start over. |
 | `ShowRecoveryKeyActivity` | Before the prompt; the words, once per prompt. |
 | `AppLockActivity` | The app lock screen ([The app lock](#the-app-lock)). |
-| `TurnOnAppLockActivity` | Turning the app lock on: the warning, the words, the prompt. |
+| `TurnOnAppLockActivity` | Turning the app lock on: the warning, the words, the prompt. In an app that does not keep the key, with a keeper of its key on the phone, also **Check the words in Water**. |
+| `HandoverActivity` | A keeper's handover screen: another app of the suite asks for its own keys, or for four words to be checked. Exported to holders of the handover permission ([The handover between apps](#the-handover-between-apps)). |
+| `GetKeysActivity` | Getting this app's keys from a keeper: it opens the keeper's handover screen, stores what comes back and says how it went. |
 
 Why activities and not screens inside the app's own window:
 
@@ -94,12 +104,13 @@ What it does:
 
    | Form | Title | Buttons |
    |---|---|---|
-   | A backup, or the app lock | "Set up your recovery key first", with one sentence on why, which differs for the two, and under it: "If another shkriuss app already has your recovery key, tap I already have one and enter the same words." | **Create a recovery key**, **I already have one**, **Not now** |
-   | A restore | "Enter your recovery key first" | **Enter the words**, **Cancel**. There is no "create": a new key cannot open an old backup. |
+   | A backup, or the app lock | "Set up your recovery key first", with one sentence on why, which differs for the two, and under it: "If another shkriuss app already has your recovery key, tap I already have one and enter the same words." | **Create a recovery key**, **I already have one**, **Not now**. With a keeper on the phone, also **Get the keys from Water**, one for each keeper. |
+   | A restore | "Enter your recovery key first" | **Enter the words**, **Cancel**. There is no "create": a new key cannot open an old backup. With a keeper on the phone, also **Get the keys from Water**. |
    | A setup that stopped, whatever was started | "Finish your recovery key" | **Open the security screen**, **Not now** |
 
-4. A button opens `CreateRecoveryKeyActivity`, `EnterRecoveryKeyActivity`
-   or `SecurityActivity`.
+4. A button opens `CreateRecoveryKeyActivity`, `EnterRecoveryKeyActivity`,
+   `GetKeysActivity` or `SecurityActivity`. The keepers are asked when
+   the dialog shows, on the background thread.
 5. When that screen closes, however it was closed, the keys are read
    again. The screens give back no result: only the keys say whether
    they are there.
@@ -128,6 +139,76 @@ More:
 - The three buttons of the first form use the third button of
   `ShkDialog` in `core/design`
   ([design-system.md](../development/design-system.md#optional-parts-for-backup-and-the-recovery-key)).
+
+## The handover between apps
+
+A keeper gives another app of the suite its own keys, never the
+recovery key ([ADR 0041](../adr/0041-the-handover-between-apps.md);
+[crypto-design.md](../security/crypto-design.md#setting-up-a-second-app-on-the-same-phone)).
+The parts are in `Handover.kt`, `HandoverCalls.kt`,
+`HandoverViewModels.kt` and `KeeperStatusProvider.kt`.
+
+The other apps:
+
+1. `SuiteApps` is how a screen sees the other apps of the suite.
+   `AndroidSuiteApps` asks Android; a ViewModel takes it through its
+   constructor, and tests pass their own.
+2. `peerName` applies the check of ADR 0041, point 9: a data app of the
+   suite, of the same build kind, with exactly one signer whose
+   certificate bytes are those of this app. `SuitePeers` holds the rule
+   on its own, without Android.
+3. `keepers` lists the apps with a handover screen that pass the check,
+   and asks each one's status provider whether it keeps the recovery
+   key now, and its short name. It is slow, so it runs on the
+   background thread.
+
+The keeper's side, `HandoverActivity` and `HandoverViewModel`:
+
+1. It reads the request with `HandoverRequest.of`: Android's calling
+   package, which must pass the check, and the request's version and
+   mode. Anything else gets a cancelled result and no screen.
+2. It shows the two apps' names and the short name of the kept key, and
+   **Allow** and **Do not allow**. It does not ask for the keeper's own
+   app lock: it shows no data of the keeper.
+3. **Allow** shows the system prompt of the Recovery guard.
+   - For the keys: `core/crypto` makes the asking app's keys inside the
+     prompt step. The recovery key never reaches the screen.
+   - For the check of the words: the prompt reads the kept key, four
+     words are asked, as when the keeper turns its own app lock on, and
+     `handOverAfterWords` makes the keys marked as checked.
+4. When the screen stops, the kept key and keys not handed over leave
+   memory. A turn of the phone does not count. A prompt answered after a
+   stop gives nothing.
+5. The screen checks the caller once more, gives it the keys in the
+   result, and closes. The keys never stay in the ViewModel after that.
+6. A keeper that does not keep the key now says so, with **Close**, and
+   tells the asking app.
+
+The asking app's side, `GetKeysActivity`, `GetKeysViewModel` and
+`KeeperCall`:
+
+1. `KeeperCall` is made in the screen's `onCreate`, so that Android hands
+   the answer straight to it, never into a saved state. It checks the
+   keeper before it opens it, and again when the answer comes back.
+2. `KeeperAnswer.of` reads the answer: the keys, which `core/crypto`
+   reads and checks, or why there are none.
+3. `GetKeysViewModel` stores the keys with `storeHandedOverKeys` and says
+   how it went. A "no" on the keeper's screen closes it, and nothing
+   changed.
+4. The turn-on screen uses the same `KeeperCall` for **Check the words
+   in Water**, and takes the keys as its proof with
+   `checkWordsAtKeeper`.
+
+Keepers on the other screens:
+
+1. The security screen lists the keepers each time it comes to the
+   front. With no recovery key, a setup that stopped, a damaged keyset
+   file or an app lock that was reset, it offers **Get the keys from
+   Water**. Set up and not kept: "The recovery key is kept in Water",
+   only for keepers of its own key, with **Open Water**.
+2. The keeping step asks "Keep it here too?" when a keeper of the same
+   key is on the phone ([crypto-design.md](../security/crypto-design.md#creating-it),
+   step 6).
 
 ## What protects the words
 
@@ -195,7 +276,7 @@ The ADR says what Android offers, and why these choices.
 
 | Where | Other apps' windows | A tap under another app's window | Accessibility services |
 |---|---|---|---|
-| The six screens | Hidden while the screen shows | Does nothing | Only accessibility tools |
+| The eight screens | Hidden while the screen shows | Does nothing | Only accessibility tools |
 | Their four dialogs | Hidden: the screen behind still shows | Does nothing | Only accessibility tools |
 | The lock screen | Hidden while the app is locked | Reaches the screen | Every service |
 
@@ -209,7 +290,7 @@ How it is built, in `WindowShield.kt`:
    - The app lock screen calls it itself: whether it blocks screenshots
      follows the app's setting.
 2. `hideOtherAppsWindows` calls Android's `Window.setHideOverlayWindows`.
-   - Each of the six screens calls it in `onCreate`.
+   - Each of the eight screens calls it in `onCreate`.
    - They are `ShieldedScreen`s, so the app lock watcher leaves that part
      of their window alone.
 3. A dialog is a window of its own. `Modifier.shieldedLike` copies the
@@ -400,7 +481,7 @@ What it does, for each app, as a unit test that runs in `check`:
    and drops the file keys before the watcher starts, as after Android
    stopped the app. So every screen starts locked.
 2. The test reads the activities of the app's merged manifest, the file
-   that goes into the APK. It leaves out only the six screens of this
+   that goes into the APK. It leaves out only the eight screens of this
    module, which are not behind the gate on purpose.
 3. It starts each one, and fails, naming the screen and what it showed,
    unless:
@@ -600,8 +681,10 @@ file says that.
   "Recovery key when first needed". Each opens on a screen of its own,
   drawn in place (`RecoveryKeyFirstNeedSample`). The dialog shows no
   recovery words, so the page has no switch to protect it.
-- Catalog's manifest removes `USE_BIOMETRIC`, `HIDE_OVERLAY_WINDOWS` and
-  the six screens. It holds no keys and has no app lock.
+- Catalog's manifest removes `USE_BIOMETRIC`, `HIDE_OVERLAY_WINDOWS`,
+  the handover permission, the eight screens, the status provider and
+  the `<queries>`. It holds no keys, has no app lock and takes no part in
+  a handover. Its pages show the handover screens with sample names.
 - The switch **Protect this page, as in an app** on both pages calls
   `secureWindow`, to try it on a phone. It blocks screenshots and shields
   the page and the dialogs opened from it. It cannot hide other apps'
@@ -630,8 +713,25 @@ file says that.
   that start no word, each under its own field.
 - `DialogShieldTest`: the four dialogs take the shield of their screen. A
   dialog over a screen without one has none.
-- `ManifestTest`: the module asks for exactly `USE_BIOMETRIC` and
-  `HIDE_OVERLAY_WINDOWS`, and its six screens are not exported.
+- `ManifestTest`: the module asks for exactly `USE_BIOMETRIC`,
+  `HIDE_OVERLAY_WINDOWS` and the handover permission, defines only the
+  handover permission, with protection level `signature`, exports only
+  the handover screen and the status provider, both behind it, and sees
+  only the apps with a handover screen.
+- `HandoverRulesTest`: who may take part in a handover, every refused
+  app, how a keeper reads a request, how an asking app reads every
+  answer and checks the keeper again, and what the status provider says
+  to whom.
+- `HandoverViewModelsTest`: both sides of the handover with real
+  cryptography on the stand-in: Allow and the prompt, a closed prompt,
+  a keeper that does not keep the key, keys and the kept key dropped
+  when the screen stops, the check of four words, every outcome on the
+  asking app's side, an app lock that was reset, "keep it here too",
+  the check of the words for the app lock, and the security screen's
+  keepers.
+- `SecurityContentTest` and `FirstNeedTest`: the choices to get the keys
+  from a keeper, on the security screen and in the dialog, and the
+  screen they open.
 - `WordInputTest`: what a word field accepts and offers, and which
   letters start no word.
 - `WordFieldTest`: select all and copy by keys leaves the clipboard as
@@ -721,8 +821,6 @@ They are checked on the owner's devices with Water ([emulator-tests.md](../devel
   and "App lock" in the Security section of Settings, and the dialog of
   [ADR 0035](../adr/0035-recovery-key-when-first-needed.md) when the key
   is first needed. Closed.
-- "The recovery key is kept in Water" for an app that is not a keeper.
-  It needs the handover between apps.
 - How an app shows files that were given up (open question 13 of
   crypto-design.md).
 - The check that every app that uses these screens requests
