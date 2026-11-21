@@ -188,6 +188,14 @@ data class SecurityState(
     /** The keepers of this app's own recovery key. */
     val ownKeepers: List<KeeperApp> get() = keepers.filter { it.keyId == keyId }
 
+    /**
+     * The keepers that the "Get the keys" choices offer (ADR 0041, point
+     * 14): those of this app's own recovery key when its short name is
+     * known, and every keeper when it is not, as when `record` is
+     * damaged. Storing refuses the keys of another recovery key anyway.
+     */
+    val getKeysKeepers: List<KeeperApp> get() = if (keyId != null) ownKeepers else keepers
+
     /** True if any key is not protected by hardware. */
     val softwareOnly: Boolean get() = keys.any { it.level == SecurityLevel.SOFTWARE }
 }

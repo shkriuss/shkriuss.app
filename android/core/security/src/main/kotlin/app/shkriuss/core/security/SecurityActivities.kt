@@ -351,8 +351,7 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
             onAnswerChange = model::onAnswerChange,
             onCheck = model::onCheckFour,
             onClose = {
-                val refusal = if (model.state.value == HandoverNotKept) HandoverRefusal.NOT_KEEPER else null
-                setResult(Activity.RESULT_CANCELED, refusalResult(refusal))
+                setResult(Activity.RESULT_CANCELED, refusalResult(closingRefusal(model.state.value)))
                 finish()
             },
         )

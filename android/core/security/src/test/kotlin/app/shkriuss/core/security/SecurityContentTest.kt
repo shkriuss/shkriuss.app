@@ -129,6 +129,24 @@ class SecurityContentTest {
     }
 
     @Test
+    fun aDamagedRecordWhoseShortNameIsUnknownOffersEveryKeeper() {
+        val asked = mutableListOf<KeeperApp>()
+        val state = SecurityState(
+            loaded = true,
+            recoveryKey = RecoveryKeyState.SET_UP,
+            keyId = null,
+            kept = Kept.NOT_KEPT,
+            keepers = listOf(water, meals),
+            needsRepair = true,
+        )
+        securityScreen(state, SecurityActions(onGetKeys = { asked += it }))
+        // ADR 0041, point 14: the app cannot tell its own key, so every keeper is offered.
+        tap(compose.activity.getString(R.string.sec_get_keys_from_with_key, "Meals", "01020304"))
+        tap(compose.activity.getString(R.string.sec_get_keys_from_with_key, "Water", "0a0b0c0d"))
+        assertEquals(listOf(meals, water), asked)
+    }
+
+    @Test
     fun afterASetupThatStoppedTheSentenceIsNotShown() {
         securityScreen(RecoveryKeyState.UNFINISHED)
         compose.onNodeWithText(text(R.string.sec_no_key_other_app)).assertDoesNotExist()

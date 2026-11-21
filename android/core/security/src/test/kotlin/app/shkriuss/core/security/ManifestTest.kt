@@ -96,6 +96,14 @@ class ManifestTest {
     }
 
     @Test
+    fun lintIsToldToIgnoreOneCheckOnTheStatusProviderAndNothingElse() {
+        // The owner's decision (docs/development/build.md, "Lint"): the provider is exported with no permission by ADR 0041.
+        val ignoring = elements("*").filter { it.hasAttributeNS(TOOLS, "ignore") }
+        assertEquals(listOf(KeeperStatusProvider::class.java.name), ignoring.map { it.android("name") })
+        assertEquals("ExportedContentProvider", ignoring.single().getAttributeNS(TOOLS, "ignore"))
+    }
+
+    @Test
     fun theModuleSeesOnlyTheAppsWithAHandoverScreen() {
         val queries = elements("queries").single()
         assertEquals(listOf(Handover.ACTION), elements("action", queries).map { it.android("name") })
@@ -105,5 +113,6 @@ class ManifestTest {
 
     private companion object {
         const val ANDROID = "http://schemas.android.com/apk/res/android"
+        const val TOOLS = "http://schemas.android.com/tools"
     }
 }

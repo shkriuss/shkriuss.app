@@ -12,7 +12,8 @@
     anything, and gives a refused caller nothing. No other part is
     exported.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
         To show Android's own system prompt: a fingerprint, or the phone's
@@ -103,11 +104,18 @@
             recovery key, and its short name. Exported with no permission:
             it checks the caller's certificate first, and answers a refused
             caller nothing. It answers one call and holds no data.
+
+            Lint's ExportedContentProvider asks for a permission or for no
+            export. ADR 0041 decided against both: the provider's own check
+            is the gate, and its one answer is a public short name. The
+            owner decided to ignore that check here only. ManifestTest checks
+            the provider's attributes instead.
         -->
         <provider
             android:name="app.shkriuss.core.security.KeeperStatusProvider"
             android:authorities="${applicationId}.keeper"
-            android:exported="true" />
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
     </application>
 
 </manifest>

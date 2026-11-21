@@ -49,6 +49,19 @@ internal sealed interface HandoverRequest {
 /** The result a keeper's handover screen gives when it gives no keys: [refusal], or none when the user did not allow it. */
 internal fun refusalResult(refusal: HandoverRefusal?): Intent? = refusal?.let { Intent().putExtra(Handover.EXTRA_REFUSAL, it.name) }
 
+/**
+ * Why the keeper's handover screen gives no keys when the user taps
+ * **Close** on [screen] (ADR 0041, point 16): `NOT_KEEPER` when it keeps
+ * no key now, also when the kept copy turned out damaged, so that the
+ * asking app offers the 24 words. None otherwise: the asking app changes
+ * nothing.
+ */
+internal fun closingRefusal(screen: HandoverScreen): HandoverRefusal? = when (screen) {
+    HandoverNotKept -> HandoverRefusal.NOT_KEEPER
+    is HandoverFailed -> if (screen.damaged) HandoverRefusal.NOT_KEEPER else null
+    else -> null
+}
+
 /** The result a keeper's handover screen gives with the keys. Never shown or logged: a bundle's text lists its bytes. */
 internal fun keysResult(keys: HandedOverKeys): Intent = Intent().putExtras(Bundle().also { keys.writeTo(it) })
 

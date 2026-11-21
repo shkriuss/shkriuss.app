@@ -82,9 +82,9 @@ fun SecurityContent(state: SecurityState, previewBuild: Boolean, actions: Securi
                         },
                     ),
                 )
-                if (state.appLock == AppLockState.RESET && state.ownKeepers.isNotEmpty()) {
+                if (state.appLock == AppLockState.RESET && state.getKeysKeepers.isNotEmpty()) {
                     Paragraph(stringResource(R.string.sec_keepers_repair))
-                    GetKeysButtons(state.ownKeepers, actions.onGetKeys)
+                    GetKeysButtons(state.getKeysKeepers, actions.onGetKeys)
                 }
                 Buttons { ShkTonalButton(stringResource(R.string.sec_app_lock_button), actions.onAppLock) }
                 ShkSectionHeader(stringResource(R.string.sec_section_screen_lock))
@@ -159,9 +159,9 @@ private fun RepairSection(state: SecurityState, actions: SecurityActions) {
     if (state.needsRepair) {
         Paragraph(stringResource(R.string.sec_repair))
         Buttons { ShkFilledButton(stringResource(R.string.sec_repair_button), actions.onEnter) }
-        if (state.ownKeepers.isNotEmpty()) {
+        if (state.getKeysKeepers.isNotEmpty()) {
             Paragraph(stringResource(R.string.sec_keepers_repair))
-            GetKeysButtons(state.ownKeepers, actions.onGetKeys)
+            GetKeysButtons(state.getKeysKeepers, actions.onGetKeys)
         }
     }
     if (state.filesCanBeGivenUp) {

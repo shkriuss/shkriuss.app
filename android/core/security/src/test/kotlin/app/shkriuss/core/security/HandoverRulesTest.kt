@@ -142,6 +142,15 @@ class HandoverRulesTest {
     }
 
     @Test
+    fun closingTheKeepersScreenSaysNotKeeperWhenTheKeptCopyIsGoneOrDamaged() {
+        // ADR 0041, point 16: then the asking app offers the 24 words.
+        assertEquals(HandoverRefusal.NOT_KEEPER, closingRefusal(HandoverNotKept))
+        assertEquals(HandoverRefusal.NOT_KEEPER, closingRefusal(HandoverFailed(damaged = true)))
+        assertNull("the keys could not be read now: nothing changes", closingRefusal(HandoverFailed(damaged = false)))
+        assertNull(closingRefusal(HandoverWorking))
+    }
+
+    @Test
     fun theStatusProviderAnswersOnlyAppsOfTheSuite() {
         val host = RuntimeEnvironment.getApplication() as TestHostApp
         val keeper = host.keys.crypto
