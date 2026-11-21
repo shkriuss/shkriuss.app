@@ -63,9 +63,11 @@ of 2026-11-16. It supersedes point 2 of 0002, the sentence of point 3 of
 0006 on Android 13 and 14, and the required emulator checks of 0028.
 Record 0041 comes from the step "3.0 Handover": how a keeper app sets up
 a second app with its own derived keys. Claude proposed it, and the owner
-answered its four questions on 2026-11-21. It is proposed, not yet
-agreed. It decides point 12 of 0007 in detail, the fourth choice that
-point 3 of 0035 left open, and the open point of 0037 on the handover.
+answered its four questions on 2026-11-21, and decided on a review that
+the suite defines no permission for it. It is proposed, not yet agreed.
+It decides point 12 of 0007 in detail and replaces its
+"signature-protected", decides the fourth choice that point 3 of 0035
+left open, and the open point of 0037 on the handover.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
