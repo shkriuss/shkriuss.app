@@ -1159,15 +1159,18 @@ The decision is recorded in
   `com.google`, those include Play services and Firebase, which no app
   may use (hard rule 3 in CLAUDE.md). CI fails on any pattern
   ([ci.md](ci.md#trust-patterns)).
-- 89 components are listed one by one. 48 are checked by checksum only,
-  because they are not signed: mostly older AndroidX releases, and parent
-  POM files. 16 are checked by a key trusted for that one file. 25 have a
-  checksum besides the key trusted for their group. They are the POM and
-  Gradle module files that `build-logic` resolves for its classpath: the
-  marker POMs of the Kotlin Gradle plugin and of its sam-with-receiver
-  plugin, the Kotlin Gradle plugin's own modules, Gson, Error Prone and
-  kotlinx-coroutines. CI runners get no signature file for them now and
-  then, and the checksum covers that case.
+- 488 components are listed one by one.
+  - In 46, files that are not signed are checked by checksum only:
+    mostly older AndroidX releases, and parent POM files.
+  - In 16, a file is checked by a key trusted for that one file.
+  - In 441, 442 POM and Gradle module files have a checksum besides the
+    key trusted for them. Gradle checks such a file by its signature in
+    every build, but does not always find the `.asc` in its cache, and
+    then asks the repository again. CI runners get no signature file now
+    and then, and the job fails. The checksum covers that case. An
+    offline build without the cached `.asc` of these files names every
+    file that needs one (see
+    [After a dependency change](#after-a-dependency-change), step 5).
 - The keyring holds 68 keys.
 - Gradle groups a trusted key by Maven group where it can. A new version in
   that group, signed by the same key, is then trusted without a new entry.
@@ -1205,12 +1208,27 @@ Claude does this in the same pull request as the change to
      was and how it was checked.
 5. Read the diff of both files. Every new key and checksum must belong to
    the new dependency. Say in the pull request where it comes from.
-   - For a new version of a file that `build-logic` resolves for its
-     classpath, Gradle writes only the key, no checksum. Add the SHA-256
-     of each new POM and Gradle module file of that classpath next to the
-     key, with the same `origin` and `reason` as the entries that are
-     there. Check the file's signature with `gpg` first, and that Maven
-     Central and Google's mirror serve the same bytes.
+   - For a signed POM or Gradle module file, Gradle writes only the key,
+     no checksum. Then CI can fail when a runner gets no signature file
+     (see [Where trust comes from](#where-trust-comes-from)). To find
+     these files:
+     1. Run the command of step 2 without `--write-verification-metadata`
+        and `--export-keys`, and add `assembleDebugAndroidTest` of each
+        module with instrumented tests, which the emulator jobs build.
+        This puts every file that CI uses into the Gradle cache. If it
+        fails on a file of the instrumented tests, run step 2 again with
+        those tasks added.
+     2. Delete the build folders again, as in step 1, and the cached
+        signatures of POM and Gradle module files:
+        `find ~/.gradle/caches/modules-2/files-2.1 \( -name '*.pom.asc' -o -name '*.module.asc' \) -delete`.
+     3. Run the same tasks as in 1 again, with `--offline`.
+     4. For each file that the report lists with **Checksums are
+        missing**, check that its repository serves the same bytes as
+        the Gradle cache (for Maven Central, Google's mirror too), and
+        that its signature was made by the key trusted for it. Then add
+        its SHA-256 next to the key, with the same `origin` and `reason`
+        as the entries that are there.
+     5. Repeat from 2 until the build passes.
 6. Search the file for `regex="true"`. CI fails while one is there
    ([ci.md](ci.md#trust-patterns)). Replace each pattern:
    1. Take the pattern out of its key, and keep the key's other lines.
@@ -1262,7 +1280,9 @@ The report lists each file that failed, and what was wrong with it:
   Gradle had no signature file (`.asc`) for it. The report does not say
   why. Run the failed job again with **Re-run failed jobs**: the file
   must still pass the same check. If it fails the same way again, tell
-  Claude in a session.
+  Claude in a session. For a POM or Gradle module file, the cure is a
+  checksum next to its key
+  ([After a dependency change](#after-a-dependency-change), step 5).
 
 This holds for a single diagnostic command too, such as
 `./gradlew dependencies` with `--dependency-verification=off` to see
