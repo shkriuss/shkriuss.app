@@ -205,9 +205,11 @@ Make a backup:
 
 1. In **Settings**, tap **Make a backup**.
 2. The first time, Reminders asks you to set up your recovery key. If
-   Water, or another app of the suite, already has your recovery key,
-   tap **I already have one** and enter the same 24 words. Otherwise tap
-   **Create a recovery key**.
+   Water, or another app of the suite, keeps your recovery key on this
+   phone, tap **Get the keys from Water**. You type no words
+   ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
+   If it has your key but does not keep it, tap **I already have one**
+   and enter the same 24 words. Otherwise tap **Create a recovery key**.
 3. Android's file picker opens, with a name such as
    `reminders-2026-11-16.shkbackup`. Pick a place and tap **Save**.
 4. Reminders writes the file, reads it again and checks it. It says
@@ -247,7 +249,8 @@ reminder, such as a snooze, and your recovery key.
 ## The recovery key and the app lock
 
 - **Recovery key** opens the security screen. Create your 24 words
-  there, enter them, or see them again
+  there, enter them, get the keys from another app that keeps them, or
+  see them again
   ([Your recovery key](recovery-key.md)). If another app of the suite
   already has your recovery key, tap **I have a recovery key** there and
   enter the same words. Use the same words in every app
@@ -334,9 +337,11 @@ Limits of reminders:
 
 Limits of the recovery key:
 
-9. Reminders cannot tell whether another app of the suite already has
-   your recovery key. If one has, tap **I already have one** yourself,
-   and enter the same words.
+9. Reminders sees only the apps of the suite that keep your recovery
+   key and are signed like it. If another app has your key but does not
+   keep it on this phone, tap **I already have one** yourself, and enter
+   the same words. If it keeps it, Reminders offers **Get the keys from**
+   that app ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
 
 Limits of the app lock:
 

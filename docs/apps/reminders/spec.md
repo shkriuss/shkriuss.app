@@ -46,7 +46,7 @@ Each part below is as Water's spec says, with the change named.
 | [On this phone only](../water/spec.md#on-this-phone-only) | Its first row is [Reminders' own file](#on-this-phone-only). |
 | [Files](../water/spec.md#files) | Nothing: no files, the pending file key move finished at once, with the same warning. |
 | [The recovery key when first needed](../water/spec.md#the-recovery-key-when-first-needed) | See [The recovery key](#the-recovery-key). |
-| [Permissions](../water/spec.md#permissions) | The same five and the same manifest rules. Only `RemindersActivity` is exported. |
+| [Permissions](../water/spec.md#permissions) | The same five and the same manifest rules. Exported: `RemindersActivity`, and the handover screen and status provider of `core/security`, authority `app.shkriuss.reminders.keeper`. Both are open to every app, with no permission, but answer only apps of the suite signed with the same key ([ADR 0041](../../adr/0041-the-handover-between-apps.md)). |
 | [TalkBack](../water/spec.md#talkback-and-accessibility) | Reminders' own points are in [TalkBack](#talkback). |
 | [Limits of Android](../../architecture/notifications.md#limits-of-android) and [reminders.md](../../user/reminders.md) | After them, Reminders shows the latest missed time late. |
 
@@ -399,7 +399,12 @@ on its own: the key is created in it, or the 24 words are entered in it.
 With a key made in Water, tap **I already have one** and enter the same
 words. Both apps then keep it
 ([crypto-design.md](../../security/crypto-design.md#keeper-apps-and-other-apps)).
-The handover of keys between apps comes later.
+When Water keeps the key on this phone, Reminders also offers **Get the
+keys from Water**, on its security screen and in the dialog when the key
+is first needed. Water gives Reminders only its own keys, never the
+words, after **Allow** and the system prompt. Water keeps the key, and
+Reminders names it on its security screen
+([ADR 0041](../../adr/0041-the-handover-between-apps.md)).
 
 The owner decided: wherever an app offers **Create a recovery key**
 while it has no key, one more sentence follows the text. It is shared
@@ -541,17 +546,14 @@ Choices this page made without a decision by the owner on that point.
 
 ## Open
 
-1. **Knowing that another app keeps a key.** Whether the handover lets
-   the dialog know that another app of the suite keeps a key
-   ([PROMPTS.md](../../development/PROMPTS.md#30-handover)).
-2. **"Local only" for a watch**, as
+1. **"Local only" for a watch**, as
    [Water's open item 9](../water/spec.md#open).
-3. **How TalkBack reads "Snooze 10 min"** on the button.
-4. **Sync.** Every device would remind. Marks, snoozes and **Done**
+2. **How TalkBack reads "Snooze 10 min"** on the button.
+3. **Sync.** Every device would remind. Marks, snoozes and **Done**
    stay on one phone. The sync design decides.
-5. **Titles of deleted reminders** stay in the database and backups as
+4. **Titles of deleted reminders** stay in the database and backups as
    deletion markers until a purge exists
    ([data.md](../../architecture/data.md#rules-for-daos), rule 4).
-6. **Many missed reminders at once.** Android caps how many
+5. **Many missed reminders at once.** Android caps how many
    notifications one app shows. Whether some are lost after a long time
    off is not checked.

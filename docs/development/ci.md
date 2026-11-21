@@ -9,7 +9,7 @@ the authoritative build (section 13 of the [plan](../plan/PLAN.md),
 | Workflow | File | Runs on | What it does |
 |---|---|---|---|
 | CI | [`ci.yml`](../../.github/workflows/ci.yml) | Every pull request, every push to `main` | Checks the Gradle wrapper, and that no released schema changed. Runs unit tests, lint, screenshot verification and the release rules checks. Runs the instrumented tests on emulators with Android 15 and 17. |
-| PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds and signs a preview APK of every app the pull request touches. Uploads it and the changed screenshots. Keeps one comment on the pull request with the links. |
+| PR preview | [`pr-preview.yml`](../../.github/workflows/pr-preview.yml) | Every pull request | Builds a preview APK of every app the pull request touches, and signs them all with one throwaway key. Uploads them and the changed screenshots. Keeps one comment on the pull request with the links. |
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
 | Site | [`site.yml`](../../.github/workflows/site.yml) | Pull requests that change the site, every push to `main`, and by hand | Builds the hub site from `docs/` and `site/` and checks it. On `main` only, deploys it to the Cloudflare Worker `shkriuss-hub`, which serves static files only, and checks the live site and its security headers. See [site.md](site.md). |
@@ -332,7 +332,7 @@ module's `src/test/screenshots/`, and uploads them as one zip,
 `screenshots-pr<number>.zip`. A deleted image is not included. A file that
 is not a plain file, such as a link, is skipped.
 
-### Job "Preview (app)"
+### Job "Build preview (app)"
 
 One job per touched app, side by side:
 
@@ -340,23 +340,55 @@ One job per touched app, side by side:
    cache, never saves it.
 2. Builds the preview:
    `./gradlew :app:<name>:assemblePreview :app:<name>:checkPreviewApkRules :app:<name>:checkPreviewGraphicsPathUse`.
-3. Makes a throwaway RSA 4096 key in the job, with a random password that
-   is never printed.
-4. Signs the APK with `apksigner`, then deletes the key.
-5. Checks the signature with `apksigner verify` and the alignment with
-   `zipalign -c`.
-6. Uploads the APK as it is, not zipped, named
-   `<app>-preview-pr<number>-<commit>.apk`.
-7. Writes a summary with the link to tap, the APK's SHA-256 and the
-   throwaway certificate's SHA-256.
+3. Uploads the unsigned APK and the build's list of it,
+   `output-metadata.json`, as `unsigned-<app>`, kept for one day.
+
+The preview is built from the test merge commit, so it shows the pull
+request as it would be after merging.
+
+### Job "Sign the previews"
+
+One job for the whole run. It runs when at least one preview was built,
+also when another failed. It checks out nothing and runs no code from the
+pull request. It reads the APKs and their lists as data only.
+
+1. Installs only the build tools, for `apksigner` and `zipalign`.
+2. Makes one throwaway RSA 4096 key, with a random password that is never
+   printed.
+3. For each app whose preview was built: checks every value it reads from
+   the list, and that both the list and the APK itself, read with
+   `aapt2`, name the app's own preview ID, `app.shkriuss.<app>.preview`.
+   So no APK can update another app's preview of the same run. Then it
+   signs the APK with `apksigner`, checks the signature with
+   `apksigner verify` and the alignment with `zipalign -c`.
+4. Deletes the key. Nothing of it leaves the job: no artifact, cache or
+   output.
+5. Checks that every preview of the run has the same certificate.
+6. Uploads the signed APKs as `signed-previews`, kept for one day, and
+   hands each one's app ID, version, APK SHA-256 and certificate SHA-256
+   to the next job.
 
 Why a throwaway key: the plan says so (section 13), and
 [ADR 0013](../adr/0013-signing-key-custody-and-rotation.md) keeps the suite
 key in the `release` environment only. A pull request can change its own
 workflow, so a preview job must never have a real key.
 
-The preview is built from the test merge commit, so it shows the pull
-request as it would be after merging.
+Why one key for the run: the apps of the suite take part in a handover
+between apps only with apps signed with exactly their own certificate
+([ADR 0041](../adr/0041-the-handover-between-apps.md), point 22). So the
+previews of one run can give each other keys, and a preview never takes
+part with a real app or with a preview of another run.
+
+### Job "Preview (app)"
+
+One job per app the run signed, side by side:
+
+1. Takes its app's APK from `signed-previews` and checks it against the
+   SHA-256 that "Sign the previews" handed over.
+2. Uploads the APK as it is, not zipped, named
+   `<app>-preview-pr<number>-<commit>.apk`.
+3. Writes a summary with the link to tap, the APK's SHA-256 and the
+   throwaway certificate's SHA-256.
 
 Each job also hands the APK's artifact number to "Comment", as a tiny
 `comment-data-<app>` file that is kept for one day. Job outputs cannot
@@ -374,8 +406,9 @@ the screenshots zip. It saves the owner three taps
 2. It runs after the preview jobs, also when one failed or none was
    needed. A failed app gets the line "no APK" with a link to the run.
 3. It reads the app list from "Find apps and screenshots", which ran no
-   code from the pull request. From the preview jobs, which did, it takes
-   only one number per app, and only if it is a number. Every link is
+   code from the pull request. From the preview jobs, whose files the
+   pull request's code made, it takes only one number per app, and only
+   if it is a number. Every link is
    built from the run's own values.
 4. It finds its earlier comment by a hidden marker and by its author,
    GitHub Actions, and updates it in place. It never edits anyone else's

@@ -30,7 +30,8 @@ class CreateViewModel internal constructor(
     private val startOver: Boolean,
     background: CoroutineDispatcher = Dispatchers.IO,
     private val random: Random = Random.Default,
-) : FlowViewModel<CreateScreen>(crypto, background, FlowWorking) {
+    suite: SuiteApps = SuiteApps.None,
+) : FlowViewModel<CreateScreen>(crypto, background, FlowWorking, suite) {
     /** The new recovery key, from its making until it is stored. Set on the background thread. */
     @Volatile
     private var key: RecoveryKey? = null
@@ -119,7 +120,8 @@ class EnterViewModel internal constructor(
     private val startOver: Boolean,
     background: CoroutineDispatcher = Dispatchers.IO,
     private val onAppLockChanged: () -> Unit = {},
-) : FlowViewModel<EnterScreen>(crypto, background, WordEntry.empty()) {
+    suite: SuiteApps = SuiteApps.None,
+) : FlowViewModel<EnterScreen>(crypto, background, WordEntry.empty(), suite) {
     /** The entered recovery key, while the screen offers to start over with it. */
     @Volatile
     private var entered: RecoveryKey? = null
@@ -296,10 +298,15 @@ class ShowViewModel internal constructor(
     }
 }
 
-/** The security screen: what [KeyStatus] says, read each time the screen comes to the front. */
+/**
+ * The security screen: what [KeyStatus] says, and which other apps of the
+ * suite keep a recovery key ([SuiteApps.keepers]), read each time the
+ * screen comes to the front.
+ */
 class SecurityViewModel internal constructor(
     private val crypto: ShkCrypto,
     private val background: CoroutineDispatcher = Dispatchers.IO,
+    private val suite: SuiteApps = SuiteApps.None,
 ) : ViewModel() {
     private val screen = MutableStateFlow(SecurityState())
 
@@ -310,7 +317,7 @@ class SecurityViewModel internal constructor(
     fun refresh() {
         viewModelScope.launch {
             screen.value = try {
-                withContext(background) { stateOf(crypto.status()) }
+                withContext(background) { stateOf(crypto.status(), suite.keepers()) }
             } catch (_: BlobException) {
                 SecurityState(loaded = true, failed = true)
             }
@@ -334,7 +341,7 @@ class SecurityViewModel internal constructor(
         }
     }
 
-    private fun stateOf(status: KeyStatus) = SecurityState(
+    private fun stateOf(status: KeyStatus, keepers: List<KeeperApp>) = SecurityState(
         loaded = true,
         recoveryKey = when {
             status.setupIsUnfinished -> RecoveryKeyState.UNFINISHED
@@ -352,5 +359,6 @@ class SecurityViewModel internal constructor(
         needsRepair = status.needsRepair,
         filesCanBeGivenUp = status.filesCanBeGivenUp,
         appLock = status.appLock,
+        keepers = keepers,
     )
 }

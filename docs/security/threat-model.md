@@ -14,8 +14,8 @@ does not. It ends with the OWASP MASVS controls and every open question.
 - What exists today: Catalog, Water, Reminders and the core modules
   ([modules.md](../architecture/modules.md)). Water is the first data
   app and Reminders the second. There is no Sync app and no sync server
-  yet. Where this page speaks of sync or of the handover between apps,
-  it describes what is decided for them, not what is built. What each
+  yet. Where this page speaks of sync, it describes what is decided for
+  it, not what is built. The handover between apps is built. What each
   app stores is in the [data inventory](data-inventory.md).
 
 ## At a glance
@@ -23,7 +23,7 @@ does not. It ends with the OWASP MASVS controls and every open question.
 | Attacker | What stops it | What does not |
 |---|---|---|
 | [A lost or stolen phone](#a-lost-or-stolen-phone) | Android's file-based encryption, keys in the phone's hardware, the optional app lock | All of it rests on the screen lock. Notification text on the lock screen while the app lock is off. |
-| [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
+| [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported but the launcher and the two parts of the handover, which check the caller first, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
 | [A network attacker](#a-network-attacker) | Data apps have no network permission. Everything synced is sealed. | Traffic analysis (out of scope). The Sync app's network settings are Open. |
 | [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing and the key ID. Replay and withholding wait for the sync design. |
 | [Malicious dependencies or CI actions](#malicious-dependencies-or-ci-actions) | Dependency verification, pinned GitHub actions, secrets in one step, reproducible builds, Dependabot alerts for the libraries that ship | Trust on first use. A harmful release signed by its real publisher. Known vulnerabilities in the build tools and test libraries. |
@@ -217,8 +217,11 @@ What stops it:
 2. Each app has its own hardware keys, and its own keys derived from the
    recovery key. One app cannot compute the keys of another
    ([crypto-design.md](crypto-design.md#deriving-keys)).
-3. Nothing is exported except each app's launcher screen. The alarm
-   receivers and the security screens are not exported. The screen-off
+3. Nothing is exported except each app's launcher screen and the two
+   parts of the handover between apps. Any app may reach those two, but
+   each checks the caller first and gives a refused caller nothing
+   (point 8). The alarm receivers and the other security screens are not
+   exported. The screen-off
    receiver is registered as not exported. A tap on a notification opens
    only the same app, through an explicit, immutable intent
    ([permissions.md](permissions.md)).
@@ -236,8 +239,11 @@ What stops it:
      shell hold. Water and Reminders remove it (owner's decision).
      Open, for the next change to Catalog: remove it there too
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
-4. There is no content provider of our own, no file provider and no deep
-   link.
+4. There is one content provider of our own, the status provider of the
+   handover. It answers one call, whether the app keeps the recovery key
+   now and its short name, and only to a caller that passes the keeper's
+   check (point 8). It holds no data, opens no file and answers no query.
+   There is no file provider and no deep link.
 5. Files enter and leave only through the system pickers. No app of the
    suite has a storage permission
    ([permissions.md](permissions.md#rules)).
@@ -247,15 +253,38 @@ What stops it:
    ([security-screens.md](../architecture/security-screens.md#what-protects-the-words)).
 7. The screens of `core/security` hide other apps' windows while they
    show. So does every screen of an app while the app is locked. A tap
-   under another app's window does nothing on those six screens. Only
+   under another app's window does nothing on those eight screens. Only
    accessibility services that declare themselves accessibility tools
    can read them or act on them
    ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
-8. Apps of the suite are to share keys and data only through screens and
-   interfaces that only apps signed with the suite key can open: the
-   handover between apps and the courier interface of sync
+8. Apps of the suite share keys and data only with apps signed with the
+   suite key: through the handover between apps
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)) and, once it
+   is built, the courier interface of sync
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
-   Neither is built.
+   The handover:
+   - The suite defines no permission for it. Its screen and its status
+     provider are exported to every app
+     ([permissions.md](permissions.md#the-handover-between-apps)).
+   - Each checks the caller itself, first, before it reads anything else
+     or shows anything: a data app of the suite, of the same build kind,
+     with exactly one signer whose certificate is the same as its own
+     current one. Not the lineage, so an app on an old signing key fails.
+     This check is the only gate.
+   - A refused caller gets a cancelled result that says `REFUSED`, and
+     no screen: the screen closes at once. The status provider gives it
+     no answer.
+   - The keeper takes the asking app's name only from Android, never
+     from the request. So an app can only ever get its own keys.
+   - The keys come only after the user allows it on the keeper's screen
+     and answers the system prompt of the Recovery guard. The screen
+     hides other apps' windows and drops a tap under them.
+   - The asking app checks the keeper in the same way before and after,
+     so an app that took a keeper's name on a phone without that keeper
+     cannot plant keys it knows.
+   - Every way an app could try to get keys, and how each fails, is in
+     [ADR 0041](../adr/0041-the-handover-between-apps.md), section
+     "Every way another app could try to get keys".
 
 What does not:
 
@@ -289,7 +318,7 @@ What does not:
    Neither Water nor Reminders marks its reminders so. Whether they
    should, or offer a setting, is Open
    ([Water's spec](../apps/water/spec.md#open), item 9;
-   [Reminders' spec](../apps/reminders/spec.md#open), item 2).
+   [Reminders' spec](../apps/reminders/spec.md#open), item 1).
 3. An app that the user lets record the screen captures every screen
    except the word screens, unless the user turns on "Hide in recent apps
    and block screenshots"
@@ -297,17 +326,26 @@ What does not:
 4. A preview build makes the same keys as its app from the same words.
    The owner accepted this. Testers must never type real words into a
    preview ([crypto-design.md](crypto-design.md#the-owners-decisions)).
-5. The signature-protected interfaces trust every app signed with the
-   suite key. Whoever has that key can build an app that passes them
-   ([The owner's GitHub account](#the-owners-github-account)).
+5. The handover trusts every data app signed with the suite's current
+   key, and the courier interface is to trust the suite key too.
+   Whoever has that key can build an app that passes them
+   ([The owner's GitHub account](#the-owners-github-account)). With the
+   handover, such an app could ask a keeper for the keys of the app
+   name it takes; the user would still have to allow it and answer the
+   prompt.
 6. An app that draws over other apps can still draw over the other
    screens of the apps, which show records, not keys. An accepted
    deviation ([PLATFORM-3](#platform)).
+7. A malicious library inside an app of the suite can ask a keeper for
+   that app's own keys, which it can reach anyway once the app is set
+   up. It needs the user to allow it and answer the prompt.
+8. Any app can start the handover screen or call the status provider,
+   as often as it likes. Each time the keeper runs its check, and the
+   screen closes at once and shows nothing. Nothing keeps an app from
+   trying.
 
 Open:
 
-- The handover: its screen, its signature permission and what it checks
-  (crypto-design.md, open questions 1 and 2).
 - The courier interface (ADR 0005).
 
 ### A network attacker
@@ -1106,7 +1144,9 @@ Status: **Open (the sync design).**
   ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). The
   protocol is Open.
 - MASWE-0018, components: met for what is built. Nothing is exported
-  except the launcher screen. Open: Catalog still exports the receiver of
+  except the launcher screen and the two parts of the handover. Those
+  two have no permission: each checks the caller's certificate first,
+  and gives a refused caller nothing. Open: Catalog still exports the receiver of
   `androidx.profileinstaller` to callers with `android.permission.DUMP`,
   until its next change. Water and Reminders remove it
   ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
@@ -1145,8 +1185,9 @@ Status: **Partly met.**
     ([crypto-design.md](crypto-design.md#showing-it-again)).
   - The app lock screen asks for the prompt each time it opens.
   - Turning the app lock on needs the words and a prompt.
-  - Setting up another app from a keeper will need a prompt (the
-    handover between apps, not built).
+  - Setting up another app from a keeper needs the user's Allow and the
+    prompt of the keeper's Recovery guard
+    ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
   - With the app lock off, opening a file needs nothing more than the
     unlocked phone. The app lock is optional
     ([crypto-design.md](crypto-design.md#the-app-lock)).
@@ -1184,7 +1225,13 @@ Status: **Open (the sync design).**
 Status: **Met for what is built.**
 
 - MASWE-0018 and 0032, components and intents: met. Only the launcher
-  screen is exported. Of the intent that starts it, only Reminders reads
+  screen and the two parts of the handover are exported. The handover
+  screen and the status provider have no permission. They check the
+  caller's certificate first, take the asking app's name only from
+  Android, and read nothing from the request but its version and mode,
+  after the check and inside a catch
+  ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Of the intent
+  that starts the launcher screen, only Reminders reads
   anything: its identifier, a reminder's ID. Receivers are not exported
   and ignore actions they do not expect. A notification opens only the
   same app, through an explicit, immutable intent ([permissions.md](permissions.md),
@@ -1198,9 +1245,16 @@ Status: **Met for what is built.**
   user copies there goes to the clipboard.
 - MASWE-0031, app extensions: does not apply. The apps offer no
   extension points.
-- Open: the handover between apps and the courier interface
-  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
-  Both are to be signature-protected. Both will carry keys or data.
+- The handover between apps carries keys, with no further encryption,
+  only to an app that Android names as the receiver of the result and
+  that passed the checks (MASWE-0032). They are never in a broadcast, a
+  file, the clipboard, a notification, a screen's saved state or a log
+  ([ADR 0041](../adr/0041-the-handover-between-apps.md), point 20).
+- Open: the courier interface
+  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). It
+  will carry data. How it lets in only apps of the suite is for the sync
+  design: a permission that every app defines would meet the faults that
+  ADR 0041 found (point 6).
 
 **MASVS-PLATFORM-2: The app uses WebViews securely.**
 Status: **Does not apply.**
@@ -1237,10 +1291,10 @@ Status: **Partly met.**
   [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
   - Android blocks a tap through another app's window that is more than
     80% opaque. This holds for every app.
-  - The six screens of `core/security` hide other apps' windows while
+  - The eight screens of `core/security` hide other apps' windows while
     they show. Every screen of an app hides them while the app is locked,
     so no fake system prompt can sit over the lock screen.
-  - The six screens and their four dialogs ignore a tap under another
+  - The eight screens and their four dialogs ignore a tap under another
     app's window. This includes a see-through window, whose taps Android
     lets through.
   - Without the permission `HIDE_OVERLAY_WINDOWS`, a screen still works,
@@ -1260,7 +1314,7 @@ Status: **Partly met.**
       taps whenever a video in picture-in-picture overlaps the screen.
 - MASWE-0040, accessibility services. Met on the screens of
   `core/security`, as above.
-  - The six screens and their four dialogs speak only to accessibility services that declare themselves
+  - The eight screens and their four dialogs speak only to accessibility services that declare themselves
     accessibility tools. Other services can neither read them nor act on
     them. From Android 16, their gestures are blocked too.
   - TalkBack reads the words aloud, and the screen says so first.
@@ -1556,11 +1610,10 @@ The first app that stores files:
 
 The handover between apps:
 
-9. The handover interface, its signature permission, and what happens
-   when the asking app already has keys. Whether a keeper can check the
-   words for another app
-   ([crypto-design.md](crypto-design.md#open-questions), questions 1
-   and 2).
+9. Decided ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+   Left: how the apps on a phone take a new recovery key, also through
+   the handover. Part of that flow, with the sync design
+   ([crypto-design.md](crypto-design.md#open-questions), question 6).
 
 Sync:
 
@@ -1668,7 +1721,7 @@ points by their numbers.
    accessibility services (PLATFORM-3, CODE-1).
    **Done**, as the owner decided
    ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)):
-   - The six screens of `core/security` hide other apps' windows. They
+   - The eight screens of `core/security` hide other apps' windows. They
      ignore a tap under another app's window. They speak only to
      accessibility tools.
    - Their dialogs take the same.

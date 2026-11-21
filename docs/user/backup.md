@@ -59,7 +59,11 @@ What the file shows to anyone who has it, without the words:
 
 1. Open the app's settings and tap **Make a backup**.
 2. If the app has no recovery key yet, it says "Set up your recovery key
-   first". Tap **Create a recovery key**, or **I already have one** if
+   first". If another app of the suite keeps your recovery key on this
+   phone, tap **Get the keys from** that app, for example **Get the keys
+   from Water**. You type no words
+   ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
+   Otherwise tap **Create a recovery key**, or **I already have one** if
    you have the 24 words of another app of the suite. When that is done,
    the app goes on by itself.
 3. Android's file picker opens. Choose a folder.

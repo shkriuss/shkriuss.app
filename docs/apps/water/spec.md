@@ -1193,7 +1193,13 @@ off do not matter for Water.
    ([permissions.md](../../security/permissions.md#catalog-appshkriusscatalog)).
 3. Android backup and device-to-device transfer are turned off. The
    backup file is the only backup ([backup.md](../../user/backup.md)).
-4. Exported: only `WaterActivity`, the launcher screen.
+4. Exported: `WaterActivity`, the launcher screen, and the two parts of
+   the handover between apps from `core/security`
+   ([ADR 0041](../../adr/0041-the-handover-between-apps.md)): the
+   handover screen and the status provider, authority
+   `app.shkriuss.water.keeper`. Both are open to every app, with no
+   permission, but answer only apps of the suite signed with the same
+   key. Any other app gets nothing.
    `androidx.profileinstaller` adds a receiver that is exported to callers
    with `android.permission.DUMP`, for developer tools. Water's manifest
    removes it (owner's decision). The start-up profile
@@ -1265,7 +1271,7 @@ off do not matter for Water.
 - Moving a drink to another day. Delete it and add it again.
 - UK fluid ounces, litres or cups as units.
 - An undo button in the notification.
-- Sync and the handover between apps.
+- Sync.
 - Georgian. All text is in string resources, ready for it.
 - "Restore as it was"
   ([backup-format.md](../../architecture/backup-format.md#open-questions),

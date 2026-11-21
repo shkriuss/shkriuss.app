@@ -56,6 +56,8 @@ class SecurityActivitiesTest {
             EnterRecoveryKeyActivity::class.java,
             ShowRecoveryKeyActivity::class.java,
             TurnOnAppLockActivity::class.java,
+            HandoverActivity::class.java,
+            GetKeysActivity::class.java,
         ).forEach { type ->
             val activity: ComponentActivity = Robolectric.buildActivity(type).setup().get()
             val name = type.simpleName
@@ -204,7 +206,7 @@ class SecurityActivitiesTest {
     private companion object {
         const val MIN_TOUCH_DP = 48f
 
-        /** The six screens of the module. */
+        /** The eight screens of the module. */
         val everyScreen: List<Class<out ComponentActivity>> = listOf(
             SecurityActivity::class.java,
             CreateRecoveryKeyActivity::class.java,
@@ -212,6 +214,8 @@ class SecurityActivitiesTest {
             ShowRecoveryKeyActivity::class.java,
             AppLockActivity::class.java,
             TurnOnAppLockActivity::class.java,
+            HandoverActivity::class.java,
+            GetKeysActivity::class.java,
         )
     }
 }

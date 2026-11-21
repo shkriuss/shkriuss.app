@@ -19,11 +19,16 @@ them. How it works is in [ci.md](ci.md#pr-preview).
   ([build.md](build.md#build-types)).
 - It installs next to the real app. Its name ends in "preview", for
   example "Catalog preview".
-- It is signed with a throwaway key. The workflow makes the key, signs once
-  and deletes it. The release key never signs a preview.
+- It is signed with a throwaway key. One job of the workflow makes the
+  key, signs every preview of that run with it and deletes it. The release
+  key never signs a preview.
 - So a preview can never replace or update the real app.
 - Each run makes a new key, so a new preview cannot update an older one
   either. Uninstall the older preview first.
+- Previews of one run can give each other their keys, as the real apps
+  do ([Your recovery key](../user/recovery-key.md)). Install them from the
+  same comment. A preview never takes part with a real app, or with a
+  preview of another run.
 - It has the same permissions as the real app. The APK rules check runs on
   every preview ([build.md](build.md#apk-rules-check)).
 
@@ -99,7 +104,7 @@ Uninstalling deletes the preview's data. The real app is not touched.
 |---|---|
 | No **Preview** line in the checks | The pull request changes no app. Nothing to install. |
 | The comment names an older commit | The new preview is still being built. Wait for the checks. |
-| The comment says "no APK", or **Preview** failed | The APK could not be built. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). |
+| The comment says "no APK", or **Build preview**, **Sign the previews** or **Preview** failed | The APK could not be built or signed. Ask Claude with prompt R1 in [PROMPTS.md](PROMPTS.md). |
 | The link opens a sign-in page or "Not Found" | Sign in to GitHub in this browser. A link also stops working when the files expire (see below). |
 | Android says "App not installed" | An older preview is still installed. Uninstall it first. |
 | Android says the package is invalid | The download stopped early. Download it again. |
