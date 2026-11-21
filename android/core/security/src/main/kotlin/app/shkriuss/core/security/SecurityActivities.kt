@@ -358,7 +358,11 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
         setContent {
             ShkTheme {
                 val screen by model.state.collectAsState()
-                LaunchedEffect(screen) { if (screen == HandoverReady) handOver(model, request, suite) }
+                LaunchedEffect(screen) {
+                    // Whichever way the screen closes, Back too, it says why it gave no keys (ADR 0041, point 16).
+                    setResult(Activity.RESULT_CANCELED, refusalResult(closingRefusal(screen)))
+                    if (screen == HandoverReady) handOver(model, request, suite)
+                }
                 HandoverContent(screen, asker, keeper, isPreviewBuild, actions)
                 SystemPrompt(
                     request = (screen as? HandoverAsk)?.prompt,
@@ -406,7 +410,7 @@ class GetKeysActivity : ComponentActivity(), WordsScreen {
         val watcher = securityHost.appLock
         val model = flowViewModel { GetKeysViewModel(it, onAppLockChanged = { watcher.refresh(announce = false) }) }
         // Made in onCreate, so that the answer comes straight to the model, never into a saved state.
-        val call = KeeperCall(this, suite, keeper = { keeper }, onAnswer = model::onAnswer)
+        val call = KeeperCall(this, suite, keeper = { keeper }, onAnswer = { _, answer -> model.onAnswer(answer) })
         // Only on the first start: after a turn of the phone the keeper's screen is open already.
         if (savedInstanceState == null) {
             if (keeper == null) model.onAnswer(KeeperAnswer.NotASuiteApp) else call.ask(HandoverMode.KEYS)

@@ -15,6 +15,7 @@ import android.content.pm.SigningInfo
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import android.os.Looper
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResult
@@ -22,6 +23,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.KeyId
 import java.io.File
+import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -297,15 +299,21 @@ class HandoverGateTest {
         assertNotNull(AndroidSuiteApps(app).handoverIntent("app.shkriuss.reminders", HandoverMode.KEYS))
     }
 
-    /** The asking screen, with a [KeeperCall] made in `onCreate` as the real screens make it. */
+    /**
+     * The asking screen, with a [KeeperCall] made in `onCreate` as the real
+     * screens make it. It knows which keeper to ask only until Android makes
+     * it anew, as the turn-on screen's model.
+     */
     internal class AskingScreen : ComponentActivity() {
-        val answers = mutableListOf<KeeperAnswer>()
+        val answers = mutableListOf<Pair<String, KeeperAnswer>>()
+        var toAsk: String? = "app.shkriuss.water"
         lateinit var call: KeeperCall
 
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
+            if (savedInstanceState != null) toAsk = null
             val suite = FakeSuiteApps(peers = mapOf("app.shkriuss.water" to AppName.of("water")))
-            call = KeeperCall(this, suite, keeper = { "app.shkriuss.water" }, onAnswer = { answers += it })
+            call = KeeperCall(this, suite, keeper = { toAsk }, onAnswer = { keeper, answer -> answers += keeper to answer })
         }
     }
 
@@ -326,11 +334,53 @@ class HandoverGateTest {
         // The keeper's screen covers this one, so this one is stopped when the answer comes.
         controller.pause().stop()
         shadowOf(screen).receiveResult(asked.intent, Activity.RESULT_CANCELED, refusalResult(HandoverRefusal.NOT_KEEPER))
-        assertEquals("handed over at once, while stopped", listOf<KeeperAnswer>(KeeperAnswer.NotKeeper), screen.answers)
+        assertEquals("handed over at once, while stopped", listOf<Pair<String, KeeperAnswer>>("app.shkriuss.water" to KeeperAnswer.NotKeeper), screen.answers)
 
         val saved = Bundle()
         controller.saveInstanceState(saved)
         assertTrue("no pending result in the saved state", pendingResults(saved).isEmpty())
+    }
+
+    @Test
+    fun anAnswerAfterAndroidMadeTheScreenAnewStillReachesItWithTheAppThatWasAsked() {
+        val first = Robolectric.buildActivity(AskingScreen::class.java).setup()
+        first.get().call.ask(HandoverMode.KEYS)
+        val asked = shadowOf(first.get()).peekNextStartedActivityForResult()
+
+        // The keeper's screen is in front; Android saves this screen and ends the process.
+        first.pause().stop()
+        val saved = Bundle()
+        first.saveInstanceState(saved)
+        assertTrue("no result is waiting in the saved state", pendingResults(saved).isEmpty())
+
+        // When the keeper answers, Android makes the screen anew from the saved state alone.
+        val second = Robolectric.buildActivity(AskingScreen::class.java).create(saved).start()
+        assertNull("the new screen no longer knows whom it asked", second.get().toAsk)
+        // What ComponentActivity.onActivityResult does with the answer.
+        assertTrue(second.get().activityResultRegistry.dispatchResult(asked.requestCode, Activity.RESULT_CANCELED, refusalResult(HandoverRefusal.NOT_KEEPER)))
+        assertEquals(listOf<Pair<String, KeeperAnswer>>("app.shkriuss.water" to KeeperAnswer.NotKeeper), second.get().answers)
+    }
+
+    @Test
+    fun theKeepersScreenSaysNotKeeperWhenItClosesWithoutAKeyAnyWay() {
+        // This app keeps no recovery key, so its handover screen shows that it is not a keeper.
+        install("app.shkriuss.reminders", current = listOf(suiteCertificate))
+        val intent = Intent(app, HandoverActivity::class.java).putExtras(request())
+        val controller = Robolectric.buildActivity(HandoverActivity::class.java, intent)
+        shadowOf(controller.get()).setCallingPackage("app.shkriuss.reminders")
+        val screen = controller.setup().get()
+        // The keeper reads its keys in the background; the screen then draws its next frame.
+        repeat(500) {
+            if (refusalOf(screen) == null) {
+                Thread.sleep(10)
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(20))
+            }
+        }
+        assertEquals("set while the screen shows, so Back gives it too", HandoverRefusal.NOT_KEEPER.name, refusalOf(screen))
+        (screen as ComponentActivity).onBackPressedDispatcher.onBackPressed()
+        assertTrue(screen.isFinishing)
+        assertEquals(Activity.RESULT_CANCELED, shadowOf(screen).resultCode)
+        assertEquals(HandoverRefusal.NOT_KEEPER.name, refusalOf(screen))
     }
 
     @Test

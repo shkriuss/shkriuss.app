@@ -323,6 +323,9 @@ class TurnOnViewModel internal constructor(
     internal var checkingAt: String? = null
         private set
 
+    /** A keeper's answer that came before the warning was read again, when Android made this screen anew. On the main thread. */
+    private var waiting: Pair<String, KeeperAnswer>? = null
+
     /** The one state of the screen. */
     val state: StateFlow<TurnOnScreen> = screen.asStateFlow()
 
@@ -350,14 +353,21 @@ class TurnOnViewModel internal constructor(
 
     init {
         work {
-            screen.value = if (crypto.appLock.canTurnOn()) {
+            val first = if (crypto.appLock.canTurnOn()) {
                 val keeper = crypto.setup.keepsRecoveryKey()
                 // Only the apps that keep this app's own recovery key can check its words.
                 val keyId = if (keeper) null else crypto.status().keyId?.toString()
                 val keepers = keyId?.let { id -> suite.keepers().filter { it.keyId == id } }.orEmpty()
-                TurnOnIntro(keeper, keepers).also { intro = it }
+                TurnOnIntro(keeper, keepers)
             } else {
                 TurnOnFailed(TurnOnProblem.NOT_ALLOWED)
+            }
+            // On the main thread, where the keeper's answer comes: it may have come already.
+            withContext(main) {
+                intro = first as? TurnOnIntro
+                val answer = waiting
+                waiting = null
+                if (answer != null && intro != null) onKeeperAnswer(answer.first, answer.second) else screen.value = first
             }
         }
     }
@@ -373,15 +383,19 @@ class TurnOnViewModel internal constructor(
     }
 
     /**
-     * What the keeper answered. Keys marked "words checked" whose `record`
-     * is this app's own are the proof; then the last prompt follows. Any
-     * other answer goes back to the warning, with a note unless the user
-     * only said no.
+     * What [keeper] answered, on the main thread. Keys marked "words
+     * checked" whose `record` is this app's own are the proof; then the
+     * last prompt follows. Any other answer goes back to the warning, with
+     * a note unless the user only said no. An answer that comes before the
+     * warning was read, after Android made the screen anew, waits for it.
      */
-    internal fun onKeeperAnswer(answer: KeeperAnswer) {
-        val keeper = checkingAt ?: return
+    internal fun onKeeperAnswer(keeper: String, answer: KeeperAnswer) {
         checkingAt = null
-        val back = intro ?: return
+        val back = intro
+        if (back == null) {
+            waiting = keeper to answer
+            return
+        }
         val label = back.keepers.firstOrNull { it.packageName == keeper }?.label ?: keeper
         when (answer) {
             is KeeperAnswer.Keys -> work {

@@ -178,6 +178,10 @@ class HandoverRulesTest {
         assertNull(KeeperStatus.keyIdOf(Bundle()))
         assertNull("a newer version", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { putInt("app.shkriuss.keeper.VERSION", 2) }))
         assertNull("no key ID", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { remove("app.shkriuss.keeper.KEY_ID") }))
+        assertNull("a key ID of another type", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { putString("app.shkriuss.keeper.KEY_ID", "0a0b0c0d") }))
+        assertNull("a key ID of another number type", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { putLong("app.shkriuss.keeper.KEY_ID", 1L) }))
+        // A key ID is four bytes of PRF output, so 0 is one of them.
+        assertEquals("00000000", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(KeyId(0))))
         assertTrue(Handover.statusAuthority("app.shkriuss.water") == "app.shkriuss.water.keeper")
     }
 }

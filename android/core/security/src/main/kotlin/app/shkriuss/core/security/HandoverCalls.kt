@@ -140,8 +140,9 @@ internal sealed interface KeeperAnswer {
 
 /**
  * Opens a keeper's handover screen and reads its answer, for the screens
- * of the asking app. Made in the screen's `onCreate`. [keeper] says which
- * app was asked; it must survive a turn of the phone.
+ * of the asking app. Made in the screen's `onCreate`, after
+ * `super.onCreate`. [keeper] says which app to ask; [onAnswer] gets the
+ * app that was asked and its answer.
  *
  * The answer may hold keys, so it must never wait in the screen's saved
  * state (ADR 0041, point 20). A callback registered with a lifecycle gets
@@ -151,21 +152,34 @@ internal sealed interface KeeperAnswer {
  * So the callback is registered with no lifecycle: Android hands it the
  * answer at once, whatever the screen's state, from `onCreate` until the
  * screen is destroyed.
+ *
+ * Android may end this app's process while the keeper's screen is in
+ * front, and make this screen anew when the answer comes. So the saved
+ * state holds the application ID of the app that was asked, which is not
+ * secret, and nothing else: the answer still reaches [onAnswer] with it.
  */
 internal class KeeperCall(
     activity: ComponentActivity,
     private val suite: SuiteApps,
     private val keeper: () -> String?,
-    private val onAnswer: (KeeperAnswer) -> Unit,
+    private val onAnswer: (keeper: String, answer: KeeperAnswer) -> Unit,
 ) {
+    /** The app asked last, until it answers. */
+    private var asked: String? = activity.savedStateRegistry.consumeRestoredStateForKey(STATE_KEY)?.getString(ASKED)
+
     private val launcher = activity.activityResultRegistry.register(
         REGISTRY_KEY,
         ActivityResultContracts.StartActivityForResult(),
     ) { result ->
-        keeper()?.let { onAnswer(KeeperAnswer.of(it, result, suite)) }
+        val packageName = asked ?: return@register
+        asked = null
+        onAnswer(packageName, KeeperAnswer.of(packageName, result, suite))
     }
 
     init {
+        activity.savedStateRegistry.registerSavedStateProvider(STATE_KEY) {
+            Bundle().apply { asked?.let { putString(ASKED, it) } }
+        }
         activity.lifecycle.addObserver(
             LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_DESTROY) launcher.unregister() },
         )
@@ -174,6 +188,11 @@ internal class KeeperCall(
     internal companion object {
         /** The one name of the answer in the screen's result registry. A screen asks one keeper at a time. */
         const val REGISTRY_KEY = "app.shkriuss.security.KeeperCall"
+
+        /** Where the screen's saved state holds the app that was asked. */
+        const val STATE_KEY = "app.shkriuss.security.KeeperCall.state"
+
+        private const val ASKED = "asked"
     }
 
     /** Opens the keeper's handover screen for [mode], after checking the keeper. A keeper that fails is answered at once. */
@@ -181,16 +200,19 @@ internal class KeeperCall(
         val packageName = keeper() ?: return
         val intent = if (suite.peerName(packageName) != null) suite.handoverIntent(packageName, mode) else null
         if (intent == null) {
-            onAnswer(KeeperAnswer.NotASuiteApp)
+            onAnswer(packageName, KeeperAnswer.NotASuiteApp)
             return
         }
+        asked = packageName
         try {
             launcher.launch(intent)
         } catch (_: ActivityNotFoundException) {
-            onAnswer(KeeperAnswer.NotASuiteApp)
+            asked = null
+            onAnswer(packageName, KeeperAnswer.NotASuiteApp)
         } catch (_: SecurityException) {
             // Android refused to start it: the keeper's screen is not open to this app.
-            onAnswer(KeeperAnswer.NotASuiteApp)
+            asked = null
+            onAnswer(packageName, KeeperAnswer.NotASuiteApp)
         }
     }
 }

@@ -164,14 +164,20 @@ internal object KeeperStatus {
         if (keyId != null) putInt(KEY_ID_KEY, keyId.value)
     }
 
-    /** The short name of the key a keeper keeps, from its answer, or null if it keeps none or the answer is not one of ours. */
+    /**
+     * The short name of the key a keeper keeps, from its answer, or null if
+     * it keeps none or the answer is not one of ours. A key ID of another
+     * type makes a bundle return each default it is given, so two reads
+     * with two defaults tell it apart from the int it must be.
+     */
     fun keyIdOf(answer: Bundle): String? = try {
         if (answer.getInt(VERSION_KEY, 0) != Handover.VERSION || !answer.getBoolean(KEEPS_KEY, false)) {
             null
         } else if (!answer.containsKey(KEY_ID_KEY)) {
             null
         } else {
-            KeyId(answer.getInt(KEY_ID_KEY)).toString()
+            val withZero = answer.getInt(KEY_ID_KEY, 0)
+            if (withZero != answer.getInt(KEY_ID_KEY, 1)) null else KeyId(withZero).toString()
         }
     } catch (_: RuntimeException) {
         null

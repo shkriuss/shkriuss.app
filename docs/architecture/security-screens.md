@@ -186,7 +186,8 @@ The keeper's side, `HandoverActivity` and `HandoverViewModel`:
    keys. The keys never stay in the ViewModel after that.
 6. A keeper that does not keep the key now says so, with **Close**, and
    gives `NOT_KEEPER`. So does a kept copy that is damaged when the
-   prompt runs (`closingRefusal`). The asking app then offers the 24
+   prompt runs (`closingRefusal`). The screen sets that result as soon
+   as it shows, so Back gives it too. The asking app then offers the 24
    words.
 7. **Do not allow**, or leaving the screen, gives a cancelled result
    with no reason.
@@ -212,7 +213,11 @@ The asking app's side, `GetKeysActivity`, `GetKeysViewModel` and
    pending result in the screen's saved state
    ([ADR 0041](../adr/0041-the-handover-between-apps.md), point 20). It
    checks the keeper before it opens it, and again when the answer comes
-   back.
+   back. Android may end the asking app's process while the keeper's
+   screen is in front. So the screen's saved state holds the application
+   ID of the app that was asked, and nothing else, and the answer reaches
+   the new screen with it. The turn-on screen's model holds an answer
+   that comes before its warning is read, until it is.
 2. `KeeperAnswer.of` reads the answer: the keys, which `core/crypto`
    reads and checks, or why there are none. `REFUSED` reads as "this app
    cannot take keys from that one": one of the two is signed otherwise,

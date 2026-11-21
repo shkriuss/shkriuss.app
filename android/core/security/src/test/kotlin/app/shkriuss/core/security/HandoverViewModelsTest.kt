@@ -279,13 +279,35 @@ class HandoverViewModelsTest {
         val kept = keeper.crypto.setup.beginShowRecoveryKey().finish()
         val words = key.words()
         val checked = keeper.crypto.setup.handOverAfterWords(kept, listOf(2, 5, 11, 20).associateWith { words[it - 1] }, reminders)!!
-        model.onKeeperAnswer(KeeperAnswer.Keys(checked))
+        model.onKeeperAnswer("app.shkriuss.water", KeeperAnswer.Keys(checked))
         val locking = (model.state.value as TurnOnLocking).prompt!!
         model.onPromptResult(locking, PromptOutcome.SUCCEEDED)
         assertEquals(TurnOnDone, model.state.value)
         assertEquals(1, turnedOn)
         assertEquals(AppLockState.ON, asker.crypto.appLock.state())
         assertFalse("the check keeps nothing", asker.crypto.status().keepsRecoveryKey)
+    }
+
+    @Test
+    fun anAnswerThatComesBeforeTheWarningIsReadWaitsForIt() {
+        // Android ended the process while Water's screen was in front, and made this screen anew: a new model,
+        // which reads the warning in the background while Water's answer comes.
+        val (keeper, key) = keeper()
+        val asker = app(reminders)
+        asker.crypto.setup.storeHandedOverKeys(keysFrom(keeper))
+        val water = KeeperApp("app.shkriuss.water", "Water", key.keyId.toString())
+        val background = QueuedDispatcher()
+        val model = TurnOnViewModel(asker.crypto, unlockMark = { 0 }, onTurnedOn = {}, background = background, random = Random(7), suite = FakeSuiteApps(listOf(water)))
+        assertEquals(TurnOnWorking, model.state.value)
+
+        val kept = keeper.crypto.setup.beginShowRecoveryKey().finish()
+        val words = key.words()
+        val checked = keeper.crypto.setup.handOverAfterWords(kept, listOf(2, 5, 11, 20).associateWith { words[it - 1] }, reminders)!!
+        model.onKeeperAnswer("app.shkriuss.water", KeeperAnswer.Keys(checked))
+        assertEquals("nothing yet", TurnOnWorking, model.state.value)
+        background.runAll()
+        background.runAll()
+        assertTrue("the checked words are the proof: the last prompt", (model.state.value as TurnOnLocking).prompt != null)
     }
 
     @Test
@@ -298,20 +320,18 @@ class HandoverViewModelsTest {
         val intro = model.state.value as TurnOnIntro
 
         model.onCheckAtKeeper(water)
-        model.onKeeperAnswer(KeeperAnswer.Declined)
+        model.onKeeperAnswer("app.shkriuss.water", KeeperAnswer.Declined)
         assertEquals("the user said no: no note", intro, model.state.value)
 
         model.onCheckAtKeeper(water)
-        model.onKeeperAnswer(KeeperAnswer.Keys(keysFrom(keeper)))
+        model.onKeeperAnswer("app.shkriuss.water", KeeperAnswer.Keys(keysFrom(keeper)))
         assertEquals("keys without the words are no proof", intro.copy(keeperFailed = "Water"), model.state.value)
 
         model.onCheckAtKeeper(water)
-        model.onKeeperAnswer(KeeperAnswer.NotKeeper)
+        model.onKeeperAnswer("app.shkriuss.water", KeeperAnswer.NotKeeper)
         assertEquals(intro.copy(keeperFailed = "Water"), model.state.value)
         assertEquals(AppLockState.OFF, asker.crypto.appLock.state())
 
-        model.onKeeperAnswer(KeeperAnswer.Declined)
-        assertNull("an answer nobody asked for changes nothing", model.checkingAt)
     }
 
     @Test

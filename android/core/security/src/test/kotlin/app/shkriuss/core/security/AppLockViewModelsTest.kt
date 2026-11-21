@@ -462,7 +462,9 @@ class AppLockViewModelsTest {
         val background = QueuedDispatcher()
         val main = QueuedDispatcher()
         val model = TurnOnViewModel(app.crypto, unlockMark = { 0 }, onTurnedOn = {}, background = background, random = Random(7), main = main)
+        // The warning is read in the background and shown on the main thread.
         background.runAll()
+        main.runAll()
         model.onContinue()
         background.runAll()
         val reading = (model.state.value as TurnOnReading).prompt!!
