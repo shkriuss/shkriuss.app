@@ -1212,20 +1212,23 @@ Claude does this in the same pull request as the change to
      no checksum. Then CI can fail when a runner gets no signature file
      (see [Where trust comes from](#where-trust-comes-from)). To find
      these files:
-     1. Delete the build folders again, as in step 1, and the cached
+     1. Run the command of step 2 without `--write-verification-metadata`
+        and `--export-keys`, and add `assembleDebugAndroidTest` of each
+        module with instrumented tests, which the emulator jobs build.
+        This puts every file that CI uses into the Gradle cache. If it
+        fails on a file of the instrumented tests, run step 2 again with
+        those tasks added.
+     2. Delete the build folders again, as in step 1, and the cached
         signatures of POM and Gradle module files:
         `find ~/.gradle/caches/modules-2/files-2.1 \( -name '*.pom.asc' -o -name '*.module.asc' \) -delete`.
-     2. Run the command of step 2 without `--write-verification-metadata`
-        and `--export-keys`, and with `--offline`. Add
-        `assembleDebugAndroidTest` of each module with instrumented
-        tests, which the emulator jobs build.
-     3. For each file that the report lists with **Checksums are
+     3. Run the same tasks as in 1 again, with `--offline`.
+     4. For each file that the report lists with **Checksums are
         missing**, check that its repository serves the same bytes as
         the Gradle cache (for Maven Central, Google's mirror too), and
         that its signature was made by the key trusted for it. Then add
         its SHA-256 next to the key, with the same `origin` and `reason`
         as the entries that are there.
-     4. Repeat from 1 until the build passes.
+     5. Repeat from 2 until the build passes.
 6. Search the file for `regex="true"`. CI fails while one is there
    ([ci.md](ci.md#trust-patterns)). Replace each pattern:
    1. Take the pattern out of its key, and keep the key's other lines.
