@@ -63,9 +63,9 @@ of 2026-11-16. It supersedes point 2 of 0002, the sentence of point 3 of
 0006 on Android 13 and 14, and the required emulator checks of 0028.
 Record 0041 comes from the step "3.0 Handover": how a keeper app sets up
 a second app with its own derived keys. Claude proposed it, and the owner
-answered its four questions on 2026-11-21, and decided on a review that
-the suite defines no permission for it. It is proposed, not yet agreed.
-It decides point 12 of 0007 in detail and replaces its
+answered its four questions on 2026-11-21, decided on a review that the
+suite defines no permission for it, and agreed to it the same day. It
+decides point 12 of 0007 in detail and supersedes its
 "signature-protected", decides the fourth choice that point 3 of 0035
 left open, and the open point of 0037 on the handover.
 
@@ -80,7 +80,7 @@ How a record may be edited or replaced is in point 7 of
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027; point 4 superseded by 0036 |
 | 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md; its sentence on Android 13 and 14 superseded by 0040 |
-| 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md |
+| 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md; "signature-protected" in point 12 superseded by 0041 |
 | 0008 | [Backup file format](0008-backup-file-format.md) | Accepted; detail in backup-format.md |
 | 0009 | [Sync protocol and server](0009-sync-protocol-and-server.md) | Accepted |
 | 0010 | [Exact alarms and reminder storage](0010-exact-alarms-and-reminder-storage.md) | Accepted |
@@ -108,10 +108,10 @@ How a record may be edited or replaced is in point 7 of
 | 0032 | [The settings of the app lock in Android's preferences file](0032-app-lock-settings-in-android-preferences.md) | Accepted; point 4 decided by 0036 |
 | 0033 | [The permission HIDE_OVERLAY_WINDOWS for the security screens](0033-hide-overlay-windows-for-the-security-screens.md) | Accepted |
 | 0034 | [Buttons on notifications](0034-notification-buttons.md) | Accepted |
-| 0035 | [The recovery key comes when it is first needed](0035-recovery-key-when-first-needed.md) | Accepted |
+| 0035 | [The recovery key comes when it is first needed](0035-recovery-key-when-first-needed.md) | Accepted; point 3 extended by 0041 |
 | 0036 | [An app's settings are records](0036-app-settings-as-records.md) | Accepted |
 | 0037 | [Signing key rotation](0037-signing-key-rotation.md) | Accepted |
 | 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Accepted |
 | 0039 | [No manual checklist for a release](0039-no-manual-checklist-for-a-release.md) | Accepted |
 | 0040 | [Minimum Android 15](0040-minimum-android-15.md) | Accepted |
-| 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Proposed |
+| 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Accepted |

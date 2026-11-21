@@ -1,7 +1,7 @@
 # 0041 The handover between apps
 
-- Status: Proposed
-- Date: 2026-11-21, the day it was proposed
+- Status: Accepted
+- Date: 2026-11-21
 - Source: the step "3.0 Handover"
   ([PROMPTS.md](../development/PROMPTS.md#30-handover)). ADR 0007,
   point 12, had decided the outline: a keeper sets up a second app
@@ -12,8 +12,8 @@
   check of the words for another app, how keepers are found, and an app
   that already has keys. A second Claude session reviewed the record on
   pull request 87. On its findings the owner decided the same day that
-  the suite defines no permission of its own (points 6 to 8). The record
-  is not agreed yet.
+  the suite defines no permission of its own (points 6 to 8). The owner
+  agreed to the record on 2026-11-21.
 
 ## Context
 
@@ -403,9 +403,9 @@
   is to be signature-protected. A permission that several apps define
   would meet the same two faults there. The sync design decides it.
 - 0007 point 12, 0035 point 3 and 0037's open point on the handover are
-  decided here. Once the record is agreed, 0007's status says that this
-  record replaces "signature-protected" in point 12, those records note
-  the rest, and
+  decided here. 0007's status says that this record replaces
+  "signature-protected" in point 12, and 0035 and 0037 note it. With the
+  build,
   [crypto-design.md](../security/crypto-design.md#setting-up-a-second-app-on-the-same-phone),
   with its open questions 1 and 2, and
   [security-screens.md](../architecture/security-screens.md) get the
