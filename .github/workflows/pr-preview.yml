@@ -343,6 +343,16 @@ jobs:
               exit 1
             fi
 
+            # Nor may an APK share a Linux user with another app: with one key
+            # for the run, two previews that asked for it would read each
+            # other's data. Android reads the attribute by its resource ID,
+            # 0x0101000b, so the ID is checked as well as the name.
+            manifest="$("$build_tools/aapt2" dump xmltree --file AndroidManifest.xml "$unsigned")"
+            if [[ "$manifest" == *sharedUserId* || "$manifest" == *"(0x0101000b)"* ]]; then
+              echo "::error::The preview APK of $app asks for a shared user ID."
+              exit 1
+            fi
+
             name="$app-preview-pr$PR_NUMBER-${HEAD_SHA:0:7}.apk"
             signed="$out_dir/$name"
             "$build_tools/apksigner" sign \

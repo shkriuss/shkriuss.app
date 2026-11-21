@@ -384,6 +384,26 @@ class HandoverGateTest {
     }
 
     @Test
+    fun theGetKeysScreenMadeAnewWaitsOnlyWhileAnAnswerIsStillToCome() {
+        install("app.shkriuss.water", current = listOf(suiteCertificate))
+        offerHandoverScreen("app.shkriuss.water")
+        val intent = SecurityScreens.getKeysIntent(app, "app.shkriuss.water")
+        val first = Robolectric.buildActivity(GetKeysActivity::class.java, intent).setup()
+        val asked = shadowOf(first.get()).peekNextStartedActivityForResult()
+        assertNotNull("Water's screen was opened", asked)
+
+        // Android ends the process while Water's screen is in front: the new screen waits for the answer.
+        first.pause().stop()
+        val waiting = Bundle().also(first::saveInstanceState)
+        assertTrue(!Robolectric.buildActivity(GetKeysActivity::class.java, intent).create(waiting).get().isFinishing)
+
+        // The answer came and was handled; later Android makes the screen anew. Nothing will come, so it closes.
+        first.get().activityResultRegistry.dispatchResult(asked.requestCode, Activity.RESULT_CANCELED, refusalResult(HandoverRefusal.NOT_KEEPER))
+        val answered = Bundle().also(first::saveInstanceState)
+        assertTrue("no screen that waits for ever", Robolectric.buildActivity(GetKeysActivity::class.java, intent).create(answered).get().isFinishing)
+    }
+
+    @Test
     fun theTestSeesAPendingResultWhereAUsualCallbackLeavesOne() {
         val controller = Robolectric.buildActivity(UsualScreen::class.java).setup()
         val screen = controller.get()

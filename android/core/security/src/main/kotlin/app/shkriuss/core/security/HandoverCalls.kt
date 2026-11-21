@@ -167,6 +167,9 @@ internal class KeeperCall(
     /** The app asked last, until it answers. */
     private var asked: String? = activity.savedStateRegistry.consumeRestoredStateForKey(STATE_KEY)?.getString(ASKED)
 
+    /** True while an asked app has not answered yet, also after Android made the screen anew. */
+    val waiting: Boolean get() = asked != null
+
     private val launcher = activity.activityResultRegistry.register(
         REGISTRY_KEY,
         ActivityResultContracts.StartActivityForResult(),
