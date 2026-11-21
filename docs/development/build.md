@@ -1159,13 +1159,15 @@ The decision is recorded in
   `com.google`, those include Play services and Firebase, which no app
   may use (hard rule 3 in CLAUDE.md). CI fails on any pattern
   ([ci.md](ci.md#trust-patterns)).
-- 66 components are listed one by one. 48 are checked by checksum only,
+- 89 components are listed one by one. 48 are checked by checksum only,
   because they are not signed: mostly older AndroidX releases, and parent
-  POM files. 16 are checked by a key trusted for that one file. Two, the
+  POM files. 16 are checked by a key trusted for that one file. 25 have a
+  checksum besides the key trusted for their group. They are the POM and
+  Gradle module files that `build-logic` resolves for its classpath: the
   marker POMs of the Kotlin Gradle plugin and of its sam-with-receiver
-  plugin, have a checksum besides the key trusted for their group: CI
-  runners get no signature file for them now and then, and the checksum
-  covers that case.
+  plugin, the Kotlin Gradle plugin's own modules, Gson, Error Prone and
+  kotlinx-coroutines. CI runners get no signature file for them now and
+  then, and the checksum covers that case.
 - The keyring holds 68 keys.
 - Gradle groups a trusted key by Maven group where it can. A new version in
   that group, signed by the same key, is then trusted without a new entry.
@@ -1203,6 +1205,12 @@ Claude does this in the same pull request as the change to
      was and how it was checked.
 5. Read the diff of both files. Every new key and checksum must belong to
    the new dependency. Say in the pull request where it comes from.
+   - For a new version of a file that `build-logic` resolves for its
+     classpath, Gradle writes only the key, no checksum. Add the SHA-256
+     of each new POM and Gradle module file of that classpath next to the
+     key, with the same `origin` and `reason` as the entries that are
+     there. Check the file's signature with `gpg` first, and that Maven
+     Central and Google's mirror serve the same bytes.
 6. Search the file for `regex="true"`. CI fails while one is there
    ([ci.md](ci.md#trust-patterns)). Replace each pattern:
    1. Take the pattern out of its key, and keep the key's other lines.
