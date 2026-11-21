@@ -20,6 +20,7 @@ import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.ViewModelProvider
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.KeyId
 import java.io.File
@@ -369,15 +370,18 @@ class HandoverGateTest {
         val controller = Robolectric.buildActivity(HandoverActivity::class.java, intent)
         shadowOf(controller.get()).setCallingPackage("app.shkriuss.reminders")
         val screen = controller.setup().get()
-        // The keeper reads its keys in the background; the screen then draws its next frame.
-        repeat(500) {
-            if (refusalOf(screen) == null) {
-                Thread.sleep(10)
-                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(20))
-            }
+        // The keeper reads its keys on a background thread. Wait for that, however slow the machine is.
+        val model = ViewModelProvider(screen as ComponentActivity)[HandoverViewModel::class.java]
+        val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
+        while (model.state.value != HandoverNotKept && System.nanoTime() < deadline) Thread.sleep(10)
+        assertEquals("the keeper keeps no key", HandoverNotKept, model.state.value)
+        // Then the screen draws the new state. That takes the main thread's turns and some real time too.
+        while (refusalOf(screen) == null && System.nanoTime() < deadline) {
+            Thread.sleep(10)
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(20))
         }
         assertEquals("set while the screen shows, so Back gives it too", HandoverRefusal.NOT_KEEPER.name, refusalOf(screen))
-        (screen as ComponentActivity).onBackPressedDispatcher.onBackPressed()
+        screen.onBackPressedDispatcher.onBackPressed()
         assertTrue(screen.isFinishing)
         assertEquals(Activity.RESULT_CANCELED, shadowOf(screen).resultCode)
         assertEquals(HandoverRefusal.NOT_KEEPER.name, refusalOf(screen))
