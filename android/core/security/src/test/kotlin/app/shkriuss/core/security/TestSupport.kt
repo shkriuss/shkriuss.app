@@ -3,6 +3,7 @@ package app.shkriuss.core.security
 import android.Manifest
 import android.app.Activity
 import android.app.Application
+import android.content.Intent
 import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
@@ -114,3 +115,31 @@ internal fun View.isNotShielded(): Boolean = !filterTouchesWhenObscured && every
 
 private fun View.everyView(): List<View> =
     listOf(this) + if (this is ViewGroup) (0 until childCount).flatMap { getChildAt(it).everyView() } else emptyList()
+
+/**
+ * Other apps of the suite as a test sets them: [peers] maps an application
+ * ID to its app name for each app that passes the checks of ADR 0041,
+ * point 9, and [keepers] are those that keep a recovery key.
+ */
+internal class FakeSuiteApps(
+    var keepers: List<KeeperApp> = emptyList(),
+    var peers: Map<String, AppName> = keepers.associate { it.packageName to AppName.fromApplicationId(it.packageName) },
+) : SuiteApps {
+    /** How often [keepers] was asked. */
+    var asked = 0
+
+    override fun peerName(packageName: String): AppName? = peers[packageName]
+
+    override fun keepers(): List<KeeperApp> = keepers.also { asked++ }
+
+    override fun labelOf(packageName: String): String = keepers.firstOrNull { it.packageName == packageName }?.label ?: packageName
+
+    override fun handoverIntent(packageName: String, mode: HandoverMode): Intent? =
+        if (packageName in peers) {
+            Intent().setClassName(packageName, HandoverActivity::class.java.name).putExtra(Handover.EXTRA_MODE, mode.name)
+        } else {
+            null
+        }
+
+    override fun launchIntent(packageName: String): Intent? = null
+}

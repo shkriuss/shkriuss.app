@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    What core/security adds to every app that uses it: two permissions and
-    six screens. See docs/architecture/security-screens.md,
-    docs/security/permissions.md, ADR 0031 and ADR 0033.
+    What core/security adds to every app that uses it: two permissions,
+    eight screens and one status provider. See
+    docs/architecture/security-screens.md, docs/security/permissions.md,
+    ADR 0031, ADR 0033 and ADR 0041.
 
-    No screen is exported. Only the app itself can open them.
+    Two parts are exported, both for the handover between apps (ADR 0041):
+    the handover screen and the status provider. The suite defines no
+    permission for them, so any app may start the one and call the other.
+    Each checks the caller's certificate itself, before it reads or shows
+    anything, and gives a refused caller nothing. No other part is
+    exported.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -21,6 +27,16 @@
         grants it at install. It gives no access to any data. ADR 0033.
     -->
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+
+    <!--
+        The other apps of the suite: those with a handover screen. Without
+        it, Android hides them from this app.
+    -->
+    <queries>
+        <intent>
+            <action android:name="app.shkriuss.action.HANDOVER" />
+        </intent>
+    </queries>
 
     <application>
         <!-- The security screen: which keys exist and where, the screen lock, the recovery key. -->
@@ -58,6 +74,40 @@
             android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
             android:exported="false"
             android:theme="@style/Theme.Shk" />
+
+        <!--
+            The handover screen of a keeper: another app of the suite asks
+            for its own keys. Exported with no permission: the screen checks
+            the caller's certificate first, and gives a refused caller a
+            cancelled result and no screen. The intent filter has no
+            category, so the screen opens only when it is named; it is there
+            so that the other apps can find it.
+        -->
+        <activity
+            android:name="app.shkriuss.core.security.HandoverActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Shk">
+            <intent-filter>
+                <action android:name="app.shkriuss.action.HANDOVER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Get this app's keys from a keeper: opens the keeper's handover screen and stores what comes back. -->
+        <activity
+            android:name="app.shkriuss.core.security.GetKeysActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+
+        <!--
+            Tells the other apps of the suite whether this app keeps the
+            recovery key, and its short name. Exported with no permission:
+            it checks the caller's certificate first, and answers a refused
+            caller nothing. It answers one call and holds no data.
+        -->
+        <provider
+            android:name="app.shkriuss.core.security.KeeperStatusProvider"
+            android:authorities="${applicationId}.keeper"
+            android:exported="true" />
     </application>
 
 </manifest>

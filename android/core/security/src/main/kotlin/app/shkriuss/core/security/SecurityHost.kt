@@ -28,6 +28,7 @@ interface SecurityHost {
  */
 object SecurityScreens {
     internal const val EXTRA_START_OVER = "app.shkriuss.core.security.START_OVER"
+    internal const val EXTRA_KEEPER = "app.shkriuss.core.security.KEEPER"
 
     /** The security screen: the recovery key, the screen lock, and where each key lives. */
     fun securityIntent(context: Context): Intent = Intent(context, SecurityActivity::class.java)
@@ -46,6 +47,10 @@ object SecurityScreens {
 
     /** Turn the app lock on: the warning, the words, the system prompt. */
     internal fun turnOnIntent(context: Context): Intent = Intent(context, TurnOnAppLockActivity::class.java)
+
+    /** Get this app's keys from the keeper [keeper], an application ID (ADR 0041). */
+    internal fun getKeysIntent(context: Context, keeper: String): Intent =
+        Intent(context, GetKeysActivity::class.java).putExtra(EXTRA_KEEPER, keeper)
 
     /** Start a setup that stopped over: with a new key ([create]) or with other words. */
     internal fun startOverIntent(context: Context, create: Boolean): Intent =

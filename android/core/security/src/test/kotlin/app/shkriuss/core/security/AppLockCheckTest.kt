@@ -48,7 +48,7 @@ import org.robolectric.annotation.GraphicsMode
  * no screen to check.
  *
  * A library has no merged manifest of an app, so each test names the
- * activities it would hold: the samples, and the six screens of this
+ * activities it would hold: the samples, and the eight screens of this
  * module, which the check leaves out. The samples are added to
  * Robolectric's package manager, so that they can start. Water's test reads
  * a real merged manifest.
@@ -60,7 +60,7 @@ class AppLockCheckTest {
     @get:Rule
     val compose = createEmptyComposeRule()
 
-    /** The activities of a merged manifest with [screens] and the six of this module. */
+    /** The activities of a merged manifest with [screens] and the eight of this module. */
     private fun manifestWith(vararg screens: Class<out Activity>): List<String> {
         val app = RuntimeEnvironment.getApplication()
         screens.forEach { shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, it)) }
@@ -117,7 +117,7 @@ class AppLockCheckTest {
     }
 
     @Test
-    fun theScreensLeftOutAreTheSixOfThisModule() {
+    fun theScreensLeftOutAreTheEightOfThisModule() {
         assertEquals(
             listOf(
                 SecurityActivity::class.java,
@@ -126,6 +126,8 @@ class AppLockCheckTest {
                 ShowRecoveryKeyActivity::class.java,
                 AppLockActivity::class.java,
                 TurnOnAppLockActivity::class.java,
+                HandoverActivity::class.java,
+                GetKeysActivity::class.java,
             ).map { it.name },
             AppLockCheck.SECURITY_SCREENS,
         )

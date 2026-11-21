@@ -21,6 +21,8 @@ import app.shkriuss.core.security.AppLockActivity
 import app.shkriuss.core.security.AppLockWatcher
 import app.shkriuss.core.security.CreateRecoveryKeyActivity
 import app.shkriuss.core.security.EnterRecoveryKeyActivity
+import app.shkriuss.core.security.GetKeysActivity
+import app.shkriuss.core.security.HandoverActivity
 import app.shkriuss.core.security.LOCK_SCREEN_TEST_TAG
 import app.shkriuss.core.security.SecurityActivity
 import app.shkriuss.core.security.SecurityHost
@@ -168,7 +170,7 @@ abstract class StoppedSetupAppForTests(appName: AppName) : HostAppForTests(appNa
  * plain Android view. Review keeps those out.
  */
 object AppLockCheck {
-    /** The six screens of `core/security`. They have no gate: the recovery key must be reachable while the app cannot be unlocked. */
+    /** The eight screens of `core/security`. They have no gate: the recovery key must be reachable while the app cannot be unlocked. */
     val SECURITY_SCREENS: List<String> = listOf(
         SecurityActivity::class.java,
         CreateRecoveryKeyActivity::class.java,
@@ -176,6 +178,8 @@ object AppLockCheck {
         ShowRecoveryKeyActivity::class.java,
         AppLockActivity::class.java,
         TurnOnAppLockActivity::class.java,
+        HandoverActivity::class.java,
+        GetKeysActivity::class.java,
     ).map { it.name }
 
     /**

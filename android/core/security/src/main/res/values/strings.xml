@@ -223,4 +223,55 @@
     <string name="sec_first_need_finish_title">Finish your recovery key</string>
     <string name="sec_first_need_finish_text">Setting up your recovery key did not finish.</string>
     <string name="sec_first_need_open_security">Open the security screen</string>
+
+    <!-- A keeper's handover screen, where another app asks for its keys (ADR 0041). -->
+    <string name="sec_handover_title">Give %1$s its keys</string>
+    <string name="sec_handover_working">Making the keys</string>
+    <string name="sec_handover_keys_ask">%1$s asks for its own keys. %2$s makes them from the recovery key it keeps, and gives %1$s only those. %1$s never gets the 24 words and cannot show them.</string>
+    <string name="sec_handover_keys_then">%1$s can then make backups and use the app lock. Its backups open with the same 24 words.</string>
+    <string name="sec_handover_check_ask">%1$s asks %2$s to check four of your recovery words before its app lock is turned on. Have your paper ready.</string>
+    <string name="sec_handover_check_then">After you confirm that it is you, %1$s asks for four words. Then it gives %2$s only its own keys, never the words.</string>
+    <string name="sec_handover_short_name">Recovery key: %1$s. This short name is not secret and opens nothing.</string>
+    <string name="sec_handover_allow">Allow</string>
+    <string name="sec_handover_deny">Do not allow</string>
+    <string name="sec_handover_cancelled">Nothing was given to %1$s. Tap Allow to try again.</string>
+    <string name="sec_handover_not_kept">%1$s does not keep the recovery key on this phone now, so it cannot give %2$s its keys. Maybe the screen lock was removed. Enter the words in %2$s instead.</string>
+    <string name="sec_handover_failed">The keys could not be made now. Try again in a moment.</string>
+    <string name="sec_handover_damaged">The recovery key kept in %1$s is damaged. Enter your 24 words in %1$s to repair it.</string>
+    <string name="sec_handover_close">Close</string>
+    <string name="sec_prompt_handover">Give %1$s its keys</string>
+    <string name="sec_prompt_handover_check">Check your recovery words for %1$s</string>
+
+    <!-- The asking app's "Get the keys" screen (ADR 0041). -->
+    <string name="sec_get_keys_title">Get the keys</string>
+    <string name="sec_get_keys_waiting">Waiting for %1$s</string>
+    <string name="sec_get_keys_done_title">This app has its keys</string>
+    <string name="sec_get_keys_done_text">It has its own keys from your recovery key, whose short name is %1$s. %2$s keeps the words. This app cannot show them.</string>
+    <string name="sec_get_keys_not_keeper">%1$s does not keep the recovery key now. Enter the words instead.</string>
+    <string name="sec_get_keys_update">This app and %1$s are not of the same version. Update both apps, then try again.</string>
+    <string name="sec_get_keys_unreadable">What %1$s sent cannot be read. Update both apps, then try again.</string>
+    <string name="sec_get_keys_not_suite">%1$s cannot give this app its keys. It is not signed like this app, or not up to date. Update both apps, or enter the words instead.</string>
+    <string name="sec_get_keys_older">%1$s keeps an older recovery key of this app. Enter the words of the current one instead.</string>
+    <string name="sec_get_keys_different">%1$s keeps another recovery key than the one this app has its keys from, whose short name is %2$s. Nothing was changed.</string>
+    <string name="sec_get_keys_different_no_name">%1$s keeps another recovery key than the one this app has its keys from. Nothing was changed.</string>
+    <string name="sec_get_keys_key_id_in_use">These keys cannot be used in this app, because their short name is already taken by another key. This is very rare.</string>
+    <string name="sec_get_keys_damaged">A key file is damaged, and these keys could not repair it.</string>
+    <string name="sec_get_keys_from">Get the keys from %1$s</string>
+    <string name="sec_get_keys_from_with_key">Get the keys from %1$s, recovery key %2$s</string>
+
+    <!-- Other apps that keep the recovery key, on the security screen and in the first-need dialog (ADR 0041). -->
+    <string name="sec_keepers_offer">Another app of the suite keeps a recovery key on this phone. This app can get its own keys from it, with no words to type. It never gets the words.</string>
+    <string name="sec_kept_in">The recovery key is kept in %1$s. That app can show you the words again.</string>
+    <string name="sec_open_keeper">Open %1$s</string>
+    <string name="sec_keepers_repair">You can also get the keys from an app that keeps this recovery key.</string>
+
+    <!-- Keeping the key when another app keeps it already (ADR 0041, point 18). -->
+    <string name="sec_keep_ask_title">Keep it here too?</string>
+    <string name="sec_keep_ask_text">%1$s already keeps this recovery key and can show you the words. This app can keep it too.</string>
+    <string name="sec_keep_ask_button">Keep it here too</string>
+
+    <!-- Turning the app lock on in an app that does not keep the key, with a keeper on the phone (ADR 0041, point 19). -->
+    <string name="sec_turn_on_at_keeper">Or let an app that keeps your recovery key check four of your words.</string>
+    <string name="sec_turn_on_check_at">Check the words in %1$s</string>
+    <string name="sec_turn_on_keeper_failed">The words could not be checked in %1$s. Try again, or enter all 24 words.</string>
 </resources>

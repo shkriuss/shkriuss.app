@@ -30,6 +30,7 @@ abstract class FlowViewModel<S : Any> internal constructor(
     protected val crypto: ShkCrypto,
     private val background: CoroutineDispatcher,
     first: S,
+    private val suite: SuiteApps = SuiteApps.None,
 ) : ViewModel() {
     private val screen = MutableStateFlow(first)
 
@@ -78,9 +79,20 @@ abstract class FlowViewModel<S : Any> internal constructor(
         }
     }
 
-    /** After the keys are stored: keep [key] on this phone, if the phone can. */
-    protected suspend fun keep(key: RecoveryKey) {
+    /**
+     * After the keys are stored: keep [key] on this phone, if the phone
+     * can. With [askFirst], when another app keeps the same key already,
+     * the user is asked first ([FlowKeepAsk]).
+     */
+    protected suspend fun keep(key: RecoveryKey, askFirst: Boolean = true) {
         keeping = key
+        if (askFirst) {
+            val others = suite.keepers().filter { it.keyId == key.keyId.toString() }
+            if (others.isNotEmpty() && !crypto.setup.keepsRecoveryKey()) {
+                show(flowScreen(FlowKeepAsk(others.map { it.label })))
+                return
+            }
+        }
         val step = crypto.setup.beginKeepRecoveryKey(key)
         if (step == null) {
             keeping = null
@@ -99,7 +111,15 @@ abstract class FlowViewModel<S : Any> internal constructor(
     /** The user asks for the system prompt again, after closing it. */
     fun onKeepAgain() {
         val key = keeping ?: return
-        work { keep(key) }
+        work { keep(key, askFirst = false) }
+    }
+
+    /** Another app keeps this key already, and the user keeps it here too. */
+    fun onKeepHereToo() {
+        val key = keeping ?: return
+        if (state.value !is FlowKeepAsk) return
+        show(flowScreen(FlowWorking))
+        work { keep(key, askFirst = false) }
     }
 
     /** The user keeps only the paper copy. */
