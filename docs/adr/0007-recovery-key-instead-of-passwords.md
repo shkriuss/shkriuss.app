@@ -1,6 +1,10 @@
 # 0007 Recovery key instead of passwords
 
-- Status: Accepted
+- Status: Accepted. The words "through a signature-protected screen"
+  of point 12 superseded by [0041](0041-the-handover-between-apps.md):
+  the suite defines no permission for the handover, and the keeper's own
+  check of the caller is the gate. The rest of point 12 is decided in
+  detail there.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decisions 3 and 12), 6
   and 7, and the owner's review of

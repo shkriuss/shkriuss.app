@@ -182,9 +182,15 @@
   Signature-protected calls between an app on the old key and an app on
   the new key may fail until both are updated. No app uses such an
   interface yet. Release every app on the same day.
-- Open: how those calls behave during the update, for the handover
-  between apps (step 3.0) and for the courier interface of sync
-  (Phase 5).
+- For the handover between apps, the keeper and the asking app compare
+  each other's exact current certificate, so an app on the old key and
+  an app on the new key refuse each other until both are updated
+  ([0041](0041-the-handover-between-apps.md), point 10). The handover
+  defines no permission, because with this record's rights a permission
+  that several apps define would make every rotated update fail
+  (0041, Context).
+- Open: how those calls behave during the update, for the courier
+  interface of sync (Phase 5).
 - Open: signing-ceremony needs a `rotate` action before a real rotation.
   - Its `create` refuses while a backup exists: "A backup already
     exists. This workflow never replaces a signing key." So `rotate` must
