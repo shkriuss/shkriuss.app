@@ -27,6 +27,8 @@ class FlowStepActions(
     val onDone: () -> Unit = {},
     /** Opens the app lock screen, after storing the keys turned the app lock off. */
     val onAppLock: () -> Unit = {},
+    /** Keeps the key here too, when another app keeps it already. */
+    val onKeepHereToo: () -> Unit = {},
 )
 
 /** What the user can do while creating a recovery key. */
@@ -238,6 +240,14 @@ private fun FlowStepContent(step: FlowStep, actions: FlowStepActions) {
                     ShkFilledButton(stringResource(R.string.sec_keep_button), actions.onKeep)
                     ShkTonalButton(stringResource(R.string.sec_keep_skip), actions.onSkipKeeping)
                 }
+            }
+        }
+        is FlowKeepAsk -> {
+            StepTitle(stringResource(R.string.sec_keep_ask_title))
+            Paragraph(stringResource(R.string.sec_keep_ask_text, step.keepers.joinToString(", ")))
+            Buttons {
+                ShkFilledButton(stringResource(R.string.sec_keep_ask_button), actions.onKeepHereToo)
+                ShkTonalButton(stringResource(R.string.sec_keep_skip), actions.onSkipKeeping)
             }
         }
         is FlowDone -> {

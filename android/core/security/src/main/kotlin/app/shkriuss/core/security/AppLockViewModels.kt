@@ -21,14 +21,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** What a prompt that did not succeed leaves as a note. Gone, for example after a turn of the phone, leaves none. */
-private fun keepNoteOf(outcome: PromptOutcome): KeepNote? = when (outcome) {
+internal fun keepNoteOf(outcome: PromptOutcome): KeepNote? = when (outcome) {
     PromptOutcome.CANCELLED -> KeepNote.CANCELLED
     PromptOutcome.FAILED -> KeepNote.FAILED
     else -> null
 }
 
 /** Throws a step away that nobody will finish. A step that was used already is left alone. */
-private fun cancelQuietly(request: PromptRequest?) {
+internal fun cancelQuietly(request: PromptRequest?) {
     try {
         request?.step?.cancel()
     } catch (_: IllegalStateException) {
@@ -310,8 +310,18 @@ class TurnOnViewModel internal constructor(
     private val background: CoroutineDispatcher = Dispatchers.IO,
     private val random: Random = Random.Default,
     private val main: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val suite: SuiteApps = SuiteApps.None,
 ) : ViewModel() {
     private val screen = MutableStateFlow<TurnOnScreen>(TurnOnWorking)
+
+    /** The warning as it first showed, to come back to after a keeper was asked. */
+    @Volatile
+    private var intro: TurnOnIntro? = null
+
+    /** The keeper that checks the words now, an application ID. It survives a turn of the phone. */
+    @Volatile
+    internal var checkingAt: String? = null
+        private set
 
     /** The one state of the screen. */
     val state: StateFlow<TurnOnScreen> = screen.asStateFlow()
@@ -341,10 +351,50 @@ class TurnOnViewModel internal constructor(
     init {
         work {
             screen.value = if (crypto.appLock.canTurnOn()) {
-                TurnOnIntro(keeper = crypto.setup.keepsRecoveryKey())
+                val keeper = crypto.setup.keepsRecoveryKey()
+                // Only the apps that keep this app's own recovery key can check its words.
+                val keyId = if (keeper) null else crypto.status().keyId?.toString()
+                val keepers = keyId?.let { id -> suite.keepers().filter { it.keyId == id } }.orEmpty()
+                TurnOnIntro(keeper, keepers).also { intro = it }
             } else {
                 TurnOnFailed(TurnOnProblem.NOT_ALLOWED)
             }
+        }
+    }
+
+    /**
+     * The user lets [keeper] check four words. The screen opens the
+     * keeper's handover screen and hands its answer to [onKeeperAnswer].
+     */
+    fun onCheckAtKeeper(keeper: KeeperApp) {
+        if (screen.value !is TurnOnIntro) return
+        checkingAt = keeper.packageName
+        screen.value = TurnOnWorking
+    }
+
+    /**
+     * What the keeper answered. Keys marked "words checked" whose `record`
+     * is this app's own are the proof; then the last prompt follows. Any
+     * other answer goes back to the warning, with a note unless the user
+     * only said no.
+     */
+    internal fun onKeeperAnswer(answer: KeeperAnswer) {
+        val keeper = checkingAt ?: return
+        checkingAt = null
+        val back = intro ?: return
+        val label = back.keepers.firstOrNull { it.packageName == keeper }?.label ?: keeper
+        when (answer) {
+            is KeeperAnswer.Keys -> work {
+                val checked = crypto.setup.checkWordsAtKeeper(answer.keys)
+                if (checked == null) {
+                    screen.value = back.copy(keeperFailed = label)
+                } else {
+                    proof = checked
+                    beginLocking()
+                }
+            }
+            KeeperAnswer.Declined -> screen.value = back
+            else -> screen.value = back.copy(keeperFailed = label)
         }
     }
 

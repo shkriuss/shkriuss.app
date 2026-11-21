@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    What core/security adds to every app that uses it: two permissions and
-    six screens. See docs/architecture/security-screens.md,
-    docs/security/permissions.md, ADR 0031 and ADR 0033.
+    What core/security adds to every app that uses it: three permissions,
+    one of them its own, eight screens and one status provider. See
+    docs/architecture/security-screens.md, docs/security/permissions.md,
+    ADR 0031, ADR 0033 and ADR 0041.
 
-    No screen is exported. Only the app itself can open them.
+    Two parts are exported, both for the handover between apps (ADR 0041):
+    the handover screen and the status provider. Both need the handover
+    permission, which only apps signed with the suite's key get, and both
+    check the caller's certificate themselves. No other part is exported.
+
+    The permission's name comes from the placeholder shkHandoverPermission,
+    which the build sets per build type: a preview has a name of its own,
+    so that it installs next to the real app.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
@@ -21,6 +29,30 @@
         grants it at install. It gives no access to any data. ADR 0033.
     -->
     <uses-permission android:name="android.permission.HIDE_OVERLAY_WINDOWS" />
+
+    <!--
+        The handover permission (ADR 0041). Every data app defines it and
+        requests it, so the apps can be installed in any order: Android
+        accepts the same definition from every app signed with the same
+        key, and grants it only to those apps.
+    -->
+    <permission
+        android:name="${shkHandoverPermission}"
+        android:description="@string/sec_handover_permission_description"
+        android:label="@string/sec_handover_permission_label"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="${shkHandoverPermission}" />
+
+    <!--
+        The other apps of the suite: those with a handover screen. Without
+        it, Android hides them from this app.
+    -->
+    <queries>
+        <intent>
+            <action android:name="app.shkriuss.action.HANDOVER" />
+        </intent>
+    </queries>
 
     <application>
         <!-- The security screen: which keys exist and where, the screen lock, the recovery key. -->
@@ -58,6 +90,40 @@
             android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
             android:exported="false"
             android:theme="@style/Theme.Shk" />
+
+        <!--
+            The handover screen of a keeper: another app of the suite asks
+            for its own keys. Exported, but only to holders of the handover
+            permission. The intent filter has no category, so the screen
+            opens only when it is named; it is there so that the other apps
+            can find it.
+        -->
+        <activity
+            android:name="app.shkriuss.core.security.HandoverActivity"
+            android:exported="true"
+            android:permission="${shkHandoverPermission}"
+            android:theme="@style/Theme.Shk">
+            <intent-filter>
+                <action android:name="app.shkriuss.action.HANDOVER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Get this app's keys from a keeper: opens the keeper's handover screen and stores what comes back. -->
+        <activity
+            android:name="app.shkriuss.core.security.GetKeysActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Shk" />
+
+        <!--
+            Tells the other apps of the suite whether this app keeps the
+            recovery key, and its short name. Exported, but only to holders
+            of the handover permission. It answers one call and holds no data.
+        -->
+        <provider
+            android:name="app.shkriuss.core.security.KeeperStatusProvider"
+            android:authorities="${applicationId}.keeper"
+            android:exported="true"
+            android:permission="${shkHandoverPermission}" />
     </application>
 
 </manifest>

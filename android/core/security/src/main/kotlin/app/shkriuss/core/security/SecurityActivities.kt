@@ -1,5 +1,6 @@
 package app.shkriuss.core.security
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,7 +33,8 @@ class SecurityActivity : ComponentActivity(), WordsScreen {
         hideOtherAppsWindows(this)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        model = flowViewModel { SecurityViewModel(it) }
+        val suite = AndroidSuiteApps(this)
+        model = flowViewModel { SecurityViewModel(it, suite = suite) }
         val actions = SecurityActions(
             onBack = ::finish,
             onCreate = { startActivity(SecurityScreens.createIntent(this)) },
@@ -43,6 +45,8 @@ class SecurityActivity : ComponentActivity(), WordsScreen {
             onGiveUpFiles = model::onGiveUpFiles,
             onRetry = model::refresh,
             onAppLock = { startActivity(SecurityScreens.appLockIntent(this)) },
+            onGetKeys = { startActivity(SecurityScreens.getKeysIntent(this, it.packageName)) },
+            onOpenKeeper = { keeper -> suite.launchIntent(keeper.packageName)?.let(::startActivity) },
         )
         setContent {
             ShkTheme {
@@ -67,14 +71,20 @@ class CreateRecoveryKeyActivity : ComponentActivity(), WordsScreen {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val startOver = intent.getBooleanExtra(SecurityScreens.EXTRA_START_OVER, false)
-        val model = flowViewModel { CreateViewModel(it, startOver) }
+        val suite = AndroidSuiteApps(this)
+        val model = flowViewModel { CreateViewModel(it, startOver, suite = suite) }
         val actions = CreateActions(
             onBack = ::finish,
             onShowWords = model::onShowWords,
             onWordsWritten = model::onWordsWritten,
             onAnswerChange = model::onAnswerChange,
             onCheck = model::onCheck,
-            step = FlowStepActions(onKeep = model::onKeepAgain, onSkipKeeping = model::onSkipKeeping, onDone = ::finish),
+            step = FlowStepActions(
+                onKeep = model::onKeepAgain,
+                onSkipKeeping = model::onSkipKeeping,
+                onDone = ::finish,
+                onKeepHereToo = model::onKeepHereToo,
+            ),
         )
         setContent {
             ShkTheme {
@@ -101,7 +111,10 @@ class EnterRecoveryKeyActivity : ComponentActivity(), WordsScreen {
         super.onCreate(savedInstanceState)
         val startOver = intent.getBooleanExtra(SecurityScreens.EXTRA_START_OVER, false)
         val watcher = securityHost.appLock
-        val model = flowViewModel { EnterViewModel(it, startOver, onAppLockChanged = { watcher.refresh(announce = false) }) }
+        val suite = AndroidSuiteApps(this)
+        val model = flowViewModel {
+            EnterViewModel(it, startOver, onAppLockChanged = { watcher.refresh(announce = false) }, suite = suite)
+        }
         val actions = EnterActions(
             onBack = ::finish,
             onTyped = model::onTyped,
@@ -118,6 +131,7 @@ class EnterRecoveryKeyActivity : ComponentActivity(), WordsScreen {
                     startActivity(SecurityScreens.appLockIntent(this))
                     finish()
                 },
+                onKeepHereToo = model::onKeepHereToo,
             ),
         )
         setContent {
@@ -246,7 +260,11 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val watcher = securityHost.appLock
-        model = flowViewModel { TurnOnViewModel(it, unlockMark = watcher::unlockMark, onTurnedOn = watcher::turnedOn) }
+        val suite = AndroidSuiteApps(this)
+        model = flowViewModel { TurnOnViewModel(it, unlockMark = watcher::unlockMark, onTurnedOn = watcher::turnedOn, suite = suite) }
+        val model = model
+        // Made in onCreate, so that the keeper's answer comes straight to the model, never into a saved state.
+        val keeperCall = KeeperCall(this, suite, keeper = { model.checkingAt }, onAnswer = model::onKeeperAnswer)
         val actions = TurnOnActions(
             onBack = ::finish,
             onContinue = model::onContinue,
@@ -262,6 +280,10 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
             ),
             onLockAgain = model::onLockAgain,
             onDone = ::finish,
+            onCheckAtKeeper = { keeper ->
+                model.onCheckAtKeeper(keeper)
+                keeperCall.ask(HandoverMode.CHECK_WORDS)
+            },
         )
         setContent {
             ShkTheme {
@@ -288,5 +310,122 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
     override fun onStop() {
         super.onStop()
         model.onStop(isChangingConfigurations)
+    }
+}
+
+/**
+ * A keeper's handover screen (ADR 0041): another app of the suite asks for
+ * its own keys, or for four words to be checked first. Exported, and
+ * protected by the handover permission. It checks the caller itself
+ * before it shows anything, and again before it hands the keys over. A
+ * caller that fails gets a cancelled result and no screen. It may take
+ * four words, so its window blocks screenshots like the recovery key
+ * screens.
+ */
+@OptIn(SecurityScreenSamples::class)
+class HandoverActivity : ComponentActivity(), WordsScreen {
+    private var model: HandoverViewModel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        secureWindow(this)
+        hideOtherAppsWindows(this)
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        val suite = AndroidSuiteApps(this)
+        val request = HandoverRequest.of(callingPackage, intent.extras, suite)
+        if (request !is HandoverRequest.Valid) {
+            setResult(Activity.RESULT_CANCELED, refusalResult(if (request == HandoverRequest.Newer) HandoverRefusal.UPDATE else null))
+            finish()
+            return
+        }
+        val model = flowViewModel { HandoverViewModel(it, request.asker, request.mode) }.also { this.model = it }
+        val asker = suite.labelOf(request.askerPackage)
+        val keeper = applicationInfo.loadLabel(packageManager).toString()
+        val actions = HandoverActions(
+            onAllow = model::onAllow,
+            onDeny = ::finish,
+            onAnswerChange = model::onAnswerChange,
+            onCheck = model::onCheckFour,
+            onClose = {
+                val refusal = if (model.state.value == HandoverNotKept) HandoverRefusal.NOT_KEEPER else null
+                setResult(Activity.RESULT_CANCELED, refusalResult(refusal))
+                finish()
+            },
+        )
+        setContent {
+            ShkTheme {
+                val screen by model.state.collectAsState()
+                LaunchedEffect(screen) { if (screen == HandoverReady) handOver(model, request, suite) }
+                HandoverContent(screen, asker, keeper, isPreviewBuild, actions)
+                SystemPrompt(
+                    request = (screen as? HandoverAsk)?.prompt,
+                    title = stringResource(
+                        if (request.mode == HandoverMode.KEYS) R.string.sec_prompt_handover else R.string.sec_prompt_handover_check,
+                        asker,
+                    ),
+                    subtitle = stringResource(R.string.sec_prompt_subtitle),
+                    onResult = model::onPromptResult,
+                )
+            }
+        }
+    }
+
+    /** Checks the caller once more, then gives it the keys and closes. The keys are never kept here after that. */
+    private fun handOver(model: HandoverViewModel, request: HandoverRequest.Valid, suite: SuiteApps) {
+        val keys = model.takeKeys() ?: return
+        val caller = callingPackage
+        if (caller != request.askerPackage || suite.peerName(caller) != request.asker) {
+            setResult(Activity.RESULT_CANCELED)
+        } else {
+            setResult(Activity.RESULT_OK, keysResult(keys))
+        }
+        finish()
+    }
+
+    // The kept key, and keys not handed over yet, leave memory when the screen stops. A turn of the phone does not count.
+    override fun onStop() {
+        super.onStop()
+        model?.onStop(isChangingConfigurations)
+    }
+}
+
+/**
+ * The asking app's "Get the keys" screen (ADR 0041): it opens the
+ * keeper's handover screen at once, stores the keys that come back, and
+ * says how it went. Not exported. It shows no words, but blocks
+ * screenshots like every screen of this module.
+ */
+@OptIn(SecurityScreenSamples::class)
+class GetKeysActivity : ComponentActivity(), WordsScreen {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        secureWindow(this)
+        hideOtherAppsWindows(this)
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        val keeper = intent.getStringExtra(SecurityScreens.EXTRA_KEEPER)
+        val suite = AndroidSuiteApps(this)
+        val watcher = securityHost.appLock
+        val model = flowViewModel { GetKeysViewModel(it, onAppLockChanged = { watcher.refresh(announce = false) }) }
+        // Made in onCreate, so that the answer comes straight to the model, never into a saved state.
+        val call = KeeperCall(this, suite, keeper = { keeper }, onAnswer = model::onAnswer)
+        // Only on the first start: after a turn of the phone the keeper's screen is open already.
+        if (savedInstanceState == null) {
+            if (keeper == null) model.onAnswer(KeeperAnswer.NotASuiteApp) else call.ask(HandoverMode.KEYS)
+        }
+        val label = keeper?.let(suite::labelOf).orEmpty()
+        val actions = GetKeysActions(
+            onDone = ::finish,
+            onAppLock = {
+                startActivity(SecurityScreens.appLockIntent(this))
+                finish()
+            },
+        )
+        setContent {
+            ShkTheme {
+                val screen by model.state.collectAsState()
+                LaunchedEffect(screen) { if (screen == GetKeysClosed) finish() }
+                GetKeysContent(screen, label, isPreviewBuild, actions)
+            }
+        }
     }
 }

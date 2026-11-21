@@ -34,6 +34,19 @@ internal object ShkBuild {
 
     /** The only build type that runs unit and screenshot tests. */
     const val TEST_BUILD_TYPE = "debug"
+
+    /**
+     * The manifest placeholder that names the handover permission of
+     * `core/security` (ADR 0041). Each app sets it per build type; the unit
+     * tests of a library set it to [HANDOVER_PERMISSION].
+     */
+    const val HANDOVER_PERMISSION_PLACEHOLDER = "shkHandoverPermission"
+
+    /** The handover permission of debug and release builds (ADR 0041, point 6). */
+    const val HANDOVER_PERMISSION = "app.shkriuss.permission.HANDOVER"
+
+    /** The handover permission of preview builds, so that a preview installs next to the real app (ADR 0041, point 21). */
+    const val HANDOVER_PERMISSION_PREVIEW = "app.shkriuss.permission.HANDOVER_PREVIEW"
 }
 
 /** The version catalog in `gradle/libs.versions.toml`. */

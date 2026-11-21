@@ -3,8 +3,9 @@ package app.shkriuss.core.crypto
 /**
  * Proof that the user just gave this app's recovery words, needed to turn
  * the app lock on ("The app lock" in crypto-design.md, rule 2). Only
- * [KeySetup.checkFourWords] and [KeySetup.checkAllWords] make one, so the
- * app lock can never be turned on without the check.
+ * [KeySetup.checkFourWords], [KeySetup.checkAllWords] and
+ * [KeySetup.checkWordsAtKeeper] make one, so the app lock can never be
+ * turned on without the check.
  *
  * It holds only [keyId]: the public key ID of the `record` key the words
  * were checked against. [AppLock.beginTurnOn] refuses a proof whose key

@@ -30,6 +30,8 @@ import org.gradle.process.CommandLineArgumentProvider
  * - Robolectric runs offline. Gradle downloads its Android image like any
  *   other dependency, so dependency verification checks the file.
  *   Robolectric's own downloader would skip that check.
+ * - In a library module, the tests name the handover permission of
+ *   `core/security`, which an app names per build type (ADR 0041).
  * - In an app module, the tests get the path of the app's merged manifest,
  *   as it goes into the APK, in the system property
  *   [MergedManifestArgument.PROPERTY]. The check that every screen is
@@ -45,6 +47,7 @@ class AndroidUnitTestConventionPlugin : Plugin<Project> {
             runHostTestsForDebugOnly()
             configureRobolectricOffline()
             giveAppTestsTheMergedManifest()
+            nameTheHandoverPermissionInLibraryTests()
 
             dependencies {
                 add("testImplementation", libs.library("junit"))
@@ -96,6 +99,26 @@ class AndroidUnitTestConventionPlugin : Plugin<Project> {
                     variant.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.configureTestTask { task ->
                         task.jvmArgumentProviders.add(MergedManifestArgument(manifest))
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * The unit tests of a library merge its manifest, and those of the
+     * libraries it uses, into a test manifest. `core/security` names its
+     * handover permission with a placeholder that only an app sets
+     * (ADR 0041). Here the tests set it to the name of a debug build. The
+     * library's own manifest keeps the placeholder for the app to fill.
+     */
+    private fun Project.nameTheHandoverPermissionInLibraryTests() {
+        pluginManager.withPlugin("com.android.library") {
+            extensions.configure<LibraryAndroidComponentsExtension> {
+                onVariants(selector().all()) { variant ->
+                    variant.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.manifestPlaceholders?.put(
+                        ShkBuild.HANDOVER_PERMISSION_PLACEHOLDER,
+                        ShkBuild.HANDOVER_PERMISSION,
+                    )
                 }
             }
         }

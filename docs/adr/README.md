@@ -61,6 +61,11 @@ that no release waits for a manual checklist. It supersedes point 4 of
 Record 0040 raises the minimum to Android 15, from the owner's decision
 of 2026-11-16. It supersedes point 2 of 0002, the sentence of point 3 of
 0006 on Android 13 and 14, and the required emulator checks of 0028.
+Record 0041 comes from the step "3.0 Handover": how a keeper app sets up
+a second app with its own derived keys. Claude proposed it, and the owner
+answered its four questions and agreed to it on 2026-11-21. It decides
+point 12 of 0007, the fourth choice that point 3 of 0035 left open, and
+the open point of 0037 on the handover.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -107,3 +112,4 @@ How a record may be edited or replaced is in point 7 of
 | 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Accepted |
 | 0039 | [No manual checklist for a release](0039-no-manual-checklist-for-a-release.md) | Accepted |
 | 0040 | [Minimum Android 15](0040-minimum-android-15.md) | Accepted |
+| 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Accepted |
