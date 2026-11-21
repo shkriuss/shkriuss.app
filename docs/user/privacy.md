@@ -47,8 +47,7 @@ Water's storage.
 
 ### Reminders
 
-Reminders has no release yet ([Apps](apps.md)). On your phone, it
-stores:
+Reminders is released ([Apps](apps.md)). On your phone, it stores:
 
 - your reminders: the title, the date, the time, the repeat and the days
   of the week of each;

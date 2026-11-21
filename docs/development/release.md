@@ -132,9 +132,10 @@ Then:
 1. Open `github.com/shkriuss/shkriuss.app/actions/workflows/release.yml`.
 2. Tap **Run workflow**.
 3. Leave the branch at `main`.
-4. Pick the app: `catalog` or `water`. Type the version exactly as
-   `versionName`, for example `0.1.0`. A version ending in `-alpha.N`, `-beta.N` or `-rc.N`, such as
-   `1.0.0-rc.1`, becomes a pre-release.
+4. Pick the app: `catalog`, `water` or `reminders`. Type the version
+   exactly as `versionName`, for example `0.1.0`. A version ending in
+   `-alpha.N`, `-beta.N` or `-rc.N`, such as `1.0.0-rc.1`, becomes a
+   pre-release.
 5. Tap **Run workflow**. Pull the page down to reload it, then tap the new
    run, named "Release" with the app and the version.
 6. Wait for **Build** and **Rebuild and compare**. Each builds the app from
@@ -176,7 +177,7 @@ asked to approve.
 |---|---|
 | Only the repository owner may start or re-run a release. | Someone other than you started the run, or re-ran a job in it. Start a new run yourself. |
 | Start the release on the branch main. | Run it again with the branch `main`. |
-| Unknown app. | Pick an app from the list: `catalog` or `water`. A new app is added to the list in a pull request. |
+| Unknown app. | Pick an app from the list: `catalog`, `water` or `reminders`. A new app is added to the list in a pull request. |
 | The version must look like 1.0.0, 1.0.0-alpha.1, 1.0.0-beta.1 or 1.0.0-rc.1 ... | Type a version in one of those forms. No `v` in front. |
 | CI (ci.yml) has not run for commit ... on main. | CI has not started yet, or the commit is not on `main`. Wait a minute, then start again. |
 | CI (ci.yml) has not passed for commit ... | CI is still running, or it failed. The message links to the run. Wait until it is green, or fix it first, then start again. |

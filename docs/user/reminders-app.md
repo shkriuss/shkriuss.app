@@ -11,8 +11,6 @@ the Reminders app.
 
 ## Install it
 
-Reminders has no release yet ([Apps](apps.md)). Once it has one:
-
 1. Install it with Obtainium, as [Install with Obtainium](install.md)
    says. In **Filter release titles by regular expression**, type
    `^reminders-v`.
@@ -307,7 +305,7 @@ Reminders' keys. A backup then opens only with your 24 words.
 
 ## Known problems
 
-Reminders has no release yet. These are its known problems and limits.
+Version 1.0.0 has these known problems and limits.
 
 Not known yet:
 
@@ -343,8 +341,8 @@ Limits of the recovery key:
 Limits of the app lock:
 
 10. If you choose a time in **Lock the app** and turn the screen off
-   from another app, Reminders may stay unlocked until that time has
-   passed ([The app lock](app-lock.md#when-the-app-locks)).
+    from another app, Reminders may stay unlocked until that time has
+    passed ([The app lock](app-lock.md#when-the-app-locks)).
 11. The app lock hides your reminders. It does not encrypt them.
     Android's own encryption protects them, with your screen lock.
 
@@ -370,7 +368,7 @@ Other:
 16. Never type your real recovery words into a preview build of a pull
     request. Use test words.
 
-Not in version 1:
+Not in version 1.0.0:
 
 - Lists, due dates and checklists: they belong to Tasks. A note, a
   place, a colour or a picture: a reminder has only a title.

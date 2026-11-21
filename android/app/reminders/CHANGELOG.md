@@ -7,7 +7,12 @@ year. Its specification is
 
 ## Unreleased
 
-Not released yet.
+## 1.0.0 (2026-11-20)
+
+Released as `reminders-v1.0.0`.
+
+The first release of Reminders. How to use it:
+[Reminders](../../../docs/user/reminders-app.md).
 
 - Three screens, Upcoming, Past and Settings, in a bar along the bottom
   of a phone and a rail along the side of a tablet.

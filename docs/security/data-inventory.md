@@ -146,10 +146,9 @@ private storage. This page did not check them in the code:
 
 ## Reminders (`app.shkriuss.reminders`)
 
-Reminders has no release yet. On its screens you add, change and delete
-reminders. It stores them and what this phone remembers of them, shows
-each reminder as a notification at its time, and makes and restores
-backups, as below.
+On its screens you add, change and delete reminders. It stores them and
+what this phone remembers of them, shows each reminder as a
+notification at its time, and makes and restores backups, as below.
 
 ### On the phone
 

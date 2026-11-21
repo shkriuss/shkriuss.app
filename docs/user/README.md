@@ -13,8 +13,8 @@ One guide per app:
 - [Reminders](reminders-app.md): set one-time and repeating reminders
   with a title, and see each one as a notification at its time.
   Everything on Upcoming, Past and Settings, the notifications, backup
-  and restore, the five permissions, and the known problems. Not on the
-  hub website until its first release.
+  and restore, the five permissions, and the known problems of 1.0.0.
+  On the hub website at `/reminders/`.
 
 Pages:
 
@@ -41,7 +41,7 @@ Pages:
   reminders, when a reminder shows,
   how to allow notifications, and what happens after a restart of the
   phone before the first unlock, in Private Space and in another user
-  profile. On the hub website at `/reminders/`.
+  profile. On the hub website at `/notifications/`.
 
 What else belongs here:
 
