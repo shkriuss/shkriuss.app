@@ -95,16 +95,9 @@ data object TurnOnWorking : TurnOnScreen
 /**
  * The plain warning before the app lock is turned on. [keeper] is true if
  * this app keeps the recovery key: it then asks for four words, else for
- * all 24. In an app that does not keep it, [keepers] are the apps that
- * keep this app's recovery key, which can check four words instead
- * (ADR 0041, point 19). [keeperFailed] names the one whose check did not
- * work last time.
+ * all 24.
  */
-data class TurnOnIntro(
-    val keeper: Boolean,
-    val keepers: List<KeeperApp> = emptyList(),
-    val keeperFailed: String? = null,
-) : TurnOnScreen
+data class TurnOnIntro(val keeper: Boolean) : TurnOnScreen
 
 /** A keeper app reads its kept recovery key, after the system prompt, to check four words. */
 data class TurnOnReading(val prompt: PromptRequest? = null, val note: KeepNote? = null) : TurnOnScreen

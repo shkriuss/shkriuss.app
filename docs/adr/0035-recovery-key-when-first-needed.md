@@ -1,7 +1,6 @@
 # 0035 The recovery key comes when it is first needed
 
-- Status: Accepted; point 3 extended by
-  [0041](0041-the-handover-between-apps.md)
+- Status: Accepted
 - Date: 2026-11-13
 - Source: Phase 2, step 2.1, the specification of Water
   ([spec.md](../apps/water/spec.md#the-recovery-key-when-first-needed)).
@@ -84,8 +83,8 @@ For every app of the suite:
   guide of each app says so, and says to make a backup.
 - Step 2.5 builds the dialog in `core/security`, with its page in
   Catalog and its screenshot tests, and Water's settings use it.
-- The handover between apps adds a fourth choice to the "set up" and
-  "restore" forms of the dialog when a keeper is on the phone: **Get the
-  keys from Water** ([0041](0041-the-handover-between-apps.md), point 3).
+- The handover between apps (step 3.0) may add a fourth choice to the
+  dialog: take the keys from a keeper app on the phone. That step
+  decides it.
 - Water is the first app that follows this record
   ([spec.md](../apps/water/spec.md#the-recovery-key-when-first-needed)).

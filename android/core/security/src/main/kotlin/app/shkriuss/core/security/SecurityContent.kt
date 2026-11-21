@@ -47,10 +47,6 @@ class SecurityActions(
     val onGiveUpFiles: () -> Unit = {},
     val onRetry: () -> Unit = {},
     val onAppLock: () -> Unit = {},
-    /** Gets this app's keys from a keeper (ADR 0041). */
-    val onGetKeys: (KeeperApp) -> Unit = {},
-    /** Opens a keeper app. */
-    val onOpenKeeper: (KeeperApp) -> Unit = {},
 )
 
 /**
@@ -82,10 +78,6 @@ fun SecurityContent(state: SecurityState, previewBuild: Boolean, actions: Securi
                         },
                     ),
                 )
-                if (state.appLock == AppLockState.RESET && state.ownKeepers.isNotEmpty()) {
-                    Paragraph(stringResource(R.string.sec_keepers_repair))
-                    GetKeysButtons(state.ownKeepers, actions.onGetKeys)
-                }
                 Buttons { ShkTonalButton(stringResource(R.string.sec_app_lock_button), actions.onAppLock) }
                 ShkSectionHeader(stringResource(R.string.sec_section_screen_lock))
                 Paragraph(stringResource(if (state.hasScreenLock) R.string.sec_screen_lock_on else R.string.sec_screen_lock_off))
@@ -101,10 +93,6 @@ private fun RecoveryKeySection(state: SecurityState, actions: SecurityActions) {
     when (state.recoveryKey) {
         RecoveryKeyState.NONE -> {
             Paragraph(stringResource(R.string.sec_no_key))
-            if (state.keepers.isNotEmpty()) {
-                Paragraph(stringResource(R.string.sec_keepers_offer))
-                GetKeysButtons(state.keepers, actions.onGetKeys)
-            }
             Paragraph(stringResource(R.string.sec_no_key_other_app))
             Buttons {
                 ShkFilledButton(stringResource(R.string.sec_create), actions.onCreate)
@@ -118,10 +106,6 @@ private fun RecoveryKeySection(state: SecurityState, actions: SecurityActions) {
                 ShkFilledButton(stringResource(R.string.sec_finish), actions.onEnter)
                 ShkTonalButton(stringResource(R.string.sec_start_over), { asking = true })
             }
-            if (state.keepers.isNotEmpty()) {
-                Paragraph(stringResource(R.string.sec_keepers_repair))
-                GetKeysButtons(state.keepers, actions.onGetKeys)
-            }
             if (asking) StartOverDialog(actions, onDismiss = { asking = false })
         }
         RecoveryKeyState.SET_UP -> {
@@ -133,18 +117,8 @@ private fun RecoveryKeySection(state: SecurityState, actions: SecurityActions) {
                     Buttons { ShkFilledButton(stringResource(R.string.sec_show), actions.onShow) }
                 }
                 Kept.NOT_KEPT -> {
-                    val keepers = state.ownKeepers
-                    if (keepers.isEmpty()) {
-                        Paragraph(stringResource(R.string.sec_not_kept))
-                    } else {
-                        Paragraph(stringResource(R.string.sec_kept_in, keepers.joinToString(", ") { it.label }))
-                    }
-                    Buttons {
-                        keepers.forEach { keeper ->
-                            ShkTonalButton(stringResource(R.string.sec_open_keeper, keeper.label), { actions.onOpenKeeper(keeper) })
-                        }
-                        ShkTonalButton(stringResource(R.string.sec_keep_here), actions.onEnter)
-                    }
+                    Paragraph(stringResource(R.string.sec_not_kept))
+                    Buttons { ShkTonalButton(stringResource(R.string.sec_keep_here), actions.onEnter) }
                 }
                 Kept.NO_SCREEN_LOCK -> Paragraph(stringResource(R.string.sec_not_kept_no_lock))
             }
@@ -159,10 +133,6 @@ private fun RepairSection(state: SecurityState, actions: SecurityActions) {
     if (state.needsRepair) {
         Paragraph(stringResource(R.string.sec_repair))
         Buttons { ShkFilledButton(stringResource(R.string.sec_repair_button), actions.onEnter) }
-        if (state.ownKeepers.isNotEmpty()) {
-            Paragraph(stringResource(R.string.sec_keepers_repair))
-            GetKeysButtons(state.ownKeepers, actions.onGetKeys)
-        }
     }
     if (state.filesCanBeGivenUp) {
         Paragraph(stringResource(R.string.sec_give_up_text))

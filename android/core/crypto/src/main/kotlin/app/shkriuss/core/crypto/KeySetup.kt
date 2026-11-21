@@ -101,25 +101,8 @@ class KeySetup internal constructor(private val vault: KeyVault) {
         vault.locked { storeDerived(RecoveryKeyDeriver.recoveryKeyset(listOf(recoveryKey), recoveryKey)) }
 
     /** As [storeDerivedKeys], for a `recovery` keyset that may hold more than one recovery key. */
-    internal fun storeDerived(recovery: KeysetHandle): KeySetupResult =
-        storeKeysets(RecoveryKeyDeriver.derive(recovery, vault.app))
-
-    /**
-     * Stores the keysets a keeper app made for this app from the recovery
-     * key it keeps ("Setting up a second app on the same phone" in
-     * crypto-design.md). Exactly as [storeDerivedKeys] stores the keysets
-     * that entered words derive: the same checks against what is stored
-     * already, the same order, the same results, and the same repair of a
-     * damaged keyset file. The recovery key is not kept: this app is not a
-     * keeper afterwards.
-     *
-     * Throws [BlobException] as [storeDerivedKeys] does. Nothing is stored
-     * then.
-     */
-    fun storeHandedOverKeys(keys: HandedOverKeys): KeySetupResult = vault.locked { storeKeysets(keys.derived) }
-
-    /** The work of [storeDerivedKeys] and [storeHandedOverKeys], once the three keysets are there. */
-    private fun storeKeysets(derived: DerivedKeysets): KeySetupResult {
+    internal fun storeDerived(recovery: KeysetHandle): KeySetupResult {
+        val derived = RecoveryKeyDeriver.derive(recovery, vault.app)
         val record = judged(KeysetName.RECORD)
         val backup = judged(KeysetName.BACKUP)
         val fileKey = judged(KeysetName.FILE_KEY)
@@ -368,7 +351,11 @@ class KeySetup internal constructor(private val vault: KeyVault) {
      * keeping them again.
      */
     fun beginShowRecoveryKey(): PromptStep<RecoveryKey> = vault.locked {
-        val stored = keptRecoveryKeyset()
+        val stored = when (val looked = judged(KeysetName.RECOVERY)) {
+            is Stored.NeedsPrompt -> looked
+            is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
+            else -> throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
+        }
         val cipher = PromptCipher(vault.startCipher(stored.key, WrappedKeyset.iv(stored.blob)), encrypts = false)
         PromptStep(
             cryptoObject = cipher.cryptoObject,
@@ -379,91 +366,6 @@ class KeySetup internal constructor(private val vault: KeyVault) {
             },
             onCancel = {},
         )
-    }
-
-    /**
-     * Starts handing over keys to another app of the suite, the
-     * [asker], from the recovery key this app keeps ("Setting up a second
-     * app on the same phone" in crypto-design.md). One prompt of the
-     * Recovery guard, one handover. `finish()` derives the asker's
-     * `record`, `backup` and `file-key` keysets and drops the recovery key
-     * at once. The screen code never sees it.
-     *
-     * The [asker] is the app that Android names as the caller, never a name
-     * the caller gives. It must hold data keys and must not be this app;
-     * otherwise this throws [IllegalArgumentException]. Throws
-     * [BlobException] as [beginShowRecoveryKey] does when this app does
-     * not keep the key now.
-     */
-    fun beginHandOver(asker: AppName): PromptStep<HandedOverKeys> = vault.locked {
-        requireAnotherDataApp(asker)
-        val stored = keptRecoveryKeyset()
-        val cipher = PromptCipher(vault.startCipher(stored.key, WrappedKeyset.iv(stored.blob)), encrypts = false)
-        PromptStep(
-            cryptoObject = cipher.cryptoObject,
-            onFinish = {
-                vault.locked {
-                    val recovery = vault.openWithPrompt(KeysetName.RECOVERY, stored, cipher)
-                    HandedOverKeys(RecoveryKeyDeriver.derive(recovery, asker), wordsChecked = false)
-                }
-            },
-            onCancel = {},
-        )
-    }
-
-    /**
-     * Checks four of the recovery words for another app of the suite, the
-     * [asker], before its app lock is turned on ("The app lock" in
-     * crypto-design.md, rule 2), and hands over its keys marked as
-     * checked. [kept] is this app's kept key, read with
-     * [beginShowRecoveryKey]. [answers] maps four positions, 1 to 24, to
-     * the words the user typed.
-     *
-     * Returns null if [kept] is not the current recovery key of this app's
-     * `record`, or a word does not match. Nothing is stored here. The
-     * asker takes the keys as its proof only with
-     * [checkWordsAtKeeper]. Throws as [beginHandOver] and [checkFourWords]
-     * do.
-     */
-    fun handOverAfterWords(kept: RecoveryKey, answers: Map<Int, String>, asker: AppName): HandedOverKeys? =
-        vault.locked {
-            requireAnotherDataApp(asker)
-            if (checkFourWords(kept, answers) == null) return@locked null
-            val recovery = RecoveryKeyDeriver.recoveryKeyset(listOf(kept), kept)
-            HandedOverKeys(RecoveryKeyDeriver.derive(recovery, asker), wordsChecked = true)
-        }
-
-    /**
-     * The proof that the user gave this app's recovery words, when a keeper
-     * checked four of them for this app ([handOverAfterWords]). [keys] are
-     * what the keeper handed over. Their `record` must be the current one
-     * of this app's stored `record`, as for [checkAllWords].
-     *
-     * Returns the proof that [AppLock.beginTurnOn] needs, or null: the
-     * keeper did not check the words, or the keys are of another recovery
-     * key. Nothing is stored. Throws [BlobException] if `record` cannot be
-     * judged now or is damaged.
-     */
-    fun checkWordsAtKeeper(keys: HandedOverKeys): WordsProof? = vault.locked {
-        if (!keys.wordsChecked) return@locked null
-        val record = judged(KeysetName.RECORD)
-        if (record is Stored.Damaged) throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
-        if (record is Stored.Open && KeysetCodec.holdsAll(record.keyset, keys.derived.record)) {
-            WordsProof(KeysetCodec.primaryId(record.keyset))
-        } else {
-            null
-        }
-    }
-
-    private fun requireAnotherDataApp(asker: AppName) {
-        require(asker.holdsDataKeys && asker != vault.app) { "Keys are handed over only to another data app" }
-    }
-
-    /** The kept `recovery` keyset, behind its Recovery guard. Throws as [beginShowRecoveryKey] does. */
-    private fun keptRecoveryKeyset(): Stored.NeedsPrompt = when (val looked = judged(KeysetName.RECOVERY)) {
-        is Stored.NeedsPrompt -> looked
-        is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
-        else -> throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
     }
 
     /**

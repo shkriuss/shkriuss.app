@@ -87,13 +87,6 @@ data object FlowWorking : FlowStep
 data class FlowKeeping(val prompt: PromptRequest? = null, val note: KeepNote? = null) : FlowStep
 
 /**
- * Another app, or several, already keeps this recovery key ([keepers], by
- * name). The user chooses whether to keep it here too, before the system
- * prompt ("Creating it", step 6, in crypto-design.md).
- */
-data class FlowKeepAsk(val keepers: List<String>) : FlowStep
-
-/**
  * The flow is done. [appLockOff] is true when storing the keys turned the
  * app lock off: a repaired key file of the app lock, or the words after
  * the app lock was reset. The screen then says how to turn it on again.
@@ -182,12 +175,7 @@ data class SecurityState(
     val appLock: AppLockState = AppLockState.OFF,
     /** True if the keys could not be read now. */
     val failed: Boolean = false,
-    /** The other apps of the suite on this phone that keep a recovery key (ADR 0041). */
-    val keepers: List<KeeperApp> = emptyList(),
 ) {
-    /** The keepers of this app's own recovery key. */
-    val ownKeepers: List<KeeperApp> get() = keepers.filter { it.keyId == keyId }
-
     /** True if any key is not protected by hardware. */
     val softwareOnly: Boolean get() = keys.any { it.level == SecurityLevel.SOFTWARE }
 }

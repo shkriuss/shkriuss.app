@@ -74,8 +74,6 @@
     <string name="sample_first_need_app_lock">For the app lock</string>
     <string name="sample_first_need_restore">For a restore</string>
     <string name="sample_first_need_finish">After a setup that stopped</string>
-    <string name="sample_first_need_backup_keeper">Before a backup, with another app that keeps the key</string>
-    <string name="sample_first_need_restore_keeper">Before a restore, with another app that keeps the key</string>
 
     <!-- Colours page. -->
     <string name="colors_intro">The palette of the theme in use. Turn dark theme on or off in the system settings to see the other one.</string>
@@ -548,15 +546,6 @@
     <string name="sample_enter_words">Enter: the words, with suggestions</string>
     <string name="sample_enter_start_over">Enter: words that could start over</string>
     <string name="sample_show_words">Show: the words again</string>
-    <string name="sample_security_keepers">Security screen, no recovery key, two other apps keep one</string>
-    <string name="sample_security_kept_elsewhere">Security screen, set up from another app that keeps the key</string>
-    <string name="sample_enter_keep_here_too">Enter: another app keeps this key already</string>
-    <string name="sample_handover_keys">Handover: another app asks for its keys</string>
-    <string name="sample_handover_check">Handover: another app asks to check the words</string>
-    <string name="sample_handover_four">Handover: four of the words</string>
-    <string name="sample_handover_not_kept">Handover: this app does not keep the key</string>
-    <string name="sample_get_keys_done">Get the keys: done</string>
-    <string name="sample_get_keys_other_key">Get the keys: another recovery key</string>
     <string name="sample_enter_done_app_lock_off">Enter: done, and the app lock turned off</string>
     <string name="app_lock_intro">The screens of the app lock that every app shares, from core/security. Each state shows with sample data. Catalog has no app lock: nothing here locks, unlocks or shows the system prompt. Back returns to this list.</string>
     <string name="sample_lock_locked">Lock screen</string>
@@ -574,7 +563,6 @@
     <string name="sample_lock_notice_turned_off">Notice: the app lock is off</string>
     <string name="sample_lock_turn_on_keeper">Turn on: the warning, in an app that keeps the key</string>
     <string name="sample_lock_turn_on_not_keeper">Turn on: the warning, in an app that does not keep the key</string>
-    <string name="sample_lock_turn_on_at_keeper">Turn on: another app checks the words, after a check that did not work</string>
     <string name="sample_lock_turn_on_four">Turn on: four words, one did not match</string>
     <string name="sample_lock_turn_on_all">Turn on: all 24 words</string>
     <string name="sample_lock_turn_on_prompt">Turn on: the last prompt was closed</string>

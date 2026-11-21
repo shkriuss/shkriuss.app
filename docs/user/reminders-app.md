@@ -334,11 +334,9 @@ Limits of reminders:
 
 Limits of the recovery key:
 
-9. Reminders sees only the apps of the suite that keep your recovery
-   key and are signed like it. If another app has your key but does not
-   keep it on this phone, tap **I already have one** yourself, and enter
-   the same words. If it keeps it, Reminders offers **Get the keys from**
-   that app ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
+9. Reminders cannot tell whether another app of the suite already has
+   your recovery key. If one has, tap **I already have one** yourself,
+   and enter the same words.
 
 Limits of the app lock:
 

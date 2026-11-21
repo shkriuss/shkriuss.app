@@ -1,16 +1,16 @@
 # 0041 The handover between apps
 
-- Status: Accepted
-- Date: 2026-11-21
+- Status: Proposed
+- Date: 2026-11-21, the day it was proposed
 - Source: the step "3.0 Handover"
   ([PROMPTS.md](../development/PROMPTS.md#30-handover)). ADR 0007,
   point 12, had decided the outline: a keeper sets up a second app
   through a signature-protected screen, after the system prompt, with
   derived keys only, and checks the caller's certificate itself. Claude
   proposed the points below in the planning session of that step. The
-  owner answered its four questions on 2026-11-21 (preview builds, the
-  check of the words for another app, how keepers are found, an app that
-  already has keys) and agreed to the record the same day.
+  owner answered its four questions on 2026-11-21: preview builds, the
+  check of the words for another app, how keepers are found, and an app
+  that already has keys. The record is not agreed yet.
 
 ## Context
 
@@ -101,7 +101,7 @@
    defines it, and each later one, signed with the same key, is accepted
    and granted it. Catalog removes it.
 8. It protects the two exported parts of the handover: the keeper's
-   handover screen and its status provider (point 11). Android refuses
+   handover screen and its status provider (point 13). Android refuses
    them to any app without it.
 
 ### The keeper checks the caller itself
@@ -147,17 +147,26 @@
     `core/crypto`, and drops the recovery key at once. The screen code
     never holds it.
 16. The keysets go back in the result of the handover screen, as version
-    1 of a small format of `core/crypto`, described in crypto-design.md.
-    The asking app takes them only if they are of version 1, each keyset
-    has its type and parameters, and all three have the same key IDs and
-    the same primary.
+    1 of a small format that only `core/crypto` writes and reads:
+    - the result: the version, the three keysets as Tink's binary
+      keysets, and a flag "words checked" for point 19;
+    - the request: its version and what it asks for, the keys or the
+      check of the words. It names no app;
+    - a keeper that gives no keys says why: it keeps no key now, or the
+      request is newer than it knows. Nothing, if the user said no.
+
+    The asking app takes the keys only if they are of version 1, each
+    keyset has its type and parameters, and all three have the same key
+    IDs and the same primary. The exact names go into crypto-design.md,
+    and a change to them is a format change.
 17. The asking app stores them as it stores the keysets that entered
     words derive: the same checks against what it stores already, the
     same order and the same answers. So a handover sets up a new app,
     finishes a setup that stopped, repairs a damaged keyset file, brings
     back keys lost with the screen lock, and never replaces keys of
-    another recovery key. The app lock stays as it is, or is reset as
-    the words would reset it. Two things differ: nothing is kept, and
+    another recovery key. An app lock that is on stays on. After an app
+    lock was reset, the files open again and the app lock is off, as
+    after the words. Two things differ: nothing is kept, and
     starting over stays an action with words. The app is not a keeper
     afterwards.
 
@@ -178,6 +187,28 @@
     only if the `record` keyset that comes back is exactly its own. The
     check stores nothing. With no such keeper, the app asks for all 24
     words, as before.
+
+### Every way another app could try to get keys
+
+| Attempt | How it fails |
+|---|---|
+| An app not signed with the suite's key opens the handover screen or calls the status provider. | Android refuses: it lacks the signature permission (point 8). |
+| It defines the handover permission first, before the suite's apps are installed. | The suite's apps then fail to install: Android refuses a second definition from another key. No keys exist to take. |
+| Android's check is bypassed somehow. | The keeper's own certificate check (point 9) refuses the caller. |
+| An app makes a suite app start the handover on its behalf, so that the result goes to it (a forwarded result). | The keeper checks the app that gets the result, which Android names, not the app that started the screen. |
+| An app claims to be another app in the request. | The request carries no app name. The keeper reads none (point 2). |
+| A suite app asks for the keys of another app of the suite. | It gets only the keys of its own name, the one Android reports (point 2). |
+| Sync, Catalog, or the keeper itself asks. | Refused by name (point 1). |
+| A preview asks a real keeper, or a real app asks a preview. | Another permission name, another certificate, and the build-kind check of point 9. |
+| An app signed with an old signing key, or with a lineage from an old key to another key. | The exact current certificate is compared, never the lineage (point 10). A thief who holds the current key is the case of [0038](0038-a-stolen-signing-key.md). |
+| A fake keeper: an app that took a keeper's package name on a phone without that keeper, and hands over keys it knows. | The asking app checks the keeper's certificate before it opens it and when the keys come back (point 11). |
+| A fake or lying status provider. | Only apps that pass the check of point 9 are asked. A wrong answer at most offers a keeper that then refuses. |
+| An app draws over the keeper's screen to make the user tap **Allow**. | Other apps' windows are hidden while the screen shows, and a tap under another app's window is dropped. The system prompt follows, which no app can draw. |
+| An app starts the handover screen without asking for a result. | Android then names no caller. Refused (point 2). |
+| An app reads the keys on their way. | Only Android carries them (point 20). A compromised Android is out of scope. |
+| A malicious library inside an app of the suite asks for keys. | It can ask only for that app's own keys, which it reaches anyway once the app is set up. It needs the user's **Allow** and the prompt. |
+| An app takes a screenshot of the keeper's screen, or sees it in the recent apps. | The screen blocks both, as every security screen does. It shows no words anyway, only the two apps' names and the short name of the key. |
+| A crafted request or answer: wrong types, unknown values, a version of the future. | Both sides read only the values they know, inside a catch, and refuse anything else. A higher version is answered with "update both apps". |
 
 ### No further encryption
 
@@ -206,6 +237,9 @@
     other, and the owner can try the handover on a phone. Previews of an
     older run must be uninstalled first: they hold another key under the
     same preview name.
+23. As before, a preview makes the same keys as the real app from the
+    same words. Testers make a new test key in a preview, and never type
+    real words into it.
 
 ## Options rejected
 
@@ -240,12 +274,18 @@
 ## Consequences
 
 - The suite declares one permission of its own. The APK rules check
-  allows Water and Reminders to declare and request it, with protection
-  level signature only. Every later data app gets the same entry.
+  must allow Water and Reminders to declare and request it, with
+  protection level signature only, and every later data app the same.
+  The check is owner-only, so the owner asks for that change.
+- The build must name the permission per build type, real or preview.
+  The application convention plugin is owner-only too.
+- The preview workflow must sign every preview of one run with one
+  throwaway key. It is owner-only too, and so is fingerprints.md, which
+  says that each preview has its own key.
 - Each data app exports two parts besides its launcher: the handover
   screen and the status provider. Both need the permission, and both
-  check the caller's certificate themselves. permissions.md and
-  threat-model.md say so.
+  check the caller's certificate themselves. permissions.md,
+  threat-model.md and data-inventory.md must say so.
 - An app set up by a handover cannot show the words. Its security screen
   names the app that keeps them.
 - When the last keeper on a phone loses its copy, no app can hand over
@@ -257,6 +297,8 @@
   emulator: the other apps that define it keep it. If Android behaved
   otherwise, the handover would fail closed until an app is updated.
 - 0007 point 12, 0035 point 3 and 0037's open point on the handover are
-  decided here. The detail is in
-  [crypto-design.md](../security/crypto-design.md#setting-up-a-second-app-on-the-same-phone)
-  and [security-screens.md](../architecture/security-screens.md).
+  decided here. Once the record is agreed, those records note it, and
+  [crypto-design.md](../security/crypto-design.md#setting-up-a-second-app-on-the-same-phone),
+  with its open questions 1 and 2, and
+  [security-screens.md](../architecture/security-screens.md) get the
+  detail.

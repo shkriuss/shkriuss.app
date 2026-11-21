@@ -58,7 +58,6 @@ enum class AppLockSample(@param:StringRes val title: Int) {
     NoticeTurnedOff(R.string.sample_lock_notice_turned_off),
     TurnOnKeeper(R.string.sample_lock_turn_on_keeper),
     TurnOnNotKeeper(R.string.sample_lock_turn_on_not_keeper),
-    TurnOnAtKeeper(R.string.sample_lock_turn_on_at_keeper),
     TurnOnFourWordsMissed(R.string.sample_lock_turn_on_four),
     TurnOnAllWords(R.string.sample_lock_turn_on_all),
     TurnOnPromptClosed(R.string.sample_lock_turn_on_prompt),
@@ -146,12 +145,6 @@ private fun Sample(sample: AppLockSample, onBack: () -> Unit, modifier: Modifier
         AppLockSample.NoticeTurnedOff -> DialogSample(sample, AppLockDialog.TURNED_OFF_NOTICE, onBack, modifier)
         AppLockSample.TurnOnKeeper -> TurnOnContent(TurnOnIntro(keeper = true), false, turnOn, modifier)
         AppLockSample.TurnOnNotKeeper -> TurnOnContent(TurnOnIntro(keeper = false), false, turnOn, modifier)
-        AppLockSample.TurnOnAtKeeper -> TurnOnContent(
-            TurnOnIntro(keeper = false, keepers = listOf(sampleKeeper), keeperFailed = sampleKeeper.label),
-            false,
-            turnOn,
-            modifier,
-        )
         AppLockSample.TurnOnFourWordsMissed -> TurnOnContent(
             TurnOnFourWords(listOf(2, 9, 15, 24), listOf(sampleWords[1], sampleWords[8], "zoo", sampleWords[23]), mismatch = true),
             false,

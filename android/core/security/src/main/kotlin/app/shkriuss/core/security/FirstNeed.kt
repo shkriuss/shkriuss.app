@@ -11,7 +11,6 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
@@ -190,23 +189,11 @@ fun RecoveryKeyFirstNeed(state: RecoveryKeyFirstNeedState, onReady: (RecoveryKey
     RecoveryKeyFirstNeed(state, onReady, Dispatchers.IO)
 }
 
-/**
- * [RecoveryKeyFirstNeed] with the thread the keys are read on, and the
- * other apps of the suite: Android's, unless a test passes [suite]. A
- * hardware key can be slow, and so can the keepers' answers.
- */
+/** [RecoveryKeyFirstNeed] with the thread the keys are read on. A hardware key can be slow; tests pass their own. */
 @Composable
-internal fun RecoveryKeyFirstNeed(
-    state: RecoveryKeyFirstNeedState,
-    onReady: (RecoveryKeyNeed) -> Unit,
-    background: CoroutineDispatcher,
-    suite: SuiteApps? = null,
-) {
+internal fun RecoveryKeyFirstNeed(state: RecoveryKeyFirstNeedState, onReady: (RecoveryKeyNeed) -> Unit, background: CoroutineDispatcher) {
     val activity = LocalActivity.current as? ComponentActivity ?: error("RecoveryKeyFirstNeed needs the screen's ComponentActivity")
     val crypto = activity.securityHost.crypto
-    val apps = suite ?: remember(activity) { AndroidSuiteApps(activity) }
-    // Not saved: after a turn of the phone the keepers are asked again.
-    var keepers by remember { mutableStateOf(emptyList<KeeperApp>()) }
     val goOn by rememberUpdatedState(onReady)
     // The result itself says nothing: the screens of the recovery key only close. The keys say whether they are there.
     val flow = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { state.returned() }
@@ -238,15 +225,9 @@ internal fun RecoveryKeyFirstNeed(
     }
 
     val form = state.form ?: return
-    LaunchedEffect(form) { keepers = withContext(background) { apps.keepers() } }
     FirstNeedDialogView(
         form = form,
         inPlace = false,
-        keepers = keepers,
-        onGetKeys = { keeper ->
-            state.leave()
-            flow.launch(SecurityScreens.getKeysIntent(activity, keeper.packageName))
-        },
         onCreate = {
             state.leave()
             flow.launch(SecurityScreens.createIntent(activity))
@@ -270,17 +251,8 @@ internal fun RecoveryKeyFirstNeed(
  */
 @SecurityScreenSamples
 @Composable
-fun RecoveryKeyFirstNeedSample(form: FirstNeedForm, modifier: Modifier = Modifier, keepers: List<KeeperApp> = emptyList()) {
-    FirstNeedDialogView(
-        form,
-        inPlace = true,
-        onCreate = {},
-        onEnter = {},
-        onSecurity = {},
-        onDismiss = {},
-        modifier = modifier,
-        keepers = keepers,
-    )
+fun RecoveryKeyFirstNeedSample(form: FirstNeedForm, modifier: Modifier = Modifier) {
+    FirstNeedDialogView(form, inPlace = true, onCreate = {}, onEnter = {}, onSecurity = {}, onDismiss = {}, modifier = modifier)
 }
 
 /**
@@ -290,9 +262,7 @@ fun RecoveryKeyFirstNeedSample(form: FirstNeedForm, modifier: Modifier = Modifie
  * window, for the Catalog. In its window it takes the shield of the screen
  * it opens over, if that has one ([shieldedLike]). The two forms that
  * offer **Create a recovery key** say under the reason that a key made in
- * another app of the suite is entered with **I already have one**. With
- * [keepers] on the phone, the forms that set up or restore also offer to
- * get the keys from each of them ([onGetKeys], ADR 0041, point 3).
+ * another app of the suite is entered with **I already have one**.
  */
 @OptIn(ShkInPlace::class)
 @Composable
@@ -304,8 +274,6 @@ internal fun FirstNeedDialogView(
     onSecurity: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    keepers: List<KeeperApp> = emptyList(),
-    onGetKeys: (KeeperApp) -> Unit = {},
 ) {
     val title: String
     val text: String
@@ -338,20 +306,8 @@ internal fun FirstNeedDialogView(
             dismiss = ShkDialogAction(stringResource(R.string.sec_first_need_not_now), {})
         }
     }
-    // The keepers of another app, where the keys can be set up or a backup restored with them.
-    val offered = if (form == FirstNeedForm.FINISH) emptyList() else keepers
-    // A paragraph of its own under the reason, in the same colour, and the keepers' buttons.
-    val more: (@Composable ColumnScope.() -> Unit)? = if (otherApp == null && offered.isEmpty()) {
-        null
-    } else {
-        {
-            if (offered.isNotEmpty()) {
-                ShkText(text = stringResource(R.string.sec_keepers_offer), color = ShkTheme.colors.textSecondary)
-                GetKeysButtons(offered, onGetKeys)
-            }
-            otherApp?.let { ShkText(text = it, color = ShkTheme.colors.textSecondary) }
-        }
-    }
+    // A paragraph of its own under the reason, in the same colour.
+    val more: (@Composable ColumnScope.() -> Unit)? = otherApp?.let { { ShkText(text = it, color = ShkTheme.colors.textSecondary) } }
     if (inPlace) {
         ShkDialogInPlace(
             title = title,

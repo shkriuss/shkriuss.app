@@ -19,7 +19,6 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.design.ShkFilledButton
 import app.shkriuss.core.design.ShkText
@@ -86,7 +85,6 @@ class FirstNeedTest {
             val app = RuntimeEnvironment.getApplication()
             shadowOf(app.packageManager).addActivityIfNotPresent(ComponentName(app, FirstNeedScreen::class.java))
             FirstNeedScreen.ready.clear()
-            FirstNeedScreen.suite = null
         }
     }
 
@@ -187,45 +185,6 @@ class FirstNeedTest {
         compose.onNodeWithText(text(R.string.sec_first_need_create)).assertDoesNotExist()
         compose.onNodeWithText(text(R.string.sec_first_need_have_one)).assertDoesNotExist()
         compose.onNodeWithText(text(R.string.sec_first_need_other_app)).assertDoesNotExist()
-    }
-
-    @Test
-    fun withAKeeperOnThePhoneTheDialogOffersItsKeysAndOpensTheGetKeysScreen() {
-        val water = KeeperApp("app.shkriuss.water", "Water", "0a0b0c0d")
-        FirstNeedScreen.suite = FakeSuiteApps(listOf(water))
-        val getKeys = compose.activity.getString(R.string.sec_get_keys_from, "Water")
-
-        listOf(BACKUP, APP_LOCK, RESTORE).forEach { need ->
-            tap(need)
-            compose.onNodeWithText(text(R.string.sec_keepers_offer)).assertExists()
-            compose.onNode(hasText(getKeys)).assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
-            // The dialog scrolls when it is taller than the window, as it is at the test's small screen.
-            compose.onNode(hasText(getKeys) and hasClickAction()).performScrollTo().performClick()
-            compose.waitForIdle()
-            val started = checkNotNull(shadowOf(compose.activity).peekNextStartedActivityForResult()) { "No screen was opened" }
-            assertEquals(GetKeysActivity::class.java.name, started.intent.component?.className)
-            assertEquals("app.shkriuss.water", started.intent.getStringExtra(SecurityScreens.EXTRA_KEEPER))
-            theScreenCloses()
-            assertNoDialog()
-        }
-        assertEquals("no keys came, so nothing goes on", emptyList<RecoveryKeyNeed>(), FirstNeedScreen.ready)
-
-        // Keys that came go on with what was started, as after the words.
-        tap(BACKUP)
-        compose.onNode(hasText(getKeys) and hasClickAction()).performScrollTo().performClick()
-        compose.waitForIdle()
-        giveKeys()
-        theScreenCloses()
-        assertEquals(listOf(RecoveryKeyNeed.BACKUP), FirstNeedScreen.ready)
-    }
-
-    @Test
-    fun aSetupThatStoppedOffersNoKeeperInTheDialog() {
-        FirstNeedScreen.suite = FakeSuiteApps(listOf(KeeperApp("app.shkriuss.water", "Water", "0a0b0c0d")))
-        stopTheSetup()
-        tap(BACKUP)
-        compose.onNodeWithText(text(R.string.sec_first_need_finish_title)).assertExists()
-        compose.onNodeWithText(text(R.string.sec_keepers_offer)).assertDoesNotExist()
     }
 
     @Test
@@ -330,7 +289,7 @@ class FirstNeedScreen : ComponentActivity() {
             ShkTheme {
                 AppLockGate {
                     val firstNeed = rememberRecoveryKeyFirstNeedState()
-                    RecoveryKeyFirstNeed(firstNeed, onReady = { ready += it }, background = inline, suite = TestSuite)
+                    RecoveryKeyFirstNeed(firstNeed, onReady = { ready += it }, background = inline)
                     Column {
                         ShkFilledButton("Start a backup", { firstNeed.start(RecoveryKeyNeed.BACKUP) })
                         ShkFilledButton("Start a restore", { firstNeed.start(RecoveryKeyNeed.RESTORE) })
@@ -344,23 +303,6 @@ class FirstNeedScreen : ComponentActivity() {
     companion object {
         /** What the screen went on with, in order. A test empties it first. */
         val ready = mutableListOf<RecoveryKeyNeed>()
-
-        /** The other apps of the suite, none unless a test sets them. Read on each call, so a test may set them late. */
-        internal var suite: SuiteApps? = null
-
-        private object TestSuite : SuiteApps {
-            private val now: SuiteApps get() = suite ?: SuiteApps.None
-
-            override fun peerName(packageName: String) = now.peerName(packageName)
-
-            override fun keepers() = now.keepers()
-
-            override fun labelOf(packageName: String) = now.labelOf(packageName)
-
-            override fun handoverIntent(packageName: String, mode: HandoverMode) = now.handoverIntent(packageName, mode)
-
-            override fun launchIntent(packageName: String) = now.launchIntent(packageName)
-        }
     }
 }
 

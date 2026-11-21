@@ -57,15 +57,11 @@ internal class StoppingStore(private val files: KeysetStore) : KeysetStore {
 }
 
 /**
- * One installed app in a test, named [appName]: its keyset files in
- * [folder] and its hardware keys. [open] is one run of the app. A new call is the app
+ * One installed app in a test: its keyset files in [folder] and its
+ * hardware keys. [open] is one run of the app. A new call is the app
  * started again, with nothing in memory.
  */
-internal class TestApp(
-    val folder: File,
-    val hardware: SoftwareHardwareKeys = SoftwareHardwareKeys(),
-    val appName: AppName = TestKeys.water,
-) {
+internal class TestApp(val folder: File, val hardware: SoftwareHardwareKeys = SoftwareHardwareKeys()) {
     /** The store of the last run, to stop it in the middle and to see what it changed. */
     lateinit var store: StoppingStore
         private set
@@ -86,7 +82,7 @@ internal class TestApp(
             it.unreadable = unreadable
             it.listFails = listFails
         }
-        vault = KeyVault(appName, store, hardware)
+        vault = KeyVault(TestKeys.water, store, hardware)
         return ShkCrypto(vault).also { if (start) it.start() }
     }
 

@@ -136,31 +136,6 @@ class NoSecretsTest {
         failing { showAgain.finish() }
         show(crypto.setup.storeDerivedKeys(RecoveryKey.ofBytes(ByteArray(32) { 0x77 })))
 
-        // The handover to another app of the suite, and its words check.
-        val reminders = AppName.of("reminders")
-        val asked = RecoveryKeyDeriver.derive(TestKeys.recoveryKeyset(key), reminders)
-        listOf("record" to asked.record, "backup" to asked.backup, "file-key" to asked.fileKey).forEach { (name, keyset) ->
-            secrets["the handed-over $name key"] = TestKeys.keyBytes(keyset).flatMap { forms(hex(it)) }
-            secrets["the handed-over $name keyset"] = forms(KeysetCodec.serialize(keyset))
-        }
-        val handOver = app.open().setup.beginHandOver(reminders)
-        show(handOver)
-        val handedOver = handOver.finish()
-        show(handedOver)
-        show(handedOver.keyId)
-        // A bundle's own text form lists the bytes it holds. The module never shows one.
-        val bundle = android.os.Bundle().also { handedOver.writeTo(it) }
-        show(HandedOverKeys.readFrom(bundle))
-        failing { HandedOverKeys.readFrom(android.os.Bundle()) }
-        failing { HandedOverKeys.readFrom(android.os.Bundle(bundle).also { it.putInt("app.shkriuss.handover.VERSION", 2) }) }
-        val asker = TestApp(temporary.newFolder(), appName = reminders).open()
-        show(asker.setup.storeHandedOverKeys(handedOver))
-        show(asker.setup.checkWordsAtKeeper(handedOver))
-        val checked = crypto.setup.handOverAfterWords(key, mapOf(1 to words[0], 7 to words[6], 13 to words[12], 24 to words[23]), reminders)
-        show(checked)
-        show(asker.setup.checkWordsAtKeeper(checked!!))
-        failing { crypto.setup.beginHandOver(TestKeys.water) }
-
         // Records.
         show(crypto.records)
         val sealed = crypto.records.seal(recordId, plaintext.toByteArray())
@@ -272,6 +247,5 @@ class NoSecretsTest {
         assertEquals("WordNotInList(1)", RecoveryWords.parse("nope").toString())
         assertEquals("DoNotBelongTogether", RecoveryWords.parse("abandon").toString())
         assertEquals("WordsProof", WordsProof(key.keyId).toString())
-        assertEquals("HandedOverKeys", HandedOverKeys(TestKeys.derived(key), wordsChecked = true).toString())
     }
 }

@@ -7,28 +7,6 @@ year. Its specification is
 
 ## Unreleased
 
-Added:
-
-- **Get the keys from another app.** When another app of the suite on
-  this phone keeps your recovery key, Reminders can get its own keys from
-  it, with no words to type: on the security screen, and in the dialog
-  when a backup, a restore or the app lock first needs the key. That
-  app asks you to allow it, then shows the system prompt. Reminders never
-  gets the words ([Your recovery key](../../../docs/user/recovery-key.md#get-the-keys-from-another-app)).
-- Reminders can give another app of the suite its own keys the same way,
-  when it keeps the recovery key. It shows which app asks, and the short
-  name of the key, and waits for **Allow** and the system prompt.
-- When it does not keep the recovery key, the security screen names the
-  app that does: "The recovery key is kept in Water", with **Open
-  Water**.
-- Entering the words while another app keeps the same key first asks
-  **Keep it here too?**
-- Turning on the app lock in an app that does not keep the key can let
-  an app that keeps it check four of your words, instead of all 24.
-- A new permission of the suite's own, for the handover between apps.
-  Android gives it only to apps signed like Reminders, and asks you nothing
-  ([permissions](../../../docs/security/permissions.md#the-handover-permission)).
-
 ## 1.0.0 (2026-11-20)
 
 Released as `reminders-v1.0.0`.

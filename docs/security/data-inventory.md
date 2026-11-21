@@ -117,21 +117,8 @@ Android also keeps some things for Water, outside Water's folders:
    carries the button, the reminder's time and, for **Drank**, the
    amount in millilitres. Never a text. The alarm carries only its name.
    Water opens Android's own pages for its notification settings.
-5. **Keys to another app of the suite on the phone**, only through the
-   handover between apps, and only when you allow it on Water's screen
-   and answer the system prompt
-   ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
-   - What goes: that app's own three keysets, which Water makes from the
-     recovery key it keeps. Never the recovery key, never Water's own
-     keys, never a record.
-   - To whom: only the app that Android names as the one that asked, if
-     it is a data app of the suite signed with the same key.
-   - Its status provider tells such an app, when it asks, whether Water
-     keeps the recovery key now, and its short name. Nothing else.
-   - Water also takes keys from another app that keeps the recovery key,
-     the same way, when you tap **Get the keys from** that app.
-6. **Nothing else.** Water has no network permission. Android backup and
-   device transfer are off. Water shares nothing else with other apps, puts
+5. **Nothing else.** Water has no network permission. Android backup and
+   device transfer are off. Water shares nothing with other apps, puts
    nothing on the clipboard itself and writes no log. Its number fields
    offer the usual copy and paste, so what you copy from them goes to
    the clipboard.
@@ -204,8 +191,8 @@ Android Keystore holds.
 2. **A restore** reads one file that you pick. It writes nothing outside
    Reminders.
 
-Three more things leave Reminders' storage. They stay inside the
-phone:
+Two more things leave Reminders' storage, to Android. They stay inside
+the phone:
 
 3. **Notifications.** A reminder shows its title, and "Every day",
    "Missed: 09:00" or "Snoozed. It was due at 09:00.", with the buttons
@@ -230,18 +217,10 @@ phone:
    carries the ID, the button, the reminder's time and, for **Snooze 10
    min**, the 10 minutes. Never a title. Reminders opens Android's own
    pages for its notification settings.
-5. **Keys to another app of the suite on the phone**, through the
-   handover between apps, as in Water: only when you allow it on
-   Reminders' screen and answer the system prompt, only that app's own
-   keysets, made from the recovery key Reminders keeps, and only to a
-   data app of the suite signed with the same key
-   ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Its status
-   provider says only whether Reminders keeps the recovery key now, and
-   its short name. Reminders takes keys from a keeper the same way.
 
 Reminders has no network permission. Android backup and device transfer
 are off. It writes no file outside its storage but the backup you make,
-shares nothing else with other apps, puts nothing on the clipboard itself and
+shares nothing with other apps, puts nothing on the clipboard itself and
 writes no log. The title field offers the usual copy and paste, so a
 title you copy goes to the clipboard.
 

@@ -64,8 +64,6 @@ class TurnOnActions(
     val words: EnterActions = EnterActions(),
     val onLockAgain: () -> Unit = {},
     val onDone: () -> Unit = {},
-    /** Lets [KeeperApp] check four words for this app (ADR 0041, point 19). */
-    val onCheckAtKeeper: (KeeperApp) -> Unit = {},
 )
 
 /** The dialogs of the app lock. */
@@ -248,15 +246,6 @@ fun TurnOnContent(screen: TurnOnScreen, previewBuild: Boolean, actions: TurnOnAc
                 }
                 Paragraph(stringResource(if (screen.keeper) R.string.sec_turn_on_keeper else R.string.sec_turn_on_not_keeper))
                 Buttons { ShkFilledButton(stringResource(R.string.sec_turn_on_continue), actions.onContinue) }
-                if (!screen.keeper && screen.keepers.isNotEmpty()) {
-                    Paragraph(stringResource(R.string.sec_turn_on_at_keeper))
-                    screen.keeperFailed?.let { Paragraph(stringResource(R.string.sec_turn_on_keeper_failed, it), error = true) }
-                    Buttons {
-                        screen.keepers.forEach { keeper ->
-                            ShkTonalButton(stringResource(R.string.sec_turn_on_check_at, keeper.label), { actions.onCheckAtKeeper(keeper) })
-                        }
-                    }
-                }
             }
             is TurnOnReading -> {
                 Paragraph(stringResource(R.string.sec_turn_on_reading))
