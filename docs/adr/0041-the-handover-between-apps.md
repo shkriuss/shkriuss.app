@@ -174,10 +174,16 @@
 ### What is handed over
 
 15. For a request for keys: after the prompt, the keeper derives the
-    asking app's `record`, `backup` and `file-key` keysets from its kept
-    recovery key, inside `core/crypto`, and drops the recovery key at
-    once. The screen code never holds it. The check of the words (point
-    19) is the one case where the screen holds the kept key.
+    asking app's `record`, `backup` and `file-key` keysets from its whole
+    `recovery` keyset, inside `core/crypto`, and drops it at once. After
+    a new recovery key that keyset holds the older key too, with the
+    current one as the primary. So the asking app gets a key for each,
+    and also opens backups and records of the older key
+    ([crypto-design.md](../security/crypto-design.md#a-new-recovery-key)).
+    The screen code never holds a recovery key. The check of the words
+    (point 19) is the one case where the screen holds the kept key, and
+    the keys it hands over are only the proof, so they come from the
+    current key alone.
 16. The keysets go back in the result of the handover screen, as version
     1 of a small format that only `core/crypto` writes and reads:
     - the result: the version, the three keysets as Tink's binary
@@ -292,10 +298,12 @@
 
 ### Preview builds
 
-21. A preview defines nothing, as the real app. So previews of different
-    runs install side by side, and next to the real apps. A preview never
-    takes part with a real app: another certificate, and the build-kind
-    check of point 9.
+21. A preview defines nothing, as the real app. So the previews of two
+    different apps install side by side whatever runs they come from, and
+    next to the real apps. A preview of the same app from another run
+    still has another key: Android takes it only after the older one is
+    uninstalled, as today. A preview never takes part with a real app:
+    another certificate, and the build-kind check of point 9.
 22. The preview workflow signs every preview that one run builds with one
     throwaway key. One job makes the key, signs every preview APK of the
     run with it, and deletes it. The key never leaves that job: no
@@ -306,7 +314,8 @@
     - A run builds only the apps that its pull request touches. A change
       to a core module builds every app. A run that builds one app has
       no pair to try.
-    - Previews of different runs refuse each other: another key.
+    - Previews of two apps from different runs refuse each other:
+      another key.
 23. As before, a preview makes the same keys as the real app from the
     same words. Testers make a new test key in a preview, and never type
     real words into it.
