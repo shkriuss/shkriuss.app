@@ -11,14 +11,16 @@ import org.w3c.dom.Element
 /**
  * What Reminders' merged manifest holds (docs/security/permissions.md,
  * "Reminders"): five permissions and no other, the three of core/notify
- * and the two of core/security; the three receivers of core/notify;
- * Reminders' one screen and the six screens of core/security; and nothing
- * that another app can reach but Reminders' own screen. The receiver of
+ * and the two of core/security, and none that it defines; the three
+ * receivers of core/notify; Reminders' one screen and the eight screens of
+ * core/security; and nothing that another app can reach but Reminders' own
+ * screen and the two parts of the handover between apps (ADR 0041). Those
+ * two have no permission: each checks its caller itself. The receiver of
  * the profile installer is removed, as in Water.
  *
  * The APK rules check fails an APK with any permission that is not on
- * Reminders' allow list too. This test also checks that the screen is the
- * only exported part, so a library that adds another fails here first.
+ * Reminders' allow list too. This test also checks which parts are exported,
+ * so a library that adds another fails here first.
  */
 class RemindersManifestTest {
     private val manifest: Element = DocumentBuilderFactory.newInstance().apply {
@@ -64,7 +66,7 @@ class RemindersManifestTest {
     }
 
     @Test
-    fun remindersHasItsOwnScreenAndTheSixOfCoreSecurity() {
+    fun remindersHasItsOwnScreenAndTheEightOfCoreSecurity() {
         val screens = elements("activity")
         assertEquals((SECURITY_SCREENS + RemindersActivity::class.java.name).toSet(), screens.map { it.android("name") }.toSet())
         assertEquals("each screen once", SECURITY_SCREENS.size + 1, screens.size)
@@ -74,19 +76,37 @@ class RemindersManifestTest {
     }
 
     @Test
-    fun noScreenOfCoreSecurityIsExportedOrStartsFromOutside() {
-        elements("activity").filter { it.android("name") in SECURITY_SCREENS }.forEach { screen ->
+    fun noScreenOfCoreSecurityButTheHandoverScreenIsExportedOrStartsFromOutside() {
+        elements("activity").filter { it.android("name") in SECURITY_SCREENS && it.android("name") != HANDOVER_SCREEN }.forEach { screen ->
             assertEquals(screen.android("name"), "false", screen.android("exported"))
             assertEquals("${screen.android("name")} has no intent filter", 0, screen.getElementsByTagName("intent-filter").length)
         }
     }
 
     @Test
-    fun theScreenIsTheOnlyExportedPart() {
+    fun theScreenAndTheTwoPartsOfTheHandoverAreTheOnlyExportedParts() {
         val exported = listOf("activity", "activity-alias", "service", "receiver", "provider").flatMap(::elements)
             .filter { it.android("exported") == "true" }
-            .map { it.android("name") }
-        assertEquals(listOf(RemindersActivity::class.java.name), exported)
+        assertEquals(
+            setOf(RemindersActivity::class.java.name, HANDOVER_SCREEN, STATUS_PROVIDER),
+            exported.map { it.android("name") }.toSet(),
+        )
+        assertEquals(3, exported.size)
+        exported.filter { it.android("name") != RemindersActivity::class.java.name }.forEach { part ->
+            assertEquals("${part.android("name")}: its own check is the gate", "", part.android("permission"))
+        }
+        val provider = elements("provider").single { it.android("name") == STATUS_PROVIDER }
+        listOf("readPermission", "writePermission", "grantUriPermissions").forEach { assertEquals(it, "", provider.android(it)) }
+        assertEquals("app.shkriuss.reminders.keeper", provider.android("authorities"))
+    }
+
+    @Test
+    fun remindersSeesOnlyTheAppsWithAHandoverScreen() {
+        val actions = elements("queries").flatMap { queries ->
+            queries.getElementsByTagName("action").let { nodes -> List(nodes.length) { (nodes.item(it) as Element).android("name") } }
+        }
+        assertEquals(listOf("app.shkriuss.action.HANDOVER"), actions)
+        assertEquals(0, elements("queries").sumOf { it.getElementsByTagName("package").length })
     }
 
     @Test
@@ -98,7 +118,11 @@ class RemindersManifestTest {
     private companion object {
         const val ANDROID = "http://schemas.android.com/apk/res/android"
 
-        /** The six screens of core/security, written out here, so that a seventh fails this test first. */
+        const val HANDOVER_SCREEN = "app.shkriuss.core.security.HandoverActivity"
+
+        const val STATUS_PROVIDER = "app.shkriuss.core.security.KeeperStatusProvider"
+
+        /** The eight screens of core/security, written out here, so that a ninth fails this test first. */
         val SECURITY_SCREENS = listOf(
             "app.shkriuss.core.security.SecurityActivity",
             "app.shkriuss.core.security.CreateRecoveryKeyActivity",
@@ -106,6 +130,8 @@ class RemindersManifestTest {
             "app.shkriuss.core.security.ShowRecoveryKeyActivity",
             "app.shkriuss.core.security.AppLockActivity",
             "app.shkriuss.core.security.TurnOnAppLockActivity",
+            HANDOVER_SCREEN,
+            "app.shkriuss.core.security.GetKeysActivity",
         )
     }
 }

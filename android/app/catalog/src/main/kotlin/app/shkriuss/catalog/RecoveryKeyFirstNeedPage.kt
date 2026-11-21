@@ -18,11 +18,13 @@ import app.shkriuss.core.security.RecoveryKeyFirstNeedSample
 import app.shkriuss.core.security.SecurityScreenSamples
 
 /** The forms of the first-need dialog that the page shows, in this order. */
-enum class FirstNeedSample(@param:StringRes val title: Int, val form: FirstNeedForm) {
+enum class FirstNeedSample(@param:StringRes val title: Int, val form: FirstNeedForm, val withKeeper: Boolean = false) {
     Backup(R.string.sample_first_need_backup, FirstNeedForm.SET_UP_FOR_BACKUP),
     AppLock(R.string.sample_first_need_app_lock, FirstNeedForm.SET_UP_FOR_APP_LOCK),
     Restore(R.string.sample_first_need_restore, FirstNeedForm.ENTER_FOR_RESTORE),
     Finish(R.string.sample_first_need_finish, FirstNeedForm.FINISH),
+    BackupWithKeeper(R.string.sample_first_need_backup_keeper, FirstNeedForm.SET_UP_FOR_BACKUP, withKeeper = true),
+    RestoreWithKeeper(R.string.sample_first_need_restore_keeper, FirstNeedForm.ENTER_FOR_RESTORE, withKeeper = true),
 }
 
 /**
@@ -59,6 +61,6 @@ fun RecoveryKeyFirstNeedPage(modifier: Modifier = Modifier) {
 @Composable
 private fun Sample(sample: FirstNeedSample, onBack: () -> Unit, modifier: Modifier = Modifier) {
     ShkScreen(modifier = modifier, scrollable = true, topBar = { ShkTopBar(title = stringResource(sample.title), onBack = onBack) }) {
-        RecoveryKeyFirstNeedSample(sample.form)
+        RecoveryKeyFirstNeedSample(sample.form, keepers = if (sample.withKeeper) listOf(sampleKeeper) else emptyList())
     }
 }
