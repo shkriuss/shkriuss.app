@@ -1,5 +1,7 @@
 package app.shkriuss.core.design
 
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
@@ -16,8 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.InterceptPlatformTextInput
+import androidx.compose.ui.platform.PlatformTextInputMethodRequest
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +51,11 @@ import androidx.compose.ui.text.input.VisualTransformation
  * [suffix] is optional: a short unit after the typed text, inside the box,
  * such as "ml". TalkBack reads [suffixDescription] for it, with the label,
  * such as "millilitres", or the suffix itself when there is none.
+ *
+ * With [keyboardLearns] false, the field asks the keyboard not to learn
+ * what is typed ([NoLearningKeyboard]), for the user's own text, such as
+ * the title of a reminder. The keyboard still suggests and corrects. A
+ * keyboard can ignore the request.
  */
 @Composable
 fun ShkTextField(
@@ -61,21 +71,49 @@ fun ShkTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     suffix: String? = null,
     suffixDescription: String? = null,
+    keyboardLearns: Boolean = true,
 ) {
-    TextFieldInStyle(
-        value = value,
-        onValueChange = onValueChange,
-        label = label,
-        textStyle = ShkTextStyle.Body,
-        modifier = modifier,
-        enabled = enabled,
-        singleLine = singleLine,
-        supportingText = supportingText,
-        errorText = errorText,
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
-        suffix = suffix,
-        suffixDescription = suffixDescription,
+    val field = @Composable {
+        TextFieldInStyle(
+            value = value,
+            onValueChange = onValueChange,
+            label = label,
+            textStyle = ShkTextStyle.Body,
+            modifier = modifier,
+            enabled = enabled,
+            singleLine = singleLine,
+            supportingText = supportingText,
+            errorText = errorText,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            suffix = suffix,
+            suffixDescription = suffixDescription,
+        )
+    }
+    if (keyboardLearns) field() else NoLearningKeyboard(field)
+}
+
+/**
+ * Asks the keyboard of the field in [content] not to learn what is typed:
+ * the flag `IME_FLAG_NO_PERSONALIZED_LEARNING`, on top of what Compose
+ * tells the keyboard. Compose has no option for it. Suggestions and
+ * corrections stay as the field's [KeyboardOptions] ask.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun NoLearningKeyboard(content: @Composable () -> Unit) {
+    InterceptPlatformTextInput(
+        interceptor = { request, nextHandler ->
+            val withoutLearning = object : PlatformTextInputMethodRequest {
+                override fun createInputConnection(outAttributes: EditorInfo): InputConnection {
+                    val connection = request.createInputConnection(outAttributes)
+                    outAttributes.imeOptions = outAttributes.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                    return connection
+                }
+            }
+            nextHandler.startInputMethod(withoutLearning)
+        },
+        content = content,
     )
 }
 

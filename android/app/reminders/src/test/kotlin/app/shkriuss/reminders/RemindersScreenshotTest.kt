@@ -17,6 +17,7 @@ import androidx.test.core.app.ApplicationProvider
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.feature.reminders.R
+import app.shkriuss.feature.reminders.RemindersAlarms
 import app.shkriuss.feature.reminders.Repeat
 import app.shkriuss.feature.reminders.Schedule
 import app.shkriuss.feature.reminders.Weekdays
@@ -111,6 +112,41 @@ class RemindersScreenshotTest(private val config: ScreenshotConfig) {
         start(ready = "Pills")
         compose.waitForText(words(R.string.reminders_line_not_asked))
         compose.captureWholeScreen("UpcomingNotificationsLine", config, LIST)
+    }
+
+    /** After a no to Android's question: the line says the reminders are silent, with **Open settings**. */
+    @Test
+    fun upcomingWithTheLineWhenNotificationsAreOff() {
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).allowNotifications(false)
+        testApp.test.notify.permissionAnswered()
+        seedUpcoming()
+        start(ready = "Pills")
+        compose.waitForText(words(R.string.reminders_line_denied))
+        compose.captureWholeScreen("UpcomingLineDenied", config, LIST)
+    }
+
+    /** With the channel of the reminders turned off in Android's settings: the line says so, with **Open settings**. */
+    @Test
+    fun upcomingWithTheLineWhenTheChannelIsOff() {
+        seedUpcoming()
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).turnOff(RemindersAlarms.CHANNEL)
+        start(ready = "Pills")
+        compose.waitForText(words(R.string.reminders_line_channel_off))
+        compose.captureWholeScreen("UpcomingLineChannelOff", config, LIST)
+    }
+
+    /** Upcoming right after Delete in the form, with "Reminder deleted" and **Undo** at the bottom. */
+    @Test
+    fun upcomingWithTheSnackbarAfterADelete() {
+        seedUpcoming()
+        start(ready = "Pills")
+        compose.tap("Pills")
+        compose.waitForText(words(R.string.reminders_edit_reminder))
+        compose.tap(R.string.reminders_delete)
+        compose.waitForText(words(R.string.reminders_deleted))
+        compose.waitForGone(hasText("Pills") and hasClickAction())
+        compose.waitForGone(hasText(words(R.string.reminders_edit_reminder)))
+        captureWindows("UpcomingDeletedSnackbar")
     }
 
     /** The question before Android's own, after **Allow**. */
@@ -215,6 +251,20 @@ class RemindersScreenshotTest(private val config: ScreenshotConfig) {
         compose.tap(R.string.reminders_delete_all)
         compose.waitForText(words(R.string.reminders_delete_all_question))
         captureWindows("DeleteAllQuestion")
+    }
+
+    /** Past right after **Delete all**: empty, with "4 reminders deleted" and **Undo** at the bottom. */
+    @Test
+    fun pastWithTheSnackbarAfterDeleteAll() {
+        seedPast()
+        start()
+        compose.tap(R.string.reminders_past)
+        compose.tap(R.string.reminders_delete_all)
+        compose.waitForText(words(R.string.reminders_delete_all_question))
+        compose.tap(R.string.reminders_delete)
+        compose.waitForText("4 reminders deleted")
+        compose.waitForText(words(R.string.reminders_past_empty_title))
+        captureWindows("PastDeletedSnackbar")
     }
 
     // Settings, Backup, Security and Licences.

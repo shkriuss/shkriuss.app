@@ -709,6 +709,15 @@ Each has a sample at the end of the Dialogs page in the Catalog.
 3. Open: how TalkBack announces the progress dialog on a real phone. A
    unit test shows what it would read, not that it speaks.
 
+### Optional part for the user's own text
+
+Reminders' title field uses one part of the text field (owner's
+decision). It changes nothing on screen, so the Catalog has no sample.
+
+| Component | Part | What it does |
+|---|---|---|
+| `ShkTextField` | `keyboardLearns = false` | The field asks the keyboard not to learn what is typed (`IME_FLAG_NO_PERSONALIZED_LEARNING`), so the keyboard does not keep the words in its own dictionary. It still suggests and corrects. A keyboard can ignore the request. Use it for the user's own text, such as a reminder's title. The default, `true`, leaves every other field as it is. |
+
 ### States
 
 | State | Which components |
@@ -1074,6 +1083,9 @@ for every component with an icon next to text.
    box. With Material 3's own field, which puts the label in the border,
    this check fails at both font scales: the label sticks out above the
    field. The error check fails too: Material 3 reads "Invalid input".
+5. With `keyboardLearns = false` it asks the keyboard not to learn
+   (`IME_FLAG_NO_PERSONALIZED_LEARNING`) and keeps its suggestions. By
+   default it does not ask.
 
 `ShkProgressBarTest` checks the progress bar at font scale 1.0 and 2.0:
 

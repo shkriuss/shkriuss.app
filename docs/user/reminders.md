@@ -84,12 +84,14 @@ which shows it again 10 minutes later.
 3. Water and Reminders do not mark their reminders "local only". That
    mark would not hide them from apps with notification access. It only
    asks apps that pass notifications to a watch not to pass them on.
-   Whether they mark them, or offer a setting, is decided after Water's
-   first release.
+   Whether they mark them, or offer a setting, is not decided yet.
 4. With the app lock on, a reminder shows only its kind and "The app
    lock hides this notification. Open the app to see it.", without its
    title or amounts and without buttons. Unless you turn on **Show the
    text in notifications** ([The app lock](app-lock.md#notifications)).
+5. If you turned on Android's notification history, Android keeps the
+   notifications of the last 24 hours there, with their text, also after
+   they are gone from the screen.
 
 ## When a reminder cannot be shown
 

@@ -1271,7 +1271,10 @@ Status: **Partly met.**
 
 - MASWE-0036, the screen: the word field shows its letters, so that 24
   words can be typed. It asks the keyboard not to learn and offers no
-  suggestions (MASTG-TEST-0258).
+  suggestions (MASTG-TEST-0258). The title field of Reminders asks the
+  keyboard not to learn too, and keeps its suggestions (owner's
+  decision). A harmful keyboard can ignore both requests
+  ([out of scope](#out-of-scope)).
 - MASWE-0037, notifications:
   - Every notification is private on the lock screen
     (`VISIBILITY_PRIVATE`).

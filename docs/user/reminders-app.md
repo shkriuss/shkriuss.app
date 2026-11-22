@@ -83,6 +83,8 @@ Good to know:
 - A new reminder starts as Once, today, at the next full hour.
 - A title has 1 to 200 characters: "Enter a title." or "A title has at
   most 200 characters."
+- Reminders asks your keyboard not to learn the words of a title. The
+  keyboard still suggests words.
 - A one-time reminder must be later than now: "That time has passed."
 - Every week needs at least one day: "Choose at least one day."
 - Reminders keeps up to 500 reminders: "Reminders keeps 500 reminders.
@@ -194,6 +196,9 @@ Who else can see a reminder:
   lock hides this notification. Open the app to see it.", without its
   title and without buttons. Unless you turn on **Show the text in
   notifications** on the app lock screen.
+- If you turned on Android's notification history, Android keeps the
+  notifications of the last 24 hours there, with their titles, also
+  after you deleted the reminder.
 
 ## Back up and restore
 
@@ -232,8 +237,8 @@ its notification goes.
 
 Restore on a new phone:
 
-1. Install Reminders, and tap **Restore a backup**. Reminders says
-   "Enter your recovery key first".
+1. Install Reminders, open **Settings** and tap **Restore a backup**.
+   Reminders says "Enter your recovery key first".
 2. Tap **Enter the words**, and type your 24 words. The file picker then
    opens by itself.
 3. Pick the file, and tap **Restore** at the question. Your reminders
@@ -334,32 +339,37 @@ Limits of reminders:
 8. On the night the clocks go back, a reminder you save or restore
    between 02:00 and 03:00 can show at once as "Missed", if its time in
    that hour already went by once.
+9. With Android's notification history on, a reminder's title stays
+   there for 24 hours, also after you delete the reminder. Turn the
+   history off in Android's notification settings if you do not want
+   that.
+10. A keyboard can ignore the request not to learn the words of a title.
 
 Limits of the recovery key:
 
-9. Reminders sees only the apps of the suite that keep your recovery
-   key and are signed like it. If another app has your key but does not
-   keep it on this phone, tap **I already have one** yourself, and enter
-   the same words. If it keeps it, Reminders offers **Get the keys from**
-   that app ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
+11. Reminders sees only the apps of the suite that keep your recovery
+    key and are signed like it. If another app has your key but does not
+    keep it on this phone, tap **I already have one** yourself, and enter
+    the same words. If it keeps it, Reminders offers **Get the keys from**
+    that app ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
 
 Limits of the app lock:
 
-10. If you choose a time in **Lock the app** and turn the screen off
+12. If you choose a time in **Lock the app** and turn the screen off
     from another app, Reminders may stay unlocked until that time has
     passed ([The app lock](app-lock.md#when-the-app-locks)).
-11. The app lock hides your reminders. It does not encrypt them.
+13. The app lock hides your reminders. It does not encrypt them.
     Android's own encryption protects them, with your screen lock.
 
 Limits of backups:
 
-12. A restore keeps the newest edit of each reminder. It cannot bring
+14. A restore keeps the newest edit of each reminder. It cannot bring
     back exactly how Reminders was on the day of the backup.
-13. Some storage apps do not let Reminders read a file again right away,
+15. Some storage apps do not let Reminders read a file again right away,
     or hand back an older copy. Reminders then says "Backup written, not
     checked". Check such a file with **Restore a backup**, and tap
     **Cancel** at the question.
-14. A deleted reminder stays in Reminders' storage, with its title,
+16. A deleted reminder stays in Reminders' storage, with its title,
     marked as deleted, until you clear Reminders' storage. Backups you
     make after the deletion hold it too. Clearing the storage does not
     change backup files you already made: delete those where you put
@@ -367,10 +377,10 @@ Limits of backups:
 
 Other:
 
-15. When the phone's storage is completely full, **Save** can close
+17. When the phone's storage is completely full, **Save** can close
     Reminders, and a snooze or a change in the app lock's settings can
     be lost when Reminders stops. Free some room on the phone.
-16. Never type your real recovery words into a preview build of a pull
+18. Never type your real recovery words into a preview build of a pull
     request. Use test words.
 
 Not in version 1.0.0:

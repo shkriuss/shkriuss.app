@@ -137,6 +137,7 @@ private fun formTitle(form: ReminderForm): String =
  * the title, the repeat, the date or the days, the time, the line "Next",
  * and the buttons. A wrong field shows its words under it, and TalkBack
  * announces them. A new reminder starts with the keyboard on the title.
+ * The keyboard is asked not to learn the title.
  */
 @Composable
 private fun FormFields(form: ReminderForm, next: LocalDateTime?, model: ReminderFormViewModel, format: RemindersFormat, today: LocalDate) {
@@ -150,6 +151,8 @@ private fun FormFields(form: ReminderForm, next: LocalDateTime?, model: Reminder
         errorText = form.titleError?.let { titleProblemText(it, format) },
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
         modifier = Modifier.focusRequester(titleField),
+        // The title is the user's own text: the keyboard is asked not to learn it (the owner's decision 13).
+        keyboardLearns = false,
     )
 
     ShkSectionHeader(stringResource(R.string.reminders_repeat))

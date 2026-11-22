@@ -1,5 +1,9 @@
 package app.shkriuss.core.design
 
+import android.text.InputType
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
@@ -21,6 +25,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
@@ -44,7 +49,9 @@ import org.robolectric.annotation.GraphicsMode
  * - typing reaches the caller, and turned off it is read as disabled,
  * - a long label and long help wrap, are not cut, and stay inside the
  *   field, above and below a box at least 48dp tall. A label in the
- *   border, as Material 3 draws it, would stick out above the field.
+ *   border, as Material 3 draws it, would stick out above the field,
+ * - asked to, it tells the keyboard not to learn what is typed, and
+ *   otherwise not.
  *
  * Graphics run natively, so text is measured with the real font.
  */
@@ -179,6 +186,44 @@ class ShkTextFieldTest(private val fontScale: Float) {
             "The space between the label and the help, $box px, should hold a box at least 48dp tall",
             box >= with(compose.density) { ShkSpacing.MinTouchTarget.toPx() },
         )
+    }
+
+    @Test
+    fun askedNotToLearnTheFieldTellsTheKeyboardSoAndKeepsItsSuggestions() {
+        compose.setContent {
+            ShkTheme { ShkTextField(value = "", onValueChange = {}, label = LABEL, keyboardLearns = false) }
+        }
+
+        val info = keyboardRequest()
+        assertTrue("no learning", info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+        assertEquals("suggestions stay", 0, info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
+    }
+
+    @Test
+    fun byDefaultTheFieldDoesNotAskTheKeyboardNotToLearn() {
+        compose.setContent {
+            ShkTheme { ShkTextField(value = "", onValueChange = {}, label = LABEL) }
+        }
+
+        assertEquals(0, keyboardRequest().imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING)
+    }
+
+    /** What the field tells the keyboard once it has the focus. */
+    private fun keyboardRequest(): EditorInfo {
+        compose.onNode(IS_TEXT_FIELD).performClick()
+        compose.waitForIdle()
+        val info = EditorInfo()
+        compose.runOnUiThread { checkNotNull(textEditor(compose.activity.window.decorView)).onCreateInputConnection(info) }
+        return info
+    }
+
+    /** The view that takes the keyboard's input: the Compose view, once a field has the focus. */
+    private fun textEditor(view: View): View? {
+        if (view.onCheckIsTextEditor()) return view
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) textEditor(view.getChildAt(index))?.let { return it }
+        }
+        return null
     }
 
     private fun textNode(text: String): SemanticsNode =

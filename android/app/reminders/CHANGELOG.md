@@ -33,8 +33,19 @@ Added:
   Reminders asks for no new permission
   ([permissions](../../../docs/security/permissions.md#the-handover-between-apps)).
 
+Changed:
+
+- **Your keyboard no longer learns titles.** The title field asks the
+  keyboard not to learn what you type, so it does not keep the words of
+  a title or suggest them in other apps. It still suggests words while
+  you type.
+
 Fixed:
 
+- **A form open on a deleted reminder.** If a reminder was open in the
+  form of Upcoming and you deleted it from Past, its form stayed open,
+  and **Save** closed it without a word. Now the form closes as soon as
+  its reminder is deleted.
 - **Back right after the last prompt of the app lock.** If you pressed
   Back while Reminders stored the app lock, a reminder already shown
   kept its title until Reminders started again. Now it loses its title

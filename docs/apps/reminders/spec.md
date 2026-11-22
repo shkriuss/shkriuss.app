@@ -107,7 +107,9 @@ form beside it, or "Choose a reminder."
 
 1. **Title**: a one-line field, empty at the start. For a new reminder
    the keyboard opens on it. The form of an existing reminder opens
-   without the keyboard.
+   without the keyboard. The field asks the keyboard not to learn what
+   is typed (`IME_FLAG_NO_PERSONALIZED_LEARNING`). The keyboard still
+   suggests and corrects.
 2. **Repeat**: a `ShkRadioGroup`: Once, Every day, Every week, Every
    month, Every year.
 3. **Date**, for Once, Every month and Every year: "Mon 16 Nov 2026". A
@@ -522,6 +524,12 @@ For backup, the recovery key and the app lock, two more:
     ([The recovery key](#the-recovery-key)).
 12. Licences is copied into Reminders: its own list, screen and texts in
     `feature/reminders`, as Water has them. No shared module for it.
+
+For the title, one more:
+
+13. The title field asks the keyboard not to learn what is typed, so a
+    keyboard app does not keep the words of a title in its own
+    dictionary ([The reminder form](#the-reminder-form), point 1).
 
 ## Assumptions
 

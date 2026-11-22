@@ -196,6 +196,29 @@ Android Keystore holds.
   `reminders.db-shm` next to the database. They can hold rows of it,
   titles too, until SQLite writes them into `reminders.db`.
 
+Android also keeps some things for Reminders, outside Reminders'
+folders:
+
+- The alarm of each upcoming reminder: its time and the random ID of its
+  reminder. No title.
+- A reminder's notification while it shows, with its title. If the user
+  turned on Android's notification history, Android keeps the
+  notifications of the last 24 hours there, titles too, also after the
+  notification is gone or the reminder is deleted.
+- A picture of Reminders' screen in the recent apps, which can show
+  titles. While the app lock is on, or "Hide in recent apps and block
+  screenshots" is on, the picture is blank.
+- The saved state of Reminders' screen while it waits in the
+  background: the place that is open, a part of Licences, an open date
+  or time picker with the date or time in it, and how far each list is
+  scrolled. Never a title: the open form lives only while Reminders runs.
+
+The keyboard app sees what is typed into a title, as in any app.
+Reminders asks it not to learn titles, so that it keeps no words of them
+in its own dictionary (`IME_FLAG_NO_PERSONALIZED_LEARNING`). A keyboard
+can ignore the request
+([threat-model.md](threat-model.md#out-of-scope), point 3).
+
 ### What leaves the phone, and how
 
 1. **A backup file**, only when you make one, to the place you pick in
@@ -257,6 +280,12 @@ are off. It writes no file outside its storage but the backup you make,
 shares nothing else with other apps, puts nothing on the clipboard itself and
 writes no log. The title field offers the usual copy and paste, so a
 title you copy goes to the clipboard.
+
+### Not checked in the code
+
+As for Water: the files of AndroidX's profile installer about the app's
+start-up profile, and the app's compiled code, which Android keeps. They
+hold no user data.
 
 ### How to delete it
 
