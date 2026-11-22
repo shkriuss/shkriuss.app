@@ -1,5 +1,9 @@
 package app.shkriuss.reminders
 
+import android.text.InputType
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -20,6 +24,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -395,6 +400,34 @@ class RemindersScreensTest {
 
         compose.tap(R.string.reminders_cancel)
         compose.waitForText(words(R.string.reminders_choose_a_reminder))
+    }
+
+    /**
+     * The title is the user's own text: the keyboard is asked not to learn
+     * it, and may still suggest (the owner's decision 13). On the tablet,
+     * where the form is in the screen's own window.
+     */
+    @Test
+    @Config(qualifiers = TABLET)
+    fun theKeyboardIsAskedNotToLearnTheTitle() {
+        start()
+        compose.tap(R.string.reminders_add)
+        compose.field(words(R.string.reminders_title)).performClick().assertIsFocused()
+        compose.waitForIdle()
+
+        val info = EditorInfo()
+        scenario.onActivity { checkNotNull(textEditor(it.window.decorView)).onCreateInputConnection(info) }
+        assertTrue("no learning", info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+        assertEquals("suggestions stay", 0, info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
+    }
+
+    /** The view that takes the keyboard's input: the Compose view, once a field has the focus. */
+    private fun textEditor(view: View): View? {
+        if (view.onCheckIsTextEditor()) return view
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) textEditor(view.getChildAt(index))?.let { return it }
+        }
+        return null
     }
 
     /**

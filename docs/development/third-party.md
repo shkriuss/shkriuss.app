@@ -209,8 +209,9 @@ not a library.
 - **Where the notice is:** the MIT licence asks that this notice and the
   licence text go with every copy. Both are in `LICENSE.txt`, in the same
   folder as the list. It is the source's own `LICENSE` file, unchanged.
-  Both files are packed into the app together. Water's Licences screen
-  shows a copy of it, `water_licence_bip39.txt`, byte for byte the same.
+  Both files are packed into the app together. The Licences screen of
+  each app shows a copy of it, `water_licence_bip39.txt` and
+  `reminders_licence_bip39.txt`, byte for byte the same.
 
 ## Tink for Java
 

@@ -244,14 +244,36 @@ class ViewModelsTest {
 
         // Snooze 10 min on the notification of "Late" while the question is open: it stays, and so does its form.
         book.update(late.id) { it.copy(snoozeMillis = millisAt(monday(12, 10), UTC)) }
-        model.confirmDeleteAll { ids ->
-            onLate.closeIfDeleted(ids)
-            onEarly.closeIfDeleted(ids)
-        }
+        model.confirmDeleteAll()
 
         model.state.await { it.snackbar != null }
         assertNull("the form of the deleted reminder closed", onEarly.state.await { it.form == null }.form)
         assertEquals("the unsaved title stays", "Late, and more", onLate.state.value.form?.title)
+    }
+
+    /**
+     * The form of Upcoming stays open on "Call the bank" while the user is
+     * on Past, where the reminder is deleted from its own form. The form of
+     * Upcoming closes too: a Save there could write nothing, and the typed
+     * change would be lost without a word.
+     */
+    @Test
+    fun aFormOpenOnAReminderDeletedFromTheOtherFormCloses() {
+        val bank = add("Call the bank", schedule(Repeat.ONCE, MONDAY, 14))
+        val other = add("Pills", pills())
+        val upcomingForm = form()
+        upcomingForm.openEdit(bank)
+        upcomingForm.onTitleChange("Call the bank about the card")
+        val otherForm = form()
+        otherForm.openEdit(other)
+        val pastForm = form()
+        pastForm.openEdit(bank)
+
+        pastForm.delete()
+
+        assertNull("the form on the deleted reminder closed", upcomingForm.state.await { it.form == null }.form)
+        assertEquals("a form on another reminder stays", "Pills", otherForm.state.value.form?.title)
+        assertEquals(listOf(other), live())
     }
 
     @Test

@@ -202,6 +202,9 @@ object FormRules {
  * [onSaved] runs after each Save that passed its checks, also one with
  * no change, so that the question for notifications can follow it. Every change runs in [work] on top of the
  * ViewModel's scope. Tests pass `Dispatchers.Unconfined`.
+ *
+ * A form open on a reminder that is deleted closes, wherever the delete
+ * came from: the other list's form, **Delete all** or a restore.
  */
 class ReminderFormViewModel(
     private val repository: RemindersRepository,
@@ -220,6 +223,16 @@ class ReminderFormViewModel(
             val next = open?.let { FormRules.nextOf(it, reading, it.stored?.let { stored -> entries[stored.id] }) }
             FormScreen(form = open, next = next, snackbar = shown, opening = opening)
         }.stateIn(viewModelScope + work, SharingStarted.Eagerly, FormScreen())
+
+    init {
+        // A reminder deleted anywhere, by the other list's form, by Delete all or by a restore, closes a form open on it:
+        // a Save there could write nothing. The list can be a moment behind the database, so a reminder missing from it
+        // is looked up once more before its form closes.
+        viewModelScope.launch(work) {
+            combine(form, repository.reminders()) { open, live -> open?.reminderId?.takeIf { id -> live.none { it.id == id } } }
+                .collect { missing -> if (missing != null && repository.find(missing) == null) closeIfDeleted(missing) }
+        }
+    }
 
     /** **Add a reminder**: an empty form, Once, today, at the next full hour. */
     fun openNew() {
@@ -337,12 +350,13 @@ class ReminderFormViewModel(
     }
 
     /**
-     * The reminders [ids] were deleted. A form open on one of them closes
-     * and writes nothing, as with Cancel. Any other form stays as it is.
+     * The reminder [id] is deleted. A form open on it closes and writes
+     * nothing, as with Cancel. Any other form stays as it is, and so does
+     * one that is saving: its write ends it.
      */
-    fun closeIfDeleted(ids: Set<String>) {
+    private fun closeIfDeleted(id: String) {
         val open = form.value ?: return
-        if (open.reminderId in ids && !open.saving) form.compareAndSet(open, null)
+        if (open.reminderId == id && !open.saving) form.compareAndSet(open, null)
     }
 
     /**

@@ -64,6 +64,10 @@ Clearing the storage does not change backup files you already made:
 delete those where you put them. Reminders stores no name, no location
 and no data from other apps.
 
+Your keyboard sees what you type into a title, as in any app. Reminders
+asks it not to learn the words of a title, so that it does not keep them
+or suggest them in other apps. A keyboard can ignore this.
+
 ### Later apps
 
 Each app adds its part to this page before its first release.
@@ -104,6 +108,10 @@ notification. A reminder of Reminders shows your title.
   notification. Open the app to see it.", without amounts or titles and
   without buttons. Unless you turn on **Show the text in notifications**
   ([The app lock](app-lock.md)).
+- If you turned on Android's notification history, Android keeps the
+  notifications of the last 24 hours there, with their text: in
+  Reminders, the title. It keeps them also after you deleted the
+  reminder.
 
 ### Nothing else
 
