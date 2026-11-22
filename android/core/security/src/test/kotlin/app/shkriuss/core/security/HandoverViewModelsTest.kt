@@ -180,6 +180,23 @@ class HandoverViewModelsTest {
     }
 
     @Test
+    fun aModelKnowsItWasAnsweredAlsoWhileItStoresTheKeys() {
+        // The screen closes when made anew with no answer to come, but must stay after a turn of the phone,
+        // when the kept model may still be storing the keys.
+        val (keeper, _) = keeper()
+        val asker = app(reminders)
+        val background = QueuedDispatcher()
+        val model = GetKeysViewModel(asker.crypto, background)
+        assertFalse("a new model has had no answer", model.answered)
+
+        model.onAnswer(KeeperAnswer.Keys(keysFrom(keeper)))
+        assertEquals("storing", GetKeysWorking, model.state.value)
+        assertTrue("answered while it stores", model.answered)
+        background.runAll()
+        assertTrue(model.state.value is GetKeysDone)
+    }
+
+    @Test
     fun theAskingAppSaysWhyNothingWasStored() {
         val asker = app(reminders)
         val model = GetKeysViewModel(asker.crypto, inline)

@@ -419,9 +419,10 @@ class GetKeysActivity : ComponentActivity(), WordsScreen {
         // Only on the first start: after a turn of the phone the keeper's screen is open already.
         if (savedInstanceState == null) {
             if (keeper == null) model.onAnswer(KeeperAnswer.NotASuiteApp) else call.ask(HandoverMode.KEYS)
-        } else if (!call.waiting && model.state.value == GetKeysWorking) {
-            // Android made the screen anew after the answer was handled, and the outcome went with the old one.
-            // No answer will come, so the screen closes; the security screen shows how things are now.
+        } else if (!call.waiting && !model.answered) {
+            // Android ended the process after the answer was handled, and the outcome went with it. No answer will
+            // come, so the screen closes; the security screen shows how things are now. After a turn of the phone
+            // the model is kept, with its answer, also while it stores the keys, and the screen stays.
             finish()
         }
         val label = keeper?.let(suite::labelOf).orEmpty()

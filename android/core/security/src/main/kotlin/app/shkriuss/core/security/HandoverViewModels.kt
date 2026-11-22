@@ -216,8 +216,17 @@ class GetKeysViewModel internal constructor(
     /** The one state of the screen. */
     val state: StateFlow<GetKeysScreen> = screen.asStateFlow()
 
+    /**
+     * True once the keeper's answer reached this model. A model kept
+     * across a turn of the phone keeps it, also while the keys are being
+     * stored; one made anew after Android ended the process does not.
+     */
+    internal var answered = false
+        private set
+
     /** What the keeper answered. */
     internal fun onAnswer(answer: KeeperAnswer) {
+        answered = true
         when (answer) {
             is KeeperAnswer.Keys -> store(answer.keys)
             KeeperAnswer.Declined -> screen.value = GetKeysClosed
