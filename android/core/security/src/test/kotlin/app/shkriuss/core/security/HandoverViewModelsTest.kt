@@ -33,11 +33,12 @@ class HandoverViewModelsTest {
 
     private val reminders = AppName.of("reminders")
 
-    private fun app(name: AppName = testAppName): SoftwareKeysApp = SoftwareKeysApp(File(temporary.newFolder(), "shk-keys"), name)
+    private fun app(name: AppName = testAppName, folder: File = File(temporary.newFolder(), "shk-keys")): SoftwareKeysApp =
+        SoftwareKeysApp(folder, name)
 
-    /** Water, keeping a new recovery key. */
-    private fun keeper(): Pair<SoftwareKeysApp, RecoveryKey> {
-        val keeper = app()
+    /** Water, keeping a new recovery key, with its keyset files in [folder]. */
+    private fun keeper(folder: File = File(temporary.newFolder(), "shk-keys")): Pair<SoftwareKeysApp, RecoveryKey> {
+        val keeper = app(folder = folder)
         val key = keeper.crypto.setup.createRecoveryKey()
         keeper.crypto.setup.storeDerivedKeys(key)
         keeper.crypto.setup.beginKeepRecoveryKey(key)!!.finish()
@@ -109,6 +110,24 @@ class HandoverViewModelsTest {
         keeper.screenLock = false
         model.onAllow()
         assertEquals("the guard went with the screen lock", HandoverNotKept, model.state.value)
+    }
+
+    @Test
+    fun aDamagedKeptCopyEndsTheHandoverAsNotAKeeper() {
+        val folder = File(temporary.newFolder(), "shk-keys")
+        val (keeper, _) = keeper(folder)
+        val model = handover(keeper)
+        assertTrue(model.state.value is HandoverAsk)
+        // The copy is damaged while the screen shows, before the prompt reads it.
+        damage(File(folder, "recovery"))
+        model.onAllow()
+        (model.state.value as? HandoverAsk)?.let { answer(model, PromptOutcome.SUCCEEDED) }
+        assertEquals(HandoverFailed(damaged = true), model.state.value)
+        assertNull(model.takeKeys())
+        // The asking app then offers the 24 words, not a "declined" (ADR 0041, point 16).
+        assertEquals(HandoverRefusal.NOT_KEEPER, closingRefusal(model.state.value))
+
+        assertEquals("a screen opened on the damaged copy says the same", HandoverRefusal.NOT_KEEPER, closingRefusal(handover(app(folder = folder)).state.value))
     }
 
     @Test
@@ -263,6 +282,21 @@ class HandoverViewModelsTest {
     }
 
     @Test
+    fun notNowAfterAClosedPromptStillNamesTheOtherKeeper() {
+        val (_, key) = keeper()
+        val notes = KeeperApp("app.shkriuss.notes", "Notes", key.keyId.toString())
+        val model = EnterViewModel(app(reminders).crypto, startOver = false, background = inline, suite = FakeSuiteApps(listOf(notes)))
+        key.words().forEach { model.onTyped(it); model.onWord(it) }
+        model.onCheck()
+        model.onKeepHereToo()
+        model.onPromptResult((model.state.value as FlowKeeping).prompt!!, PromptOutcome.CANCELLED)
+        assertEquals(FlowKeeping(note = KeepNote.CANCELLED), model.state.value)
+
+        model.onSkipKeeping()
+        assertEquals("Notes keeps it: the paper is not the only copy", FlowDone(Kept.NOT_KEPT, keptIn = listOf("Notes")), model.state.value)
+    }
+
+    @Test
     fun notNowKeepsItOnlyInTheOtherAppAndNoKeeperMeansNoQuestion() {
         val (_, key) = keeper()
         val notes = KeeperApp("app.shkriuss.notes", "Notes", key.keyId.toString())
@@ -291,8 +325,11 @@ class HandoverViewModelsTest {
         assertFalse(intro.keeper)
         assertEquals("only the keepers of this app's key", listOf(water), intro.keepers)
 
-        model.onCheckAtKeeper(water)
+        assertTrue(model.onCheckAtKeeper(water))
         assertEquals("app.shkriuss.water", model.checkingAt)
+        assertFalse("a second tap asks no keeper", model.onCheckAtKeeper(suite.keepers()[1]))
+        assertEquals("app.shkriuss.water", model.checkingAt)
+        assertEquals(TurnOnWorking, model.state.value)
         val kept = keeper.crypto.setup.beginShowRecoveryKey().finish()
         val words = key.words()
         val checked = keeper.crypto.setup.handOverAfterWords(kept, listOf(2, 5, 11, 20).associateWith { words[it - 1] }, reminders)!!

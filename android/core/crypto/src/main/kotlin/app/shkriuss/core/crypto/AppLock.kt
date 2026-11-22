@@ -72,7 +72,8 @@ class AppLock internal constructor(private val vault: KeyVault) {
      * Starts turning the app lock on. Before this, the app has checked the
      * recovery words: [proof] comes from [KeySetup.checkFourWords] in an
      * app that keeps the recovery key, or from [KeySetup.checkAllWords] in
-     * one that does not. A proof for another `record` key than the one
+     * one that does not, or from [KeySetup.checkWordsAtKeeper] when a
+     * keeper checked four words for it. A proof for another `record` key than the one
      * stored now is refused with [IllegalStateException]: the keys changed
      * since the words were checked. The steps, in an order that a stop at
      * any point cannot harm:

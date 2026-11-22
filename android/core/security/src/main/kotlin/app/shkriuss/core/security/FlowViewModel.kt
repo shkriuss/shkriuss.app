@@ -41,6 +41,10 @@ abstract class FlowViewModel<S : Any> internal constructor(
     @Volatile
     private var keeping: RecoveryKey? = null
 
+    /** The other apps that keep the key now being kept, by name. Named on the done screen after **Not now**. */
+    @Volatile
+    private var otherKeepers: List<String> = emptyList()
+
     @Volatile
     private var requests = 0
 
@@ -87,9 +91,11 @@ abstract class FlowViewModel<S : Any> internal constructor(
     protected suspend fun keep(key: RecoveryKey, askFirst: Boolean = true) {
         keeping = key
         if (askFirst) {
+            otherKeepers = emptyList()
             val others = suite.keepers().filter { it.keyId == key.keyId.toString() }
             if (others.isNotEmpty() && !crypto.setup.keepsRecoveryKey()) {
-                show(flowScreen(FlowKeepAsk(others.map { it.label })))
+                otherKeepers = others.map { it.label }
+                show(flowScreen(FlowKeepAsk(otherKeepers)))
                 return
             }
         }
@@ -122,11 +128,14 @@ abstract class FlowViewModel<S : Any> internal constructor(
         work { keep(key, askFirst = false) }
     }
 
-    /** The user does not keep the key here: the paper copy, and the other apps that keep it, if any. */
+    /**
+     * The user does not keep the key here: the paper copy, and the other
+     * apps that keep it, if any. Also after **Keep it here too** and a
+     * prompt that was closed or failed.
+     */
     fun onSkipKeeping() {
-        val keptIn = (state.value as? FlowKeepAsk)?.keepers.orEmpty()
         keeping = null
-        show(flowScreen(FlowDone(Kept.NOT_KEPT, appLockWentOff, keptIn)))
+        show(flowScreen(FlowDone(Kept.NOT_KEPT, appLockWentOff, otherKeepers)))
     }
 
     /** How the system prompt of [request] ended. A request that is no longer shown is ignored. */

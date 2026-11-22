@@ -295,6 +295,36 @@ class HandoverTest {
     }
 
     @Test
+    fun aKeeperWhoseKeptCopyIsDamagedHandsOverNothing() {
+        val keeper = keeper()
+        damage(File(keeper.folder, "recovery"))
+        try {
+            keeper.open().setup.beginHandOver(reminders).finish()
+            fail("a damaged kept copy handed over keys")
+        } catch (failed: BlobException) {
+            // The keeper's screen then says so, and its result is NOT_KEEPER (ADR 0041, point 16).
+            assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, failed.answer)
+        }
+    }
+
+    @Test
+    fun checkedKeysOfAnOlderKeyAreNoProofAfterANewRecoveryKey() {
+        // Reminders holds both keys, the new one as its primary, as after a new recovery key (ADR 0041, point 19).
+        val both = RecoveryKeyDeriver.recoveryKeyset(listOf(key, otherKey), primary = otherKey)
+        val asker = asker()
+        asker.open()
+        assertEquals(KeySetupResult.STORED, asker.vault.locked { KeySetup(asker.vault).storeDerived(both) })
+
+        fun checkedBy(kept: RecoveryKey): HandedOverKeys {
+            val keeper = keeper(kept).open()
+            val answers = listOf(3, 8, 17, 22).associateWith { kept.words()[it - 1] }
+            return keeper.setup.handOverAfterWords(keeper.setup.beginShowRecoveryKey().finish(), answers, reminders)!!
+        }
+        assertNull("words of the older key do not count", asker.open().setup.checkWordsAtKeeper(checkedBy(key)))
+        assertNotNull("words of the current key do", asker.open().setup.checkWordsAtKeeper(checkedBy(otherKey)))
+    }
+
+    @Test
     fun noProofWithoutTheWordsOrForAnotherRecoveryKey() {
         val asker = asker()
         asker.open().setup.storeHandedOverKeys(handOver(keeper()))

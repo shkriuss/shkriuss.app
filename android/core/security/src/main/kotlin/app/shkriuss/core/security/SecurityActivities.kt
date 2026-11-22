@@ -283,8 +283,8 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
             onLockAgain = model::onLockAgain,
             onDone = ::finish,
             onCheckAtKeeper = { keeper ->
-                model.onCheckAtKeeper(keeper)
-                keeperCall.ask(HandoverMode.CHECK_WORDS)
+                // A second tap before the screen changes opens nothing: the keeper is asked once.
+                if (model.onCheckAtKeeper(keeper)) keeperCall.ask(HandoverMode.CHECK_WORDS)
             },
         )
         setContent {

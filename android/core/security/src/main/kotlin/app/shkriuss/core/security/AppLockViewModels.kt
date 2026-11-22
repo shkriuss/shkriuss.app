@@ -375,11 +375,14 @@ class TurnOnViewModel internal constructor(
     /**
      * The user lets [keeper] check four words. The screen opens the
      * keeper's handover screen and hands its answer to [onKeeperAnswer].
+     * False, with nothing changed, when the warning no longer shows, as on
+     * a second tap: then the screen asks no keeper.
      */
-    fun onCheckAtKeeper(keeper: KeeperApp) {
-        if (screen.value !is TurnOnIntro) return
+    fun onCheckAtKeeper(keeper: KeeperApp): Boolean {
+        if (screen.value !is TurnOnIntro) return false
         checkingAt = keeper.packageName
         screen.value = TurnOnWorking
+        return true
     }
 
     /**
