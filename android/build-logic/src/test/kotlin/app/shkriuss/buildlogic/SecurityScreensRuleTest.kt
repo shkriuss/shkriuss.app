@@ -20,7 +20,7 @@ import org.w3c.dom.Document
  * taken from the check. So a check with a shorter list fails a test.
  */
 class SecurityScreensRuleTest {
-    /** The six screens of `core/security`, as its manifest declares them. */
+    /** The eight screens of `core/security`, as its manifest declares them. */
     private val screens = listOf(
         "app.shkriuss.core.security.SecurityActivity",
         "app.shkriuss.core.security.CreateRecoveryKeyActivity",
@@ -28,6 +28,8 @@ class SecurityScreensRuleTest {
         "app.shkriuss.core.security.ShowRecoveryKeyActivity",
         "app.shkriuss.core.security.AppLockActivity",
         "app.shkriuss.core.security.TurnOnAppLockActivity",
+        "app.shkriuss.core.security.HandoverActivity",
+        "app.shkriuss.core.security.GetKeysActivity",
     )
 
     private val prompt = "android.permission.USE_BIOMETRIC"
@@ -74,7 +76,7 @@ class SecurityScreensRuleTest {
 
     @Test
     fun anAppWithNoScreenOfCoreSecurityNeedsNeitherPermission() {
-        // As Catalog: it removes the six screens and both permissions.
+        // As Catalog: it removes the eight screens and both permissions.
         assertEquals(emptyList<String>(), problems(emptyList(), listOf("app.shkriuss.catalog.CatalogActivity")))
         assertEquals(emptyList<String>(), problems(emptyList(), emptyList()))
     }
@@ -97,7 +99,7 @@ class SecurityScreensRuleTest {
     }
 
     @Test
-    fun eachOfTheSixScreensAloneNeedsBothPermissions() {
+    fun eachOfTheEightScreensAloneNeedsBothPermissions() {
         screens.forEach { screen ->
             val found = problems(requests(prompt), listOf("app.shkriuss.water.WaterActivity", screen))
             assertOneProblem("<activity> $screen of core/security", found)
@@ -114,7 +116,7 @@ class SecurityScreensRuleTest {
 
     @Test
     fun theProblemNamesTheFirstScreenAndCountsTheRest() =
-        assertOneProblem("<activity> ${screens.first()} and 5 more of core/security", problems(requests(prompt), screens))
+        assertOneProblem("<activity> ${screens.first()} and 7 more of core/security", problems(requests(prompt), screens))
 
     @Test
     fun aPermissionDeclaredOrAskedAnyOtherWayDoesNotCount() {
