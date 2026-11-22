@@ -4,7 +4,7 @@ What others made and the apps contain: where it comes from, its licence
 and its notice.
 
 - Status: complete for Water and Reminders: everything that ships in
-  the release APK of Water `1.0.1` and of Reminders `1.0.0`, and
+  the release APK of Water `1.0.2` and of Reminders `1.0.0`, and
   the screen that shows it in each app.
   [How to check again](#how-to-check-again) says how to keep it right.
 - The project's own licences are in
@@ -22,7 +22,7 @@ and its notice.
 
 ## What ships in Water
 
-Seven parts, in the release APK of Water `1.0.1`
+Seven parts, in the release APK of Water `1.0.2`
 ([How the list is made](#how-the-list-is-made)).
 
 | Part in the app's list | Version | Licence | What it is in Water |
@@ -226,7 +226,7 @@ The only cryptography library of the suite
   as "Copyright 2017 Google Inc." and "Copyright 2022 Google LLC".
 - **In the jar:** no licence text and no notice. One R8 rule file,
   `META-INF/proguard/protobuf.pro`.
-- **In Water's APK:** 376 class names under `com.google.crypto.tink`,
+- **In Water's APK:** 375 class names under `com.google.crypto.tink`,
   with the 64 of Protocol Buffers below.
 
 ### Protocol Buffers, inside Tink
@@ -362,9 +362,9 @@ page names the version that was checked
    `android/feature/reminders`, and the files in their `res/raw`,
    together. Each `LicencesTest` then needs the new count.
 
-### What the APK of Water 1.0.1 holds
+### What the APK of Water 1.0.2 holds
 
-What steps 1 and 2 give for version `1.0.1`, to compare with:
+What steps 1 and 2 give for version `1.0.2`, to compare with:
 
 - The class path has the 110 modules.
 - The APK has one dex file. It holds classes of the seven parts, with
