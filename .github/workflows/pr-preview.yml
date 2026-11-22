@@ -151,8 +151,8 @@ jobs:
             echo "All steps: [Test a pull request on a phone]($guide)."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  preview:
-    name: Preview (${{ matrix.app }})
+  build:
+    name: Build preview (${{ matrix.app }})
     needs: changes
     if: needs.changes.outputs.apps != '[]'
     runs-on: ubuntu-24.04
@@ -166,8 +166,6 @@ jobs:
       cancel-in-progress: true
     env:
       APP: ${{ matrix.app }}
-      PR_NUMBER: ${{ github.event.pull_request.number }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -218,39 +216,126 @@ jobs:
             ":app:$APP:checkPreviewApkRules" \
             ":app:$APP:checkPreviewGraphicsPathUse"
 
-      # The key is made here, used once and deleted. It is not the release
-      # key, so a preview can never replace or update a real app. Every run
-      # makes a new key, so a preview cannot update an older preview either.
-      - name: Sign with a throwaway key
-        id: sign
+      # The APK leaves this job unsigned. "Sign the previews" signs the APKs
+      # of every app of the run with one key. Both files are named after
+      # the app, so that they all land in one folder there, however many
+      # apps the run built.
+      - name: Gather the unsigned APK
         run: |
           set -u
-          if ! [[ "$APP" =~ ^[a-z][a-z0-9]*$ && "$PR_NUMBER" =~ ^[0-9]+$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "::error::Unexpected app name, pull request number or commit."
+          if ! [[ "$APP" =~ ^[a-z][a-z0-9]*$ ]]; then
+            echo "::error::Unexpected app name."
             exit 1
           fi
-          build_tools="$ANDROID_HOME/build-tools/36.0.0"
           apk_dir="android/app/$APP/build/outputs/apk/preview"
-
-          # The build lists its output in output-metadata.json. Check every
-          # value read from it before using it.
-          metadata="$apk_dir/output-metadata.json"
-          app_id="$(jq -r '.applicationId' "$metadata")"
-          mapfile -t outputs < <(jq -r '.elements[] | .outputFile, .versionName' "$metadata")
-          if [ "${#outputs[@]}" -ne 2 ] ||
-             ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.-]+\.apk$ ]] ||
-             ! [[ "${outputs[1]}" =~ ^[A-Za-z0-9_.+-]+$ ]] ||
-             ! [[ "$app_id" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
+          # The build lists its output in output-metadata.json. Check the file
+          # name read from it before using it.
+          mapfile -t outputs < <(jq -r '.elements[] | .outputFile' "$apk_dir/output-metadata.json")
+          if [ "${#outputs[@]}" -ne 1 ] || ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.-]+\.apk$ ]]; then
             echo "::error::Expected exactly one preview APK in $apk_dir."
             exit 1
           fi
-          unsigned="$apk_dir/${outputs[0]}"
-          version="${outputs[1]}"
+          stage="$RUNNER_TEMP/unsigned"
+          rm -rf -- "$stage"
+          mkdir -p "$stage"
+          cp -- "$apk_dir/output-metadata.json" "$stage/$APP.output-metadata.json"
+          cp -- "$apk_dir/${outputs[0]}" "$stage/$APP.apk"
 
-          out_dir="$RUNNER_TEMP/apk"
+      - name: Upload the unsigned APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-${{ matrix.app }}
+          path: ${{ runner.temp }}/unsigned/
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  sign:
+    name: Sign the previews
+    needs: [changes, build]
+    # Runs when at least one preview was built, also when another failed.
+    if: ${{ !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.apps != '[]' && needs.build.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: pr-preview-sign-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    outputs:
+      details: ${{ steps.sign.outputs.details }}
+      signed: ${{ steps.sign.outputs.signed }}
+    env:
+      APPS: ${{ needs.changes.outputs.apps }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    # This job checks out nothing and runs no code from the pull request.
+    # It reads the APKs and the build's list of them as data only.
+    steps:
+      - name: Use JDK 21
+        run: |
+          # GitHub's Ubuntu runners come with JDK 21 installed.
+          if [ -z "${JAVA_HOME_21_X64:-}" ]; then
+            echo "::error::This runner has no JDK 21."
+            exit 1
+          fi
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+
+      # Only the build tools, for apksigner and zipalign. Keep the version in
+      # step with the build jobs.
+      - name: Install the build tools the build pins
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          log="$RUNNER_TEMP/sdkmanager.log"
+          set +o pipefail
+          if ! yes | "$sdkmanager" --licenses > "$log" 2>&1; then cat "$log"; exit 1; fi
+          set -o pipefail
+          if ! "$sdkmanager" "build-tools;36.0.0" >> "$log" 2>&1; then cat "$log"; exit 1; fi
+
+      # All into one folder: the action puts a single artifact straight into
+      # the path, but several into a folder each, unless they are merged.
+      - name: Get the unsigned APKs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: unsigned-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/unsigned
+
+      # One throwaway key signs every preview of this run, so that the
+      # previews of one run can take part in the handover between apps with
+      # each other (ADR 0041, point 22). The key is made here, used here and
+      # deleted here. Nothing of it leaves this job: no artifact, cache or
+      # output. It is not the release key, so a preview can never replace or
+      # update a real app. Every run makes a new key, so a preview cannot
+      # update a preview of an older run either.
+      - name: Sign with one throwaway key
+        id: sign
+        run: |
+          set -u
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Unexpected pull request number or commit."
+            exit 1
+          fi
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          out_dir="$RUNNER_TEMP/signed"
           mkdir -p "$out_dir"
-          name="$APP-preview-pr$PR_NUMBER-${HEAD_SHA:0:7}.apk"
-          signed="$out_dir/$name"
+
+          # A run whose builds all failed or were stopped, say by a newer
+          # push, has nothing to sign. Then no key is made, and the build
+          # jobs show why.
+          mapfile -t apps < <(jq -r '.[]' <<< "$APPS")
+          built=0
+          for app in "${apps[@]}"; do
+            if ! [[ "$app" =~ ^[a-z][a-z0-9]*$ ]]; then
+              echo "::error::Unexpected app name."
+              exit 1
+            fi
+            metadata="$RUNNER_TEMP/unsigned/$app.output-metadata.json"
+            if [ -f "$metadata" ] && [ ! -L "$metadata" ]; then built=$((built + 1)); fi
+          done
+          if [ "$built" -eq 0 ]; then
+            echo "::notice::No preview was built in this run, so none was signed. The build jobs show why."
+            { echo "signed=0"; echo "details={}"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           key_store="$RUNNER_TEMP/throwaway-key.p12"
           trap 'rm -f "$key_store"' EXIT
@@ -260,35 +345,181 @@ jobs:
             -storetype PKCS12 -keystore "$key_store" -storepass:env THROWAWAY_PASSWORD \
             -alias preview -keyalg RSA -keysize 4096 -validity 3650 \
             -dname "CN=shkriuss.app preview, O=Throwaway key"
-          "$build_tools/apksigner" sign \
-            --ks "$key_store" --ks-pass env:THROWAWAY_PASSWORD --ks-key-alias preview \
-            --out "$signed" "$unsigned"
+
+          details='{}'
+          for app in "${apps[@]}"; do
+            if ! [[ "$app" =~ ^[a-z][a-z0-9]*$ ]]; then
+              echo "::error::Unexpected app name."
+              exit 1
+            fi
+            # The build job named both files after the app. Its list of the
+            # output, output-metadata.json: check every value read from it
+            # before using it.
+            metadata="$RUNNER_TEMP/unsigned/$app.output-metadata.json"
+            unsigned="$RUNNER_TEMP/unsigned/$app.apk"
+            if [ ! -f "$metadata" ] || [ -L "$metadata" ]; then
+              echo "No preview of $app was built. It gets no APK."
+              continue
+            fi
+            app_id="$(jq -r '.applicationId' "$metadata")"
+            mapfile -t outputs < <(jq -r '.elements[] | .versionName' "$metadata")
+            if [ "${#outputs[@]}" -ne 1 ] ||
+               ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.+-]+$ ]] ||
+               ! [[ "$app_id" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
+              echo "::error::Expected exactly one preview APK of $app."
+              exit 1
+            fi
+            version="${outputs[0]}"
+            if [ ! -f "$unsigned" ] || [ -L "$unsigned" ]; then
+              echo "::error::The preview APK of $app is missing."
+              exit 1
+            fi
+
+            # One key signs every preview of the run, so an APK built as
+            # another app's preview would update that app's preview and take
+            # its data. Each APK must be its own app's preview, as the APK
+            # itself says, not only as the build's list says.
+            expected="app.shkriuss.$app.preview"
+            apk_id="$("$build_tools/aapt2" dump packagename "$unsigned")"
+            if [ "$app_id" != "$expected" ] || [ "$apk_id" != "$expected" ]; then
+              echo "::error::The preview APK of $app is not $expected."
+              exit 1
+            fi
+
+            # Nor may an APK share a Linux user with another app: with one key
+            # for the run, two previews that asked for it would read each
+            # other's data. Android reads the attribute by its resource ID,
+            # 0x0101000b, so the ID is checked as well as the name.
+            manifest="$("$build_tools/aapt2" dump xmltree --file AndroidManifest.xml "$unsigned")"
+            if [[ "$manifest" == *sharedUserId* || "$manifest" == *"(0x0101000b)"* ]]; then
+              echo "::error::The preview APK of $app asks for a shared user ID."
+              exit 1
+            fi
+
+            # Nor may it name keys that Android would accept for its later
+            # updates: an update signed with such a key would keep this
+            # preview's data. Android reads these elements by name.
+            if [[ "$manifest" == *"E: key-sets "* || "$manifest" == *"E: upgrade-key-set "* ]]; then
+              echo "::error::The preview APK of $app declares key sets for its updates."
+              exit 1
+            fi
+
+            name="$app-preview-pr$PR_NUMBER-${HEAD_SHA:0:7}.apk"
+            signed="$out_dir/$name"
+            "$build_tools/apksigner" sign \
+              --ks "$key_store" --ks-pass env:THROWAWAY_PASSWORD --ks-key-alias preview \
+              --out "$signed" "$unsigned"
+
+            # apksigner verify fails unless the signature is valid on every
+            # Android version the APK supports. With min SDK 35 it signs with
+            # scheme v3 only, which all of them read.
+            verification="$RUNNER_TEMP/apksigner-verify-$app.txt"
+            "$build_tools/apksigner" verify --verbose --print-certs "$signed" > "$verification"
+            cat "$verification"
+            "$build_tools/zipalign" -c -P 16 4 "$signed"
+            cert_sha256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: \([0-9a-f]\{64\}\)$/\1/p' "$verification")"
+            if [ -z "$cert_sha256" ]; then
+              echo "::error::apksigner did not report the certificate's SHA-256."
+              exit 1
+            fi
+            apk_sha256="$(sha256sum "$signed" | cut -d ' ' -f 1)"
+
+            details="$(jq -c --arg app "$app" --arg app_id "$app_id" --arg version "$version" \
+              --arg apk_sha256 "$apk_sha256" --arg cert_sha256 "$cert_sha256" \
+              '. + {($app): {app_id: $app_id, version: $version, apk_sha256: $apk_sha256, cert_sha256: $cert_sha256}}' <<< "$details")"
+          done
           rm -f "$key_store"
 
-          # apksigner verify fails unless the signature is valid on every
-          # Android version the APK supports. With min SDK 35 it signs with
-          # scheme v3 only, which all of them read.
-          verification="$RUNNER_TEMP/apksigner-verify.txt"
-          "$build_tools/apksigner" verify --verbose --print-certs "$signed" > "$verification"
-          cat "$verification"
-          "$build_tools/zipalign" -c -P 16 4 "$signed"
-          cert_sha256="$(sed -n 's/^Signer #1 certificate SHA-256 digest: \([0-9a-f]\{64\}\)$/\1/p' "$verification")"
-          if [ -z "$cert_sha256" ]; then
-            echo "::error::apksigner did not report the certificate's SHA-256."
+          if [ "$(jq '[.[].cert_sha256] | unique | length' <<< "$details")" -ne 1 ]; then
+            echo "::error::The previews of this run are not signed with one certificate."
             exit 1
           fi
-          apk_sha256="$(sha256sum "$signed" | cut -d ' ' -f 1)"
+          { echo "signed=$(jq 'length' <<< "$details")"; echo "details=$details"; } >> "$GITHUB_OUTPUT"
+
+      - name: Upload the signed APKs for the preview jobs
+        if: steps.sign.outputs.signed != '0'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-previews
+          path: ${{ runner.temp }}/signed/
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  preview:
+    name: Preview (${{ matrix.app }})
+    needs: [changes, sign]
+    if: ${{ !cancelled() && needs.sign.result == 'success' && needs.sign.outputs.signed != '0' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.changes.outputs.apps) }}
+    concurrency:
+      group: pr-preview-upload-${{ github.event.pull_request.number }}-${{ matrix.app }}
+      cancel-in-progress: true
+    env:
+      APP: ${{ matrix.app }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Get the signed APKs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed-previews
+          path: ${{ runner.temp }}/signed
+
+      # The details come from "Sign the previews". Check them again here.
+      - name: Find this app's APK
+        id: apk
+        env:
+          DETAILS: ${{ needs.sign.outputs.details }}
+        run: |
+          set -u
+          if ! [[ "$APP" =~ ^[a-z][a-z0-9]*$ && "$PR_NUMBER" =~ ^[0-9]+$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Unexpected app name, pull request number or commit."
+            exit 1
+          fi
+          name="$APP-preview-pr$PR_NUMBER-${HEAD_SHA:0:7}.apk"
+          signed="$RUNNER_TEMP/signed/$name"
+          # An app whose build failed or was stopped has nothing to publish.
+          # Its build job shows why, and the comment says "no APK".
+          if [ "$(jq --arg app "$APP" 'has($app)' <<< "$DETAILS")" != true ]; then
+            echo "::notice::No preview of $APP: its build failed or was stopped. See \"Build preview ($APP)\"."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f "$signed" ] || [ -L "$signed" ]; then
+            echo "::error::The signed preview of $APP is missing."
+            exit 1
+          fi
+          mapfile -t values < <(jq -r --arg app "$APP" '.[$app] | .app_id, .version, .apk_sha256, .cert_sha256' <<< "$DETAILS")
+          if [ "${#values[@]}" -ne 4 ] ||
+             ! [[ "${values[0]}" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]] ||
+             ! [[ "${values[1]}" =~ ^[A-Za-z0-9_.+-]+$ ]] ||
+             ! [[ "${values[2]}" =~ ^[0-9a-f]{64}$ ]] ||
+             ! [[ "${values[3]}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::Unexpected details of the preview of $APP."
+            exit 1
+          fi
+          if [ "$(sha256sum "$signed" | cut -d ' ' -f 1)" != "${values[2]}" ]; then
+            echo "::error::The APK is not the one that was signed."
+            exit 1
+          fi
 
           {
+            echo "found=true"
             echo "name=$name"
             echo "path=$signed"
-            echo "app_id=$app_id"
-            echo "version=$version"
-            echo "apk_sha256=$apk_sha256"
-            echo "cert_sha256=$cert_sha256"
+            echo "app_id=${values[0]}"
+            echo "version=${values[1]}"
+            echo "apk_sha256=${values[2]}"
+            echo "cert_sha256=${values[3]}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload the APK
+        if: steps.apk.outputs.found == 'true'
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -297,8 +528,8 @@ jobs:
           archive: false
           # Without a zip, the file name is the artifact name. Giving the same
           # name here lets a re-run replace the earlier upload.
-          name: ${{ steps.sign.outputs.name }}
-          path: ${{ steps.sign.outputs.path }}
+          name: ${{ steps.apk.outputs.name }}
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
           overwrite: true
 
@@ -306,6 +537,7 @@ jobs:
       # outputs cannot carry it: every app's job would overwrite the same
       # output. So the number travels as a tiny file, kept for one day.
       - name: Save the artifact number for the comment
+        if: steps.apk.outputs.found == 'true'
         env:
           ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
         run: |
@@ -318,6 +550,7 @@ jobs:
           printf '%s\n' "$ARTIFACT_ID" > "$RUNNER_TEMP/comment-data/$APP.id"
 
       - name: Upload the artifact number
+        if: steps.apk.outputs.found == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: comment-data-${{ matrix.app }}
@@ -327,13 +560,14 @@ jobs:
           overwrite: true
 
       - name: Write the summary
+        if: steps.apk.outputs.found == 'true'
         env:
-          APK_NAME: ${{ steps.sign.outputs.name }}
+          APK_NAME: ${{ steps.apk.outputs.name }}
           APK_URL: ${{ steps.upload.outputs.artifact-url }}
-          APP_ID: ${{ steps.sign.outputs.app_id }}
-          VERSION: ${{ steps.sign.outputs.version }}
-          APK_SHA256: ${{ steps.sign.outputs.apk_sha256 }}
-          CERT_SHA256: ${{ steps.sign.outputs.cert_sha256 }}
+          APP_ID: ${{ steps.apk.outputs.app_id }}
+          VERSION: ${{ steps.apk.outputs.version }}
+          APK_SHA256: ${{ steps.apk.outputs.apk_sha256 }}
+          CERT_SHA256: ${{ steps.apk.outputs.cert_sha256 }}
         run: |
           set -u
           label="${APP^} preview"
@@ -346,7 +580,7 @@ jobs:
             echo "4. Tap **Install**."
             echo
             echo "If Android says the app was not installed, uninstall **$label** first, then try again."
-            echo "Every preview is signed with a new throwaway key, so it cannot update an older preview."
+            echo "All previews of one run are signed with one new throwaway key, so a preview cannot update a preview of another run."
             echo
             echo "| Detail | Value |"
             echo "|---|---|"

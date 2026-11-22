@@ -27,6 +27,8 @@ class FlowStepActions(
     val onDone: () -> Unit = {},
     /** Opens the app lock screen, after storing the keys turned the app lock off. */
     val onAppLock: () -> Unit = {},
+    /** Keeps the key here too, when another app keeps it already. */
+    val onKeepHereToo: () -> Unit = {},
 )
 
 /** What the user can do while creating a recovery key. */
@@ -240,16 +242,29 @@ private fun FlowStepContent(step: FlowStep, actions: FlowStepActions) {
                 }
             }
         }
+        is FlowKeepAsk -> {
+            StepTitle(stringResource(R.string.sec_keep_ask_title))
+            Paragraph(stringResource(R.string.sec_keep_ask_text, step.keepers.joinToString(", ")))
+            Buttons {
+                ShkFilledButton(stringResource(R.string.sec_keep_ask_button), actions.onKeepHereToo)
+                ShkTonalButton(stringResource(R.string.sec_keep_skip), actions.onSkipKeeping)
+            }
+        }
         is FlowDone -> {
             ShkEmptyState(
                 title = stringResource(R.string.sec_done_title),
-                body = stringResource(
-                    when (step.kept) {
-                        Kept.KEPT -> R.string.sec_done_kept
-                        Kept.NOT_KEPT -> R.string.sec_done_not_kept
-                        Kept.NO_SCREEN_LOCK -> R.string.sec_done_no_lock
-                    },
-                ),
+                body = if (step.kept == Kept.NOT_KEPT && step.keptIn.isNotEmpty()) {
+                    // Another app keeps the same key: the paper is not the only copy.
+                    stringResource(R.string.sec_kept_in, step.keptIn.joinToString(", "))
+                } else {
+                    stringResource(
+                        when (step.kept) {
+                            Kept.KEPT -> R.string.sec_done_kept
+                            Kept.NOT_KEPT -> R.string.sec_done_not_kept
+                            Kept.NO_SCREEN_LOCK -> R.string.sec_done_no_lock
+                        },
+                    )
+                },
                 action = ShkStateAction(stringResource(R.string.sec_done), actions.onDone),
                 announce = true,
             )

@@ -7,6 +7,32 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
+Added:
+
+- **Get the keys from another app.** When another app of the suite on
+  this phone keeps your recovery key, Water can get its own keys from
+  it, with no words to type: on the security screen, and in the dialog
+  when a backup, a restore or the app lock first needs the key. That
+  app asks you to allow it, then shows the system prompt. Water never
+  gets the words ([Your recovery key](../../../docs/user/recovery-key.md#get-the-keys-from-another-app)).
+- Water can give another app of the suite its own keys the same way,
+  when it keeps the recovery key. It shows which app asks, and the short
+  name of the key, and waits for **Allow** and the system prompt.
+- When it does not keep the recovery key, the security screen names the
+  app that does: "The recovery key is kept in Reminders", with **Open
+  Reminders**.
+- Entering the words while another app keeps the same key first asks
+  **Keep it here too?** After **Not now**, it says which app keeps the
+  key.
+- Turning on the app lock in an app that does not keep the key can let
+  an app that keeps it check four of your words, instead of all 24.
+- Two parts of Water are open to other apps: the screen that gives
+  another app its keys, and a small check that says whether Water keeps
+  a recovery key, and its short name. Both answer only apps of the suite
+  signed exactly like Water. Any other app gets nothing. Water asks for
+  no new permission
+  ([permissions](../../../docs/security/permissions.md#the-handover-between-apps)).
+
 Changed:
 
 - **"Set up your recovery key first"**, the dialog when a backup or the

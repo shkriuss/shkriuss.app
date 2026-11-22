@@ -38,6 +38,13 @@
         android:name="android.permission.HIDE_OVERLAY_WINDOWS"
         tools:node="remove" />
 
+    <!--
+        core/security asks to see the apps with a handover screen (ADR
+        0041). Catalog removes the handover screens and holds no keys, so it
+        takes no part in a handover and needs to see no other app. Remove it.
+    -->
+    <queries tools:node="removeAll" />
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -76,6 +83,18 @@
             tools:node="remove" />
         <activity
             android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.HandoverActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.GetKeysActivity"
+            tools:node="remove" />
+
+        <!-- Catalog keeps no recovery key and answers no other app. -->
+        <provider
+            android:name="app.shkriuss.core.security.KeeperStatusProvider"
+            android:authorities="${applicationId}.keeper"
             tools:node="remove" />
 
         <!--

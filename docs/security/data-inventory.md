@@ -40,8 +40,10 @@ Catalog stores nothing of its own.
 - Its sample recovery words come from the word list inside the APK. They
   are no real key.
 - Its manifest removes the screens of `core/security`, the two
-  permissions they bring, and the emoji font loader
-  ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
+  permissions they bring, its status provider and its `<queries>`, and
+  the emoji font loader
+  ([permissions.md](permissions.md#catalog-appshkriusscatalog)). So
+  Catalog takes no part in the handover between apps.
 - Nothing leaves the phone. It shows no notification and writes no file.
 
 ## Water (`app.shkriuss.water`)
@@ -117,8 +119,31 @@ Android also keeps some things for Water, outside Water's folders:
    carries the button, the reminder's time and, for **Drank**, the
    amount in millilitres. Never a text. The alarm carries only its name.
    Water opens Android's own pages for its notification settings.
-5. **Nothing else.** Water has no network permission. Android backup and
-   device transfer are off. Water shares nothing with other apps, puts
+5. **Keys to another app of the suite on the phone**, only through the
+   handover between apps, and only when you allow it on Water's screen
+   and answer the system prompt
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+   - What goes: that app's own three keysets, which Water makes from the
+     recovery key it keeps. Never the recovery key, never Water's own
+     keys, never a record.
+   - To whom: only the app that Android names as the one that asked, and
+     only if it is a data app of the suite signed with exactly Water's
+     own current certificate
+     ([permissions.md](permissions.md#the-handover-between-apps)).
+   - How: in the answer of Water's handover screen, which Android hands
+     to that app. Never in a file, the clipboard, a notification, a
+     screen's saved state or a log.
+   - When another app turns its app lock on, you can let Water check
+     four of your words instead. Water then gives that app its keys in
+     the same way, marked "words checked". It stores nothing.
+   - Water's status provider tells such an app, when it asks, whether
+     Water keeps the recovery key now, and its short name. Nothing else,
+     and nothing to any other app.
+   - Water also takes its own keys from another app that keeps the
+     recovery key, the same way, when you tap **Get the keys from** that
+     app.
+6. **Nothing else.** Water has no network permission. Android backup and
+   device transfer are off. Water shares nothing else with other apps, puts
    nothing on the clipboard itself and writes no log. Its number fields
    offer the usual copy and paste, so what you copy from them goes to
    the clipboard.
@@ -191,8 +216,8 @@ Android Keystore holds.
 2. **A restore** reads one file that you pick. It writes nothing outside
    Reminders.
 
-Two more things leave Reminders' storage, to Android. They stay inside
-the phone:
+Three more things leave Reminders' storage. They stay inside the
+phone:
 
 3. **Notifications.** A reminder shows its title, and "Every day",
    "Missed: 09:00" or "Snoozed. It was due at 09:00.", with the buttons
@@ -203,7 +228,7 @@ the phone:
      that app notification access. Such an app can pass them on to a
      watch.
    - Reminders does not mark its reminders "local only", as Water does
-     not ([spec.md](../apps/reminders/spec.md#open), item 2).
+     not ([spec.md](../apps/reminders/spec.md#open), item 1).
    - With the app lock on, a reminder shows only its hidden form:
      "Reminders" and "The app lock hides this notification. Open the app
      to see it.", without its title and without buttons. Unless **Show
@@ -217,10 +242,19 @@ the phone:
    carries the ID, the button, the reminder's time and, for **Snooze 10
    min**, the 10 minutes. Never a title. Reminders opens Android's own
    pages for its notification settings.
+5. **Keys to another app of the suite on the phone**, through the
+   handover between apps, as in Water: only when you allow it on
+   Reminders' screen and answer the system prompt, only that app's own
+   keysets, made from the recovery key Reminders keeps, and only to a
+   data app of the suite signed with exactly Reminders' own current
+   certificate ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+   The check of four words works as in Water. Its status provider says
+   only whether Reminders keeps the recovery key now, and its short
+   name. Reminders takes its own keys from a keeper the same way.
 
 Reminders has no network permission. Android backup and device transfer
 are off. It writes no file outside its storage but the backup you make,
-shares nothing with other apps, puts nothing on the clipboard itself and
+shares nothing else with other apps, puts nothing on the clipboard itself and
 writes no log. The title field offers the usual copy and paste, so a
 title you copy goes to the clipboard.
 

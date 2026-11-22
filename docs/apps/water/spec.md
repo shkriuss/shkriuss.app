@@ -1000,6 +1000,15 @@ recovery key. Three things do:
      (`SecurityScreens.enterIntent`). For example, words you made in
      another app of the suite, or on your old phone.
    - **Not now**: closes the dialog.
+3. When another app of the suite keeps a recovery key on this phone,
+   the dialog also says: "Another app of the suite keeps a recovery key
+   on this phone. This app can get its own keys from it, with no words
+   to type. It never gets the words." Under it, one button for each
+   such app, **Get the keys from Reminders**, opens "Get the keys"
+   (`SecurityScreens.getKeysIntent`,
+   [ADR 0041](../../adr/0041-the-handover-between-apps.md)). When the
+   apps keep different recovery keys, each button also names the key's
+   short name.
 
 **Restore a backup**, with no recovery key:
 
@@ -1009,6 +1018,8 @@ recovery key. Three things do:
    **Cancel**.
 3. There is no "create" here: a new recovery key can never open an old
    backup.
+4. The same sentence and **Get the keys from** buttons as in step 3
+   above follow, when another app of the suite keeps a recovery key.
 
 **Any of the three**, after a setup that stopped:
 
@@ -1193,7 +1204,13 @@ off do not matter for Water.
    ([permissions.md](../../security/permissions.md#catalog-appshkriusscatalog)).
 3. Android backup and device-to-device transfer are turned off. The
    backup file is the only backup ([backup.md](../../user/backup.md)).
-4. Exported: only `WaterActivity`, the launcher screen.
+4. Exported: `WaterActivity`, the launcher screen, and the two parts of
+   the handover between apps from `core/security`
+   ([ADR 0041](../../adr/0041-the-handover-between-apps.md)): the
+   handover screen and the status provider, authority
+   `app.shkriuss.water.keeper`. Both are open to every app, with no
+   permission, but answer only apps of the suite signed with the same
+   key. Any other app gets nothing.
    `androidx.profileinstaller` adds a receiver that is exported to callers
    with `android.permission.DUMP`, for developer tools. Water's manifest
    removes it (owner's decision). The start-up profile
@@ -1265,7 +1282,7 @@ off do not matter for Water.
 - Moving a drink to another day. Delete it and add it again.
 - UK fluid ounces, litres or cups as units.
 - An undo button in the notification.
-- Sync and the handover between apps.
+- Sync.
 - Georgian. All text is in string resources, ready for it.
 - "Restore as it was"
   ([backup-format.md](../../architecture/backup-format.md#open-questions),

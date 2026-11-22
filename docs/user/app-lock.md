@@ -63,6 +63,13 @@ paper safe.
    - **It does not keep the key.** Type all 24 words from your paper,
      as on the screen **Enter your recovery key**. Then tap **Check the
      words**. The words are not kept on the phone by this.
+   - **It does not keep the key, but another app of the suite keeps
+     the same key**, for example Water. Then the warning also offers
+     **Check the words in Water**. Tap it instead of typing all 24
+     words. Water opens: tap **Allow**, answer the system prompt, type
+     the four words Water asks for, and tap **Check**. Then you are back
+     in this app. If it did not work, the warning says so. Try again, or
+     type all 24 words.
 4. Answer the system prompt once more. This makes the key of the app
    lock.
 5. The screen says **The app lock is on**. Tap **Done**.

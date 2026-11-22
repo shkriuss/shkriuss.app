@@ -29,7 +29,21 @@ import app.shkriuss.core.security.EnterContent
 import app.shkriuss.core.security.EnterStartOverOffer
 import app.shkriuss.core.security.EnterWords
 import app.shkriuss.core.security.FlowDone
+import app.shkriuss.core.security.FlowKeepAsk
 import app.shkriuss.core.security.FlowKeeping
+import app.shkriuss.core.security.GetKeysActions
+import app.shkriuss.core.security.GetKeysContent
+import app.shkriuss.core.security.GetKeysDone
+import app.shkriuss.core.security.GetKeysFailed
+import app.shkriuss.core.security.GetKeysProblem
+import app.shkriuss.core.security.HandoverActions
+import app.shkriuss.core.security.HandoverAsk
+import app.shkriuss.core.security.HandoverContent
+import app.shkriuss.core.security.HandoverFailed
+import app.shkriuss.core.security.HandoverFourWords
+import app.shkriuss.core.security.HandoverMode
+import app.shkriuss.core.security.HandoverNotKept
+import app.shkriuss.core.security.KeeperApp
 import app.shkriuss.core.security.KeepNote
 import app.shkriuss.core.security.Kept
 import app.shkriuss.core.security.KeyRow
@@ -58,6 +72,22 @@ enum class SecuritySample(@param:StringRes val title: Int) {
     EnterStartOver(R.string.sample_enter_start_over),
     EnterDoneAppLockOff(R.string.sample_enter_done_app_lock_off),
     ShowTheWords(R.string.sample_show_words),
+    SecurityKeepers(R.string.sample_security_keepers),
+    SecurityKeptElsewhere(R.string.sample_security_kept_elsewhere),
+    EnterKeepHereToo(R.string.sample_enter_keep_here_too),
+    EnterDoneKeptElsewhere(R.string.sample_enter_done_kept_elsewhere),
+    HandoverAskKeys(R.string.sample_handover_keys),
+    HandoverAskCheck(R.string.sample_handover_check),
+    HandoverFour(R.string.sample_handover_four),
+    HandoverNotKeeper(R.string.sample_handover_not_kept),
+    GetKeysHasThem(R.string.sample_get_keys_done),
+    GetKeysOtherKey(R.string.sample_get_keys_other_key),
+    SecurityUnfinishedKeeper(R.string.sample_security_unfinished_keeper),
+    SecurityRepairKeeper(R.string.sample_security_repair_keeper),
+    SecurityAppLockResetKeeper(R.string.sample_security_app_lock_reset_keeper),
+    GetKeysHasThemAppLockOff(R.string.sample_get_keys_done_app_lock_off),
+    HandoverDamaged(R.string.sample_handover_damaged),
+    HandoverAskAfterCancel(R.string.sample_handover_cancelled),
 }
 
 /**
@@ -164,7 +194,130 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
         SecuritySample.EnterDoneAppLockOff ->
             EnterContent(FlowDone(Kept.KEPT, appLockOff = true), false, EnterActions(onBack = onBack), modifier)
         SecuritySample.ShowTheWords -> ShowContent(ShowWords(sampleWords), false, ShowActions(onBack = onBack), modifier)
+        SecuritySample.SecurityKeepers -> SecurityContent(
+            SecurityState(loaded = true, keepers = listOf(sampleKeeper, KeeperApp("app.shkriuss.meals", SAMPLE_OTHER_KEEPER, "5e6f7a8b"))),
+            false,
+            security,
+            modifier,
+        )
+        SecuritySample.SecurityKeptElsewhere -> SecurityContent(
+            SecurityState(
+                loaded = true,
+                recoveryKey = RecoveryKeyState.SET_UP,
+                keyId = SAMPLE_KEY_ID,
+                kept = Kept.NOT_KEPT,
+                keys = listOf(
+                    KeyRow(HardwareKeyKind.BACKGROUND, SecurityLevel.STRONGBOX),
+                    KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.STRONGBOX),
+                ),
+                keepers = listOf(sampleKeeper),
+            ),
+            false,
+            security,
+            modifier,
+        )
+        SecuritySample.EnterKeepHereToo ->
+            EnterContent(FlowKeepAsk(listOf(SAMPLE_KEEPER)), false, EnterActions(onBack = onBack), modifier)
+        SecuritySample.EnterDoneKeptElsewhere ->
+            EnterContent(FlowDone(Kept.NOT_KEPT, keptIn = listOf(SAMPLE_KEEPER)), false, EnterActions(onBack = onBack), modifier)
+        SecuritySample.HandoverAskKeys -> HandoverContent(
+            HandoverAsk(HandoverMode.KEYS, SAMPLE_KEY_ID),
+            SAMPLE_ASKER,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+        )
+        SecuritySample.HandoverAskCheck -> HandoverContent(
+            HandoverAsk(HandoverMode.CHECK_WORDS, SAMPLE_KEY_ID),
+            SAMPLE_ASKER,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+        )
+        SecuritySample.HandoverFour -> HandoverFourSample(onBack, modifier)
+        SecuritySample.HandoverNotKeeper ->
+            HandoverContent(HandoverNotKept, SAMPLE_ASKER, SAMPLE_KEEPER, false, HandoverActions(onDeny = onBack), modifier)
+        SecuritySample.GetKeysHasThem ->
+            GetKeysContent(GetKeysDone(SAMPLE_KEY_ID), SAMPLE_KEEPER, false, GetKeysActions(onDone = onBack), modifier)
+        SecuritySample.GetKeysOtherKey -> GetKeysContent(
+            GetKeysFailed(GetKeysProblem.DIFFERENT_KEY, "5e6f7a8b"),
+            SAMPLE_KEEPER,
+            false,
+            GetKeysActions(onDone = onBack),
+            modifier,
+        )
+        SecuritySample.SecurityUnfinishedKeeper -> SecurityContent(
+            SecurityState(
+                loaded = true,
+                recoveryKey = RecoveryKeyState.UNFINISHED,
+                keys = listOf(KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.TEE)),
+                keepers = listOf(sampleKeeper),
+            ),
+            false,
+            security,
+            modifier,
+        )
+        // A damaged record: no short name, so every keeper is offered (ADR 0041, point 14).
+        SecuritySample.SecurityRepairKeeper -> SecurityContent(
+            SecurityState(
+                loaded = true,
+                recoveryKey = RecoveryKeyState.SET_UP,
+                kept = Kept.NOT_KEPT,
+                needsRepair = true,
+                keys = listOf(KeyRow(HardwareKeyKind.BACKGROUND, SecurityLevel.TEE), KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.TEE)),
+                keepers = listOf(sampleKeeper),
+            ),
+            false,
+            security,
+            modifier,
+        )
+        SecuritySample.SecurityAppLockResetKeeper -> SecurityContent(
+            SecurityState(
+                loaded = true,
+                recoveryKey = RecoveryKeyState.SET_UP,
+                keyId = SAMPLE_KEY_ID,
+                kept = Kept.NOT_KEPT,
+                keys = listOf(KeyRow(HardwareKeyKind.BACKGROUND, SecurityLevel.TEE), KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.TEE)),
+                appLock = AppLockState.RESET,
+                keepers = listOf(sampleKeeper),
+            ),
+            false,
+            security,
+            modifier,
+        )
+        SecuritySample.GetKeysHasThemAppLockOff ->
+            GetKeysContent(GetKeysDone(SAMPLE_KEY_ID, appLockOff = true), SAMPLE_KEEPER, false, GetKeysActions(onDone = onBack), modifier)
+        SecuritySample.HandoverDamaged ->
+            HandoverContent(HandoverFailed(damaged = true), SAMPLE_ASKER, SAMPLE_KEEPER, false, HandoverActions(onDeny = onBack), modifier)
+        SecuritySample.HandoverAskAfterCancel -> HandoverContent(
+            HandoverAsk(HandoverMode.KEYS, SAMPLE_KEY_ID, note = KeepNote.CANCELLED),
+            SAMPLE_ASKER,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+        )
     }
+}
+
+/** Four of the words, on a keeper's handover screen. The fields can be typed into, as on the create screen. */
+@OptIn(SecurityScreenSamples::class)
+@Composable
+private fun HandoverFourSample(onBack: () -> Unit, modifier: Modifier) {
+    var four by remember { mutableStateOf(HandoverFourWords(listOf(2, 7, 16, 21), listOf(sampleWords[1], "", "", ""))) }
+    HandoverContent(
+        screen = four,
+        asker = SAMPLE_ASKER,
+        keeper = SAMPLE_KEEPER,
+        previewBuild = false,
+        actions = HandoverActions(
+            onDeny = onBack,
+            onAnswerChange = { index, text -> four = four.copy(answers = four.answers.toMutableList().also { it[index] = text }) },
+        ),
+        modifier = modifier,
+    )
 }
 
 /**
@@ -215,3 +368,11 @@ private fun EnterSample(onBack: () -> Unit, modifier: Modifier) {
 
 /** The public short name the samples show. It is no real key ID. */
 private const val SAMPLE_KEY_ID = "1a2b3c4d"
+
+/** The names of the sample apps of the handover. No app is asked: Catalog holds no keys. */
+private const val SAMPLE_KEEPER = "Water"
+private const val SAMPLE_ASKER = "Reminders"
+private const val SAMPLE_OTHER_KEEPER = "Meals"
+
+/** A keeper of the sample key, for the samples of the handover. */
+internal val sampleKeeper = KeeperApp("app.shkriuss.water", SAMPLE_KEEPER, SAMPLE_KEY_ID)

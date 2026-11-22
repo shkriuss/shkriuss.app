@@ -28,7 +28,7 @@ Pages:
   you. On the hub website at `/privacy/`.
 - [Your recovery key](recovery-key.md): what the 24 words are, when an
   app asks for them, how to create them, enter them and see them again,
-  the security screen, and
+  how an app gets its keys from another app, the security screen, and
   what to do when setting up stopped or a key file is damaged. On the
   hub website at `/recovery-key/`.
 - [The app lock](app-lock.md): what the app lock protects and what it

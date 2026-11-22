@@ -30,6 +30,7 @@ abstract class FlowViewModel<S : Any> internal constructor(
     protected val crypto: ShkCrypto,
     private val background: CoroutineDispatcher,
     first: S,
+    private val suite: SuiteApps = SuiteApps.None,
 ) : ViewModel() {
     private val screen = MutableStateFlow(first)
 
@@ -39,6 +40,10 @@ abstract class FlowViewModel<S : Any> internal constructor(
     /** The recovery key the flow keeps, between storing and keeping. Set on the background thread. */
     @Volatile
     private var keeping: RecoveryKey? = null
+
+    /** The other apps that keep the key now being kept, by name. Named on the done screen after **Not now**. */
+    @Volatile
+    private var otherKeepers: List<String> = emptyList()
 
     @Volatile
     private var requests = 0
@@ -78,9 +83,22 @@ abstract class FlowViewModel<S : Any> internal constructor(
         }
     }
 
-    /** After the keys are stored: keep [key] on this phone, if the phone can. */
-    protected suspend fun keep(key: RecoveryKey) {
+    /**
+     * After the keys are stored: keep [key] on this phone, if the phone
+     * can. With [askFirst], when another app keeps the same key already,
+     * the user is asked first ([FlowKeepAsk]).
+     */
+    protected suspend fun keep(key: RecoveryKey, askFirst: Boolean = true) {
         keeping = key
+        if (askFirst) {
+            otherKeepers = emptyList()
+            val others = suite.keepers().filter { it.keyId == key.keyId.toString() }
+            if (others.isNotEmpty() && !crypto.setup.keepsRecoveryKey()) {
+                otherKeepers = others.map { it.label }
+                show(flowScreen(FlowKeepAsk(otherKeepers)))
+                return
+            }
+        }
         val step = crypto.setup.beginKeepRecoveryKey(key)
         if (step == null) {
             keeping = null
@@ -99,13 +117,25 @@ abstract class FlowViewModel<S : Any> internal constructor(
     /** The user asks for the system prompt again, after closing it. */
     fun onKeepAgain() {
         val key = keeping ?: return
-        work { keep(key) }
+        work { keep(key, askFirst = false) }
     }
 
-    /** The user keeps only the paper copy. */
+    /** Another app keeps this key already, and the user keeps it here too. */
+    fun onKeepHereToo() {
+        val key = keeping ?: return
+        if (state.value !is FlowKeepAsk) return
+        show(flowScreen(FlowWorking))
+        work { keep(key, askFirst = false) }
+    }
+
+    /**
+     * The user does not keep the key here: the paper copy, and the other
+     * apps that keep it, if any. Also after **Keep it here too** and a
+     * prompt that was closed or failed.
+     */
     fun onSkipKeeping() {
         keeping = null
-        show(flowScreen(FlowDone(Kept.NOT_KEPT, appLockWentOff)))
+        show(flowScreen(FlowDone(Kept.NOT_KEPT, appLockWentOff, otherKeepers)))
     }
 
     /** How the system prompt of [request] ended. A request that is no longer shown is ignored. */

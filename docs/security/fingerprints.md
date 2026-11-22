@@ -33,8 +33,9 @@ form:
 | Reminders | `app.shkriuss.reminders` |
 
 Preview APKs from pull requests have a package name that ends in
-`.preview`. Each one is signed with its own throwaway key, never with this
-one ([ci.md](../development/ci.md#pr-preview)).
+`.preview`. All previews of one run share one throwaway key, made and
+deleted in one job, never this one
+([ci.md](../development/ci.md#pr-preview)).
 
 ## How to check an installed app
 

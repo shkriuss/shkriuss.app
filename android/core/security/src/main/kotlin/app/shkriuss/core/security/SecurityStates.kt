@@ -87,11 +87,20 @@ data object FlowWorking : FlowStep
 data class FlowKeeping(val prompt: PromptRequest? = null, val note: KeepNote? = null) : FlowStep
 
 /**
+ * Another app, or several, already keeps this recovery key ([keepers], by
+ * name). The user chooses whether to keep it here too, before the system
+ * prompt ("Creating it", step 6, in crypto-design.md).
+ */
+data class FlowKeepAsk(val keepers: List<String>) : FlowStep
+
+/**
  * The flow is done. [appLockOff] is true when storing the keys turned the
  * app lock off: a repaired key file of the app lock, or the words after
  * the app lock was reset. The screen then says how to turn it on again.
+ * [keptIn] names the other apps that keep this recovery key, when the user
+ * chose not to keep it here too: then the paper is not the only copy.
  */
-data class FlowDone(val kept: Kept, val appLockOff: Boolean = false) : FlowStep
+data class FlowDone(val kept: Kept, val appLockOff: Boolean = false, val keptIn: List<String> = emptyList()) : FlowStep
 
 /** The flow stopped. Nothing was stored, or what was stored is whole. */
 data class FlowFailed(val problem: SecurityProblem) : FlowStep
@@ -175,7 +184,20 @@ data class SecurityState(
     val appLock: AppLockState = AppLockState.OFF,
     /** True if the keys could not be read now. */
     val failed: Boolean = false,
+    /** The other apps of the suite on this phone that keep a recovery key (ADR 0041). */
+    val keepers: List<KeeperApp> = emptyList(),
 ) {
+    /** The keepers of this app's own recovery key. */
+    val ownKeepers: List<KeeperApp> get() = keepers.filter { it.keyId == keyId }
+
+    /**
+     * The keepers that the "Get the keys" choices offer (ADR 0041, point
+     * 14): those of this app's own recovery key when its short name is
+     * known, and every keeper when it is not, as when `record` is
+     * damaged. Storing refuses the keys of another recovery key anyway.
+     */
+    val getKeysKeepers: List<KeeperApp> get() = if (keyId != null) ownKeepers else keepers
+
     /** True if any key is not protected by hardware. */
     val softwareOnly: Boolean get() = keys.any { it.level == SecurityLevel.SOFTWARE }
 }
