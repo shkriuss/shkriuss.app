@@ -386,7 +386,9 @@ part with a real app or with a preview of another run.
 One job per app the run signed, side by side:
 
 1. Takes its app's APK from `signed-previews` and checks it against the
-   SHA-256 that "Sign the previews" handed over.
+   SHA-256 that "Sign the previews" handed over. An app whose build failed
+   or was stopped has no APK: the job only leaves a notice, and the build
+   job shows the result.
 2. Uploads the APK as it is, not zipped, named
    `<app>-preview-pr<number>-<commit>.apk`.
 3. Writes a summary with the link to tap, the APK's SHA-256 and the
