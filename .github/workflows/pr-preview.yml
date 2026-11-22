@@ -239,6 +239,7 @@ jobs:
       cancel-in-progress: true
     outputs:
       details: ${{ steps.sign.outputs.details }}
+      signed: ${{ steps.sign.outputs.signed }}
     env:
       APPS: ${{ needs.changes.outputs.apps }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -291,6 +292,25 @@ jobs:
           out_dir="$RUNNER_TEMP/signed"
           mkdir -p "$out_dir"
 
+          # A run whose builds all failed or were stopped, say by a newer
+          # push, has nothing to sign. Then no key is made, and the build
+          # jobs show why.
+          mapfile -t apps < <(jq -r '.[]' <<< "$APPS")
+          built=0
+          for app in "${apps[@]}"; do
+            if ! [[ "$app" =~ ^[a-z][a-z0-9]*$ ]]; then
+              echo "::error::Unexpected app name."
+              exit 1
+            fi
+            metadata="$RUNNER_TEMP/unsigned/unsigned-$app/output-metadata.json"
+            if [ -f "$metadata" ] && [ ! -L "$metadata" ]; then built=$((built + 1)); fi
+          done
+          if [ "$built" -eq 0 ]; then
+            echo "::notice::No preview was built in this run, so none was signed. The build jobs show why."
+            { echo "signed=0"; echo "details={}"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           key_store="$RUNNER_TEMP/throwaway-key.p12"
           trap 'rm -f "$key_store"' EXIT
           THROWAWAY_PASSWORD="$(openssl rand -hex 32)"
@@ -301,7 +321,6 @@ jobs:
             -dname "CN=shkriuss.app preview, O=Throwaway key"
 
           details='{}'
-          mapfile -t apps < <(jq -r '.[]' <<< "$APPS")
           for app in "${apps[@]}"; do
             if ! [[ "$app" =~ ^[a-z][a-z0-9]*$ ]]; then
               echo "::error::Unexpected app name."
@@ -379,17 +398,14 @@ jobs:
           done
           rm -f "$key_store"
 
-          if [ "$(jq 'length' <<< "$details")" -eq 0 ]; then
-            echo "::error::No preview was built, so none was signed."
-            exit 1
-          fi
           if [ "$(jq '[.[].cert_sha256] | unique | length' <<< "$details")" -ne 1 ]; then
             echo "::error::The previews of this run are not signed with one certificate."
             exit 1
           fi
-          echo "details=$details" >> "$GITHUB_OUTPUT"
+          { echo "signed=$(jq 'length' <<< "$details")"; echo "details=$details"; } >> "$GITHUB_OUTPUT"
 
       - name: Upload the signed APKs for the preview jobs
+        if: steps.sign.outputs.signed != '0'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: signed-previews
@@ -401,7 +417,7 @@ jobs:
   preview:
     name: Preview (${{ matrix.app }})
     needs: [changes, sign]
-    if: ${{ !cancelled() && needs.sign.result == 'success' }}
+    if: ${{ !cancelled() && needs.sign.result == 'success' && needs.sign.outputs.signed != '0' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:

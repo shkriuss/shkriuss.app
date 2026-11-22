@@ -349,8 +349,11 @@ request as it would be after merging.
 ### Job "Sign the previews"
 
 One job for the whole run. It runs when at least one preview was built,
-also when another failed. It checks out nothing and runs no code from the
-pull request. It reads the APKs and their lists as data only.
+also when another failed. When none was built, because every build
+failed or a newer push stopped them, it leaves a notice, makes no key and
+ends, and the preview jobs are skipped. It checks out nothing and runs no
+code from the pull request. It reads the APKs and their lists as data
+only.
 
 1. Installs only the build tools, for `apksigner` and `zipalign`.
 2. Makes one throwaway RSA 4096 key, with a random password that is never
