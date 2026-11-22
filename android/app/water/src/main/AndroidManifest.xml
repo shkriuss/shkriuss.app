@@ -4,10 +4,10 @@
     docs/security/permissions.md. It holds five, which are its allow list
     in the APK rules check, and none of its own:
 
-    - the three of core/notify, for its reminders (step 2.4). core/notify
-      adds them and its three receivers, none exported;
+    - the three of core/notify, for its reminders. core/notify adds them
+      and its three receivers, none exported;
     - the two of core/security, for the system prompt (ADR 0031) and for
-      hiding other apps' windows (ADR 0033) (step 2.5). core/security adds
+      hiding other apps' windows (ADR 0033). core/security adds
       them, its eight screens and its status provider. Of these, only the
       handover screen and the status provider are exported, with no
       permission: each checks the calling app first (ADR 0041). Settings
@@ -69,8 +69,7 @@
             (docs/apps/water/spec.md, "Permissions"), and needs no such
             tool. The start-up profile is
             still installed when the app starts, by the profile installer's
-            initializer in androidx.startup. Owner's decision on pull
-            request 40.
+            initializer in androidx.startup. Owner's decision.
 
             As for the provider below, lint cannot see this class: the
             library comes in only at run time. The removal works, which

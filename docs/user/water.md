@@ -77,7 +77,8 @@ Good to know:
 **History** lists every day since your first drink, newest first. Each
 row shows the day, such as "Yesterday" or "Thu, 12 Nov", how much you
 drank and that day's goal, such as "1,800 of 2,000 ml", and "Goal
-reached" when you reached it. Days with no drink show "0 ml".
+reached" when you reached it. A day with no drink shows "0 of" its
+goal, such as "0 of 2,000 ml".
 
 1. Tap a day. It opens, with its drinks.
 2. Tap **Add a drink** to add a drink on that day. The time starts at
@@ -143,7 +144,8 @@ The two buttons:
 - **Drank 150 ml** logs a drink of your first quick amount, now. The
   next reminder then comes one interval after it. If Water cannot save
   the drink, the reminder stays, and you can press **Drank** again.
-- **Later** reminds you again in 15 minutes.
+- **Later** reminds you again in 15 minutes. If that is after
+  **Until**, no more reminder comes today.
 - On the lock screen, a button first asks you to unlock the phone.
   Before the unlock it does nothing.
 - To undo **Drank**, open Water, tap the drink at the top of Today, and
@@ -273,50 +275,68 @@ Version 1.0.1 has these known problems and limits.
 Not checked on a phone yet:
 
 1. How TalkBack reads "ml" and "fl oz" on the buttons of a reminder.
+2. Whether TalkBack goes back to the item that opened a sheet or a
+   dialog, when it closes. Water does nothing of its own for it.
 
 Limits of reminders:
 
-2. No reminder comes after a restart until you unlock the phone once.
+3. No reminder comes after a restart until you unlock the phone once.
    Water cannot run before that.
-3. A missed reminder is skipped, never shown late. A reminder can come
+4. A missed reminder is skipped, never shown late. A reminder can come
    up to a minute late.
-4. No reminder comes while Water's profile or Private Space is stopped,
+5. No reminder comes while Water's profile or Private Space is stopped,
    or after **Force stop**, until you open Water again.
-5. A reminder's text and buttons reach apps you gave notification
+6. A reminder's text and buttons reach apps you gave notification
    access. Such an app can pass them on to a watch, and can press the
    buttons without the phone's unlock. Water does not
    mark its reminders "local only". Whether it should, or offers a
    setting, is not decided yet.
-6. With the app lock off, the lock screen shows a reminder's text if
+7. With the app lock off, the lock screen shows a reminder's text if
    your phone's setting allows it.
-7. When the clocks go back at the end of summer time, one hour of the
+8. When the clocks go back at the end of summer time, one hour of the
    night comes twice. A drink you log in the second of the two counts
    as if you logged it in the first, so the next reminder can come up
    to an hour early, that one night.
 
+Limits of the recovery key:
+
+9. Water sees only the apps of the suite that keep your recovery key
+   and are signed like it. If another app has your key but does not
+   keep it on this phone, tap **I already have one** yourself, and enter
+   the same words. If it keeps it, Water offers **Get the keys from**
+   that app ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
+
 Limits of the app lock:
 
-8. If you choose a time in **Lock the app** and turn the screen off
-   from another app, Water may stay unlocked until that time has passed
-   ([The app lock](app-lock.md#when-the-app-locks)).
-9. The app lock hides your drinks. It does not encrypt them. Android's
-   own encryption protects them, with your screen lock.
+10. If you choose a time in **Lock the app** and turn the screen off
+    from another app, Water may stay unlocked until that time has passed
+    ([The app lock](app-lock.md#when-the-app-locks)).
+11. The app lock hides your drinks. It does not encrypt them. Android's
+    own encryption protects them, with your screen lock.
 
 Limits of backups:
 
-10. A restore keeps the newest edit of each drink, goal and setting. It
+12. A restore keeps the newest edit of each drink, goal and setting. It
     cannot bring back exactly how Water was on the day of the backup.
-11. Some storage apps do not let Water read a file again right away,
+13. Some storage apps do not let Water read a file again right away,
     or hand back an older copy. Water then says "Backup written, not
     checked". Check such a file with **Restore a backup**, and tap
     **Cancel** at the question.
 
 Other:
 
-12. Never type your real recovery words into a preview build of a pull
+14. When the phone's storage is completely full, a quick amount,
+    **Save**, a change in **Settings** or a restore can close Water.
+    What was saved before stays, and a restore that stops changes
+    nothing. A snooze can be lost when Water stops. Free some room on
+    the phone.
+15. Never type your real recovery words into a preview build of a pull
     request. Use test words.
-13. No accessibility checks run on an emulator for Water. A TalkBack
+16. No accessibility checks run on an emulator for Water. A TalkBack
     pass on a phone stands in for them.
+17. Two dialogs have no screenshot test, because a test cannot reach
+    them: "No backup was made" and the answer "No keys" of a restore.
+    Their words were not checked at a large font size.
 
 Not in version 1.0.1:
 
