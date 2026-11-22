@@ -375,10 +375,10 @@ class HandoverGateTest {
         val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
         while (model.state.value != HandoverNotKept && System.nanoTime() < deadline) Thread.sleep(10)
         assertEquals("the keeper keeps no key", HandoverNotKept, model.state.value)
-        // Then the screen draws the new state. That takes the main thread's turns and some real time too.
+        // The screen takes the new state on the main thread.
         while (refusalOf(screen) == null && System.nanoTime() < deadline) {
-            Thread.sleep(10)
-            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(20))
+            shadowOf(Looper.getMainLooper()).idle()
+            if (refusalOf(screen) == null) Thread.sleep(10)
         }
         assertEquals("set while the screen shows, so Back gives it too", HandoverRefusal.NOT_KEEPER.name, refusalOf(screen))
         screen.onBackPressedDispatcher.onBackPressed()

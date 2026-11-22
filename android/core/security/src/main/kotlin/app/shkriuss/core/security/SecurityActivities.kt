@@ -10,8 +10,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.lifecycleScope
 import app.shkriuss.core.crypto.ShkCrypto
 import app.shkriuss.core.design.ShkTheme
+import kotlinx.coroutines.launch
 
 /**
  * The ViewModel of this screen, made once with the app's [ShkCrypto] and
@@ -343,6 +345,13 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
             return
         }
         val model = flowViewModel { HandoverViewModel(it, request.asker, request.mode) }.also { this.model = it }
+        // Whichever way the screen closes, Back too, it says why it gave no keys (ADR 0041, point 16). Set from the
+        // screen's state on the main thread, not from a frame of the UI. The keys' RESULT_OK is set only by handOver.
+        lifecycleScope.launch {
+            model.state.collect { screen ->
+                if (screen != HandoverReady) setResult(Activity.RESULT_CANCELED, refusalResult(closingRefusal(screen)))
+            }
+        }
         val asker = suite.labelOf(request.askerPackage)
         val keeper = applicationInfo.loadLabel(packageManager).toString()
         val actions = HandoverActions(
@@ -358,11 +367,7 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
         setContent {
             ShkTheme {
                 val screen by model.state.collectAsState()
-                LaunchedEffect(screen) {
-                    // Whichever way the screen closes, Back too, it says why it gave no keys (ADR 0041, point 16).
-                    setResult(Activity.RESULT_CANCELED, refusalResult(closingRefusal(screen)))
-                    if (screen == HandoverReady) handOver(model, request, suite)
-                }
+                LaunchedEffect(screen) { if (screen == HandoverReady) handOver(model, request, suite) }
                 HandoverContent(screen, asker, keeper, isPreviewBuild, actions)
                 SystemPrompt(
                     request = (screen as? HandoverAsk)?.prompt,
