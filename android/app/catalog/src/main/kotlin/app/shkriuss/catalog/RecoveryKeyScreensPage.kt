@@ -39,6 +39,7 @@ import app.shkriuss.core.security.GetKeysProblem
 import app.shkriuss.core.security.HandoverActions
 import app.shkriuss.core.security.HandoverAsk
 import app.shkriuss.core.security.HandoverContent
+import app.shkriuss.core.security.HandoverFailed
 import app.shkriuss.core.security.HandoverFourWords
 import app.shkriuss.core.security.HandoverMode
 import app.shkriuss.core.security.HandoverNotKept
@@ -81,6 +82,12 @@ enum class SecuritySample(@param:StringRes val title: Int) {
     HandoverNotKeeper(R.string.sample_handover_not_kept),
     GetKeysHasThem(R.string.sample_get_keys_done),
     GetKeysOtherKey(R.string.sample_get_keys_other_key),
+    SecurityUnfinishedKeeper(R.string.sample_security_unfinished_keeper),
+    SecurityRepairKeeper(R.string.sample_security_repair_keeper),
+    SecurityAppLockResetKeeper(R.string.sample_security_app_lock_reset_keeper),
+    GetKeysHasThemAppLockOff(R.string.sample_get_keys_done_app_lock_off),
+    HandoverDamaged(R.string.sample_handover_damaged),
+    HandoverAskAfterCancel(R.string.sample_handover_cancelled),
 }
 
 /**
@@ -239,6 +246,57 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
             SAMPLE_KEEPER,
             false,
             GetKeysActions(onDone = onBack),
+            modifier,
+        )
+        SecuritySample.SecurityUnfinishedKeeper -> SecurityContent(
+            SecurityState(
+                loaded = true,
+                recoveryKey = RecoveryKeyState.UNFINISHED,
+                keys = listOf(KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.TEE)),
+                keepers = listOf(sampleKeeper),
+            ),
+            false,
+            security,
+            modifier,
+        )
+        // A damaged record: no short name, so every keeper is offered (ADR 0041, point 14).
+        SecuritySample.SecurityRepairKeeper -> SecurityContent(
+            SecurityState(
+                loaded = true,
+                recoveryKey = RecoveryKeyState.SET_UP,
+                kept = Kept.NOT_KEPT,
+                needsRepair = true,
+                keys = listOf(KeyRow(HardwareKeyKind.BACKGROUND, SecurityLevel.TEE), KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.TEE)),
+                keepers = listOf(sampleKeeper),
+            ),
+            false,
+            security,
+            modifier,
+        )
+        SecuritySample.SecurityAppLockResetKeeper -> SecurityContent(
+            SecurityState(
+                loaded = true,
+                recoveryKey = RecoveryKeyState.SET_UP,
+                keyId = SAMPLE_KEY_ID,
+                kept = Kept.NOT_KEPT,
+                keys = listOf(KeyRow(HardwareKeyKind.BACKGROUND, SecurityLevel.TEE), KeyRow(HardwareKeyKind.UNLOCKED, SecurityLevel.TEE)),
+                appLock = AppLockState.RESET,
+                keepers = listOf(sampleKeeper),
+            ),
+            false,
+            security,
+            modifier,
+        )
+        SecuritySample.GetKeysHasThemAppLockOff ->
+            GetKeysContent(GetKeysDone(SAMPLE_KEY_ID, appLockOff = true), SAMPLE_KEEPER, false, GetKeysActions(onDone = onBack), modifier)
+        SecuritySample.HandoverDamaged ->
+            HandoverContent(HandoverFailed(damaged = true), SAMPLE_ASKER, SAMPLE_KEEPER, false, HandoverActions(onDeny = onBack), modifier)
+        SecuritySample.HandoverAskAfterCancel -> HandoverContent(
+            HandoverAsk(HandoverMode.KEYS, SAMPLE_KEY_ID, note = KeepNote.CANCELLED),
+            SAMPLE_ASKER,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
             modifier,
         )
     }

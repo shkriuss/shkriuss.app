@@ -7,10 +7,13 @@ development.
 
 - **Recovery key screens** show the handover between apps, with the
   sample names Water and Reminders: a keeper's screen when another app
-  asks for its keys or to check four words, the four words, a keeper
-  that does not keep the key, the screen that gets the keys when it is
-  done and when the keys are of another recovery key, the security
-  screen with keepers on the phone and kept in another app, "Keep it
+  asks for its keys or to check four words, after the prompt was
+  closed, the four words, a keeper that does not keep the key and one
+  whose kept key is damaged, the screen that gets the keys when it is
+  done, when that turned the app lock off and when the keys are of
+  another recovery key, the security screen with keepers on the phone,
+  kept in another app, and with a keeper after a setup that stopped,
+  with a damaged key file and after the app lock was reset, "Keep it
   here too?", and the end of entering the words when another app keeps
   the key. **The recovery key when first needed** shows the dialog
   with a keeper, before a backup and before a restore. **App lock

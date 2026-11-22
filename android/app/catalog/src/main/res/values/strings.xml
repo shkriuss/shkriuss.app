@@ -558,6 +558,12 @@
     <string name="sample_handover_not_kept">Handover: this app does not keep the key</string>
     <string name="sample_get_keys_done">Get the keys: done</string>
     <string name="sample_get_keys_other_key">Get the keys: another recovery key</string>
+    <string name="sample_security_unfinished_keeper">Security screen, setup stopped, another app keeps the key</string>
+    <string name="sample_security_repair_keeper">Security screen, damaged key file, another app keeps a key</string>
+    <string name="sample_security_app_lock_reset_keeper">Security screen, app lock reset, another app keeps the key</string>
+    <string name="sample_get_keys_done_app_lock_off">Get the keys: done, and the app lock turned off</string>
+    <string name="sample_handover_damaged">Handover: the kept key is damaged</string>
+    <string name="sample_handover_cancelled">Handover: the prompt was closed</string>
     <string name="sample_enter_done_app_lock_off">Enter: done, and the app lock turned off</string>
     <string name="app_lock_intro">The screens of the app lock that every app shares, from core/security. Each state shows with sample data. Catalog has no app lock: nothing here locks, unlocks or shows the system prompt. Back returns to this list.</string>
     <string name="sample_lock_locked">Lock screen</string>
