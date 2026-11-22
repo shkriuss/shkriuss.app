@@ -3,7 +3,7 @@
 What Water does, screen by screen, what it stores, how it reminds, and
 what goes into its backup. The app is built from this page.
 
-- Status: built. Water 1.0.1 is released. The data and the logic, the
+- Status: built. Water 1.0.2 is released. The data and the logic, the
   view models and the backup content are in `android/feature/water`, the
   screens in its package `ui`, and the app module is `android/app/water`.
   What Water needed in shared modules is under
