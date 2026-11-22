@@ -7,7 +7,7 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
-## 1.0.2 (Nov 22 2026)
+## 1.0.2 (2026-11-22)
 
 Released as `water-v1.0.2`.
 
