@@ -365,19 +365,27 @@ behaviour of the app.
    or "Pre-release: <version>" for a version with a hyphen. Update the
    status in README.md.
 4. The user guide matches this version.
+5. Check docs/development/third-party.md again for <app>, as its
+   section "How to check again" says: the release runtime class path,
+   and the APK that ./gradlew :app:<app>:assembleRelease builds. If
+   both match the page, write <version> where the page names the
+   version of <app> it was checked for, and change nothing else on it.
+   If anything differs, stop and say in the pull request what differs.
+   The page, the app's Licences and its texts then change together, in
+   a pull request of their own, before the release.
 
 For the app's first release, also:
 
-5. I am the owner and I ask you to add <app> to the list of apps in
+6. I am the owner and I ask you to add <app> to the list of apps in
    .github/workflows/release.yml: the "app" options, and the step
    "Check the inputs" of every job, in its case line and in its error
    text. Nothing else in that file. Update docs/development/release.md
    where it names the apps.
-6. I am the owner and I ask you to add the row
+7. I am the owner and I ask you to add the row
    "| <Name> | `app.shkriuss.<app>` |" to the table "Apps signed with
    this key" in docs/security/fingerprints.md. Change nothing else on
    that page.
-7. Add the app's guide pages to site/site.json. Update
+8. Add the app's guide pages to site/site.json. Update
    docs/development/site.md and docs/user/README.md.
 ```
 
