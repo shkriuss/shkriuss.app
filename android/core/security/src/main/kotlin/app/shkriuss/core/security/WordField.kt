@@ -66,13 +66,26 @@ internal object WordInput {
      * The text after a change from [old] to [new], or null if the change
      * is refused. Only the letters `a` to `z`, made lower case the same
      * way in every language, and at most [LONGEST] of them. A change may
-     * add one letter at most, so a pasted word or phrase never lands.
+     * put in one letter at most, also where it replaces selected letters,
+     * so a pasted word or phrase never lands.
      */
     fun accept(old: String, new: String): String? {
         val lower = new.lowercase(Locale.ROOT)
-        if (lower.length > LONGEST || lower.length > old.length + 1) return null
+        if (lower.length > LONGEST || lettersPutIn(old, lower) > 1) return null
         if (!lower.all { it in 'a'..'z' }) return null
         return lower
+    }
+
+    /**
+     * How many letters a change from [old] to [new] puts in, at the
+     * least: what is left of [new] after the part it shares with [old] at
+     * its start and at its end. "able" to "acid" puts in three, though
+     * both have four letters.
+     */
+    private fun lettersPutIn(old: String, new: String): Int {
+        val start = old.commonPrefixWith(new).length
+        val end = old.substring(start).commonSuffixWith(new.substring(start)).length
+        return new.length - start - end
     }
 
     /** The words of the list that start with [typed], at most four, once two letters are typed. */

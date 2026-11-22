@@ -1,5 +1,8 @@
 package app.shkriuss.core.security
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.RecoveryKey
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
@@ -410,6 +413,37 @@ class AppLockViewModelsTest {
         assertEquals(TurnOnDone, model.state.value)
         assertEquals(AppLockState.ON, app.crypto.appLock.state())
         assertEquals("the app stays locked: its unlock needs a prompt", AppGate.LOCKED, watcher.gate.value)
+    }
+
+    @Test
+    fun backWhileTheAppLockIsStoredStillHidesTheTextOfShownNotifications() {
+        val (app, _) = newApp()
+        val key = withKeys(app)
+        var hidden = 0
+        val watcher = watcherOf(app) { hidden++ }.also { it.refresh() }
+        val main = QueuedDispatcher()
+        // Held as the screen holds it, so that it ends as it does when Back closes the screen.
+        val store = ViewModelStore()
+        val factory = object : ViewModelProvider.Factory {
+            override fun <V : ViewModel> create(modelClass: Class<V>): V = modelClass.cast(
+                TurnOnViewModel(app.crypto, watcher::unlockMark, watcher::turnedOn, background = inline, random = Random(7), main = main),
+            )!!
+        }
+        val model = ViewModelProvider(store, factory)[TurnOnViewModel::class.java]
+        main.runAll()
+        model.onContinue()
+        enterAll(model, key.words())
+        main.runAll()
+        val locking = (model.state.value as TurnOnLocking).prompt!!
+
+        // The prompt was answered and the app lock is stored. Before the main thread hears of it, Back closes the screen.
+        model.onPromptResult(locking, PromptOutcome.SUCCEEDED)
+        assertEquals(AppLockState.ON, app.crypto.appLock.state())
+        store.clear()
+        main.runAll()
+
+        assertEquals("the shown notifications are posted again without their text", 1, hidden)
+        assertEquals(AppGate.OPEN, watcher.gate.value)
     }
 
     @Test

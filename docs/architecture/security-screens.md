@@ -500,6 +500,11 @@ class WaterActivity : ComponentActivity() {
    Turning it on counts on the same terms: the mark is taken on the main
    thread before its last prompt shows, so leaving the app after the
    prompt was answered leaves it locked (`AppLockWatcher.turnedOn`).
+8. A read of the keys that started before a lock, an unlock, or
+   turning the app lock on or off counts for nothing, and the watcher
+   reads again. Its answer is older than what the watcher knows: an
+   "off" read just before the app lock was stored would open the gate
+   of an app that locked meanwhile.
 
 The screens of the recovery key are not behind the gate. They show no
 records, "Show the words" has its own prompt, and the repair must be
@@ -633,9 +638,9 @@ guide says so.
 
 1. While the app lock is on, it asks for the system prompt each time it
    opens, before it shows anything. Closing the prompt, or a prompt that
-   fails, closes the screen. A turn of the phone asks again. So whoever
-   is handed the open app cannot turn the lock off, pick a longer time
-   or show the text of notifications.
+   fails, closes the screen. A turn of the phone while the prompt
+   shows asks again. So whoever is handed the open app cannot turn the
+   lock off, pick a longer time or show the text of notifications.
 2. The prompt is `beginUnlock` of the Lock key, which reads the keyset
    file and works also while the app is unlocked. So it unlocks the app
    too. Like the lock screen's prompt, it counts only if the app has not
@@ -683,7 +688,10 @@ like the recovery key screens.
 4. The check gives a `WordsProof`, which names the key ID of the
    `record` key it was checked against. `beginTurnOn` refuses a proof for
    another key. The prompt of the new Lock key turns the app lock on. A closed prompt leaves it off and can be opened
-   again with the same check.
+   again with the same check. Once the app lock is stored, the watcher
+   is told also if Back closed the screen meanwhile
+   (`AppLockWatcher.turnedOn`): the shown notifications lose their
+   text, and an app that locked since stays locked.
 5. The recovery key leaves memory right after the check.
 
 ### Settings

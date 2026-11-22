@@ -5,10 +5,12 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.result.ActivityResult
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.KeyId
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -168,6 +170,24 @@ class HandoverRulesTest {
 
         host.keys.screenLock = false
         assertNull("the guard went with the screen lock", KeeperStatus.keyIdOf(KeeperStatusProvider.statusFor("app.shkriuss.reminders", suite, host)!!))
+    }
+
+    @Test
+    fun theStatusProviderSaysNotKeptOnceAPromptFoundTheKeptCopyDamaged() {
+        val host = RuntimeEnvironment.getApplication() as TestHostApp
+        val keeper = host.keys.crypto
+        val key = keeper.setup.createRecoveryKey()
+        keeper.setup.storeDerivedKeys(key)
+        keeper.setup.beginKeepRecoveryKey(key)!!.finish()
+        val suite = FakeSuiteApps(peers = mapOf("app.shkriuss.reminders" to reminders))
+        damage(File(host.filesDir, "shk-keys/recovery"))
+        assertEquals("only a prompt can see it", key.keyId.toString(), KeeperStatus.keyIdOf(KeeperStatusProvider.statusFor("app.shkriuss.reminders", suite, host)!!))
+
+        // The prompt of "Show the words" finds the copy damaged.
+        assertThrows(BlobException::class.java) { keeper.setup.beginShowRecoveryKey().finish() }
+
+        // So Reminders does not count on it (security-screens.md, the keeper's status provider, point 2).
+        assertNull(KeeperStatus.keyIdOf(KeeperStatusProvider.statusFor("app.shkriuss.reminders", suite, host)!!))
     }
 
     @Test

@@ -45,7 +45,8 @@ class ShkCrypto internal constructor(private val vault: KeyVault) {
         KeyStatus(
             hasDerivedKeys = vault.isStored(KeysetName.RECORD),
             keyId = (vault.look(KeysetName.RECORD) as? Stored.Open)?.let { KeysetCodec.primaryId(it.keyset) },
-            keepsRecoveryKey = vault.look(KeysetName.RECOVERY) is Stored.NeedsPrompt,
+            // A kept copy that a prompt of this run found damaged cannot be shown or handed over: it is not kept.
+            keepsRecoveryKey = vault.look(KeysetName.RECOVERY) is Stored.NeedsPrompt && !vault.isDamagedBehindPrompt(KeysetName.RECOVERY),
             appLock = appLock.state(),
             hasScreenLock = vault.hardware.hasScreenLock(),
             fileKeyMoveIsPending = vault.isStored(KeysetName.FILE_KEY_OLD),

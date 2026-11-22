@@ -23,6 +23,19 @@ class WordInputTest {
     }
 
     @Test
+    fun aChangeOverSelectedLettersAlsoPutsInOneLetterAtMost() {
+        assertNull("a word pasted over a selected word of the same length", WordInput.accept("able", "acid"))
+        assertNull("a word pasted over a selected word one letter shorter", WordInput.accept("act", "acid"))
+        assertNull("two letters pasted over two selected ones", WordInput.accept("abandon", "abanxyn"))
+        assertEquals("one letter typed over the selected end", "ax", WordInput.accept("able", "ax"))
+        assertEquals("one letter typed over one selected letter", "abxe", WordInput.accept("able", "abxe"))
+        assertEquals("one letter typed in the middle", "able", WordInput.accept("ale", "able"))
+        assertEquals("a letter typed twice in a row", "abb", WordInput.accept("ab", "abb"))
+        assertEquals("a letter deleted in the middle", "ale", WordInput.accept("able", "ale"))
+        assertEquals("a capital letter typed over a selected one", "abla", WordInput.accept("able", "ablA"))
+    }
+
+    @Test
     fun suggestionsStartAtTwoLettersAndAreAtMostFour() {
         assertEquals(emptyList<String>(), WordInput.suggestions(""))
         assertEquals(emptyList<String>(), WordInput.suggestions("a"))

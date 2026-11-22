@@ -205,8 +205,10 @@ class RepairTest {
         val damaged = damage(File(app.folder, "recovery"))
         val crypto = app.open()
         assertFalse("look() cannot see it without a prompt", crypto.status().needsRepair)
+        assertTrue(crypto.status().keepsRecoveryKey)
         assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { crypto.setup.beginShowRecoveryKey().finish() })
         assertTrue("the prompt found it", crypto.status().needsRepair)
+        assertFalse("a copy that cannot be read is not kept", crypto.status().keepsRecoveryKey)
 
         // The words are entered again. The keyset that is kept is replaced.
         assertEquals(KeySetupResult.STORED, crypto.setup.storeDerivedKeys(recoveryKey))
@@ -217,6 +219,7 @@ class RepairTest {
         assertFalse(oldGuard.alias in app.hardware.existing())
         assertTrue(app.open().setup.beginShowRecoveryKey().finish().sameKeyAs(recoveryKey))
         assertFalse(app.open().status().needsRepair)
+        assertTrue("the new copy is kept", crypto.status().keepsRecoveryKey)
     }
 
     @Test

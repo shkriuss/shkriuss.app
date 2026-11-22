@@ -14,7 +14,11 @@ class KeyStatus internal constructor(
     val hasDerivedKeys: Boolean,
     /** The public ID of the current recovery key, if the app has its keys and can read them now. */
     val keyId: KeyId?,
-    /** True if this app keeps the recovery key on the phone and can show it again. */
+    /**
+     * True if this app keeps the recovery key on the phone and can show it
+     * again. A kept copy that a prompt of this run of the app found
+     * damaged does not count: the words repair it.
+     */
     val keepsRecoveryKey: Boolean,
     /** The state of the app lock. */
     val appLock: AppLockState,
