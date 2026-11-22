@@ -13,7 +13,7 @@ Pages:
 For users:
 
 - The user guide: [water.md](../../user/water.md), with the known
-  problems of 1.0.1.
+  problems of 1.0.2.
 - What Water stores, and what leaves the phone:
   [data-inventory.md](../../security/data-inventory.md#water-appshkriusswater)
   and, in plain words, [privacy.md](../../user/privacy.md).
