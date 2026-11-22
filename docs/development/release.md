@@ -86,8 +86,10 @@ with another certificate.
    [PROMPTS.md](PROMPTS.md#r2-independent-review)). What the audit found
    is fixed, or listed as open.
 2. One pull request sets the version and the version code, writes the
-   changelog heading, and sets the app's status on
-   [apps.md](../user/apps.md) (prompt R6 in
+   changelog heading, sets the app's status on
+   [apps.md](../user/apps.md), and checks
+   [third-party.md](third-party.md#how-to-check-again) again on the
+   release APK (prompt R6 in
    [PROMPTS.md](PROMPTS.md#r6-prepare-a-release)). You merge it and run
    the release at once.
 3. CI is green on the newest commit of `main`.

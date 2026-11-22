@@ -350,7 +350,10 @@ In the cloud environment, with dependency verification on:
 
 ## How to check again
 
-After a dependency change, and before a release:
+After a dependency change, and before a release. Before a release,
+prompt R6 does it for the app, and writes the new version where this
+page names the version that was checked
+([PROMPTS.md](PROMPTS.md#r6-prepare-a-release)).
 
 1. Run step 1 above. Compare the list with this page.
 2. Run step 2. Look for a package in the dex files that no row of

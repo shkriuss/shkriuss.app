@@ -19,7 +19,12 @@ import app.shkriuss.feature.water.WaterUnit
 import app.shkriuss.core.design.R as DesignR
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
+import app.shkriuss.core.crypto.AppName
+import app.shkriuss.feature.water.WaterServices
+import java.io.File
+import java.io.FileNotFoundException
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -42,7 +47,13 @@ import org.robolectric.annotation.GraphicsMode
  * A screen that scrolls is captured to its end, in parts. A sheet or a
  * dialog is captured with the screen dimmed behind it. On the tablet,
  * Today and History show two panes. The reminder line of Today has one
- * screenshot for each of its six states.
+ * screenshot for each of its six states, and a backup and a restore one
+ * for each of their dialogs.
+ *
+ * Two dialogs have none: "No backup was made" and the answer "No keys" of
+ * a restore. Each needs keys that exist but cannot be used now, as on a
+ * locked phone, and the app classes of the tests cannot make that. The
+ * user guide lists them under its known problems.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(application = UnlockedWaterApp::class)
@@ -159,6 +170,18 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         compose.tap(R.string.water_save)
         compose.waitForText(words(R.string.water_time_not_yet))
         captureWindows("EditDrinkErrors")
+    }
+
+    /** The time picker of the sheet "Add a drink", over the sheet, at the time of now. */
+    @Test
+    fun theTimePickerOfTheSheet() {
+        start()
+        compose.waitForText(words(R.string.water_no_drinks_today))
+        compose.tap(R.string.water_other_amount)
+        compose.waitForText(words(R.string.water_add_drink))
+        compose.tap(R.string.water_time)
+        compose.waitFor(hasText(words(DesignR.string.shk_hour)) and SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText))
+        captureWindows("AddDrinkTime")
     }
 
     // History.
@@ -422,6 +445,168 @@ class WaterScreenshotTest(private val config: ScreenshotConfig) {
         pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri("photo.jpg"))
         compose.waitForText(words(R.string.water_refused_not_a_backup_title))
         captureWindows("RestoreNotABackup")
+    }
+
+    @Test
+    fun theDialogWhenABackupCannotBeWritten() {
+        pickerDocuments()
+        seedAWeek()
+        TestDocuments.onOpen = { mode -> if (mode == "wt") throw FileNotFoundException("the storage app refuses") }
+        openSettings()
+        pick(R.string.water_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.water_backup_not_written_title))
+        captureWindows("BackupNotWritten")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsWrittenButCannotBeReadAgain() {
+        pickerDocuments()
+        seedAWeek()
+        TestDocuments.onOpen = { mode -> if (mode == "r") throw FileNotFoundException("the storage app refuses to read") }
+        openSettings()
+        pick(R.string.water_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.water_backup_not_checked_title))
+        captureWindows("BackupNotChecked")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsWrittenButFailsItsCheck() {
+        pickerDocuments()
+        seedAWeek()
+        // The storage loses the end of the file between the write and the check.
+        TestDocuments.onOpen = { mode ->
+            if (mode == "r") {
+                val file = TestDocuments.file(BACKUP_NAME)
+                file.writeBytes(file.readBytes().dropLast(10).toByteArray())
+            }
+        }
+        openSettings()
+        pick(R.string.water_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.water_backup_not_usable_title))
+        captureWindows("BackupNotUsable")
+    }
+
+    @Test
+    fun theProgressDialogWhileAFileIsChecked() {
+        pickerDocuments()
+        seedAWeek()
+        val backup = writeABackup()
+        // The storage does not answer, so "Checking the backup" stays on screen. Then the read fails, and nothing changes.
+        TestDocuments.onOpen = { mode ->
+            if (mode == "r") {
+                held.await()
+                throw FileNotFoundException("the test has ended")
+            }
+        }
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.water_backup_checking))
+        captureWindows("BackupChecking")
+    }
+
+    @Test
+    fun theProgressDialogWhileABackupIsRestored() {
+        pickerDocuments()
+        seedAWeek()
+        val backup = writeABackup()
+        // The first read is the check before the question. The storage does not answer the next one, the restore, so
+        // "Restoring the backup" stays on screen. Then the read fails, and nothing changes.
+        val reads = AtomicInteger()
+        TestDocuments.onOpen = { mode ->
+            if (mode == "r" && reads.incrementAndGet() > 1) {
+                held.await()
+                throw FileNotFoundException("the test has ended")
+            }
+        }
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.tap(R.string.water_restore)
+        compose.waitForText(words(R.string.water_backup_restoring))
+        captureWindows("BackupRestoring")
+    }
+
+    @Test
+    fun theAnswerForABackupOfANewerVersion() {
+        pickerDocuments()
+        val backup = writeABackupOf(OtherContent(dataVersion = 2))
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.water_refused_newer_title))
+        captureWindows("RestoreNewerVersion")
+    }
+
+    @Test
+    fun theAnswerForABackupOfAnotherApp() {
+        pickerDocuments()
+        val notes = AppName.of("notes")
+        val backup = writeABackupOf(OtherContent(dataVersion = 1), crypto = keysOfOtherWords(notes), appName = notes)
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.water_refused_other_app_title))
+        captureWindows("RestoreOtherApp")
+    }
+
+    /** The longest words of a restore: the short name of the key comes from fixed words, so it is the same in every run. */
+    @Test
+    fun theAnswerForABackupMadeWithOtherWords() {
+        pickerDocuments()
+        val backup = writeABackupOf(OtherContent(dataVersion = 1), crypto = keysOfOtherWords(WaterServices.APP_NAME))
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.water_refused_other_key_title))
+        captureWindows("RestoreOtherKey")
+    }
+
+    @Test
+    fun theAnswerForAFileThatIsCutShort() {
+        pickerDocuments()
+        seedAWeek()
+        val backup = writeABackup()
+        val file = TestDocuments.file(BACKUP_NAME)
+        file.writeBytes(file.readBytes().dropLast(1).toByteArray())
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.water_refused_damaged_title))
+        captureWindows("RestoreDamaged")
+    }
+
+    @Test
+    fun theAnswerForAFileThatCannotBeRead() {
+        pickerDocuments()
+        TestDocuments.onOpen = { throw FileNotFoundException("the storage app refuses") }
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.water_not_read_title))
+        captureWindows("RestoreNotRead")
+    }
+
+    @Test
+    fun theAnswerWhenTheBackupCannotBePutAside() {
+        pickerDocuments()
+        seedAWeek()
+        val backup = writeABackup()
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.water_restore_question_title))
+        // The staging folder cannot be made: a file stands in its place.
+        File(RuntimeEnvironment.getApplication().noBackupFilesDir, "shk-restore").apply {
+            deleteRecursively()
+            writeText("in the way")
+        }
+        compose.tap(R.string.water_restore)
+        compose.waitForText(words(R.string.water_no_room_title))
+        captureWindows("RestoreNoRoom")
+    }
+
+    @Test
+    fun theAnswerForABackupWithSomethingWaterCannotRead() {
+        pickerDocuments()
+        val backup = writeABackupOf(OtherContent(dataVersion = 1, listOf(otherRecord("note"))))
+        openSettings()
+        pick(R.string.water_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.tap(R.string.water_restore)
+        compose.waitForText(words(R.string.water_unreadable_title))
+        captureWindows("RestoreUnreadable")
     }
 
     @Test

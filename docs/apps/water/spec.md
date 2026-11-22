@@ -3,7 +3,7 @@
 What Water does, screen by screen, what it stores, how it reminds, and
 what goes into its backup. The app is built from this page.
 
-- Status: built. Water 1.0.0 is released. The data and the logic, the
+- Status: built. Water 1.0.1 is released. The data and the logic, the
   view models and the backup content are in `android/feature/water`, the
   screens in its package `ui`, and the app module is `android/app/water`.
   What Water needed in shared modules is under
@@ -236,7 +236,7 @@ One day from History, today included.
 3. A button **Add a drink**, which opens
    [Add a drink](#add-a-drink-and-edit-a-drink) for that day.
 4. The drinks of that day, newest first, as on Today. A tap edits a
-   drink.
+   drink. With no drinks: "No drinks on this day."
 5. The same snackbars as Today after a new drink or a delete.
 
 The goal shown is the goal that day had
