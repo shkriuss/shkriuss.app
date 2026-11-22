@@ -157,6 +157,23 @@ class HandoverViewModelsTest {
     }
 
     @Test
+    fun aStopWhileThePromptIsMadeMakesItsAnswerCountForNothing() {
+        for (mode in HandoverMode.entries) {
+            val (keeper, _) = keeper()
+            val background = QueuedDispatcher()
+            val model = HandoverViewModel(keeper.crypto, reminders, mode, background, Random(7), inline)
+            background.runAll()
+            model.onAllow()
+            model.onStop(changingConfigurations = false)
+            background.runAll()
+            answer(model, PromptOutcome.SUCCEEDED)
+            background.runAll()
+            assertNull("$mode: nothing from a prompt asked for before the stop", model.takeKeys())
+            assertTrue("$mode: the screen asks again", (model.state.value as HandoverAsk).prompt == null)
+        }
+    }
+
+    @Test
     fun inTheCheckModeTheKeeperAsksForFourWordsAndMarksTheKeys() {
         val (keeper, key) = keeper()
         val model = handover(keeper, HandoverMode.CHECK_WORDS)

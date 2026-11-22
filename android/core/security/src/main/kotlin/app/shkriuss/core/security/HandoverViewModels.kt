@@ -79,6 +79,9 @@ class HandoverViewModel internal constructor(
     fun onAllow() {
         val ask = screen.value as? HandoverAsk ?: return
         if (ask.prompt != null) return
+        // Taken now, on the main thread, as on the screen that shows the words: a stop while the prompt is made makes
+        // its answer count for nothing.
+        val asked = stops
         screen.value = HandoverWorking
         work {
             val step = try {
@@ -87,7 +90,7 @@ class HandoverViewModel internal constructor(
                 screen.value = if (failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) HandoverFailed(damaged = true) else HandoverNotKept
                 return@work
             }
-            screen.value = ask.copy(prompt = PromptRequest(++requests, step, stops), note = null)
+            screen.value = ask.copy(prompt = PromptRequest(++requests, step, asked), note = null)
         }
     }
 
