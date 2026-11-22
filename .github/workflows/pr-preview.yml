@@ -217,12 +217,35 @@ jobs:
             ":app:$APP:checkPreviewGraphicsPathUse"
 
       # The APK leaves this job unsigned. "Sign the previews" signs the APKs
-      # of every app of the run with one key.
+      # of every app of the run with one key. Both files are named after
+      # the app, so that they all land in one folder there, however many
+      # apps the run built.
+      - name: Gather the unsigned APK
+        run: |
+          set -u
+          if ! [[ "$APP" =~ ^[a-z][a-z0-9]*$ ]]; then
+            echo "::error::Unexpected app name."
+            exit 1
+          fi
+          apk_dir="android/app/$APP/build/outputs/apk/preview"
+          # The build lists its output in output-metadata.json. Check the file
+          # name read from it before using it.
+          mapfile -t outputs < <(jq -r '.elements[] | .outputFile' "$apk_dir/output-metadata.json")
+          if [ "${#outputs[@]}" -ne 1 ] || ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.-]+\.apk$ ]]; then
+            echo "::error::Expected exactly one preview APK in $apk_dir."
+            exit 1
+          fi
+          stage="$RUNNER_TEMP/unsigned"
+          rm -rf -- "$stage"
+          mkdir -p "$stage"
+          cp -- "$apk_dir/output-metadata.json" "$stage/$APP.output-metadata.json"
+          cp -- "$apk_dir/${outputs[0]}" "$stage/$APP.apk"
+
       - name: Upload the unsigned APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: unsigned-${{ matrix.app }}
-          path: android/app/${{ matrix.app }}/build/outputs/apk/preview/
+          path: ${{ runner.temp }}/unsigned/
           retention-days: 1
           if-no-files-found: error
           overwrite: true
@@ -267,10 +290,13 @@ jobs:
           set -o pipefail
           if ! "$sdkmanager" "build-tools;36.0.0" >> "$log" 2>&1; then cat "$log"; exit 1; fi
 
+      # All into one folder: the action puts a single artifact straight into
+      # the path, but several into a folder each, unless they are merged.
       - name: Get the unsigned APKs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: unsigned-*
+          merge-multiple: true
           path: ${{ runner.temp }}/unsigned
 
       # One throwaway key signs every preview of this run, so that the
@@ -302,7 +328,7 @@ jobs:
               echo "::error::Unexpected app name."
               exit 1
             fi
-            metadata="$RUNNER_TEMP/unsigned/unsigned-$app/output-metadata.json"
+            metadata="$RUNNER_TEMP/unsigned/$app.output-metadata.json"
             if [ -f "$metadata" ] && [ ! -L "$metadata" ]; then built=$((built + 1)); fi
           done
           if [ "$built" -eq 0 ]; then
@@ -326,26 +352,24 @@ jobs:
               echo "::error::Unexpected app name."
               exit 1
             fi
-            apk_dir="$RUNNER_TEMP/unsigned/unsigned-$app"
-
-            # The build lists its output in output-metadata.json. Check every
-            # value read from it before using it.
-            metadata="$apk_dir/output-metadata.json"
+            # The build job named both files after the app. Its list of the
+            # output, output-metadata.json: check every value read from it
+            # before using it.
+            metadata="$RUNNER_TEMP/unsigned/$app.output-metadata.json"
+            unsigned="$RUNNER_TEMP/unsigned/$app.apk"
             if [ ! -f "$metadata" ] || [ -L "$metadata" ]; then
               echo "No preview of $app was built. It gets no APK."
               continue
             fi
             app_id="$(jq -r '.applicationId' "$metadata")"
-            mapfile -t outputs < <(jq -r '.elements[] | .outputFile, .versionName' "$metadata")
-            if [ "${#outputs[@]}" -ne 2 ] ||
-               ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.-]+\.apk$ ]] ||
-               ! [[ "${outputs[1]}" =~ ^[A-Za-z0-9_.+-]+$ ]] ||
+            mapfile -t outputs < <(jq -r '.elements[] | .versionName' "$metadata")
+            if [ "${#outputs[@]}" -ne 1 ] ||
+               ! [[ "${outputs[0]}" =~ ^[A-Za-z0-9_.+-]+$ ]] ||
                ! [[ "$app_id" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
               echo "::error::Expected exactly one preview APK of $app."
               exit 1
             fi
-            unsigned="$apk_dir/${outputs[0]}"
-            version="${outputs[1]}"
+            version="${outputs[0]}"
             if [ ! -f "$unsigned" ] || [ -L "$unsigned" ]; then
               echo "::error::The preview APK of $app is missing."
               exit 1
@@ -369,6 +393,14 @@ jobs:
             manifest="$("$build_tools/aapt2" dump xmltree --file AndroidManifest.xml "$unsigned")"
             if [[ "$manifest" == *sharedUserId* || "$manifest" == *"(0x0101000b)"* ]]; then
               echo "::error::The preview APK of $app asks for a shared user ID."
+              exit 1
+            fi
+
+            # Nor may it name keys that Android would accept for its later
+            # updates: an update signed with such a key would keep this
+            # preview's data. Android reads these elements by name.
+            if [[ "$manifest" == *"E: key-sets "* || "$manifest" == *"E: upgrade-key-set "* ]]; then
+              echo "::error::The preview APK of $app declares key sets for its updates."
               exit 1
             fi
 

@@ -341,7 +341,8 @@ One job per touched app, side by side:
 2. Builds the preview:
    `./gradlew :app:<name>:assemblePreview :app:<name>:checkPreviewApkRules :app:<name>:checkPreviewGraphicsPathUse`.
 3. Uploads the unsigned APK and the build's list of it,
-   `output-metadata.json`, as `unsigned-<app>`, kept for one day.
+   `output-metadata.json`, both named after the app, as `unsigned-<app>`,
+   kept for one day.
 
 The preview is built from the test merge commit, so it shows the pull
 request as it would be after merging.
@@ -355,15 +356,17 @@ ends, and the preview jobs are skipped. It checks out nothing and runs no
 code from the pull request. It reads the APKs and their lists as data
 only.
 
-1. Installs only the build tools, for `apksigner` and `zipalign`.
+1. Installs only the build tools, for `apksigner` and `zipalign`, and
+   downloads the unsigned APKs of the run into one folder.
 2. Makes one throwaway RSA 4096 key, with a random password that is never
    printed.
 3. For each app whose preview was built: checks every value it reads from
    the list, and that both the list and the APK itself, read with
    `aapt2`, name the app's own preview ID, `app.shkriuss.<app>.preview`,
-   and that the APK asks for no shared user ID (`android:sharedUserId`).
-   So no APK can update another app's preview of the same run, or share
-   its data. Then it
+   and that the APK asks for no shared user ID (`android:sharedUserId`)
+   and declares no key sets for its updates (`<key-sets>`). So no APK can
+   update another app's preview of the same run, or share its data, and
+   no key but the run's can update it. Then it
    signs the APK with `apksigner`, checks the signature with
    `apksigner verify` and the alignment with `zipalign -c`.
 4. Deletes the key. Nothing of it leaves the job: no artifact, cache or
