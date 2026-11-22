@@ -126,6 +126,22 @@ Fixed:
   are not held up.
 - **Restore a backup.** The temporary copy of the drinks is emptied
   before it is deleted, so none is left to read if the delete fails.
+- **Back right after the last prompt of the app lock.** If you pressed
+  Back while Water stored the app lock, a reminder already shown kept
+  its text until Water started again. Now it loses its text as soon as
+  the app lock is on.
+- **Right after the app lock is turned on.** Water no longer says now
+  and then that the app lock went off. If Water locked in that moment,
+  it no longer shows its screen for an instant before the lock screen.
+- **A damaged kept recovery key.** Once the system prompt finds the
+  copy of the recovery key that Water keeps damaged, Water no longer
+  says that it keeps the key: not on its security screen, and not to
+  the other apps of the suite. So they no longer offer **Not now**
+  because Water keeps it. Enter the words once to keep it here again.
+- **Recovery words.** A word field no longer takes a whole word at once
+  when a keyboard puts it in place of selected letters, for example
+  from its clipboard. Each change takes one letter at most, as typing
+  does.
 
 ## 1.0.1 (2026-11-17)
 

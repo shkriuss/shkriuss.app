@@ -116,6 +116,34 @@ class AppLockWatcherTest {
     }
 
     @Test
+    fun aReadThatStartedBeforeTheAppLockWasTurnedOnOpensNothingAndSaysNothing() {
+        // The answers of the reads wait for the main thread, so that an old one can come after the app lock was turned on.
+        val answers = ArrayDeque<Runnable>()
+        val watcher = AppLockWatcher(app, app.crypto, onTextHidden = {}, elapsed = { app.now }, background = atOnce, main = { answers += it })
+        watcher.start()
+        val key = app.crypto.setup.createRecoveryKey()
+        app.crypto.setup.storeDerivedKeys(key)
+        val screen = screen()
+        while (answers.isNotEmpty()) answers.removeFirst().run()
+        val step = app.crypto.appLock.beginTurnOn(app.crypto.setup.checkAllWords(key)!!)
+        val mark = watcher.unlockMark()
+
+        // After the last prompt, the user leaves the app and comes back. The read on the way back finds the app lock off.
+        leave(screen)
+        comeBack(screen)
+        step.finish()
+        watcher.turnedOn(mark)
+        assertEquals(AppGate.LOCKED, watcher.gateNow)
+
+        while (answers.isNotEmpty()) {
+            answers.removeFirst().run()
+            assertEquals("the old read does not open the gate", AppGate.LOCKED, watcher.gateNow)
+        }
+        assertEquals(AppGate.LOCKED, watcher.gate.value)
+        assertNull("nor does it say that the app lock went off", watcher.notice)
+    }
+
+    @Test
     fun withATimerTheAppLocksOnlyWhenItComesBackAfterTheTimeAway() {
         turnOn()
         watcher.lockAfter = LockAfter.FIVE_MINUTES

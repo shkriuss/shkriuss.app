@@ -33,6 +33,31 @@ Added:
   Reminders asks for no new permission
   ([permissions](../../../docs/security/permissions.md#the-handover-between-apps)).
 
+Fixed:
+
+- **Back right after the last prompt of the app lock.** If you pressed
+  Back while Reminders stored the app lock, a reminder already shown
+  kept its title until Reminders started again. Now it loses its title
+  and text as soon as the app lock is on.
+- **Right after the app lock is turned on.** Reminders no longer says
+  now and then that the app lock went off. If Reminders locked in that
+  moment, it no longer shows its screen for an instant before the lock
+  screen.
+- **A damaged kept recovery key.** Once the system prompt finds the
+  copy of the recovery key that Reminders keeps damaged, Reminders no
+  longer says that it keeps the key: not on its security screen, and
+  not to the other apps of the suite. So they no longer offer **Not
+  now** because Reminders keeps it. Enter the words once to keep it
+  here again.
+- **Recovery words.** A word field no longer takes a whole word at once
+  when a keyboard puts it in place of selected letters, for example
+  from its clipboard. Each change takes one letter at most, as typing
+  does.
+- **A notification after a stop.** If Android stopped Reminders right
+  after a restore, a new time, **Done** or **Snooze 10 min**, before it
+  took the old notification away, that notification stayed with its
+  old title. Now it goes when Reminders starts again.
+
 ## 1.0.0 (2026-11-20)
 
 Released as `reminders-v1.0.0`.

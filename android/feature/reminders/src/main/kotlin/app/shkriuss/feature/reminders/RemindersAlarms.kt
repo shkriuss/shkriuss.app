@@ -250,15 +250,22 @@ class RemindersAlarms(
     // As the ShownReview.
 
     /**
-     * Removes a notification whose reminder is deleted or not stored. A
-     * delete takes the notification away (spec, "The notification"), but
-     * Reminders may stop between the delete and the removal. Then the
-     * next start takes the title out of the notification shade. The
-     * check takes its turn on [turns], as a press does.
+     * Removes a notification whose reminder is deleted or not stored, and
+     * one that is no longer current: its time is not the reminder's
+     * `showing`. A delete, a new time, a restore and a press take the
+     * notification away (spec, "The notification" and "Backup contents"),
+     * but Reminders may stop between the write of the entry and the
+     * removal. Then the next start takes the old title out of the
+     * notification shade. A current notification stays: the handler
+     * writes `showing` before it posts, and posting it again in the hidden
+     * form keeps its time. The check takes its turn on [turns], as a press
+     * does.
      */
     override fun review(onScreen: List<OnScreen>, notifications: Notifications, timeChanged: Boolean) = runBlocking {
         turns.withLock {
-            onScreen.filter { repository.find(it.key) == null }.forEach { notifications.cancel(it.key) }
+            onScreen
+                .filter { repository.find(it.key) == null || book.entryOf(it.key).showingMillis != it.atMillis }
+                .forEach { notifications.cancel(it.key) }
         }
     }
 

@@ -432,6 +432,36 @@ class RemindersAlarmsTest {
     }
 
     @Test
+    fun aNotificationOfARestoredReminderGoesAtTheNextStartIfAStopCameBeforeItsRemoval() {
+        val pills = savePills()
+        setup.fireAt(monday(9))
+        shownOf(pills)
+
+        // A restore took Pills and wrote its entry, and Reminders stopped before it removed the notification.
+        setup.setClock(monday(9, 30))
+        ReminderBook.of(setup.app).update(pills.id) { ReminderEntry(mark = monday(9, 30)) }
+        shownOf(pills)
+        setup.startTheApp()
+
+        assertNull("the old title left the notification shade", setup.shown(pills))
+        assertEquals(ReminderEntry(mark = monday(9, 30)), setup.entryOf(pills))
+    }
+
+    @Test
+    fun aNotificationThatLostItsTextWhenTheAppLockWentOnStaysAtTheNextStart() {
+        val pills = savePills()
+        setup.fireAt(monday(9))
+        setup.hidesText = true
+
+        // The start posts it again in the hidden form, with the same time, and then reviews what is on screen.
+        setup.startTheApp()
+
+        val shown = shownOf(pills)
+        assertEquals("Reminders", shown.title)
+        assertEquals(setup.app.getString(NotifyR.string.notify_text_hidden), shown.text)
+    }
+
+    @Test
     fun aReminderStoppedWhileItWasBeingShownShowsAtTheNextStart() {
         val bank = saveCallTheBank()
         // Reminders was stopped in the handler at 14:00, after step 1: its alarm never counted as fired.
@@ -732,5 +762,7 @@ class RemindersAlarmsTest {
         assertEquals(setup.app.getString(NotifyR.string.notify_reminder_failed), notice.text)
         assertEquals(ReminderEntry(mark = monday(9), showingMillis = setup.millisOf(monday(9))), setup.entryOf(pills))
         assertEquals(listOf(setup.millisOf(day(1, 9))), setup.waiting())
+        setup.startTheApp()
+        assertEquals("the notice stays at the next start", setup.app.getString(NotifyR.string.notify_reminder_failed), shownOf(pills).text)
     }
 }

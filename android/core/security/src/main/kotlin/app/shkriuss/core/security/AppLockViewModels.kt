@@ -14,6 +14,7 @@ import app.shkriuss.core.crypto.WordsProof
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -299,7 +300,9 @@ class AppLockViewModel internal constructor(
  * mark that [unlockMark] gave on the main thread before the last prompt
  * showed, as for an unlock. The app counts as unlocked only if it has not
  * locked since (`AppLockWatcher.turnedOn`): leaving the app after the
- * prompt was answered leaves it locked.
+ * prompt was answered leaves it locked. It runs also when the screen
+ * closed after the prompt was answered and before the app lock was
+ * stored.
  *
  * [main] is the main thread. Tests hold its work back.
  */
@@ -592,7 +595,9 @@ class TurnOnViewModel internal constructor(
             }
             proof = null
             // The mark from before the prompt showed. If the app locked after it, also after the prompt was answered, it stays locked.
-            withContext(main) { onTurnedOn(request.askedAt) }
+            // The app lock is on now, so the app hears of it also if Back closed the screen meanwhile: the text of the shown
+            // notifications must go, and the app must stay locked if it locked since.
+            withContext(NonCancellable + main) { onTurnedOn(request.askedAt) }
             screen.value = TurnOnDone
         }
     }

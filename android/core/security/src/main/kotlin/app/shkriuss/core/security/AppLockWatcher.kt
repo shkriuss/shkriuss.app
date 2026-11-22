@@ -269,6 +269,13 @@ class AppLockWatcher(
     private class Read(val state: AppLockState, val isLocked: Boolean)
 
     private fun take(read: Read?, asked: Int, announce: Boolean) {
+        // A read that started before a lock, an unlock or a turn of the app lock on or off by this thread is older than what
+        // the watcher knows now. Its "off" could open the gate of an app that just locked. So it counts for nothing, and the
+        // keys are read again.
+        if (asked != generation) {
+            refresh(announce)
+            return
+        }
         if (read == null) {
             // Unknown at the start counts as locked: nothing shows, and the lock screen offers to try again.
             if (known == null) readFailed = true
@@ -278,8 +285,7 @@ class AppLockWatcher(
         readFailed = false
         val before = known
         known = read.state
-        // A read that started before a lock or an unlock of this thread says nothing about the keys in memory now.
-        if (asked == generation) locked = read.isLocked || onlyAPromptUnlocks
+        locked = read.isLocked || onlyAPromptUnlocks
         if (announce && before == AppLockState.ON && read.state == AppLockState.OFF) notice = AppLockNotice.TURNED_OFF
         if (announce && read.state == AppLockState.RESET && !resetAnnounced) {
             resetAnnounced = true
