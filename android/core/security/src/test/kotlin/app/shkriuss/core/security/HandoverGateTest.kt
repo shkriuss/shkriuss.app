@@ -39,6 +39,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadow.api.Shadow
+import org.robolectric.shadows.ShadowContentProvider
 
 /**
  * The real gate of the handover (ADR 0041, points 8 to 11): the checks as
@@ -231,6 +233,19 @@ class HandoverGateTest {
     }
 
     @Test
+    fun theStatusProviderNamesItsCallerFromAndroidNotFromTheCall() {
+        install("app.shkriuss.reminders", current = listOf(suiteCertificate))
+        install("app.shkriuss.other", current = listOf(otherCertificate))
+        val provider = Robolectric.setupContentProvider(KeeperStatusProvider::class.java, "${app.packageName}.keeper")
+        val shadow = Shadow.extract<ShadowContentProvider>(provider)
+
+        shadow.setCallingPackage("app.shkriuss.reminders")
+        assertNotNull("Android names an app of the suite", provider.call(Handover.METHOD_STATUS, "app.shkriuss.other", null))
+        shadow.setCallingPackage("app.shkriuss.other")
+        assertNull("the call cannot name another caller", provider.call(Handover.METHOD_STATUS, "app.shkriuss.reminders", null))
+    }
+
+    @Test
     fun theStatusProviderAnswersOnlyACallerThatPassesTheRealCheck() {
         install("app.shkriuss.reminders", current = listOf(suiteCertificate))
         install("app.shkriuss.other", current = listOf(otherCertificate))
@@ -385,6 +400,59 @@ class HandoverGateTest {
         assertTrue(screen.isFinishing)
         assertEquals(Activity.RESULT_CANCELED, shadowOf(screen).resultCode)
         assertEquals(HandoverRefusal.NOT_KEEPER.name, refusalOf(screen))
+    }
+
+    /**
+     * Runs the main thread until [done], while the keeper's work runs on its own threads, however slow the machine
+     * is. One task at a time: while the loading indicator shows, its animation asks for the next frame at once, so
+     * the main thread of the test is never idle.
+     */
+    private fun waitUntil(what: String, done: () -> Boolean) {
+        val looper = shadowOf(Looper.getMainLooper())
+        val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
+        while (!done() && System.nanoTime() < deadline) {
+            if (looper.isIdle) Thread.sleep(10) else looper.runOneTask()
+        }
+        assertTrue(what, done())
+    }
+
+    @Test
+    fun theKeepersScreenGivesTheKeysOnlyAfterItsSecondCheck() {
+        install("app.shkriuss.reminders", current = listOf(suiteCertificate))
+        val keeper = (app as TestHostApp).crypto
+        val key = keeper.setup.createRecoveryKey()
+        keeper.setup.storeDerivedKeys(key)
+        keeper.setup.beginKeepRecoveryKey(key)!!.finish()
+
+        // The real screen, as Android starts it for Reminders: Allow, then the system prompt. Gives its result.
+        fun allowed(beforeThePromptEnds: () -> Unit = {}): Pair<Int, Intent?> {
+            val intent = Intent(app, HandoverActivity::class.java).putExtras(request())
+            val controller = Robolectric.buildActivity(HandoverActivity::class.java, intent)
+            shadowOf(controller.get()).setCallingPackage("app.shkriuss.reminders")
+            val screen = controller.setup().get()
+            val model = ViewModelProvider(screen as ComponentActivity)[HandoverViewModel::class.java]
+            waitUntil("the screen asks") { model.state.value is HandoverAsk }
+            model.onAllow()
+            waitUntil("the prompt opens") { (model.state.value as? HandoverAsk)?.prompt != null }
+            val prompt = (model.state.value as HandoverAsk).prompt!!
+            beforeThePromptEnds()
+            model.onPromptResult(prompt, PromptOutcome.SUCCEEDED)
+            waitUntil("the screen closes") { screen.isFinishing }
+            val result = shadowOf(screen).resultCode to shadowOf(screen).resultIntent
+            // Destroyed, as Android does with a finished screen. Its loading indicator would ask for frames for ever.
+            controller.pause().stop().destroy()
+            return result
+        }
+
+        val (code, data) = allowed()
+        assertEquals(Activity.RESULT_OK, code)
+        assertNotNull("the keys", data?.getByteArrayExtra("app.shkriuss.handover.RECORD"))
+
+        // Reminders is replaced by an app signed otherwise while the prompt is open: the second check refuses it.
+        val (refusedCode, refusedData) = allowed { install("app.shkriuss.reminders", current = listOf(otherCertificate)) }
+        assertEquals(Activity.RESULT_CANCELED, refusedCode)
+        assertEquals(HandoverRefusal.REFUSED.name, refusedData?.getStringExtra(Handover.EXTRA_REFUSAL))
+        assertNull("no keys", refusedData?.getByteArrayExtra("app.shkriuss.handover.RECORD"))
     }
 
     @Test

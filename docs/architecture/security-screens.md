@@ -757,8 +757,11 @@ file says that.
   and who is refused: another certificate, two signers, a lineage, Sync,
   Catalog, a preview, a stranger, an app not installed. The handover
   screen started by refused callers and with hostile requests gives
-  `REFUSED` or `UPDATE` and shows nothing. The second check before the
-  keys go. The status provider with no caller and with a refused one.
+  `REFUSED` or `UPDATE` and shows nothing. The real screen gives the
+  keys after **Allow** and the prompt, and gives `REFUSED` instead when
+  the asking app was replaced by one signed otherwise before the second
+  check. The status provider with no caller, with a refused one, and
+  with the caller that Android names, not one that the call names.
   Which apps are listed as keepers. The result callback gets an answer
   while the screen is stopped and leaves nothing of it in the saved
   state.

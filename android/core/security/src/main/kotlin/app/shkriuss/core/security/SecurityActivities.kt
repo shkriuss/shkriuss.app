@@ -345,11 +345,16 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
             return
         }
         val model = flowViewModel { HandoverViewModel(it, request.asker, request.mode) }.also { this.model = it }
-        // Whichever way the screen closes, Back too, it says why it gave no keys (ADR 0041, point 16). Set from the
-        // screen's state on the main thread, not from a frame of the UI. The keys' RESULT_OK is set only by handOver.
+        // Whichever way the screen closes, Back too, it says why it gave no keys (ADR 0041, point 16). When the keys
+        // are ready, it checks the caller again and hands them over. Both from the screen's state on the main thread,
+        // not from a frame of the UI. The keys' RESULT_OK is set only by handOver.
         lifecycleScope.launch {
             model.state.collect { screen ->
-                if (screen != HandoverReady) setResult(Activity.RESULT_CANCELED, refusalResult(closingRefusal(screen)))
+                if (screen == HandoverReady) {
+                    handOver(model, request, suite)
+                } else {
+                    setResult(Activity.RESULT_CANCELED, refusalResult(closingRefusal(screen)))
+                }
             }
         }
         val asker = suite.labelOf(request.askerPackage)
@@ -367,7 +372,6 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
         setContent {
             ShkTheme {
                 val screen by model.state.collectAsState()
-                LaunchedEffect(screen) { if (screen == HandoverReady) handOver(model, request, suite) }
                 HandoverContent(screen, asker, keeper, isPreviewBuild, actions)
                 SystemPrompt(
                     request = (screen as? HandoverAsk)?.prompt,
