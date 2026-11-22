@@ -1000,6 +1000,15 @@ recovery key. Three things do:
      (`SecurityScreens.enterIntent`). For example, words you made in
      another app of the suite, or on your old phone.
    - **Not now**: closes the dialog.
+3. When another app of the suite keeps a recovery key on this phone,
+   the dialog also says: "Another app of the suite keeps a recovery key
+   on this phone. This app can get its own keys from it, with no words
+   to type. It never gets the words." Under it, one button for each
+   such app, **Get the keys from Reminders**, opens "Get the keys"
+   (`SecurityScreens.getKeysIntent`,
+   [ADR 0041](../../adr/0041-the-handover-between-apps.md)). When the
+   apps keep different recovery keys, each button also names the key's
+   short name.
 
 **Restore a backup**, with no recovery key:
 
@@ -1009,6 +1018,8 @@ recovery key. Three things do:
    **Cancel**.
 3. There is no "create" here: a new recovery key can never open an old
    backup.
+4. The same sentence and **Get the keys from** buttons as in step 3
+   above follow, when another app of the suite keeps a recovery key.
 
 **Any of the three**, after a setup that stopped:
 

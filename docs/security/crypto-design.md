@@ -970,8 +970,8 @@ with no files. So the prompt always unlocks a real hardware key.
      kept by this check. Keeping stays the user's own choice on the
      security screen. The owner decided this.
    - `core/crypto` enforces the check: turning on needs a `WordsProof`,
-     which only `checkFourWords` and `checkAllWords` make. Both store
-     nothing and drop no key from memory. A proof names the key ID of the
+     which only `checkFourWords`, `checkAllWords` and `checkWordsAtKeeper`
+     make. None of them stores anything or drops a key from memory. A proof names the key ID of the
      `record` key it was checked against, and turning on refuses a proof
      whose key ID is not the one of the `record` key stored now.
    - In a keeper app, the kept recovery key that was read for the four
@@ -2151,7 +2151,7 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 | The permission `USE_BIOMETRIC` (open question 4) | [ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md): `core/security` declares it, Catalog removes it, and the APK rules check allows it per app. |
 | AndroidX Biometric (open question 5) | Used nowhere. The app lock uses Android's own prompt too. ADR 0003, point 4, says so. |
 | Checking the words in an app that does not keep the recovery key (open question 1) | All 24 words, on the screen of "Entering it". Words that give this app's own `record` key are the proof. No four words on top, and the key is not kept. A keeper asks for four words, as before. A keeper of the same key can also check four words for it ([ADR 0041](../adr/0041-the-handover-between-apps.md), point 19). |
-| Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords` and `KeySetup.checkAllWords` make one. It names the key ID of the `record` key it was checked against, and `beginTurnOn` refuses a proof for another key. |
+| Proving the check in code | `AppLock.beginTurnOn` takes a `WordsProof`. Only `KeySetup.checkFourWords`, `KeySetup.checkAllWords` and `KeySetup.checkWordsAtKeeper` make one. It names the key ID of the `record` key it was checked against, and `beginTurnOn` refuses a proof for another key. |
 | A keeper app that cannot read its kept recovery key | It asks for all 24 words instead: the same check as an app that does not keep the key. |
 | The kept recovery key during the four words | It leaves memory when the screen stops, as on the screen that shows the words, and when an error ends the turn-on. A turn of the phone does not count. The prompt asks again on the way back. |
 | When the app locks | When it leaves the screen (the default), or after 1, 5 or 15 minutes or 1 hour away. Time away is counted with a clock the user cannot change. The app always locks when the screen turns off with the app on it, and after Android stopped it. |

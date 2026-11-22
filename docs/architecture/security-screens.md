@@ -243,6 +243,8 @@ Keepers on the other screens:
    key is on the phone ([crypto-design.md](../security/crypto-design.md#creating-it),
    step 6). After **Not now**, the done screen names that keeper
    (`FlowDone.keptIn`) instead of saying the paper is the only copy.
+   So does **Not now** after **Keep it here too** and a prompt that was
+   closed or failed.
 
 ## What protects the words
 
@@ -794,7 +796,7 @@ file says that.
   the prompt is asked for again. One that comes while the app is away
   but not locked counts. After a lock, a read of the keys does not open
   the gate. While locked, every screen of the app hides other apps'
-  windows, set before the screen starts again. The six screens of the
+  windows, set before the screen starts again. The eight screens of the
   module always do. Without the permission, the lock screen still shows.
 - `AppLockGateTest`: nothing of the screen while locked, not one frame
   drawn on the way back, the screen as it was after the prompt, a closed

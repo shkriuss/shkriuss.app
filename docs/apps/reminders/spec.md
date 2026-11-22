@@ -397,7 +397,9 @@ As in Water and [ADR 0035](../../adr/0035-recovery-key-when-first-needed.md):
 only a backup, a restore or the app lock needs it. Reminders is set up
 on its own: the key is created in it, or the 24 words are entered in it.
 With a key made in Water, tap **I already have one** and enter the same
-words. Both apps then keep it
+words. When Water keeps that key, Reminders then asks "Keep it here
+too?". After **Keep it here too** and the system prompt, both apps keep
+it. After **Not now**, only Water keeps it, and the done screen says so
 ([crypto-design.md](../../security/crypto-design.md#keeper-apps-and-other-apps)).
 When Water keeps the key on this phone, Reminders also offers **Get the
 keys from Water**, on its security screen and in the dialog when the key
