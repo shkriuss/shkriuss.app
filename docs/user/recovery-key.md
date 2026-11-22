@@ -162,7 +162,8 @@ this phone again:
 5. The app stores its keys, and asks to keep the recovery key, as when
    you create one. If another app on this phone keeps the same key, it
    first asks **Keep it here too?** Tap **Keep it here too** to keep it
-   in this app as well, or **Not now**.
+   in this app as well, or **Not now**. After **Not now**, the app says
+   which app keeps the key.
 6. If the app lock was on and these words repaired its key file, or the
    app lock was reset because the screen lock was removed, the end of
    the screen says that the app lock is off now. Tap **App lock** to

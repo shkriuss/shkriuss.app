@@ -551,6 +551,7 @@
     <string name="sample_security_keepers">Security screen, no recovery key, two other apps keep one</string>
     <string name="sample_security_kept_elsewhere">Security screen, set up from another app that keeps the key</string>
     <string name="sample_enter_keep_here_too">Enter: another app keeps this key already</string>
+    <string name="sample_enter_done_kept_elsewhere">Enter: done, not kept here, kept in another app</string>
     <string name="sample_handover_keys">Handover: another app asks for its keys</string>
     <string name="sample_handover_check">Handover: another app asks to check the words</string>
     <string name="sample_handover_four">Handover: four of the words</string>

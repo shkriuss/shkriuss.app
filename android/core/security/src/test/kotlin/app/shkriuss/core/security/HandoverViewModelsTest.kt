@@ -246,14 +246,14 @@ class HandoverViewModelsTest {
     }
 
     @Test
-    fun notNowKeepsOnlyThePaperCopyAndNoKeeperMeansNoQuestion() {
+    fun notNowKeepsItOnlyInTheOtherAppAndNoKeeperMeansNoQuestion() {
         val (_, key) = keeper()
         val notes = KeeperApp("app.shkriuss.notes", "Notes", key.keyId.toString())
         val asked = EnterViewModel(app(reminders).crypto, startOver = false, background = inline, suite = FakeSuiteApps(listOf(notes)))
         key.words().forEach { asked.onTyped(it); asked.onWord(it) }
         asked.onCheck()
         asked.onSkipKeeping()
-        assertEquals(FlowDone(Kept.NOT_KEPT), asked.state.value)
+        assertEquals("not kept here, but Notes keeps it: the paper is not the only copy", FlowDone(Kept.NOT_KEPT, keptIn = listOf("Notes")), asked.state.value)
 
         val alone = EnterViewModel(app(reminders).crypto, startOver = false, background = inline, suite = FakeSuiteApps())
         key.words().forEach { alone.onTyped(it); alone.onWord(it) }

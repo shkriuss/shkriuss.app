@@ -74,6 +74,7 @@ enum class SecuritySample(@param:StringRes val title: Int) {
     SecurityKeepers(R.string.sample_security_keepers),
     SecurityKeptElsewhere(R.string.sample_security_kept_elsewhere),
     EnterKeepHereToo(R.string.sample_enter_keep_here_too),
+    EnterDoneKeptElsewhere(R.string.sample_enter_done_kept_elsewhere),
     HandoverAskKeys(R.string.sample_handover_keys),
     HandoverAskCheck(R.string.sample_handover_check),
     HandoverFour(R.string.sample_handover_four),
@@ -210,6 +211,8 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
         )
         SecuritySample.EnterKeepHereToo ->
             EnterContent(FlowKeepAsk(listOf(SAMPLE_KEEPER)), false, EnterActions(onBack = onBack), modifier)
+        SecuritySample.EnterDoneKeptElsewhere ->
+            EnterContent(FlowDone(Kept.NOT_KEPT, keptIn = listOf(SAMPLE_KEEPER)), false, EnterActions(onBack = onBack), modifier)
         SecuritySample.HandoverAskKeys -> HandoverContent(
             HandoverAsk(HandoverMode.KEYS, SAMPLE_KEY_ID),
             SAMPLE_ASKER,

@@ -253,13 +253,18 @@ private fun FlowStepContent(step: FlowStep, actions: FlowStepActions) {
         is FlowDone -> {
             ShkEmptyState(
                 title = stringResource(R.string.sec_done_title),
-                body = stringResource(
-                    when (step.kept) {
-                        Kept.KEPT -> R.string.sec_done_kept
-                        Kept.NOT_KEPT -> R.string.sec_done_not_kept
-                        Kept.NO_SCREEN_LOCK -> R.string.sec_done_no_lock
-                    },
-                ),
+                body = if (step.kept == Kept.NOT_KEPT && step.keptIn.isNotEmpty()) {
+                    // Another app keeps the same key: the paper is not the only copy.
+                    stringResource(R.string.sec_kept_in, step.keptIn.joinToString(", "))
+                } else {
+                    stringResource(
+                        when (step.kept) {
+                            Kept.KEPT -> R.string.sec_done_kept
+                            Kept.NOT_KEPT -> R.string.sec_done_not_kept
+                            Kept.NO_SCREEN_LOCK -> R.string.sec_done_no_lock
+                        },
+                    )
+                },
                 action = ShkStateAction(stringResource(R.string.sec_done), actions.onDone),
                 announce = true,
             )

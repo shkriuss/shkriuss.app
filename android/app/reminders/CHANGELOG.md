@@ -22,7 +22,8 @@ Added:
   app that does: "The recovery key is kept in Water", with **Open
   Water**.
 - Entering the words while another app keeps the same key first asks
-  **Keep it here too?**
+  **Keep it here too?** After **Not now**, it says which app keeps the
+  key.
 - Turning on the app lock in an app that does not keep the key can let
   an app that keeps it check four of your words, instead of all 24.
 - Two parts of Reminders are open to other apps: the screen that gives

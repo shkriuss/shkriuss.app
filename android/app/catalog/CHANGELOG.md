@@ -10,8 +10,9 @@ development.
   asks for its keys or to check four words, the four words, a keeper
   that does not keep the key, the screen that gets the keys when it is
   done and when the keys are of another recovery key, the security
-  screen with keepers on the phone and kept in another app, and "Keep it
-  here too?". **The recovery key when first needed** shows the dialog
+  screen with keepers on the phone and kept in another app, "Keep it
+  here too?", and the end of entering the words when another app keeps
+  the key. **The recovery key when first needed** shows the dialog
   with a keeper, before a backup and before a restore. **App lock
   screens** show turning the app lock on with another app that checks
   the words. Catalog holds no keys and takes no part in a handover: its

@@ -147,6 +147,19 @@ class SecurityContentTest {
     }
 
     @Test
+    fun afterNotNowTheDoneScreenNamesTheAppThatKeepsTheKeyInsteadOfTheOnlyCopy() {
+        compose.setContent { ShkTheme { EnterContent(FlowDone(Kept.NOT_KEPT, keptIn = listOf("Water")), false, EnterActions()) } }
+        compose.onNodeWithText(compose.activity.getString(R.string.sec_kept_in, "Water")).assertExists()
+        compose.onNodeWithText(text(R.string.sec_done_not_kept)).assertDoesNotExist()
+    }
+
+    @Test
+    fun withNoOtherKeeperTheDoneScreenSaysThePaperIsTheOnlyCopy() {
+        compose.setContent { ShkTheme { EnterContent(FlowDone(Kept.NOT_KEPT), false, EnterActions()) } }
+        compose.onNodeWithText(text(R.string.sec_done_not_kept)).assertExists()
+    }
+
+    @Test
     fun afterASetupThatStoppedTheSentenceIsNotShown() {
         securityScreen(RecoveryKeyState.UNFINISHED)
         compose.onNodeWithText(text(R.string.sec_no_key_other_app)).assertDoesNotExist()

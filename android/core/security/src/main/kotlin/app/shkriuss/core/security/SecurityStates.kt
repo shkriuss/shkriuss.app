@@ -97,8 +97,10 @@ data class FlowKeepAsk(val keepers: List<String>) : FlowStep
  * The flow is done. [appLockOff] is true when storing the keys turned the
  * app lock off: a repaired key file of the app lock, or the words after
  * the app lock was reset. The screen then says how to turn it on again.
+ * [keptIn] names the other apps that keep this recovery key, when the user
+ * chose not to keep it here too: then the paper is not the only copy.
  */
-data class FlowDone(val kept: Kept, val appLockOff: Boolean = false) : FlowStep
+data class FlowDone(val kept: Kept, val appLockOff: Boolean = false, val keptIn: List<String> = emptyList()) : FlowStep
 
 /** The flow stopped. Nothing was stored, or what was stored is whole. */
 data class FlowFailed(val problem: SecurityProblem) : FlowStep

@@ -122,10 +122,11 @@ abstract class FlowViewModel<S : Any> internal constructor(
         work { keep(key, askFirst = false) }
     }
 
-    /** The user keeps only the paper copy. */
+    /** The user does not keep the key here: the paper copy, and the other apps that keep it, if any. */
     fun onSkipKeeping() {
+        val keptIn = (state.value as? FlowKeepAsk)?.keepers.orEmpty()
         keeping = null
-        show(flowScreen(FlowDone(Kept.NOT_KEPT, appLockWentOff)))
+        show(flowScreen(FlowDone(Kept.NOT_KEPT, appLockWentOff, keptIn)))
     }
 
     /** How the system prompt of [request] ended. A request that is no longer shown is ignored. */

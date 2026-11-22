@@ -187,8 +187,9 @@ The keeper's side, `HandoverActivity` and `HandoverViewModel`:
 6. A keeper that does not keep the key now says so, with **Close**, and
    gives `NOT_KEEPER`. So does a kept copy that is damaged when the
    prompt runs (`closingRefusal`). The screen sets that result as soon
-   as it shows, so Back gives it too. The asking app then offers the 24
-   words.
+   as it shows, so Back gives it too. The asking app then says so: "Get
+   the keys" tells the user to enter the words instead, and the check of
+   the words for the app lock asks for all 24.
 7. **Do not allow**, or leaving the screen, gives a cancelled result
    with no reason.
 
@@ -240,7 +241,8 @@ Keepers on the other screens:
    only for keepers of its own key ID, with **Open Water**.
 2. The keeping step asks "Keep it here too?" when a keeper of the same
    key is on the phone ([crypto-design.md](../security/crypto-design.md#creating-it),
-   step 6).
+   step 6). After **Not now**, the done screen names that keeper
+   (`FlowDone.keptIn`) instead of saying the paper is the only copy.
 
 ## What protects the words
 
