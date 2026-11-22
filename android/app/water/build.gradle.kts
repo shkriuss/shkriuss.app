@@ -10,8 +10,8 @@ android {
     defaultConfig {
         applicationId = "app.shkriuss.water"
         // Follows from versionName by the rule in ADR 0021. CI checks it.
-        versionCode = 10001900
-        versionName = "1.0.1"
+        versionCode = 10002900
+        versionName = "1.0.2"
     }
 }
 

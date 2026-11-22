@@ -7,6 +7,10 @@ get reminders during the hours you choose. Its specification is
 
 ## Unreleased
 
+## 1.0.2 (Nov 22 2026)
+
+Released as `water-v1.0.2`.
+
 Added:
 
 - **Get the keys from another app.** When another app of the suite on

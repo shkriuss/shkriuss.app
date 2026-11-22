@@ -270,7 +270,7 @@ Water's keys. A backup then opens only with your 24 words.
 
 ## Known problems
 
-Version 1.0.1 has these known problems and limits.
+Version 1.0.2 has these known problems and limits.
 
 Not checked on a phone yet:
 
@@ -338,7 +338,7 @@ Other:
     them: "No backup was made" and the answer "No keys" of a restore.
     Their words were not checked at a large font size.
 
-Not in version 1.0.1:
+Not in version 1.0.2:
 
 - Kinds of drinks, such as coffee or tea, charts and statistics.
 - UK fluid ounces, litres or cups.
