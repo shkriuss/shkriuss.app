@@ -28,8 +28,10 @@ dependencies {
     // exported (docs/security/permissions.md).
     implementation(project(":core:notify"))
     // The recovery key and the app lock: SecurityHost, AppLockWatcher and
-    // AppLockGate. The module adds two permissions and six screens, none
-    // exported (docs/security/permissions.md).
+    // AppLockGate. The module adds two permissions, eight screens and a
+    // status provider. Only the handover screen and the status provider
+    // are exported, and each checks the calling app first (ADR 0041,
+    // docs/security/permissions.md).
     implementation(project(":core:security"))
     implementation(libs.activity.compose)
 

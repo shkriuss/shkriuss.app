@@ -8,9 +8,12 @@
       adds them and its three receivers, none exported;
     - the two of core/security, for the system prompt (ADR 0031) and for
       hiding other apps' windows (ADR 0033) (step 2.5). core/security adds
-      them and its six screens, none exported. Settings opens those
-      screens: the recovery key and the app lock. The APK rules check
-      fails an app that has the screens without both permissions.
+      them, its eight screens and its status provider. Of these, only the
+      handover screen and the status provider are exported, with no
+      permission: each checks the calling app first (ADR 0041). Settings
+      opens the other screens: the recovery key and the app lock. The APK
+      rules check fails an app that has the screens without both
+      permissions.
 
     Water stores its data in its own database and backs it up only into the
     backup file of the suite, so Android backup and device-to-device
@@ -41,9 +44,12 @@
         android:theme="@style/Theme.Shk">
 
         <!--
-            The one screen of Water's own, and the only exported part. All of
-            its content is in AppLockGate. The six screens of core/security
-            come from that module's manifest, and none of them is exported.
+            The one screen of Water's own, and its only exported part. All of
+            its content is in AppLockGate. The eight screens and the status
+            provider of core/security come from that module's manifest. Two
+            of them are exported, for the handover between apps: the handover
+            screen and the status provider (ADR 0041). WaterManifestTest
+            checks that these three are the only exported parts.
         -->
         <activity
             android:name=".WaterActivity"
@@ -59,8 +65,9 @@
             caller with android.permission.DUMP: the system and the developer
             shell. It lets developer tools install or save the start-up
             profile from outside the app. Water lets no other app reach any
-            part of it but its screen (docs/apps/water/spec.md,
-            "Permissions"), and needs no such tool. The start-up profile is
+            part of it but its screen and the two parts of the handover
+            (docs/apps/water/spec.md, "Permissions"), and needs no such
+            tool. The start-up profile is
             still installed when the app starts, by the profile installer's
             initializer in androidx.startup. Owner's decision on pull
             request 40.
