@@ -15,6 +15,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.design.ShkDestination
 import app.shkriuss.core.design.ShkNavigationScaffold
+import app.shkriuss.core.security.rememberRecoveryKeyFirstNeedState
 import app.shkriuss.feature.tasks.R
 import app.shkriuss.feature.tasks.TappedTask
 
@@ -28,7 +29,12 @@ import app.shkriuss.feature.tasks.TappedTask
  *   them.
  * - Back from Lists or Settings goes to Today. A form, a dialog or a list
  *   open in place of Lists closes first: Back from an open list goes to
- *   Lists. Back from Today leaves the app.
+ *   Lists. So does Licences, which Settings opens in its own place. Back
+ *   from Today leaves the app.
+ * - A backup, a restore and the moment the recovery key is first needed
+ *   are drawn once, after the destinations ([BackupFlow]), so their
+ *   dialogs and the results of the file picker do not depend on which
+ *   destination shows.
  *
  * A tap on a notification opens Lists, on the task's list, with its form
  * open, or Today if that task is gone (spec, "The notification", point
@@ -44,6 +50,7 @@ import app.shkriuss.feature.tasks.TappedTask
 @Composable
 fun TasksScreens(models: TasksModels, versionName: String) {
     var destination by rememberSaveable { mutableStateOf(TasksDestination.TODAY) }
+    var licencesOpen by rememberSaveable { mutableStateOf(false) }
     val notifications by models.notifications.state.collectAsState()
     LaunchedEffect(notifications.tapped) {
         when (val tapped = notifications.tapped) {
@@ -57,24 +64,35 @@ fun TasksScreens(models: TasksModels, versionName: String) {
         }
         models.notifications.tapOpened()
     }
-    // Before the content, so that the Back of an open list, a form or a dialog comes first.
+    // Before the content, so that the Back of an open list, a form, a dialog and that of Licences comes first.
     BackHandler(enabled = destination != TasksDestination.TODAY) { destination = TasksDestination.TODAY }
     val saved = rememberSaveableStateHolder()
+    val firstNeed = rememberRecoveryKeyFirstNeedState()
     ShkNavigationScaffold(
         destinations = TasksDestination.entries.map { ShkDestination(stringResource(it.label), painterResource(it.icon)) },
         selectedIndex = destination.ordinal,
         onSelect = { destination = TasksDestination.entries[it] },
     ) {
-        saved.SaveableStateProvider(destination.name) {
+        val licences = destination == TasksDestination.SETTINGS && licencesOpen
+        // Licences has a saved state of its own, so Settings keeps its scroll position under it.
+        saved.SaveableStateProvider(if (licences) LICENCES_KEY else destination.name) {
             when (destination) {
                 TasksDestination.TODAY -> TodayContent(models.today, models.todayForm, models.notifications)
                 TasksDestination.LISTS -> ListsContent(models.lists, models.list, models.listName, models.listForm)
-                TasksDestination.SETTINGS -> SettingsContent(versionName)
+                TasksDestination.SETTINGS -> if (licences) {
+                    LicencesContent(onBack = { licencesOpen = false })
+                } else {
+                    SettingsContent(models.backup, firstNeed, versionName, onLicences = { licencesOpen = true })
+                }
             }
         }
     }
     NotificationQuestion(models.notifications)
+    BackupFlow(models.backup, firstNeed)
 }
+
+/** The key of the saved state of Licences. No destination has this name. */
+private const val LICENCES_KEY = "licences"
 
 /** The three destinations of Tasks, in the order the navigation shows them. */
 private enum class TasksDestination(@param:StringRes val label: Int, @param:DrawableRes val icon: Int) {

@@ -61,8 +61,9 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   ViewModels and its backup content, and its screens, in the package
   `ui`. See [apps/reminders/spec.md](../apps/reminders/spec.md).
 - `android/feature/tasks/`: the data and logic of Tasks: its database,
-  with the committed schemas in `schemas/`, its rules and its
-  ViewModels. See [apps/tasks/spec.md](../apps/tasks/spec.md).
+  with the committed schemas in `schemas/`, its rules, its ViewModels
+  and its backup content, and its screens, in the package `ui`. See
+  [apps/tasks/spec.md](../apps/tasks/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
 - `android/app/water/`: the Water app, `app.shkriuss.water`.
@@ -604,7 +605,7 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
     and dialog. The date picker shows June 2100, because Material's
     picker marks the real today in the month it shows.
-- `feature/tasks` has 12 test classes with 196 tests: the dates of each
+- `feature/tasks` has 15 test classes with 265 tests: the dates of each
   repeat with the examples of the spec, the limits of every column and
   the rules that join two, the reminder number and moment, also in the
   two hours of summer time, the one alarm of a task, the order of each
@@ -617,17 +618,38 @@ second build must write the same mapping file, or the release stops. See
   the screens write dates, times, repeats and rows, and what TalkBack
   reads for them (`TasksFormatTest`), and the reminders
   (`TasksAlarmsTest`, `NotificationsViewModelTest`), on a real `Notify`
-  as Reminders' tests build it (`AlarmsSetup`). The
+  as Reminders' tests build it (`AlarmsSetup`), and backup and restore
+  and the licences (`TasksBackupContentTest`, `BackupViewModelTest`,
+  `LicencesTest`). The
   ViewModels run their work at once, as Water's do. A trigger that
   aborts every write to a table stands for a disk that refuses a
   write, and a table that is gone for a database that cannot be read:
   the tests check that nothing changes and what the screen says.
-- `app/tasks` has six test classes:
+  - `TasksBackupContentTest` checks the bytes of the spec's example,
+    every limit and rule that a restore refuses, and writes a whole
+    backup through `Backups` and restores it on a second app with the
+    same recovery key, as Reminders' does. It checks that a restore
+    hands on the tasks it took, and only those, once its transaction is
+    written.
+  - `BackupViewModelTest` is a copy of Reminders', with a second phone
+    (`AnotherPhone`) that makes the backups to restore. It also checks
+    that a task the restore took counts from that moment, loses its
+    notification and its snooze, or its entries when it came back
+    done, while one it did not take keeps its snooze.
+  - `LicencesTest` is a copy of Reminders'.
+- `app/tasks` has seven test classes:
   - `EveryScreenIsBehindTheAppLockTest`, a copy of Water's. It also
     locks the app over the form, new and to edit, its list dialog and
     its date and time pickers, the dialog of New list and Rename, a
     list's menu, the questions of Delete list and Delete done tasks,
-    and the question for notifications.
+    the question for notifications, the dialogs of backup and restore
+    and the progress dialog, held open by the test, and the Licences
+    list and a notice.
+  - `TasksBackupScreensTest`, a copy of Reminders'
+    `RemindersBackupScreensTest`: the rows of Backup and Security and
+    what each opens, the first-need dialog with the sentence about
+    another app's key, a backup and a restore on the screen, the
+    answers, and the Licences screen.
   - `TasksManifestTest` names everything Tasks' merged manifest lets
     another app reach: five permissions and none that it defines, the
     three receivers of `core/notify`, none exported, Tasks' screen and
@@ -664,8 +686,8 @@ Test helpers that the tests of other modules may use
 1. A module that applies `shkriuss.android.test-fixtures` has a folder
    `src/testFixtures/`. Today `core/crypto` and `core/notify` do.
    `core/backup`, `core/security`, `feature/water`, `app/water`,
-   `feature/reminders`, `app/reminders` and `app/tasks` use those of
-   `core/crypto` in their tests, and `core/testing` compiles
+   `feature/reminders`, `app/reminders`, `feature/tasks` and `app/tasks`
+   use those of `core/crypto` in their tests, and `core/testing` compiles
    against them ([Shared test helpers](#shared-test-helpers)).
    `feature/water` and `app/water` use those of `core/notify` in their
    tests.

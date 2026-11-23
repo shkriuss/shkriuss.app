@@ -10,10 +10,19 @@ Pages:
   backup contents, permissions and TalkBack notes, and what is out of
   scope for version 1.
 
+For users:
+
+- The user guide: [tasks.md](../../user/tasks.md), with the known
+  problems.
+- What Tasks stores, and what leaves the phone:
+  [data-inventory.md](../../security/data-inventory.md#tasks-appshkriusstasks).
+
 Code:
 
-- `android/feature/tasks`: the data and logic, and the screens, in
-  the package `ui`.
+- `android/feature/tasks`: the data and logic, backup and restore, and
+  the screens, in the package `ui`: Today, Lists and an open list,
+  Settings with the rows of the backup, the recovery key and the app
+  lock, the form, the dialogs, and Licences.
 - `android/app/tasks`: the app.
 - What changed: [CHANGELOG.md](../../../android/app/tasks/CHANGELOG.md).
 - How the modules fit together:

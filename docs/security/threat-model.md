@@ -1520,9 +1520,10 @@ Status: **Partly met.**
   - The data stays on the phone unless the user sets up sync or makes a
     backup.
   - Backup and restore to a file of the user's choice exist in
-    `core/backup`. Water and Reminders have the screens
+    `core/backup`. Water, Reminders and Tasks have the screens
     ([Water's spec](../apps/water/spec.md#backup-and-restore-screens),
-    [Reminders' spec](../apps/reminders/spec.md#as-in-water)). The
+    [Reminders' spec](../apps/reminders/spec.md#as-in-water),
+    [Tasks' spec](../apps/tasks/spec.md#as-in-water-and-reminders)). The
     app reads every backup again right after it is written and checks
     it, so a backup that cannot be restored is found on the day it is
     made.

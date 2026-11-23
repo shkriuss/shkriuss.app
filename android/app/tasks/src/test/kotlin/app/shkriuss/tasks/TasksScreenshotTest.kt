@@ -1,5 +1,7 @@
 package app.shkriuss.tasks
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyAncestor
@@ -18,6 +20,8 @@ import androidx.room3.useWriterConnection
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
+import app.shkriuss.core.security.R as SecurityR
+import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.feature.tasks.Due
 import app.shkriuss.feature.tasks.R
 import app.shkriuss.feature.tasks.Repeat
@@ -28,6 +32,7 @@ import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Rule
@@ -65,8 +70,13 @@ class TasksScreenshotTest(private val config: ScreenshotConfig) {
 
     private var scenario: ActivityScenario<TasksActivity>? = null
 
+    /** Holds a backup that is being written, so that its progress dialog stays. Opened again at the end of the test. */
+    private val held = CountDownLatch(1)
+
     @After
     fun closeTheScreen() {
+        held.countDown()
+        TestDocuments.onOpen = {}
         scenario?.close()
     }
 
@@ -317,14 +327,123 @@ class TasksScreenshotTest(private val config: ScreenshotConfig) {
         captureWindows("DeleteDoneQuestion")
     }
 
-    // Settings.
+    // Settings, Backup, Security and Licences.
 
     @Test
     fun settings() {
-        start()
-        compose.tap(R.string.tasks_settings)
-        compose.waitForText(words(R.string.tasks_version))
+        openSettings()
         compose.captureWholeScreen("Settings", config)
+    }
+
+    @Test
+    @Config(application = NewTasksApp::class)
+    fun settingsWithNoRecoveryKey() {
+        openSettings()
+        compose.captureWholeScreen("SettingsNoRecoveryKey", config)
+    }
+
+    @Test
+    @Config(application = StoppedSetupTasksApp::class)
+    fun settingsAfterASetupThatStopped() {
+        openSettings()
+        compose.captureWholeScreen("SettingsSetupNotFinished", config)
+    }
+
+    /** With the owner's sentence about a recovery key made in another app. */
+    @Test
+    @Config(application = NewTasksApp::class)
+    fun theDialogWhenTheRecoveryKeyIsFirstNeededForABackup() {
+        openSettings()
+        compose.tap(R.string.tasks_make_backup)
+        compose.waitForText(words(SecurityR.string.sec_first_need_set_up_title))
+        captureWindows("FirstNeedBackup")
+    }
+
+    @Test
+    fun theProgressDialogWhileABackupIsWritten() {
+        pickerDocuments()
+        // The storage does not answer, so "Writing the backup" stays on screen.
+        TestDocuments.onOpen = { held.await() }
+        openSettings()
+        pick(R.string.tasks_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.tasks_backup_writing))
+        captureWindows("BackupWriting")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsWrittenAndChecked() {
+        pickerDocuments()
+        seedTasks()
+        openSettings(ready = "Pills")
+        pick(R.string.tasks_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.tasks_backup_written_title))
+        captureWindows("BackupWritten")
+    }
+
+    @Test
+    fun theQuestionBeforeARestore() {
+        pickerDocuments()
+        seedTasks()
+        val backup = writeABackup()
+        openSettings(ready = "Pills")
+        pick(R.string.tasks_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.tasks_restore_question_title))
+        captureWindows("RestoreQuestion")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsRestored() {
+        pickerDocuments()
+        seedTasks()
+        val backup = writeABackup()
+        openSettings(ready = "Pills")
+        pick(R.string.tasks_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.tap(R.string.tasks_restore)
+        compose.waitForText(words(R.string.tasks_restored_title))
+        captureWindows("BackupRestored")
+    }
+
+    @Test
+    fun theAnswerForAFileThatIsNoBackup() {
+        pickerDocuments()
+        TestDocuments.file("photo.jpg").writeText("not a backup")
+        openSettings()
+        pick(R.string.tasks_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri("photo.jpg"))
+        compose.waitForText(words(R.string.tasks_refused_not_a_backup_title))
+        captureWindows("RestoreNotABackup")
+    }
+
+    @Test
+    fun licences() {
+        openSettings()
+        compose.tap(R.string.tasks_licences)
+        compose.waitForText(words(R.string.tasks_licences_intro))
+        compose.captureWholeScreen("Licences", config)
+    }
+
+    /** The shortest licence, so that the whole notice fits in a few images. */
+    @Test
+    fun theNoticeOfOnePartOfLicences() {
+        openSettings()
+        compose.tap(R.string.tasks_licences)
+        compose.tap("BIP-39 English word list")
+        compose.waitForText("Copyright (c) 2013-2016 Pavol Rusnak", substring = true)
+        compose.captureWholeScreen("LicenceNotice", config)
+    }
+
+    /** Starts Tasks, waits until Today shows [ready], and opens Settings, with all of its sections. */
+    private fun openSettings(ready: String = words(R.string.tasks_nothing_due_today)) {
+        start(ready)
+        compose.tap(R.string.tasks_settings)
+        compose.waitForSettings()
+    }
+
+    /** Taps the row [row] of Settings and picks [document] in the file picker that Tasks opens with [action]. */
+    private fun pick(row: Int, action: String, document: Uri) {
+        compose.tap(row)
+        val shown = checkNotNull(scenario)
+        compose.waitForOpened(shown) { it.action == action }
+        compose.theOpenedScreenCloses(shown, picked = document)
     }
 
     /** Opens Lists, then the list [name], and waits for its top bar. */

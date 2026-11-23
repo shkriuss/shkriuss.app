@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.shkriuss.feature.tasks.BackupViewModel
 import app.shkriuss.feature.tasks.ListNameViewModel
 import app.shkriuss.feature.tasks.ListViewModel
 import app.shkriuss.feature.tasks.ListsViewModel
@@ -42,6 +43,7 @@ class TasksModels(owner: ViewModelStoreOwner, services: TasksServices) {
                 initializer { ListNameViewModel(services.repository) }
                 // A form outlives this object when the phone is turned, so it holds the question's ViewModel only, not this.
                 initializer { TaskFormViewModel(services.repository, services.time, now, onSaved = asks::saved) }
+                initializer { BackupViewModel(services.backups) }
             },
         )
     }
@@ -64,17 +66,23 @@ class TasksModels(owner: ViewModelStoreOwner, services: TasksServices) {
     /** The form that a list opens: a new task in it, or one of its rows. */
     val listForm: TaskFormViewModel = provider[LIST_FORM_KEY, TaskFormViewModel::class.java]
 
+    /** Backup and restore, and the rows "Recovery key" and "App lock" of Settings. */
+    val backup: BackupViewModel = provider[BackupViewModel::class.java]
+
     /**
      * The clock is read again, so every screen shows what is overdue and
      * what is due today now, also if the clock, the time zone or the
      * phone's language changed while the app was away. The line about
      * notifications reads their state again: the user can change it in
-     * Android's settings at any moment. The activity calls it each time it
+     * Android's settings at any moment. Settings reads the keys again: on
+     * the way back from a screen of `core/security` the recovery key or
+     * the app lock may have changed. The activity calls it each time it
      * comes to the front.
      */
     fun check() {
         now.check()
         notifications.refresh()
+        backup.refresh()
     }
 
     private companion object {

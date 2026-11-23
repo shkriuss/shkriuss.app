@@ -16,6 +16,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.time.format.TextStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
@@ -51,12 +52,23 @@ class TasksFormat(
     private val shortDateWithYear = pattern("EEEdMMMy")
     private val spokenDate = pattern("EEEEdMMMM")
     private val spokenDateWithYear = pattern("EEEEdMMMMy")
+    private val longDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)
 
     /** The seven days of the week from the phone's first day, as the day chips of the form list them. */
     val week: List<DayOfWeek> = WeekFields.of(locale).firstDayOfWeek.let { first -> List(DAYS_PER_WEEK) { first.plus(it.toLong()) } }
 
     /** [number] in the phone's format: "1,250". */
     fun number(number: Int): String = numbers.format(number.toLong())
+
+    /** How many tasks a backup holds, in the phone's number format, for the plurals of the backup dialogs: "1,250". */
+    fun count(count: Long): String = numbers.format(count)
+
+    /**
+     * When a backup was made, in the phone's long date format and its
+     * clock, for the question before a restore: "16 November 2026, 14:05".
+     */
+    fun madeAt(at: LocalDateTime): String =
+        resources.getString(R.string.tasks_made_at, longDate.format(at), clock.format(at.toLocalTime()))
 
     /** A reminder time, in minutes after midnight, in the phone's 12-hour or 24-hour format: "09:00". */
     fun time(minuteOfDay: Int): String = time(LocalTime.of(minuteOfDay / MINUTES_PER_HOUR, minuteOfDay % MINUTES_PER_HOUR))

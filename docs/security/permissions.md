@@ -257,10 +257,11 @@ Other components that libraries add, none of them a permission:
   and a new time or time zone, and `ButtonReceiver` for **Done** and
   **Snooze 10 min** on a reminder. `TasksManifestTest` checks that these
   three are Tasks' receivers.
-- The eight screens of `core/security` ([Screens](#screens)). Tasks has
-  Settings, with About only: it has no Security section yet, so nothing
-  in Tasks opens seven of them, and the app lock cannot be turned on. The eighth, the handover screen, is
-  exported with no permission, as in Water. A screen of the module
+- The eight screens of `core/security` ([Screens](#screens)). Tasks'
+  Settings opens them from **Recovery key** and **App lock**, and from
+  the dialog for the moment the recovery key is first needed. The
+  handover screen is exported with no permission, as in Water. A
+  screen of the module
   needs both permissions, and the APK rules check fails a build of
   Tasks without them. `TasksManifestTest` checks that Tasks' screens are
   its own and these eight, and that none but the handover screen is
@@ -290,9 +291,9 @@ Other components that libraries add, none of them a permission:
   that ID, or Today if there is none. It reads nothing else from the
   intent.
 
-Tasks stores its data in its own database. Android backup and
-device-to-device transfer are turned off. Its backup goes only into the
-backup file of the suite, once the backup screens are built.
+Tasks stores its data in its own database and backs it up only into
+the backup file of the suite, so Android backup and device-to-device
+transfer are turned off.
 
 ## Apps that use `core/notify`
 

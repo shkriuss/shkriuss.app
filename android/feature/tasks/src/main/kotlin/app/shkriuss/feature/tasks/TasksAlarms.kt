@@ -271,8 +271,8 @@ class TasksAlarms(
     /**
      * Runs after every write that changed something (spec, "Reminders of
      * a task", the table of changes). A task with a new due day, time or
-     * repeat, one done, moved, opened again, deleted or brought back loses
-     * its notification. The repository has already written its entries,
+     * repeat, one done, moved, opened again, deleted, brought back or
+     * taken from a backup loses its notification. The repository has already written its entries,
      * with nothing on screen. A new title or list only keeps it. Then the
      * alarms move.
      *
@@ -373,6 +373,7 @@ class TasksAlarms(
             TaskChange.Kind.OPENED_AGAIN,
             TaskChange.Kind.DELETED,
             TaskChange.Kind.BROUGHT_BACK,
+            TaskChange.Kind.RESTORED,
         )
 
         /** A reminder shown more than this long after its moment is late (spec, "Words used on this page"). */

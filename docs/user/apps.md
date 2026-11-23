@@ -9,7 +9,7 @@ example `app.shkriuss.catalog`.
 | Catalog | A gallery of the shared design components and screens, for development. Most people do not need it. | Released: 0.3.0 |
 | [Water](water.md) | Log the water you drink, see how close you are to your daily goal, and get reminders during the hours you choose. The pilot app. | Released: 1.0.2 |
 | [Reminders](reminders-app.md) | Set one-time and repeating reminders with a title, and see each one as a notification at its time. | Released: 1.0.1 |
-| Tasks | Keep the things you have to do in lists, with a due date, a repeat and a reminder if you want them. | In development |
+| [Tasks](tasks.md) | Keep the things you have to do in lists, with a due date, a repeat and a reminder if you want them. | In development |
 | Notes | | Planned |
 | Sync | The only app with network access. It moves encrypted data only. | Planned |
 | Budget | | Planned |
