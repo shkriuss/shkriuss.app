@@ -112,8 +112,8 @@ The parts, in as few pull requests as stay easy to read:
   `core/backup` and `core/security`, as Water does. The settings get
   **Licences**, and docs/development/third-party.md lists everything
   that ships in the app.
-- **Sync**, once the Sync app is built: the signature-protected
-  interface for the Sync app, through `core/sync-client`, as
+- **Sync**, once the Sync app is built: the courier interface for the
+  Sync app (ADR 0005), through `core/sync-client`, as
   docs/architecture/sync-protocol.md says.
 
 Every permission of the app is in docs/security/permissions.md and in
@@ -387,24 +387,32 @@ options you see, with the one you recommend.
 
 ### R9 The next step
 
-Model: `opus`. Effort: `high`. It also fits a scheduled task that starts
-when a pull request is merged.
+Model: `opus`. Effort: `high`. One session of it at a time: a second one
+would start the same step.
 
 ```text
-Read CLAUDE.md, docs/development/PROMPTS.md and docs/user/apps.md. Do
-the next step of the project, and only that one.
+Read CLAUDE.md, docs/development/PROMPTS.md and docs/user/apps.md. Find
+the next step of the project. Do it only if point 4 allows.
 
 1. The app is the one "In development" on apps.md. If there is none, it
    is the first "Planned" one in the order of that page.
 2. Its next step is the first of "Every app" in PROMPTS.md that is not
-   done: the specification, each part of the build in its order, the
-   audit, then the pull request that prepares the release. For Sync,
-   the steps are those of "Sync". Find out what is done from
+   done: the specification, each part of the build that applies to the
+   app, in its order, the audit, then the pull request that prepares
+   the release. For Sync, the steps are 5.1 to 5.5 of "Sync", then the
+   audit and the release of "Every app". Find out what is done from
    docs/apps/<app>/spec.md, from "Unreleased" in
    android/app/<app>/CHANGELOG.md and from the merged pull requests.
 3. If a pull request for that step is open, change nothing and tell me
-   which one.
-4. Otherwise do the step as its prompt says. Where that prompt needs an
-   answer from me, such as a version, or a sentence that starts "I am
-   the owner and I ask you", ask me first and wait.
+   which one. For a step of "Sync", also tell me that 5.6 asks for
+   prompt R2 on it before I merge.
+4. Do the step, as its prompt says, only if that prompt and the notes
+   for the app ask for no more than `opus`, `high` and Accept edits:
+   a part of the build, 5.2 to 5.5, or the pull request that prepares a
+   release. Where that prompt needs an answer from me, such as a
+   version, or a sentence that starts "I am the owner and I ask you",
+   ask me first and wait.
+5. For every other step, such as a specification, an audit, 5.1 or a
+   step of Grammar, change nothing. Tell me the step, its prompt, and
+   the model, effort and mode that prompt asks for.
 ```
