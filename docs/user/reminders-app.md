@@ -313,7 +313,7 @@ Reminders' keys. A backup then opens only with your 24 words.
 
 ## Known problems
 
-Version 1.0.0 has these known problems and limits.
+Version 1.0.1 has these known problems and limits.
 
 Not known yet:
 
@@ -383,7 +383,7 @@ Other:
 18. Never type your real recovery words into a preview build of a pull
     request. Use test words.
 
-Not in version 1.0.0:
+Not in version 1.0.1:
 
 - Lists, due dates and checklists: they belong to Tasks. A note, a
   place, a colour or a picture: a reminder has only a title.
