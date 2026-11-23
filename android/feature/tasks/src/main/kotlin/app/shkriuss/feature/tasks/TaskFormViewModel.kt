@@ -48,6 +48,13 @@ data class TaskForm(
     val daysError: Boolean = false,
     /** After a Save of a new task while 5,000 are kept: "Tasks keeps 5,000 tasks. Delete some to add more." */
     val limitError: Boolean = false,
+    /**
+     * After a Save that the database refused: "Could not save the task. Try
+     * again.", in the form, above its buttons. The form is a sheet over the
+     * bottom of the screen, where a snackbar would be hidden (the owner's
+     * decision). Nothing was written. It stays until the next Save.
+     */
+    val saveFailed: Boolean = false,
     /** True while Save writes. Another Save does nothing then, and the form takes no change. */
     val saving: Boolean = false,
     /** The task as stored when the form opened, for Edit. A Save with no change writes nothing. */
@@ -80,7 +87,7 @@ data class FormScreen(
     val list: TaskList? = null,
     /** Inbox and every list, for the list dialog, in the order of Lists. */
     val lists: List<TaskList> = emptyList(),
-    /** For a repeat, the line "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, ...": the first three dates the form gives. */
+    /** For a repeat, the line "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, …": the first three dates the form gives. */
     val dates: List<LocalDate> = emptyList(),
     /** For a done task, the line "Done on Mon 16 Nov.", as the phone's clock shows that day. */
     val doneOn: LocalDate? = null,
@@ -178,8 +185,8 @@ object FormRules {
  *
  * Save and Delete take one press at a time and close the form after it.
  * A save the database refuses changes nothing: the form stays open with
- * what was typed, and the snackbar says "Could not save the task. Try
- * again." [onSaved] runs after each new or changed task is written, so
+ * what was typed, and says "Could not save the task. Try again."
+ * ([TaskForm.saveFailed]). [onSaved] runs after each new or changed task is written, so
  * that the question for notifications can follow it.
  *
  * A form open on a task that is deleted elsewhere closes. Every change
@@ -347,6 +354,7 @@ class TaskFormViewModel(
             // Checked only when the due date, the repeat, the days, the time or Remind me changed (rule 3).
             timeError = (datesChanged || reminderChanged) && due?.remindMinute?.let { FormRules.hasPassed(due.day, it, now) } == true,
             limitError = false,
+            saveFailed = false,
         )
         if (checked.titleError != null || checked.daysError || checked.timeError) {
             form.value = checked
@@ -367,9 +375,8 @@ class TaskFormViewModel(
                     repository.changeTask(stored.id, edit, now)
                 }
             } catch (_: SQLException) {
-                // Nothing changed. Only the form that was saved stays open, with what was typed.
-                form.compareAndSet(writing, checked)
-                snackbar.value = TasksSnackbar.CouldNotSave
+                // Nothing changed. Only the form that was saved stays open, with what was typed, and says so.
+                form.compareAndSet(writing, checked.copy(saveFailed = true))
                 return@launch
             }
             // Only the form that was saved closes, or says it was refused. A form opened, or one closed, while it wrote stays as it is.

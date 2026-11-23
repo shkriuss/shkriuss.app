@@ -2,11 +2,16 @@ package app.shkriuss.core.design
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -19,13 +24,21 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 
 /**
  * One row in a list, such as a task, a setting or a file. Use it for
@@ -54,11 +67,26 @@ import androidx.compose.ui.unit.dp
  * TalkBack reads "selected". Rows that are not selected say nothing about
  * it, so a list where nothing can be open sounds as before.
  *
+ * With [onCheckedChange], the row has a tick box at its start, such as
+ * the box of a task, ticked while [checked] is true. The box is a touch
+ * target of its own, at least 48dp, beside the row's tap: a tap on the
+ * box calls [onCheckedChange] with the new value, and a tap on the rest of
+ * the row calls [onClick]. The caller changes [checked]. TalkBack still
+ * reads the whole row as one item: its text, then [checkedDescription],
+ * by default "Ticked" or "Not ticked". It offers the tick as an action
+ * named [checkActionLabel], by default "Tick" or "Clear the tick", beside
+ * the row's own tap. Give both in the app's words, such as "not done" and
+ * "Mark as done". The box grows with the font size, as the box of a
+ * [ShkCheckbox] does, and dims with the row. Without [onCheckedChange],
+ * the row has no box and is as it always was.
+ *
  * Its content starts and ends at the edges of the space it is given, so
  * its text lines up with the page title and the other text on the screen.
  * Only its touch target, its pressed state and its selected mark, a
  * rounded [ShkShapes.Field], reach 8dp past those edges, as those of a
  * checkbox or switch row do. The bar sits in that space, before the text.
+ * The touch target of a tick box reaches into that space too, and the box
+ * is drawn at the edge, where the box of a [ShkCheckbox] is.
  */
 @Composable
 fun ShkListItem(
@@ -71,6 +99,10 @@ fun ShkListItem(
     enabled: Boolean = true,
     selected: Boolean = false,
     trailingIcon: Painter? = null,
+    checked: Boolean = false,
+    onCheckedChange: ((Boolean) -> Unit)? = null,
+    checkedDescription: String? = null,
+    checkActionLabel: String? = null,
 ) {
     val colors = ShkTheme.colors
     val alpha = if (enabled) 1f else DisabledContentAlpha
@@ -79,6 +111,13 @@ fun ShkListItem(
     } else {
         // One TalkBack item, as a row that can be tapped is.
         Modifier.semantics(mergeDescendants = true) { if (!enabled) disabled() }
+    }
+    val tick = if (onCheckedChange != null) {
+        val state = checkedDescription ?: stringResource(if (checked) R.string.shk_ticked else R.string.shk_not_ticked)
+        val label = checkActionLabel ?: stringResource(if (checked) R.string.shk_clear_tick else R.string.shk_tick)
+        Modifier.tickSemantics(checked, onCheckedChange, enabled, state, label)
+    } else {
+        Modifier
     }
     val mark = if (selected) {
         Modifier
@@ -89,10 +128,11 @@ fun ShkListItem(
     }
     Row(
         // The mark comes before the action, so the pressed state is drawn over it.
-        modifier = modifier.shkRow(action = mark.then(action), verticalPadding = ShkSpacing.Small),
+        modifier = modifier.shkRow(action = mark.then(action).then(tick), verticalPadding = ShkSpacing.Small),
         horizontalArrangement = Arrangement.spacedBy(ShkSpacing.Medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (onCheckedChange != null) TickBox(checked, onCheckedChange, enabled)
         if (icon != null) {
             Icon(
                 painter = icon,
@@ -118,6 +158,82 @@ fun ShkListItem(
                 tint = colors.textSecondary.copy(alpha = alpha),
             )
         }
+    }
+}
+
+/**
+ * What TalkBack hears of a row's tick box, on the row itself: the [state]
+ * after the row's text, and the tick as an action named [label]. The box
+ * has no TalkBack item of its own ([TickBox]), so the row stays one item.
+ * A row that is turned off offers no action.
+ */
+private fun Modifier.tickSemantics(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean,
+    state: String,
+    label: String,
+): Modifier = semantics {
+    stateDescription = state
+    if (enabled) {
+        customActions = listOf(
+            CustomAccessibilityAction(label) {
+                onCheckedChange(!checked)
+                true
+            },
+        )
+    }
+}
+
+/**
+ * The tick box at the start of a [ShkListItem]: Material 3's checkbox in
+ * a touch target of its own, at least 48dp wide and tall. The target
+ * starts where the row's own reaches to, [RowReach] before the row's
+ * content, and ends where the text starts: it takes the gap after it
+ * too. The box is drawn at the content's edge, as the box of a
+ * [ShkCheckbox] is. TalkBack skips it: the row says its state and offers
+ * the tick ([tickSemantics]).
+ */
+@Composable
+private fun TickBox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean) {
+    val colors = ShkTheme.colors
+    Box(
+        modifier = Modifier
+            .reachPast(start = RowReach, end = ShkSpacing.Medium)
+            .sizeIn(minWidth = ShkSpacing.MinTouchTarget, minHeight = ShkSpacing.MinTouchTarget)
+            .toggleable(value = checked, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange)
+            .semantics { hideFromAccessibility() }
+            .padding(start = RowReach),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Checkbox(
+            checked = checked,
+            // The box around it takes the tap, so the checkbox has no action of its own.
+            onCheckedChange = null,
+            modifier = Modifier.grownBy(iconSizeNextToText(SelectionControlSize) / SelectionControlSize),
+            enabled = enabled,
+            colors = CheckboxDefaults.colors(
+                checkedColor = colors.accent,
+                uncheckedColor = colors.textSecondary,
+                checkmarkColor = colors.textOnAccent,
+            ),
+        )
+    }
+}
+
+/**
+ * Lays out what follows [start] plus [end] wider than the space this
+ * element takes: it reaches [start] back before that space, and [end] on
+ * past it, into the gap the row leaves after it. The parent sees that much
+ * less than what follows measured; touches and drawing reach past it. In
+ * right-to-left languages it is mirrored.
+ */
+private fun Modifier.reachPast(start: Dp, end: Dp): Modifier = layout { measurable, constraints ->
+    val before = start.roundToPx()
+    val after = end.roundToPx()
+    val placeable = measurable.measure(constraints.offset(horizontal = before + after))
+    layout((placeable.width - before - after).coerceAtLeast(0), placeable.height) {
+        placeable.placeRelative(x = -before, y = 0)
     }
 }
 

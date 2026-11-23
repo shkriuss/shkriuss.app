@@ -251,6 +251,8 @@
     <string name="state_stays_open_with_error">Stays open: a value refused under its field</string>
     <string name="state_with_suffix">With a unit after the text</string>
     <string name="state_with_trailing_icon">With an icon at the end</string>
+    <string name="state_with_tick_box">With a tick box</string>
+    <string name="state_with_tick_box_ticked">With a tick box, ticked</string>
     <string name="state_progress_empty">Empty</string>
     <string name="state_progress_part">Part of the way</string>
     <string name="state_progress_full">Full</string>
@@ -469,7 +471,7 @@
     <!-- Lists page. -->
     <string name="lists_intro">Touch and hold a tappable list item to see it pressed. Nothing on this page does anything when tapped.</string>
     <string name="list_item_title">List item</string>
-    <string name="list_item_use">One row in a list of things that look alike, such as tasks. A tappable row is one touch target, text included. A selected row is the one open beside the list; TalkBack reads it as selected.</string>
+    <string name="list_item_use">One row in a list of things that look alike, such as tasks. A tappable row is one touch target, text included. A selected row is the one open beside the list; TalkBack reads it as selected. A row can have a tick box at its start, a touch target of its own beside the row\'s tap; TalkBack still reads the row as one item, with the tick as an action.</string>
     <string name="section_header_title">Section header</string>
     <string name="section_header_use">The heading of a group, such as Today above a list of tasks. TalkBack reads it as a heading.</string>
     <string name="divider_title">Divider</string>

@@ -72,15 +72,17 @@ on your phone, with no account and no network.
 3. Section **Overdue**: open tasks with a due day before today, oldest
    first. Section **Today**: open tasks due today. Within a day: tasks
    with a reminder first, by time, then the others, oldest first. Ties:
-   `createdAt`, then `id`.
+   `createdAt`, then `id`. A section with no task is left out, with its
+   heading.
 4. A row: a tick box, the title, and under it the list, the date if
    overdue, the reminder time and the repeat: "Home · 09:00 · Every
-   day", "Inbox · Mon 16 Nov · Every week". A tap on the row opens the
-   form.
+   day", "Inbox · Mon 16 Nov · Every week". A date has its year only
+   when it is not this year, as in Reminders: "Tue 30 Dec 2025". A tap
+   on the row opens the form.
 5. A tick marks the task done, or moves a repeating task to its next
    date ([Repeats](#repeats), point 3). A snackbar, "Task done", or "Next: Wed 18
    Nov" for a repeating task, with **Undo**.
-6. With none: "Nothing due today."
+6. With no task in either section: "Nothing due today."
 7. A floating button, "Add a task": the form, due today, in Inbox.
 
 ### Lists
@@ -89,7 +91,8 @@ on your phone, with no account and no network.
    the phone's language order. Ties: `createdAt`, then `id`. Each row has
    its count of open tasks at the end: "4 open".
 2. A floating button, "New list": a dialog with one field, **Name**, and
-   **Save** and **Cancel**.
+   **Save** and **Cancel**. The field asks the keyboard not to learn
+   what is typed, as the title does.
 3. A tap opens the list. Under 840dp it opens in place, with Back. From
    840dp, `ShkListDetailScaffold`: the lists, 360dp wide, and the open
    list beside them, or "Choose a list."
@@ -100,7 +103,11 @@ on your phone, with no account and no network.
    except on Inbox, and **Delete done tasks** while there are any.
 2. The open tasks: those with a due day first, by due day, then by
    reminder time, those without one last; then those with no due day,
-   oldest first. Ties: `createdAt`, then `id`. Rows as on Today.
+   oldest first. Ties: `createdAt`, then `id`. Rows as on Today, except
+   the line under the title: no list's name, and the due day always,
+   "Today" or its date, then the reminder time and the repeat: "Today ·
+   09:00 · Every day", "Fri 20 Nov · Every week". With no due day,
+   nothing under the title.
 3. Section **Done**: done tasks, the last one done first. The row says
    "Done Mon 16 Nov". Clearing its tick opens the task again, with no
    snackbar.
@@ -120,8 +127,10 @@ A bottom sheet at every width. "New task" or "Edit task":
 1. **Title**: as [Reminders' title](../reminders/spec.md#the-reminder-form),
    point 1: one line, the keyboard opens for a new task only, and it
    asks the keyboard not to learn what is typed.
-2. **List**: the list's name. A tap opens a dialog with Inbox and every
-   list as a `ShkRadioGroup`.
+2. **List**: the list's name. A tap opens a dialog, "List", with Inbox
+   and every list as a `ShkRadioGroup`. A tap on one chooses it and
+   closes the dialog. Its one button, **Cancel**, closes it with no
+   change.
 3. **Due date**: "No due date" and **Add a due date**, or "Mon 16 Nov
    2026" and **Remove**. A tap on the date opens `ShkDatePicker`, from
    today to 31 Dec 2100. An earlier due date stays until it is changed.
@@ -129,7 +138,7 @@ A bottom sheet at every width. "New task" or "Edit task":
 4. With a due date: **Repeat**, the five choices of Reminders, and for
    Every week the seven day chips. Choosing Every week selects the day
    of the date. For a repeat, a line: "Dates: Wed 18 Nov, Fri 20 Nov,
-   Mon 23 Nov, ...".
+   Mon 23 Nov, …".
 5. With a due date: **Remind me**, a `ShkCheckbox`, and when it is on,
    **Time**, which opens `ShkTimePicker`. It starts at 09:00. When the
    due day is today and 09:00 has passed, it starts at the next full
@@ -326,7 +335,7 @@ current minute.
 
 | What fails | What follows |
 |---|---|
-| Saving the form | Nothing changes. The form stays open with what was typed. A snackbar: "Could not save the task. Try again." |
+| Saving the form | Nothing changes. The form stays open with what was typed, and says above its buttons: "Could not save the task. Try again." The form is a sheet over the bottom of the screen, where a snackbar would be hidden. The words stay until the next Save. |
 | Saving a list's name, in **New list** or **Rename** | Nothing changes. The dialog stays open with the name, and says under the field: "Could not save the list. Try again." |
 | A tick, a delete, an Undo | Nothing changes. The row stays as it was. A snackbar: "Could not change your tasks. Try again." |
 | The phone-only file, after the database | The database change stays. Entries written for an old reminder number, or for a task that is done, deleted or not stored, count as missing: the mark is the current minute, with no snooze and no `showing`. So an old snooze never fires for a new due day. |
@@ -432,8 +441,9 @@ at 14:05 in Tbilisi:
 As in Water and Reminders, and:
 
 1. A task row is one item: "Pay rent, due today at 10:00, every month,
-   Home, not done". Its actions: "Mark as done" (or "Mark as not done")
-   and "Edit".
+   Home, not done". In a list, without the list's name. A done task:
+   "Water the plants, done on Monday 16 November". Its actions: "Mark
+   as done" (or "Mark as not done") and "Edit".
 2. A list row is one item: "Home, 4 open tasks".
 3. Overdue, Today and Done are headings.
 4. The day chips, the form's errors and the notification line are as in
@@ -445,7 +455,7 @@ As in Water and Reminders, and:
 
 | Module | Change |
 |---|---|
-| `core/design` | `ShkListItem` gets an optional tick box at its start (`checked`, `onCheckedChange`), a touch target of its own of at least 48dp, beside the row's tap. With none, every row stays as it is. A sample in Catalog, tests and screenshots. |
+| `core/design` | `ShkListItem` gets an optional tick box at its start (`checked`, `onCheckedChange`), a touch target of its own of at least 48dp, beside the row's tap. TalkBack still reads the row as one item: the state after its text and the tick as an action, in the app's words (`checkedDescription`, `checkActionLabel`). With none, every row stays as it is. A sample in Catalog, tests and screenshots. |
 
 `core/notify` lacks nothing: a button carries a whole number, the
 review sees each button's value, and an alarm in the past fires late.
@@ -479,6 +489,21 @@ the clock or the time zone changes
 4. Deleting a list deletes its tasks, after a question, with **Undo**.
    Inbox is fixed: it cannot be renamed or deleted.
 5. The buttons **Done** and **Snooze 10 min**, as in Reminders.
+
+For the screens, five more:
+
+6. A save of the form that fails says so in the form, above its
+   buttons, not in a snackbar, which the sheet would hide
+   ([A write fails](#a-write-fails)).
+7. A row in a list says its due day, "Today" or its date, and not the
+   list's name ([A list](#a-list), point 2). A date has its year only
+   when it is not this year, as in Reminders.
+8. Today leaves out a section with no task. "Nothing due today." shows
+   only when both are empty ([Today](#today), points 3 and 6).
+9. In the form's list dialog, a tap chooses a list. Its one button is
+   **Cancel** ([The task form](#the-task-form), point 2).
+10. The field of a list's name asks the keyboard not to learn what is
+    typed, as the title does ([Lists](#lists), point 2).
 
 ## Assumptions
 

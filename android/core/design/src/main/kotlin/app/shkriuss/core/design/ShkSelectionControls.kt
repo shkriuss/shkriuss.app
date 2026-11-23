@@ -233,7 +233,7 @@ private fun SelectionText(text: String, enabled: Boolean, modifier: Modifier) {
  * button at, at the default font size. They grow from it like an icon of
  * this size next to text (owner decision).
  */
-private val SelectionControlSize = 20.dp
+internal val SelectionControlSize = 20.dp
 
 /**
  * Draws a control [scale] times as large as it measures, and takes that
@@ -243,7 +243,7 @@ private val SelectionControlSize = 20.dp
  * included, as an icon's strokes grow with it. At a scale of 1 it changes
  * nothing.
  */
-private fun Modifier.grownBy(scale: Float): Modifier {
+internal fun Modifier.grownBy(scale: Float): Modifier {
     if (scale <= 1f) return this
     return layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)

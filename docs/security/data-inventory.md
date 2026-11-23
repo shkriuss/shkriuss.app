@@ -297,10 +297,10 @@ hold no user data.
 
 ## Tasks (`app.shkriuss.tasks`)
 
-Tasks is being built. Its code stores lists, tasks and what this phone
-remembers of the reminder of each task, as below. Its screens are not
-built yet: the app shows one line and writes none of it. It has no
-backup, shows no notification and cannot set up the recovery key.
+Tasks is being built. It stores lists, tasks and what this phone
+remembers of the reminder of each task, as below. Its screens write all
+of it. It has no backup yet, shows no notification and cannot set up the
+recovery key.
 
 ### On the phone
 

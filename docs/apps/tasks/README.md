@@ -12,10 +12,9 @@ Pages:
 
 Code:
 
-- `android/feature/tasks`: the data and logic. The screens are not
-  built yet. They go there too.
-- `android/app/tasks`: the app. Until the screens come, it shows one
-  line in their place.
+- `android/feature/tasks`: the data and logic, and the screens, in
+  the package `ui`.
+- `android/app/tasks`: the app.
 - What changed: [CHANGELOG.md](../../../android/app/tasks/CHANGELOG.md).
 - How the modules fit together:
   [modules.md](../../architecture/modules.md).

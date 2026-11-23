@@ -2,6 +2,7 @@ package app.shkriuss.tasks
 
 import android.app.Application
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.testing.AppLockOnForTests
 import app.shkriuss.core.testing.LockedAppForTests
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
@@ -48,6 +49,15 @@ interface TasksTestApp : TasksHost {
  * lock: locked from the start, with what `TasksApp` hands to the screens.
  */
 class LockedTasksApp : LockedAppForTests(TASKS), TasksTestApp {
+    override val test: TestTasks by lazy { TestTasks(this) }
+}
+
+/**
+ * Tasks' app class for the check that every sheet and dialog is behind
+ * the app lock: the app lock is on and the app is open, so a test can open
+ * a sheet or a dialog, then lock the app.
+ */
+class AppLockOnTasksApp : AppLockOnForTests(TASKS), TasksTestApp {
     override val test: TestTasks by lazy { TestTasks(this) }
 }
 

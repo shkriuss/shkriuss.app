@@ -4,40 +4,37 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
-import app.shkriuss.core.design.ShkScreen
-import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTheme
-import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.core.security.AppLockGate
+import app.shkriuss.feature.tasks.tasksServices
+import app.shkriuss.feature.tasks.ui.TasksModels
+import app.shkriuss.feature.tasks.ui.TasksScreens
 
 /**
  * The one activity of Tasks (docs/apps/tasks/spec.md, "As in Water and
- * Reminders", navigation). All of its content is inside [AppLockGate],
- * inside [ShkTheme]: while the app is locked, nothing of it is drawn.
- * `EveryScreenIsBehindTheAppLockTest` checks it.
+ * Reminders", navigation). All of its content, with every sheet and
+ * dialog, is inside [AppLockGate], inside [ShkTheme]: while the app is
+ * locked, nothing of it is drawn. `EveryScreenIsBehindTheAppLockTest`
+ * checks it.
  */
 class TasksActivity : ComponentActivity() {
+    private lateinit var models: TasksModels
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        models = TasksModels(this, tasksServices)
+        val versionName = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
         setContent {
             ShkTheme {
-                AppLockGate { TasksPlaceholder() }
+                AppLockGate { TasksScreens(models, versionName) }
             }
         }
     }
-}
 
-/**
- * Stands in for Tasks' screens, Today, Lists with one list open, Settings
- * and the task form, until they are built. They replace it, and delete it
- * with its two strings and its screenshots.
- */
-@Composable
-internal fun TasksPlaceholder() {
-    ShkScreen(scrollable = true, topBar = { ShkTopBar(title = stringResource(R.string.placeholder_title)) }) {
-        ShkText(stringResource(R.string.placeholder_line))
+    override fun onStart() {
+        super.onStart()
+        // Every screen shows what is overdue and due today now, also if the clock changed while the app was away.
+        models.check()
     }
 }

@@ -334,7 +334,7 @@ icon rule asks, and the rail grows with its labels.
 | `ShkSlider` | A value in a range where the exact number matters less than where it sits, such as a daily goal. | A value that must be exact. Use a text field. |
 | `ShkProgressBar` | How far something has got, such as how much of a daily goal is drunk. | Picking a value: use a slider. A wait whose end is not known: use a loading state. |
 | `ShkCard` | One item set apart from the things around it, such as a note in a list of notes. Give it `onClick` when tapping it opens the item. | Rows of things that look alike. Use list items. |
-| `ShkListItem` | One row in a list of things that look alike, such as tasks, settings or files. Give it `onClick` when tapping it opens or changes something, and `selected` when it is the item open beside the list. | A setting that turns on and off. Use a switch. |
+| `ShkListItem` | One row in a list of things that look alike, such as tasks, settings or files. Give it `onClick` when tapping it opens or changes something, `selected` when it is the item open beside the list, and `onCheckedChange` for a tick box at its start, such as the box of a task. | A setting that turns on and off. Use a switch. |
 | `ShkSectionHeader` | The heading of a group on a screen, such as "Today" above a list of tasks. | The title of a screen. Each screen has one title. |
 | `ShkDivider` | A line between groups, where space alone does not show where one ends. | Between every two list items. Most lists need no line. |
 | `ShkEmptyState` | What a screen or list shows when it has nothing yet, such as "No notes yet", or no results. | Content that is still loading. |
@@ -709,6 +709,17 @@ Each has a sample at the end of the Dialogs page in the Catalog.
 3. Open: how TalkBack announces the progress dialog on a real phone. A
    unit test shows what it would read, not that it speaks.
 
+### Optional part for Tasks' screens
+
+Tasks' rows use one part of the list item
+([Tasks' specification](../apps/tasks/spec.md#changes-to-shared-modules)).
+Its default, none, leaves every other row as it is. It has samples on
+the Lists page of the Catalog.
+
+| Component | Part | What it does |
+|---|---|---|
+| `ShkListItem` | `checked`, `onCheckedChange`, `checkedDescription` and `checkActionLabel` | With `onCheckedChange`, a tick box at the start of the row, such as the box of a task, ticked while `checked` is true. The box is a touch target of its own, at least 48 dp, beside the row's tap: from the start of the row's touch target to where the text starts. Its box is drawn where the box of a `ShkCheckbox` is, grows with the text and dims with the row. TalkBack skips the box and still reads the row as one item: its text, then `checkedDescription`, such as "not done", and it offers the tick as an action named `checkActionLabel`, such as "Mark as done". Without them it says "Ticked" or "Not ticked", and "Tick" or "Clear the tick". |
+
 ### Optional part for the user's own text
 
 Reminders' title field uses one part of the text field (owner's
@@ -716,7 +727,7 @@ decision). It changes nothing on screen, so the Catalog has no sample.
 
 | Component | Part | What it does |
 |---|---|---|
-| `ShkTextField` | `keyboardLearns = false` | The field asks the keyboard not to learn what is typed (`IME_FLAG_NO_PERSONALIZED_LEARNING`), so the keyboard does not keep the words in its own dictionary. It still suggests and corrects. A keyboard can ignore the request. Use it for the user's own text, such as a reminder's title. The default, `true`, leaves every other field as it is. |
+| `ShkTextField` | `keyboardLearns = false` | The field asks the keyboard not to learn what is typed (`IME_FLAG_NO_PERSONALIZED_LEARNING`), so the keyboard does not keep the words in its own dictionary. It still suggests and corrects. A keyboard can ignore the request. Use it for the user's own text, such as a reminder's title or a list's name. The default, `true`, leaves every other field as it is. |
 
 ### States
 
@@ -1191,6 +1202,17 @@ the corners round, and the bar on the right in right-to-left languages.
 Without the bar, the mark would be a change of colour only, and the test
 fails.
 
+`ShkListItemTickBoxTest` checks the tick box of a list item at font
+scale 1.0 and 2.0. A real touch on the box ticks it and does not open
+the row; a touch on the text opens the row and does not tick. The box is
+at least 48 dp wide and tall, starts where the row's touch target starts
+and ends where the text starts, on the right in right-to-left languages.
+TalkBack skips the box and reads the row as one item, with "Not ticked"
+or "Ticked", or the app's own words, after its text, and offers "Tick" or
+"Clear the tick", or the app's own words, as an action. A row turned off
+ignores a touch on its box and offers no action. A row without
+`onCheckedChange` has no box, no state and no action.
+
 `ShkWindowWidthTest` checks that window widths split at 600 and 840 dp,
 and that `ShkWindowWidth.current` follows the window: compact on the
 screenshot phone, medium on the tablet held upright, expanded on the
@@ -1300,7 +1322,9 @@ radio button clears the others in its group, the text field takes typing
 and shows its error past 20 characters, the slider moves and says its
 new value, and the progress bar fills and empties and says its value in
 words. On Lists, exactly one list item, the selected sample, is
-read as selected. On Navigation, a tap selects a destination and shows
+read as selected, and the two rows with a tick box say "Not ticked" and
+"Ticked" and offer "Tick" and "Clear the tick". A tick box is checked as
+part of its row: its touch target is inside its row's and in no other. On Navigation, a tap selects a destination and shows
 its name as the title. On List and detail, a tap on a note opens it in
 place of the list, and the back gesture, then Back in its top bar, closes
 it and leaves the page open. On Dialogs, Bottom sheets, Snackbars,

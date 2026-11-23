@@ -12,7 +12,7 @@ import app.shkriuss.core.design.ShkSectionHeader
 import app.shkriuss.core.design.R as DesignR
 
 /**
- * The list item in every state, the section header alone, long and above
+ * The list item in every state, with a tick box too, the section header alone, long and above
  * list items, and the divider between list items. The pressed state shows
  * when the owner touches a list item that can be tapped. Nothing here does
  * anything when tapped.
@@ -86,6 +86,25 @@ fun ListsPage(modifier: Modifier = Modifier) {
                         headline = stringResource(R.string.sample_call_dentist),
                         trailingText = stringResource(R.string.sample_done),
                         trailingIcon = painterResource(DesignR.drawable.shk_icon_check),
+                    )
+                },
+                // The box is its own touch target, beside the row's tap. As everything here, it changes nothing when tapped.
+                ComponentState(R.string.state_with_tick_box) {
+                    ShkListItem(
+                        headline = stringResource(R.string.sample_buy_bread),
+                        supportingText = stringResource(R.string.sample_corner_shop),
+                        onClick = {},
+                        checked = false,
+                        onCheckedChange = {},
+                    )
+                },
+                ComponentState(R.string.state_with_tick_box_ticked) {
+                    ShkListItem(
+                        headline = stringResource(R.string.sample_call_dentist),
+                        supportingText = stringResource(R.string.sample_done),
+                        onClick = {},
+                        checked = true,
+                        onCheckedChange = {},
                     )
                 },
             ),
