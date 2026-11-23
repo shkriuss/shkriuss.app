@@ -72,6 +72,12 @@ backup, follow docs/architecture/backup-format.md: name the record
 types, say what each holds, and give the app's data version. End with
 what is open.
 
+Give every stored value its limits, also the rules that join two
+values, and say that a restore refuses a value outside them. Say what
+happens when the app is stopped between two writes, when a write fails,
+when a button press arrives twice or late, and when the clock or the
+time zone changes.
+
 <the lines for this app, from "Notes for each app" below>
 ```
 
