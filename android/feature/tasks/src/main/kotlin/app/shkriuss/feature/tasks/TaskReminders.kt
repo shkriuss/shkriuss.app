@@ -5,6 +5,25 @@ import app.shkriuss.feature.tasks.data.TaskEntity
 import java.time.LocalDateTime
 
 /**
+ * Where the one alarm of a task is, and why (docs/apps/tasks/spec.md,
+ * "Reminders of a task", point 2). [atMillis] is its moment, in
+ * milliseconds since 1970 UTC.
+ */
+sealed interface TaskAlarm {
+    /** The moment of the alarm. */
+    val atMillis: Long
+
+    /** Rule 1: the reminder moment is pending and has passed, so it shows late. */
+    data class Due(override val atMillis: Long) : TaskAlarm
+
+    /** Rule 2: the end of a snooze, earlier than a pending moment. It counts also when it has passed. */
+    data class Snooze(override val atMillis: Long) : TaskAlarm
+
+    /** Rule 3: the pending reminder moment, still to come. */
+    data class Next(override val atMillis: Long) : TaskAlarm
+}
+
+/**
  * The reminder of a task (docs/apps/tasks/spec.md, "Reminders of a
  * task"). A task has a reminder when it is open and has a due day and a
  * reminder time. A done or deleted task has none.
@@ -41,6 +60,56 @@ object TaskReminders {
      * reminder time.
      */
     fun momentOf(due: Due): LocalDateTime? = due.remindMinute?.let { due.day.atStartOfDay().plusMinutes(it.toLong()) }
+
+    /** The reminder moment of [task], as a local minute, or null if it has no reminder: also when it is done. */
+    fun momentOf(task: Task): LocalDateTime? = if (task.isOpen) task.due?.let(::momentOf) else null
+
+    /**
+     * The mark the rule uses now, as in Reminders: **the mark never stays
+     * later than now** (docs/apps/reminders/spec.md, "The mark", point 3).
+     * A mark whose moment is later than now, because the clock was set
+     * back or the phone moved to a zone further west, counts as the
+     * current minute. So does no mark at all. The moment of a mark is
+     * found as for a reminder moment: of a time that happens twice it is
+     * the first, so in the hour that happens twice the mark stays.
+     */
+    fun markNow(stored: LocalDateTime?, now: ClockReading): LocalDateTime =
+        if (stored == null || now.millisOf(stored) > now.millis) now.currentMinute else stored
+
+    /**
+     * The one alarm of a task's reminder at [moment], with the mark
+     * [mark] and the snooze [snoozeMillis], now, or null for none
+     * (docs/apps/tasks/spec.md, "Reminders of a task", point 2). It is
+     * Reminders' rule for a **one-time reminder**, with the moment as its
+     * one occurrence, pending while it is later than the mark:
+     *
+     * 1. **Due first.** A pending moment that is at or before now: the
+     *    alarm is then, so it fires within seconds, late.
+     * 2. **Then a snooze.** Otherwise, the end of a snooze, or the pending
+     *    moment, whichever is earlier. The end counts also when it has
+     *    passed.
+     * 3. **Then the next.** Otherwise, the pending moment.
+     * 4. With neither, no alarm: the reminder is dealt with.
+     */
+    fun alarmOf(moment: LocalDateTime, mark: LocalDateTime, snoozeMillis: Long?, now: ClockReading): TaskAlarm? {
+        val pending = moment > mark
+        val atMillis = now.millisOf(moment)
+        if (pending && atMillis <= now.millis) return TaskAlarm.Due(atMillis)
+        val next = if (pending) TaskAlarm.Next(atMillis) else null
+        if (snoozeMillis != null && (next == null || snoozeMillis <= next.atMillis)) return TaskAlarm.Snooze(snoozeMillis)
+        return next
+    }
+
+    /**
+     * The alarm of [task], whose entry on this phone is [entry], now, or
+     * null for none: also for a task with no reminder. [entry] counts only
+     * if it was written for the task's reminder number now.
+     */
+    fun alarmOf(task: Task, entry: TaskEntry?, now: ClockReading): TaskAlarm? {
+        val moment = momentOf(task) ?: return null
+        val counted = TaskBook.countingEntry(entry, numberOf(task))
+        return alarmOf(moment, markNow(counted.mark, now), counted.snoozeMillis, now)
+    }
 
     private fun numberOf(day: Long, repeat: Int, minute: Int): Long = (day * REPEATS + repeat) * MINUTES_PER_DAY + minute
 

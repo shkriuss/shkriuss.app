@@ -7,9 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The reminder number and the reminder moment of a task
+ * The reminder number, the reminder moment and the one alarm of a task
  * (docs/apps/tasks/spec.md, "Reminders of a task"), with the spec's
- * example, and the moment of a time in the two hours of summer time.
+ * example, the moment of a time in the two hours of summer time, and
+ * Reminders' rule for a one-time reminder with the moment as its one
+ * occurrence.
  */
 class TaskRemindersTest {
     private fun task(due: Due?, doneAt: Long? = null) = Task("id", INBOX, "Pills", due, doneAt, createdAt = 0)
@@ -66,5 +68,60 @@ class TaskRemindersTest {
         // The first 02:30 is at 00:30 UTC, in summer time.
         assertEquals(readingAt(LocalDate.of(2027, 10, 31).atTime(0, 30)).millis, reading.millisOf(autumn))
         assertTrue(reading.millisOf(autumn) < readingAt(LocalDate.of(2027, 10, 31).atTime(1, 30)).millis)
+    }
+
+    // The one alarm of a task: Reminders' rule for a one-time reminder.
+
+    private val moment = monday(14)
+
+    @Test
+    fun aMomentLaterThanTheMarkAndStillToComeIsTheNext() {
+        val now = readingAt(monday(8))
+        assertEquals(TaskAlarm.Next(readingAt(moment).millis), TaskReminders.alarmOf(moment, monday(8), null, now))
+    }
+
+    @Test
+    fun aMomentLaterThanTheMarkThatHasPassedIsDue() {
+        val now = readingAt(monday(15))
+        assertEquals(TaskAlarm.Due(readingAt(moment).millis), TaskReminders.alarmOf(moment, monday(8), null, now))
+    }
+
+    @Test
+    fun aMomentAtOrBeforeTheMarkHasNoAlarmUnlessASnoozeIsSet() {
+        val now = readingAt(monday(14, 5))
+        assertNull(TaskReminders.alarmOf(moment, monday(14), null, now))
+        val snooze = readingAt(monday(14, 12)).millis
+        assertEquals(TaskAlarm.Snooze(snooze), TaskReminders.alarmOf(moment, monday(14), snooze, now))
+        val passed = readingAt(monday(14, 1)).millis
+        assertEquals("a snooze whose end has passed counts", TaskAlarm.Snooze(passed), TaskReminders.alarmOf(moment, monday(14), passed, now))
+    }
+
+    @Test
+    fun aDueMomentComesBeforeASnoozeAndASnoozeBeforeAMomentStillToCome() {
+        val snooze = readingAt(monday(13)).millis
+        assertEquals(TaskAlarm.Due(readingAt(moment).millis), TaskReminders.alarmOf(moment, monday(8), snooze, readingAt(monday(14, 1))))
+        assertEquals(TaskAlarm.Snooze(snooze), TaskReminders.alarmOf(moment, monday(8), snooze, readingAt(monday(12))))
+        val later = readingAt(monday(15)).millis
+        assertEquals(TaskAlarm.Next(readingAt(moment).millis), TaskReminders.alarmOf(moment, monday(8), later, readingAt(monday(12))))
+    }
+
+    @Test
+    fun theMarkNeverStaysLaterThanNow() {
+        assertEquals(monday(9, 30), TaskReminders.markNow(monday(14), readingAt(monday(9, 30, 20))))
+        assertEquals(monday(9, 30), TaskReminders.markNow(null, readingAt(monday(9, 30, 20))))
+        assertEquals(monday(8), TaskReminders.markNow(monday(8), readingAt(monday(9, 30))))
+    }
+
+    @Test
+    fun aTaskWithNoReminderOrDoneHasNoAlarmAndAnEntryForAnotherNumberCountsAsMissing() {
+        val now = readingAt(monday(8))
+        assertNull(TaskReminders.alarmOf(task(Due(MONDAY)), null, now))
+        assertNull(TaskReminders.alarmOf(task(Due(MONDAY, null, 14 * 60), doneAt = 1L), null, now))
+        val bank = task(Due(MONDAY, null, 14 * 60))
+        // Written for another number: its mark at 14:00 and its snooze count for nothing.
+        val old = TaskEntry(number = 1L, mark = monday(14), snoozeMillis = readingAt(monday(9)).millis)
+        assertEquals(TaskAlarm.Next(readingAt(moment).millis), TaskReminders.alarmOf(bank, old, now))
+        val counted = TaskEntry(number = TaskReminders.numberOf(bank), mark = monday(14))
+        assertNull(TaskReminders.alarmOf(bank, counted, readingAt(monday(14, 5))))
     }
 }

@@ -604,36 +604,46 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
     and dialog. The date picker shows June 2100, because Material's
     picker marks the real today in the month it shows.
-- `feature/tasks` has 10 test classes with 122 tests: the dates of each
+- `feature/tasks` has 12 test classes with 196 tests: the dates of each
   repeat with the examples of the spec, the limits of every column and
   the rules that join two, the reminder number and moment, also in the
-  two hours of summer time, the order of each screen, and the rules of
-  the form, as plain code (`RepeatDatesTest`, `TaskLimitsTest`,
+  two hours of summer time, the one alarm of a task, the order of each
+  screen, and the rules of the form, as plain code (`RepeatDatesTest`, `TaskLimitsTest`,
   `TaskRemindersTest`, `TaskOrderTest`, `FormRulesTest`), the phone-only
   file, its limits and the reminder number its entries count for, also
   after the disk refused a write (`TaskBookTest`), the schema
   (`TasksDatabaseTest`), and the repository and the ViewModels on a
-  database in memory (`TasksRepositoryTest`, `ViewModelsTest`), and how
+  database in memory (`TasksRepositoryTest`, `ViewModelsTest`), how
   the screens write dates, times, repeats and rows, and what TalkBack
-  reads for them (`TasksFormatTest`). The
+  reads for them (`TasksFormatTest`), and the reminders
+  (`TasksAlarmsTest`, `NotificationsViewModelTest`), on a real `Notify`
+  as Reminders' tests build it (`AlarmsSetup`). The
   ViewModels run their work at once, as Water's do. A trigger that
   aborts every write to a table stands for a disk that refuses a
   write, and a table that is gone for a database that cannot be read:
   the tests check that nothing changes and what the screen says.
-- `app/tasks` has four test classes:
+- `app/tasks` has six test classes:
   - `EveryScreenIsBehindTheAppLockTest`, a copy of Water's. It also
     locks the app over the form, new and to edit, its list dialog and
     its date and time pickers, the dialog of New list and Rename, a
-    list's menu, and the questions of Delete list and Delete done tasks.
+    list's menu, the questions of Delete list and Delete done tasks,
+    and the question for notifications.
   - `TasksManifestTest` names everything Tasks' merged manifest lets
-    another app reach: two permissions and none that it defines, no
-    receiver, Tasks' screen and the eight of `core/security`, and as the
-    only exported parts Tasks' screen and the two parts of the handover.
+    another app reach: five permissions and none that it defines, the
+    three receivers of `core/notify`, none exported, Tasks' screen and
+    the eight of `core/security`, and as the only exported parts Tasks'
+    screen and the two parts of the handover.
   - `TasksScreensTest`: what the screens do and what TalkBack hears, on
     a phone and on a tablet. A tick is a real touch on the tick box, or
     TalkBack's action on the row. It also checks that the keyboard is
     asked not to learn a title or a list's name, in the windows of the
     sheet and the dialog.
+  - `TasksNotificationsTest` and
+    `TasksNotificationsWithTheAppLockTest`: the reminders from end to
+    end through Robolectric's `AlarmManager` and the receivers of the
+    merged manifest, a tap that opens the task's list with its form,
+    the line on Today and the question, and the hidden form with the
+    app lock on.
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.

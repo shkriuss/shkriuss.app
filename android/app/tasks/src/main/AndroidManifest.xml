@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Tasks (app.shkriuss.tasks). Its permissions are listed in
-    docs/security/permissions.md. Its allow list in the APK rules check has
-    the five of Water. It holds two of them now, and none of its own:
+    docs/security/permissions.md. It holds the five of Water, which are its
+    allow list in the APK rules check, and none of its own:
 
+    - the three of core/notify, for the reminders of its tasks. core/notify
+      adds them and its three receivers, none exported;
     - the two of core/security, for the system prompt (ADR 0031) and for
       hiding other apps' windows (ADR 0033). core/security adds them, its
       eight screens and its status provider. Of these, only the handover
       screen and the status provider are exported, with no permission:
       each checks the calling app first (ADR 0041). The APK rules check
       fails an app that has the screens without both permissions.
-
-    The three of core/notify come with the module, when Tasks shows the
-    reminders of its tasks.
 
     Tasks stores its data in its own database and will back it up only
     into the backup file of the suite, so Android backup and

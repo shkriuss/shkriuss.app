@@ -174,6 +174,9 @@ class TasksRepository(
     /** The phone-only entries, by task `id`, as written. They change after every write, and when an alarm or a button changes them. */
     val entries: StateFlow<Map<String, TaskEntry>> = book.entries
 
+    /** The tasks that are not deleted, as stored now, in no order. The alarms are read from them. */
+    suspend fun liveTasks(): List<Task> = tasks.live().map(::taskOf)
+
     /** The task with [id], or null if there is none or it is deleted. */
     suspend fun findTask(id: String): Task? = tasks.find(id)?.takeUnless { it.record.isDeleted }?.let(::taskOf)
 
@@ -277,29 +280,61 @@ class TasksRepository(
      */
     suspend fun tick(id: String, shownDue: LocalDate?, shownRepeat: Repeat, now: ClockReading = time.reading()): Tick? =
         withContext(NonCancellable) {
-            // The write and its entries take one turn: a cleared tick on another screen, which opens the task again and
-            // writes its new mark, comes before both or after both, never between them.
-            val written = inTurn {
-                val triple = database.withWriteTransaction<Triple<TaskEntity, TaskEntity, LocalDate?>?> {
-                    val before = tasks.find(id) ?: return@withWriteTransaction null
-                    val shown = before.dueDay == shownDue?.let(::epochDayOf) && before.repeat == shownRepeat.code
-                    if (before.record.isDeleted || before.doneAt != null || !shown) return@withWriteTransaction null
-                    val due = taskOf(before).due
-                    val next = due?.repeat?.let { RepeatDates.firstAfter(it, maxOf(due.day, now.today)) }
-                    val after = taskWriter.update(id) { stored ->
-                        if (next != null) stored.copy(dueDay = epochDayOf(next)) else stored.copy(doneAt = doneAtOf(now))
-                    } ?: return@withWriteTransaction null
-                    Triple(before, after, next)
-                }
-                if (triple != null) {
-                    if (triple.third != null) writeCounting(now, listOf(triple.second)) else book.remove(listOf(id))
-                }
-                triple
+            val (before, after, next) = tickIf(id, now) { stored ->
+                stored.dueDay == shownDue?.let(::epochDayOf) && stored.repeat == shownRepeat.code
             } ?: return@withContext null
-            val (before, after, next) = written
-            onChange(TaskChange(if (next != null) TaskChange.Kind.MOVED else TaskChange.Kind.DONE, listOf(id)))
             Tick(taskOf(after), next, Undo(listOf(UndoStep.PutBack(id, after.changeNumber, before.dueDay, before.doneAt))))
         }
+
+    /**
+     * **Done** on the notification of the task [id] that showed at
+     * [shownAt], with the task's reminder number [number] when it showed
+     * (docs/apps/tasks/spec.md, "The notification", points 3 and 4). It
+     * counts only while it is current: [shownAt] is the task's `showing`,
+     * and [number] is its reminder number now, so the task is open, has a
+     * reminder, and has the same due day, repeat and time. Then it does
+     * what a tick does, at [now]: a repeating task moves to its next date
+     * and counts from now, any other task is done and its entries go.
+     * There is no Undo. True if it counted.
+     */
+    suspend fun pressDone(id: String, number: Long, shownAt: Long, now: ClockReading = time.reading()): Boolean =
+        withContext(NonCancellable) {
+            tickIf(id, now) { stored ->
+                TaskReminders.numberOf(stored) == number && book.entryOf(id, number).showingMillis == shownAt
+            } != null
+        }
+
+    /**
+     * A tick on the task [id], if it is open and [counts] says yes for its
+     * stored row, read inside the write transaction. Returns the row
+     * before, the row after and the new due day of a repeating task, or
+     * null if it did not count, also for a task that is deleted.
+     *
+     * The write and its entries take one turn: a cleared tick on another
+     * screen, which opens the task again and writes its new mark, comes
+     * before both or after both, never between them. So does a press of a
+     * notification's button.
+     */
+    private suspend fun tickIf(id: String, now: ClockReading, counts: (TaskEntity) -> Boolean): Triple<TaskEntity, TaskEntity, LocalDate?>? {
+        val written = inTurn {
+            val triple = database.withWriteTransaction<Triple<TaskEntity, TaskEntity, LocalDate?>?> {
+                val before = tasks.find(id) ?: return@withWriteTransaction null
+                if (before.record.isDeleted || before.doneAt != null || !counts(before)) return@withWriteTransaction null
+                val due = taskOf(before).due
+                val next = due?.repeat?.let { RepeatDates.firstAfter(it, maxOf(due.day, now.today)) }
+                val after = taskWriter.update(id) { stored ->
+                    if (next != null) stored.copy(dueDay = epochDayOf(next)) else stored.copy(doneAt = doneAtOf(now))
+                } ?: return@withWriteTransaction null
+                Triple(before, after, next)
+            }
+            if (triple != null) {
+                if (triple.third != null) writeCounting(now, listOf(triple.second)) else book.remove(listOf(id))
+            }
+            triple
+        } ?: return null
+        onChange(TaskChange(if (written.third != null) TaskChange.Kind.MOVED else TaskChange.Kind.DONE, listOf(id)))
+        return written
+    }
 
     /**
      * Opens the done task [id] again: a cleared tick, with no snackbar. It

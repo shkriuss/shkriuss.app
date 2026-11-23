@@ -16,6 +16,8 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.room3.executeSQL
 import androidx.room3.useWriterConnection
 import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.feature.tasks.Due
 import app.shkriuss.feature.tasks.R
 import app.shkriuss.feature.tasks.Repeat
@@ -93,6 +95,27 @@ class TasksScreenshotTest(private val config: ScreenshotConfig) {
         compose.waitForText(words(R.string.tasks_task_done))
         compose.waitForGone(hasText("Call the bank"))
         captureWindows("TodaySnackbar")
+    }
+
+    /** While notifications cannot show and a reminder is to come: the line at the top, before the sections, with **Allow**. */
+    @Test
+    fun todayWithTheLineAboutNotifications() {
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).allowNotifications(false)
+        seedTasks()
+        start(ready = "Pills")
+        compose.waitForText(words(R.string.tasks_line_not_asked))
+        compose.captureWholeScreen("TodayNotificationsLine", config, LIST)
+    }
+
+    /** The question before Android's own, after **Allow**. */
+    @Test
+    fun theQuestionForNotifications() {
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).allowNotifications(false)
+        seedTasks()
+        start(ready = "Pills")
+        compose.tap(R.string.tasks_allow)
+        compose.waitForText(words(R.string.tasks_question_text))
+        captureWindows("NotificationsQuestion")
     }
 
     /** What every screen shows when the database cannot be read. */

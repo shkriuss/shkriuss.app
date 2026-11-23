@@ -220,26 +220,28 @@ transfer are turned off.
 
 ### Tasks (`app.shkriuss.tasks`)
 
-Two permissions, from `core/security`, for the recovery key screens and
+Five permissions: three from `core/notify`, for the reminders of its
+tasks, and two from `core/security`, for the recovery key screens and
 the app lock.
 
 | Permission | From | Why |
 |---|---|---|
+| `android.permission.POST_NOTIFICATIONS` | `core/notify` | To show a task's reminder. The user allows it or not: Tasks explains first, after a save that sets a reminder, then Android asks ([spec.md](../apps/tasks/spec.md#as-in-water-and-reminders)). |
+| `android.permission.USE_EXACT_ALARM` | `core/notify` | To show a reminder at its exact minute ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)). Granted at install. |
+| `android.permission.RECEIVE_BOOT_COMPLETED` | `core/notify` | To set the alarms again after a restart. Granted at install. |
 | `android.permission.USE_BIOMETRIC` | `core/security` | To show Android's system prompt: for the recovery key that the phone keeps, and for the app lock ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). Granted at install. |
 | `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | To hide other apps' windows while a screen of the recovery key or the lock screen shows ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Granted at install. |
 
-- Tasks' allow list in the APK rules check has five permissions, the
-  same as Water's, which its
+- They are Tasks' allow list in the APK rules check, the same as
+  Water's, which its
   [specification](../apps/tasks/spec.md#as-in-water-and-reminders)
-  names: these two, and the three of `core/notify`,
-  `POST_NOTIFICATIONS`, `USE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`.
-  The owner asked for all five. A build of Tasks with any other
+  names. The owner asked for all five. A build of Tasks with any other
   permission fails.
-- Tasks does not use `core/notify` yet, so it does not hold the three.
-  They come with the module, for the reminders of its tasks. Their
-  reasons are those of Reminders, above.
-- Tasks asks the user for none of the two. Android grants both at
-  install.
+- What they allow and do not allow is under
+  [Apps that use core/notify](#apps-that-use-corenotify) and
+  [Apps that use core/security](#apps-that-use-coresecurity).
+- Tasks asks the user for one only: `POST_NOTIFICATIONS`. Android
+  grants the other four at install.
 
 Tasks' manifest removes one permission that a library asks for:
 
@@ -249,6 +251,12 @@ Tasks' manifest removes one permission that a library asks for:
 
 Other components that libraries add, none of them a permission:
 
+- The three receivers of `core/notify`, none exported
+  ([Receivers](#receivers)): `AlarmReceiver` for the one alarm of each
+  task with a reminder, `SystemEventReceiver` for a restart, an update
+  and a new time or time zone, and `ButtonReceiver` for **Done** and
+  **Snooze 10 min** on a reminder. `TasksManifestTest` checks that these
+  three are Tasks' receivers.
 - The eight screens of `core/security` ([Screens](#screens)). Tasks has
   Settings, with About only: it has no Security section yet, so nothing
   in Tasks opens seven of them, and the app lock cannot be turned on. The eighth, the handover screen, is
@@ -271,11 +279,16 @@ Other components that libraries add, none of them a permission:
   Tasks starts its `AppLockWatcher`.
 - `<queries>` for the action `app.shkriuss.action.HANDOVER`, as in
   Water.
-- No receiver in the manifest. `TasksManifestTest` checks that there is
-  none, and fails unless `TasksActivity`, the handover screen and the
-  status provider are the only exported parts of Tasks' merged
+- `TasksManifestTest` fails unless `TasksActivity`, the handover screen
+  and the status provider are the only exported parts of Tasks' merged
   manifest, and unless the two parts of the handover have no
   permission.
+- A tap on a reminder starts `TasksActivity` with the task's random ID
+  as the intent's identifier, and the task's list opens with its form,
+  behind the app lock. Another app can start the screen with an
+  identifier too. Then Tasks opens the list and form of the task with
+  that ID, or Today if there is none. It reads nothing else from the
+  intent.
 
 Tasks stores its data in its own database. Android backup and
 device-to-device transfer are turned off. Its backup goes only into the
@@ -286,8 +299,8 @@ backup file of the suite, once the backup screens are built.
 `core/notify` sets the alarms and shows the notifications of an app with
 reminders ([notifications.md](../architecture/notifications.md)). Its
 manifest declares three permissions and three receivers. Every app that
-uses the module gets them when the app is built. Water and Reminders
-use it. Calendar and Tasks will use it too
+uses the module gets them when the app is built. Water, Reminders and
+Tasks use it. Calendar will use it too
 ([ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md)).
 
 An app does not get them unnoticed. The APK rules check fails the app

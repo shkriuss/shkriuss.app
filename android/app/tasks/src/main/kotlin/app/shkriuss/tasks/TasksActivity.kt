@@ -1,5 +1,6 @@
 package app.shkriuss.tasks
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,6 +17,14 @@ import app.shkriuss.feature.tasks.ui.TasksScreens
  * dialog, is inside [AppLockGate], inside [ShkTheme]: while the app is
  * locked, nothing of it is drawn. `EveryScreenIsBehindTheAppLockTest`
  * checks it.
+ *
+ * A tap on a notification starts it with the task's `id` as the intent's
+ * identifier, and the task's list opens with its form, after the app lock
+ * (spec, "The notification", point 2). Only the identifier is read: no
+ * text travels. It is read on a new start only, and not when the user
+ * opens Tasks again from Recents. Another app can start the screen the
+ * same way. Then the form of that task opens, or Today if no task has
+ * that id.
  */
 class TasksActivity : ComponentActivity() {
     private lateinit var models: TasksModels
@@ -24,6 +33,7 @@ class TasksActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         models = TasksModels(this, tasksServices)
+        tappedTaskOf(savedInstanceState)?.let(models.notifications::open)
         val versionName = packageManager.getPackageInfo(packageName, 0).versionName.orEmpty()
         setContent {
             ShkTheme {
@@ -32,9 +42,23 @@ class TasksActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The `id` of the task whose notification was tapped, or null. Only on
+     * a new start: when the phone is turned, the screen is as the user
+     * left it. Not when Tasks is opened again from Recents: the tap that
+     * started the task is old by then, and Android passes its intent
+     * again, with `FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY`.
+     */
+    private fun tappedTaskOf(savedInstanceState: Bundle?): String? {
+        if (savedInstanceState != null) return null
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+        return intent.identifier
+    }
+
     override fun onStart() {
         super.onStart()
-        // Every screen shows what is overdue and due today now, also if the clock changed while the app was away.
+        // Every screen shows what is overdue and due today now, also if the clock changed while the app was away, and the
+        // line about notifications shows their state now.
         models.check()
     }
 }

@@ -13,6 +13,7 @@ import app.shkriuss.feature.tasks.TaskRow
 import java.text.NumberFormat
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -68,6 +69,24 @@ class TasksFormat(
 
     /** A short date, with the year when it is not this year: "Mon 16 Nov", "Fri 1 Jan 2027". */
     fun day(date: LocalDate, today: LocalDate): String = (if (date.year == today.year) shortDate else shortDateWithYear).format(date)
+
+    /**
+     * A local date and time in a notification: the time alone today,
+     * "09:00", or the short date and the time on another day, "Mon 16
+     * Nov, 09:00", as in Reminders.
+     */
+    fun timeOrDateTime(at: LocalDateTime, today: LocalDate): String =
+        if (at.toLocalDate() == today) {
+            time(at.toLocalTime())
+        } else {
+            resources.getString(R.string.tasks_date_at, day(at.toLocalDate(), today), time(at.toLocalTime()))
+        }
+
+    /** The text of a task's notification on time: "Due today", and its repeat after it: "Due today · Every day". */
+    fun dueToday(repeat: Repeat): String {
+        val words = resources.getString(R.string.tasks_notification_due_today)
+        return if (repeat == Repeat.ONCE) words else resources.getString(R.string.tasks_row_parts, words, repeatName(repeat))
+    }
 
     /** [day] as TalkBack reads it: "Monday 16 November", "Friday 1 January 2027". */
     fun daySpoken(date: LocalDate, today: LocalDate): String =

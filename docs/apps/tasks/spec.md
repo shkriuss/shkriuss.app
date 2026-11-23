@@ -68,7 +68,9 @@ on your phone, with no account and no network.
 2. The notification line of
    [Reminders' Upcoming](../reminders/spec.md#upcoming), while an open
    task has a reminder to come and notifications cannot show, with
-   "Reminders" replaced by "Tasks".
+   "Reminders" replaced by "Tasks". For `ChannelOff` it names the
+   channel: "Task reminders are turned off in Android's settings. Your
+   reminders are silent."
 3. Section **Overdue**: open tasks with a due day before today, oldest
    first. Section **Today**: open tasks due today. Within a day: tasks
    with a reminder first, by time, then the others, oldest first. Ties:
@@ -490,7 +492,7 @@ the clock or the time zone changes
    Inbox is fixed: it cannot be renamed or deleted.
 5. The buttons **Done** and **Snooze 10 min**, as in Reminders.
 
-For the screens, five more:
+For the screens, six more:
 
 6. A save of the form that fails says so in the form, above its
    buttons, not in a snackbar, which the sheet would hide
@@ -504,6 +506,8 @@ For the screens, five more:
    **Cancel** ([The task form](#the-task-form), point 2).
 10. The field of a list's name asks the keyboard not to learn what is
     typed, as the title does ([Lists](#lists), point 2).
+11. The line on Today for a channel turned off names the channel, "Task
+    reminders", not the app ([Today](#today), point 2).
 
 ## Assumptions
 
