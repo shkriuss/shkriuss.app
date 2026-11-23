@@ -221,9 +221,9 @@ class TasksScreensTest {
         // A chip reads the whole day. The date is a Monday.
         val monday = compose.onNode(hasContentDescription("Monday") and hasClickAction())
         monday.assertIsSelected()
-        compose.waitForText("Dates: Mon, Nov 16, Mon, Nov 23, Mon, Nov 30, ...")
+        compose.waitForText("Dates: Mon, Nov 16, Mon, Nov 23, Mon, Nov 30, …")
         compose.onNode(hasContentDescription("Wednesday") and hasClickAction()).tapAsTalkBack()
-        compose.waitForText("Dates: Mon, Nov 16, Wed, Nov 18, Mon, Nov 23, ...")
+        compose.waitForText("Dates: Mon, Nov 16, Wed, Nov 18, Mon, Nov 23, …")
         compose.onNode(hasContentDescription("Wednesday") and hasClickAction()).tapAsTalkBack()
         monday.tapAsTalkBack()
         compose.tap(R.string.tasks_save)

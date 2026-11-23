@@ -87,7 +87,7 @@ data class FormScreen(
     val list: TaskList? = null,
     /** Inbox and every list, for the list dialog, in the order of Lists. */
     val lists: List<TaskList> = emptyList(),
-    /** For a repeat, the line "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, ...": the first three dates the form gives. */
+    /** For a repeat, the line "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, …": the first three dates the form gives. */
     val dates: List<LocalDate> = emptyList(),
     /** For a done task, the line "Done on Mon 16 Nov.", as the phone's clock shows that day. */
     val doneOn: LocalDate? = null,

@@ -137,7 +137,7 @@ A bottom sheet at every width. "New task" or "Edit task":
 4. With a due date: **Repeat**, the five choices of Reminders, and for
    Every week the seven day chips. Choosing Every week selects the day
    of the date. For a repeat, a line: "Dates: Wed 18 Nov, Fri 20 Nov,
-   Mon 23 Nov, ...".
+   Mon 23 Nov, …".
 5. With a due date: **Remind me**, a `ShkCheckbox`, and when it is on,
    **Time**, which opens `ShkTimePicker`. It starts at 09:00. When the
    due day is today and 09:00 has passed, it starts at the next full

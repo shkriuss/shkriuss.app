@@ -118,9 +118,9 @@
     <string name="tasks_remove">Remove</string>
     <string name="tasks_repeat">Repeat</string>
     <string name="tasks_days">Days</string>
-    <!-- What the form gives for a repeat: "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, ...". -->
+    <!-- What the form gives for a repeat: "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, …". -->
     <string name="tasks_dates">Dates: %1$s</string>
-    <string name="tasks_dates_more">%1$s, ...</string>
+    <string name="tasks_dates_more">%1$s, …</string>
     <!-- Days of the week, or dates, one after the other: "Mon, Wed, Fri". -->
     <string name="tasks_list_of_two">%1$s, %2$s</string>
     <string name="tasks_remind_me">Remind me</string>

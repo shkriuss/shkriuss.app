@@ -93,10 +93,10 @@ class TasksFormatTest {
     @Test
     fun theLineOfARepeatShowsThreeDatesAndMore() {
         assertEquals(
-            "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, ...",
+            "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, …",
             uk.dates(listOf(day(2), day(4), day(7)), MONDAY),
         )
-        // A repeat that ends at 9999-12-31 before three dates: no "...".
+        // A repeat that ends at 9999-12-31 before three dates: no "…".
         assertEquals("Dates: Fri, 31 Dec 9999", uk.dates(listOf(TaskLimits.LAST_DAY), MONDAY))
     }
 

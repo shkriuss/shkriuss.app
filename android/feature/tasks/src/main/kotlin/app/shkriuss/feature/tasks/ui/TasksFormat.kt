@@ -99,7 +99,7 @@ class TasksFormat(
     /** The whole name of [day], as TalkBack reads its chip: "Monday". */
     fun dayName(day: DayOfWeek): String = day.getDisplayName(TextStyle.FULL, locale)
 
-    /** The line of a repeat in the form: "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, ...". Three dates end in "...". */
+    /** The line of a repeat in the form: "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, …". Three dates end in "…". */
     fun dates(dates: List<LocalDate>, today: LocalDate): String {
         val listed = joined(dates.map { day(it, today) })
         val shown = if (dates.size >= DATES_SHOWN) resources.getString(R.string.tasks_dates_more, listed) else listed
