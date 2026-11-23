@@ -74,6 +74,8 @@ data class TaskForm(
 data class FormScreen(
     /** The form, while it is open. */
     val form: TaskForm? = null,
+    /** True if the database could not be read: "Could not open your tasks." The form keeps what was typed. */
+    val failed: Boolean = false,
     /** The list the form shows: null for Inbox, also for a list that is deleted or not stored. */
     val list: TaskList? = null,
     /** Inbox and every list, for the list dialog, in the order of Lists. */
@@ -196,11 +198,17 @@ class TaskFormViewModel(
     private val opened = MutableStateFlow(0)
     private val rows = RowActions(repository, time, viewModelScope, work, snackbar)
 
-    /** What the form shows. */
+    /**
+     * What the form shows. A read of the lists that fails shows as
+     * [FormScreen.failed], and the form goes on taking what is typed, so
+     * Cancel still closes it.
+     */
     val state: StateFlow<FormScreen> =
-        combine(form, repository.lists(), now.reading, snackbar, opened) { open, lists, reading, shown, opening ->
+        combine(form, repository.lists().orNullOnReadFailure(), now.reading, snackbar, opened) { open, read, reading, shown, opening ->
+            val lists = read.orEmpty()
             FormScreen(
                 form = open,
+                failed = read == null,
                 list = open?.let { lists.firstOrNull { list -> list.id == it.listId } },
                 lists = TaskOrder.byName(lists),
                 dates = open?.let(FormRules::datesOf).orEmpty(),
@@ -212,10 +220,12 @@ class TaskFormViewModel(
 
     init {
         // A task deleted anywhere closes a form open on it: a Save there could write nothing. The list can be a moment
-        // behind the database, so a task missing from it is looked up once more before its form closes.
+        // behind the database, so a task missing from it is looked up once more before its form closes. A read that
+        // fails closes nothing: [state] shows it.
         viewModelScope.launch(work) {
             combine(form, repository.tasks()) { open, live -> open?.taskId?.takeIf { id -> live.none { it.id == id } } }
-                .collect { missing -> if (missing != null && repository.findTask(missing) == null) closeIfDeleted(missing) }
+                .ignoreReadFailure()
+                .collect { missing -> if (missing != null && isGone { repository.findTask(missing) }) closeIfDeleted(missing) }
         }
     }
 

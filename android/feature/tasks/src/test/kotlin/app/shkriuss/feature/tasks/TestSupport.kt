@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.room3.executeSQL
 import androidx.room3.useWriterConnection
 import androidx.test.platform.app.InstrumentationRegistry
+import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.testing.TestClock
+import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.core.testing.inMemoryTestDatabaseBuilder
 import app.shkriuss.feature.tasks.data.TasksDatabase
 import java.time.DayOfWeek
@@ -87,6 +89,24 @@ internal fun TasksDatabase.acceptWritesTo(table: String) = runBlocking {
         connection.executeSQL("DROP TRIGGER refuse_insert_$table")
         connection.executeSQL("DROP TRIGGER refuse_update_$table")
     }
+}
+
+/**
+ * Makes every read of [table] fail from now on, as when the database
+ * cannot be read: the table is gone. Room throws an
+ * `android.database.SQLException`.
+ */
+internal fun TasksDatabase.refuseReadsOf(table: String) = runBlocking {
+    useWriterConnection { connection -> connection.executeSQL("DROP TABLE $table") }
+}
+
+/**
+ * Marks the list [listId] as deleted and leaves its tasks as they are, as
+ * a restore that brings a newer deleted list does: its tasks are then in
+ * a list that is gone, and show in Inbox (spec, "Data", point 2).
+ */
+internal fun TasksDatabase.deleteOnlyTheList(listId: String, clock: TestClock) = runBlocking {
+    checkNotNull(RecordWriter(this@deleteOnlyTheList, lists(), clock, TestIdSource()).markDeleted(listId))
 }
 
 /** Waits up to five seconds for a state that [condition] accepts, and returns it. */

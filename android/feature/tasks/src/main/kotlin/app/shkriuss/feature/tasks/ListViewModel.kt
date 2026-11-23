@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
@@ -87,10 +88,14 @@ class ListViewModel(
     private val snackbar = MutableStateFlow<TasksSnackbar?>(null)
     private val rows = RowActions(repository, time, viewModelScope, work, snackbar)
 
+    /** The open list once this screen's read of the lists has shown it. Read and written only by [closeIfGone]. */
+    private var seenOpen: String? = null
+
     /** What the screen shows. */
     val state: StateFlow<ListScreen> = combine(
         repository.tasks(),
-        repository.lists(),
+        // Before each read of the lists reaches the state, a deleted open list closes ([closeIfGone]).
+        repository.lists().onEach(::closeIfGone),
         now.reading,
         openId,
         combine(question, snackbar, ::Pair),
@@ -122,6 +127,30 @@ class ListViewModel(
     fun close() {
         question.value = null
         openId.value = null
+    }
+
+    /**
+     * A list deleted anywhere, here, by Undo on another screen, or by a
+     * restore, closes with its question, and stays closed should it come
+     * back: the screen is on Lists again. It runs on each read of [lists],
+     * before the state takes it, so no read can show the list again first.
+     * Lists may show a new list a moment before this screen's read of the
+     * lists does, so an open list that this read has not shown yet is
+     * looked up in the database instead. A read that fails closes nothing:
+     * the state shows it.
+     */
+    private fun closeIfGone(lists: List<TaskList>) {
+        val listId = openId.value?.takeIf { it != INBOX } ?: return
+        when {
+            lists.any { it.id == listId } -> seenOpen = listId
+            seenOpen == listId -> closeIfOpen(listId)
+            else -> viewModelScope.launch(work) { if (isGone { repository.findList(listId) }) closeIfOpen(listId) }
+        }
+    }
+
+    /** The list [listId] is deleted. If it is open, it closes with its question. */
+    private fun closeIfOpen(listId: String) {
+        if (openId.compareAndSet(listId, null)) question.value = null
     }
 
     /** A tick on [row]. */
@@ -167,7 +196,7 @@ class ListViewModel(
                 }
             } ?: return@launch
             // The deleted list closes, and stays closed after Undo: Undo brings it back on Lists.
-            if (asked is ListQuestion.DeleteList) openId.compareAndSet(asked.list.id, null)
+            if (asked is ListQuestion.DeleteList) closeIfOpen(asked.list.id)
             snackbar.value = shown
         }
     }

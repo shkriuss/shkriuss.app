@@ -602,7 +602,7 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
     and dialog. The date picker shows June 2100, because Material's
     picker marks the real today in the month it shows.
-- `feature/tasks` has 9 test classes with 103 tests: the dates of each
+- `feature/tasks` has 9 test classes with 108 tests: the dates of each
   repeat with the examples of the spec, the limits of every column and
   the rules that join two, the reminder number and moment, also in the
   two hours of summer time, the order of each screen, and the rules of
@@ -614,7 +614,8 @@ second build must write the same mapping file, or the release stops. See
   database in memory (`TasksRepositoryTest`, `ViewModelsTest`). The
   ViewModels run their work at once, as Water's do. A trigger that
   aborts every write to a table stands for a disk that refuses a
-  write: the tests check that nothing changes and what the screen says.
+  write, and a table that is gone for a database that cannot be read:
+  the tests check that nothing changes and what the screen says.
 - `app/tasks` has three test classes:
   `EveryScreenIsBehindTheAppLockTest`, a copy of Water's;
   `TasksManifestTest`, which names everything Tasks' merged manifest

@@ -108,3 +108,22 @@ internal class RowActions(
 internal fun <T> Flow<T>.onReadFailure(failed: () -> T): Flow<T> = catch { error ->
     if (error is SQLException) emit(failed()) else throw error
 }
+
+/** This flow without the error of a database read: it ends there. The screen's state shows the failure ([onReadFailure]). */
+internal fun <T> Flow<T>.ignoreReadFailure(): Flow<T> = catch { error -> if (error !is SQLException) throw error }
+
+/**
+ * True if [find] finds no record: there is none, or it is deleted. False
+ * also when the database cannot be read: then nothing closes, and the
+ * screen's state shows the failure.
+ */
+internal suspend fun isGone(find: suspend () -> Any?): Boolean = try {
+    find() == null
+} catch (_: SQLException) {
+    false
+}
+
+/** This flow, with null in place of the error of a database read, for a state that goes on after it. Any other error goes on. */
+internal fun <T : Any> Flow<T>.orNullOnReadFailure(): Flow<T?> = catch<T?> { error ->
+    if (error is SQLException) emit(null) else throw error
+}

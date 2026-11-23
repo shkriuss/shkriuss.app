@@ -201,6 +201,28 @@ class TasksRepositoryTest {
     }
 
     @Test
+    fun aSaveIntoAListDeletedInThatMomentPutsTheTaskInInbox() = runBlocking {
+        // The form opened on Home, and Home was deleted before its Save.
+        val home = addList()
+        val bank = add("Call the bank")
+        repository.deleteList(home.id)
+
+        assertEquals(INBOX, repository.addTask(NewTask("Pay rent", home.id, null))!!.listId)
+        assertEquals(INBOX, repository.changeTask(bank.id, TaskEdit(listId = home.id))!!.listId)
+        // A list that was never stored too: only a restore, or later sync, makes a task whose list is gone.
+        assertEquals(INBOX, repository.addTask(NewTask("Gym", "00000000-0000-4000-8000-0000000000ff", null))!!.listId)
+    }
+
+    @Test
+    fun aTaskWhoseListIsGoneKeepsItsListIdWhenOnlyItsTitleChanges() = runBlocking {
+        val home = addList()
+        val bank = add("Call the bank", listId = home.id)
+        database.deleteOnlyTheList(home.id, clock)
+
+        assertEquals(home.id, repository.changeTask(bank.id, TaskEdit(title = "Call mum"))!!.listId)
+    }
+
+    @Test
     fun aDeletedTaskIsNotChanged() = runBlocking {
         val bank = add("Call the bank")
         repository.deleteTask(bank.id)

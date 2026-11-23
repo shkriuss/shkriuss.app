@@ -9,6 +9,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.Locale
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -174,6 +175,16 @@ class ViewModelsTest {
         assertEquals(TasksSnackbar.CouldNotChange, model.state.await { it.snackbar != null }.snackbar)
         assertTrue(find(bank.id)!!.isOpen)
         assertEquals(1, model.state.value.dueToday.size)
+    }
+
+    @Test
+    fun aScreenThatCannotReadTheDatabaseSaysSo() {
+        database.refuseReadsOf(TaskEntity.TABLE)
+
+        assertTrue(today().state.await { it.loaded }.failed)
+        assertTrue(lists().state.await { it.loaded }.failed)
+        assertTrue(list().state.await { it.loaded }.failed)
+        assertFalse("no task, but not empty either: an error", today().state.await { it.loaded }.isEmpty)
     }
 
     // Lists.
@@ -353,15 +364,28 @@ class ViewModelsTest {
     }
 
     @Test
-    fun aListDeletedElsewhereCloses() {
+    fun aListDeletedElsewhereClosesWithItsQuestionAndStaysClosedWhenItComesBack() {
         val home = addList("Home")
         val model = list()
         model.open(home.id)
-        model.state.await { it.listId == home.id }
+        model.state.await { it.listId == home.id && it.list != null }
+        model.askDeleteList()
+        model.state.await { it.question != null }
 
-        runBlocking { repository.deleteList(home.id) }
+        val undo = runBlocking { checkNotNull(repository.deleteList(home.id)) }
+        model.state.await { it.listId == null }
+        // Undo on another screen brings the list back: this screen stays on Lists, with no question.
+        runBlocking { repository.undo(undo) }
+        runBlocking { withTimeout(5_000) { repository.lists().first { it.isNotEmpty() } } }
 
-        assertNull(model.state.await { it.listId == null }.listId)
+        // The screen's own read of the lists comes a moment later. For a second, it must stay closed.
+        val until = System.nanoTime() + 1_000_000_000L
+        while (System.nanoTime() < until) {
+            val screen = model.state.value
+            assertNull(screen.listId)
+            assertNull(screen.question)
+            Thread.sleep(20)
+        }
     }
 
     // The task form.
@@ -512,18 +536,18 @@ class ViewModelsTest {
     }
 
     @Test
-    fun theFormOfATaskInAListThatIsNotStoredShowsInboxAndKeepsItsListIdOnSave() {
-        // As a restore can bring: the list it names is not stored.
-        val gone = "00000000-0000-4000-8000-0000000000ff"
-        val bank = add("Call the bank", listId = gone)
+    fun theFormOfATaskInAListThatIsGoneShowsInboxAndKeepsItsListIdOnSave() {
+        val home = addList("Home")
+        val bank = add("Call the bank", listId = home.id)
+        database.deleteOnlyTheList(home.id, clock)
         val model = form()
         model.openEdit(bank)
 
-        assertNull(model.state.await { it.form != null }.list)
+        assertNull(model.state.await { it.form != null && it.lists.isEmpty() }.list)
         model.onTitleChange("Call mum")
         model.save()
 
-        assertEquals(gone, tasksBecome { it.single().title == "Call mum" }.single().listId)
+        assertEquals(home.id, tasksBecome { it.single().title == "Call mum" }.single().listId)
     }
 
     @Test
@@ -603,6 +627,42 @@ class ViewModelsTest {
         runBlocking { repository.deleteTask(bank.id) }
 
         model.state.await { it.form == null }
+    }
+
+    @Test
+    fun aFormThatCannotReadTheListsSaysSoAndStillTakesWhatIsTyped() {
+        database.refuseReadsOf(TaskListEntity.TABLE)
+        val model = form()
+        model.openNewIn(INBOX)
+
+        assertTrue(model.state.await { it.form != null }.failed)
+        model.onTitleChange("Call the bank")
+        assertEquals("Call the bank", model.openForm { it.title.isNotEmpty() }.title)
+        model.cancel()
+        model.state.await { it.form == null }
+    }
+
+    @Test
+    fun aFormWhoseWatchForADeletedTaskCannotReadTheTasksFailsNothing() {
+        // An error that reaches no handler would stop the app.
+        val uncaught = CopyOnWriteArrayList<Throwable>()
+        val before = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { _, error -> uncaught += error }
+        try {
+            database.refuseReadsOf(TaskEntity.TABLE)
+            val model = form()
+            model.openNewIn(INBOX)
+            model.onTitleChange("Call mum")
+            assertEquals("Call mum", model.openForm { it.title == "Call mum" }.title)
+
+            // The watch reads the tasks a moment later, on another thread. For a second, nothing may fail.
+            val until = System.nanoTime() + 1_000_000_000L
+            while (System.nanoTime() < until && uncaught.isEmpty()) Thread.sleep(20)
+            assertEquals(emptyList<Throwable>(), uncaught.toList())
+            assertEquals("Call mum", model.state.value.form?.title)
+        } finally {
+            Thread.setDefaultUncaughtExceptionHandler(before)
+        }
     }
 
     @Test

@@ -199,18 +199,20 @@ class TasksRepository(
     /**
      * Adds [task], unless [TaskLimits.MOST_TASKS] are kept: then it adds
      * none and returns null. With a reminder, it counts from the current
-     * minute of [now], the moment of the save.
+     * minute of [now], the moment of the save. A list that was deleted in
+     * that moment puts the task in Inbox ([listToWrite]).
      */
     suspend fun addTask(task: NewTask, now: ClockReading = time.reading()): Task? = withContext(NonCancellable) {
         val created = database.withWriteTransaction<TaskEntity?> {
             if (tasks.liveCount() >= TaskLimits.MOST_TASKS) {
                 null
             } else {
+                val listId = listToWrite(task.listId)
                 taskWriter.create { fields, number ->
                     val row = TaskEntity(
                         fields,
                         number,
-                        listId = task.listId,
+                        listId = listId,
                         title = task.title,
                         dueDay = null,
                         repeat = Repeat.ONCE.code,
@@ -234,12 +236,16 @@ class TasksRepository(
      * from the current minute of [now]: the mark is now, with no snooze and
      * nothing on screen; with no reminder, its entries go. A new title or
      * list only writes no entries. Nothing is written if nothing changed.
-     * Null if there is no such task, or it is deleted.
+     * Null if there is no such task, or it is deleted. A new list that was
+     * deleted in that moment puts the task in Inbox ([listToWrite]); with
+     * no new list, the stored `listId` stays, also one of a list that is
+     * gone (spec, "Data", point 2).
      */
     suspend fun changeTask(id: String, edit: TaskEdit, now: ClockReading = time.reading()): Task? = withContext(NonCancellable) {
         val written = database.withWriteTransaction<Pair<TaskEntity, TaskEntity>?> {
             val before = tasks.find(id)?.takeUnless { it.record.isDeleted } ?: return@withWriteTransaction null
-            val after = taskWriter.update(id) { stored -> stored(edited(stored, edit)) } ?: return@withWriteTransaction null
+            val checked = edit.listId?.let { edit.copy(listId = listToWrite(it)) } ?: edit
+            val after = taskWriter.update(id) { stored -> stored(edited(stored, checked)) } ?: return@withWriteTransaction null
             before to after
         } ?: return@withContext null
         val (before, after) = written
@@ -359,6 +365,22 @@ class TasksRepository(
         }
         if (done.isNotEmpty()) onChange(TaskChange(TaskChange.Kind.BROUGHT_BACK, done.map { it.record.id }))
         done.map(::taskOf)
+    }
+
+    /**
+     * The list a task the form saves goes in: [listId] while it is
+     * [INBOX] or a list that is not deleted, else Inbox. Called inside the
+     * write transaction, so no delete of the list comes between the check
+     * and the write. Only a restore, or later sync, can make a task whose
+     * list is gone (docs/apps/tasks/spec.md, "Data", point 2): a save that
+     * comes just after its list was deleted, from a form opened before,
+     * keeps the task, in Inbox.
+     */
+    private suspend fun listToWrite(listId: String): String = when {
+        // Not an ID at all: the limits of the table refuse it, and nothing is written.
+        listId == INBOX || !TaskRules.isListId(listId) -> listId
+        lists.find(listId)?.record?.isDeleted == false -> listId
+        else -> INBOX
     }
 
     /** The task of [row] after [step]: back from its delete, or with the due day and done time it had before its tick. */
