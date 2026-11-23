@@ -524,6 +524,8 @@ class TasksRepositoryTest {
         // "Pills" was snoozed and shows. "Gym" came back deleted from the backup, and still had entries here.
         book.update(listOf(pills.id)) { _, entry -> entry.copy(snoozeMillis = 5L, showingMillis = 6L) }
         RecordWriter(database, database.tasks(), clock, TestIdSource()).markDeleted(gym.id)
+        // "Dishes" came back with its reminder turned off, and still had the entries of its old reminder here.
+        book.update(listOf(dishes.id)) { _, _ -> TaskEntry.countingFrom(pillsNumber, monday(9)) }
         val bankBefore = book.storedOf(bank.id)
         changes.clear()
 

@@ -149,9 +149,9 @@ Tap the tick box of a task when you have done it.
 
 1. A task with no repeat is done. It moves under **Done** in its list. A
    message says "Task done".
-2. A task that repeats moves to its next date after today, and stays not
-   done. A message says when, for example "Next: Wed 18 Nov". Dates you
-   missed are skipped.
+2. A task that repeats moves to its next date after today, or after its
+   due date if you tick it early, and stays not done. A message says
+   when, for example "Next: Wed 18 Nov". Dates you missed are skipped.
 3. Tap **Undo** in the message to put the task back as it was.
 4. To open a done task again, clear its tick under **Done**.
 
