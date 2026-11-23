@@ -168,7 +168,7 @@
     <!-- The line at the top of Today while an open task has a reminder to come and notifications cannot show, and its button. -->
     <string name="tasks_line_not_asked">Tasks may not show notifications yet.</string>
     <string name="tasks_line_denied">Notifications are off for Tasks. Your reminders are silent.</string>
-    <string name="tasks_line_channel_off">Tasks are turned off in Android\'s settings. Your reminders are silent.</string>
+    <string name="tasks_line_channel_off">Task reminders are turned off in Android\'s settings. Your reminders are silent.</string>
     <string name="tasks_allow">Allow</string>
     <string name="tasks_open_settings">Open settings</string>
 

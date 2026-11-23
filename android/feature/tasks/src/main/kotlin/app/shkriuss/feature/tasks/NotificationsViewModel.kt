@@ -27,7 +27,11 @@ enum class NotificationLine {
     /** "Notifications are off for Tasks. Your reminders are silent." **Open settings**: Android's notification page for Tasks. */
     DENIED,
 
-    /** "Tasks are turned off in Android's settings. Your reminders are silent." **Open settings**: Android's page for the channel. */
+    /**
+     * "Task reminders are turned off in Android's settings. Your reminders
+     * are silent.", with the name of the channel (the owner's decision).
+     * **Open settings**: Android's page for the channel.
+     */
     CHANNEL_OFF,
 }
 
