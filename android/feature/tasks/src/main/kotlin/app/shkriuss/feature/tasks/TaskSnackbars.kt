@@ -31,9 +31,6 @@ sealed interface TasksSnackbar {
 
     /** "Could not change your tasks. Try again.": a tick, a delete or an Undo that the database refused. */
     data object CouldNotChange : TasksSnackbar
-
-    /** "Could not save the task. Try again.": a save of the form that the database refused. */
-    data object CouldNotSave : TasksSnackbar
 }
 
 /** The [Undo] of a snackbar that offers it, or null. */
@@ -44,7 +41,7 @@ val TasksSnackbar.offeredUndo: Undo?
         is TasksSnackbar.TaskDeleted -> undo
         is TasksSnackbar.ListDeleted -> undo
         is TasksSnackbar.DoneTasksDeleted -> undo
-        TasksSnackbar.TaskAdded, TasksSnackbar.CouldNotChange, TasksSnackbar.CouldNotSave -> null
+        TasksSnackbar.TaskAdded, TasksSnackbar.CouldNotChange -> null
     }
 
 /**

@@ -8,6 +8,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -307,6 +308,28 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aDoneTaskInAListIsDoneOnTheDayOfThePhonesTimeZone() {
+        val home = addList("Home")
+        val bins = add("Bins", listId = home.id)
+        clock.setTo(monday(22, 0))
+        runBlocking { repository.tick(bins.id, null, Repeat.ONCE) }
+        var zone: ZoneId = UTC
+        val zoned = TasksTime(clock) { zone }
+        val zonedNow = TasksNow(zoned, sourceScope) { waitEnds.receive() }
+        val model = ListViewModel(repository, zoned, zonedNow, Dispatchers.Unconfined)
+        model.open(home.id)
+
+        val inUtc = model.state.await { it.done.size == 1 }
+        assertEquals(MONDAY, inUtc.doneOn(inUtc.done.single()))
+        assertNull(inUtc.doneOn(TaskRow(bins, "Home")))
+        // 22:00 in UTC is 02:00 on Tuesday in Tbilisi.
+        zone = TBILISI
+        zonedNow.check()
+        val inTbilisi = model.state.await { it.zone == TBILISI }
+        assertEquals(day(1), inTbilisi.doneOn(inTbilisi.done.single()))
+    }
+
+    @Test
     fun inboxCannotBeRenamedOrDeleted() {
         add("Call the bank")
         val model = list()
@@ -588,10 +611,18 @@ class ViewModelsTest {
         model.onTitleChange("Call the bank")
         model.save()
 
-        val screen = model.state.await { it.snackbar != null }
-        assertEquals(TasksSnackbar.CouldNotSave, screen.snackbar)
+        // The form is a sheet over the bottom of the screen, so it says so itself, not in a snackbar.
+        val screen = model.state.await { it.form?.saveFailed == true }
+        assertNull(screen.snackbar)
         assertEquals("Call the bank", screen.form!!.title)
         assertFalse(screen.form.saving)
+        assertTrue(tasksBecome { it.isEmpty() }.isEmpty())
+
+        // The next Save tries again, and the words go.
+        database.acceptWritesTo(TaskEntity.TABLE)
+        model.save()
+        assertEquals("Call the bank", tasksBecome { it.isNotEmpty() }.single().title)
+        assertEquals(TasksSnackbar.TaskAdded, model.state.await { it.form == null }.snackbar)
     }
 
     @Test

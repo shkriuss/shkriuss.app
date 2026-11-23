@@ -88,6 +88,13 @@ class ComponentPagesTest {
                     assertFalse("${page.name}: two touch targets overlap, $target and $other", target.overlaps(other))
                 }
             }
+            // A tick box takes the taps on it from inside its row's target, and reaches no other.
+            compose.onAllNodes(IS_TICK_BOX).fetchSemanticsNodes().forEach { node ->
+                val box = touchTarget(node)
+                val holders = targets.filter { it.overlaps(box) }
+                assertEquals("${page.name}: the tick box $box is in one row's target, and in no other", 1, holders.size)
+                assertTrue("${page.name}: the tick box $box reaches out of its row, ${holders.single()}", holders.single().holds(box))
+            }
             back()
         }
     }
@@ -257,6 +264,22 @@ class ComponentPagesTest {
             ProgressBarRangeInfo.Indeterminate,
         )
         compose.onNode(hasText(text(R.string.sample_loading_notes))).performScrollTo().assert(inProgress)
+    }
+
+    @Test
+    fun theListItemsWithATickBoxSayTheirStateAndOfferTheTick() {
+        open(CatalogPage.Lists)
+        compose.onAllNodes(IS_TICK_BOX).assertCountEquals(2)
+        listOf(
+            Triple(R.string.sample_buy_bread, DesignR.string.shk_not_ticked, DesignR.string.shk_tick),
+            Triple(R.string.sample_call_dentist, DesignR.string.shk_ticked, DesignR.string.shk_clear_tick),
+        ).forEach { (headline, state, action) ->
+            val row = compose.onAllNodes(hasText(text(headline)) and SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions))
+                .fetchSemanticsNodes()
+                .single()
+            assertEquals(text(state), row.config[SemanticsProperties.StateDescription])
+            assertEquals(listOf(text(action)), row.config[SemanticsActions.CustomActions].map { it.label })
+        }
     }
 
     @Test
@@ -500,6 +523,10 @@ class ComponentPagesTest {
      * to at least 48 by 48 dp around its centre, as Android does. Measured
      * unclipped, so components below the window count too.
      */
+    /** True if [other] lies inside this, give or take half a pixel for rounding. */
+    private fun Rect.holds(other: Rect): Boolean =
+        other.left >= left - HALF_PIXEL && other.top >= top - HALF_PIXEL && other.right <= right + HALF_PIXEL && other.bottom <= bottom + HALF_PIXEL
+
     private fun touchTarget(node: SemanticsNode): Rect {
         val drawn = Rect(node.positionInRoot, node.size.toSize())
         val minimum = with(compose.density) { ShkSpacing.MinTouchTarget.toPx() }
@@ -522,9 +549,19 @@ class ComponentPagesTest {
         val IS_GROUP = SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)
 
         /**
+         * The tick box of a list item: a touch target of its own, inside its
+         * row's, that TalkBack skips. The row says its state and offers the
+         * tick, so it is checked as part of its row.
+         */
+        val IS_TICK_BOX = hasClickAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.HideFromAccessibility)
+
+        /**
          * Anything the user acts on: what is tapped (buttons, chips and the
          * rows of selection controls), text fields and sliders.
          */
-        val IS_COMPONENT = hasClickAction() or IS_TEXT_FIELD or IS_SLIDER
+        val IS_COMPONENT = (hasClickAction() and !IS_TICK_BOX) or IS_TEXT_FIELD or IS_SLIDER
+
+        /** Half a pixel, for the rounding of positions. */
+        const val HALF_PIXEL = 0.5f
     }
 }

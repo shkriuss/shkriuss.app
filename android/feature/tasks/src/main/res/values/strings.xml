@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Every word of Tasks' screens (docs/apps/tasks/spec.md, "Screens").
+    Dates and times come already in the phone's format, such as "Wed 18
+    Nov" and "18:30", and counts in its number format, such as "1,250", so
+    the plurals take them as text and the number as the quantity.
+-->
+<resources>
+    <!-- The three destinations. -->
+    <string name="tasks_today">Today</string>
+    <string name="tasks_lists">Lists</string>
+    <string name="tasks_settings">Settings</string>
+
+    <!-- The fixed list of tasks that are in no list. -->
+    <string name="tasks_inbox">Inbox</string>
+
+    <!-- The repeats, as the form offers them and the rows show them. -->
+    <string name="tasks_once">Once</string>
+    <string name="tasks_every_day">Every day</string>
+    <string name="tasks_every_week">Every week</string>
+    <string name="tasks_every_month">Every month</string>
+    <string name="tasks_every_year">Every year</string>
+    <!-- The same as TalkBack reads them in a row: "Pay rent, due today at 10:00, every month, Home". -->
+    <string name="tasks_every_day_spoken">every day</string>
+    <string name="tasks_every_week_spoken">every week</string>
+    <string name="tasks_every_month_spoken">every month</string>
+    <string name="tasks_every_year_spoken">every year</string>
+
+    <!--
+        One row: the title, and under it its parts, one after the other:
+        "Home · 09:00 · Every day" on Today, "Fri 20 Nov · Every week" in a
+        list. In a list, a task due today says "Today".
+    -->
+    <string name="tasks_row_parts">%1$s · %2$s</string>
+    <string name="tasks_due_today">Today</string>
+    <!-- A done task in section Done: "Done Mon 16 Nov". -->
+    <string name="tasks_done_on">Done %1$s</string>
+    <!--
+        One row as TalkBack reads it, one part after the other: "Pay rent,
+        due today at 10:00, every month, Home", then whether it is done:
+        "not done", or "done on Monday 16 November".
+    -->
+    <string name="tasks_spoken_parts">%1$s, %2$s</string>
+    <string name="tasks_due_today_spoken">due today</string>
+    <string name="tasks_due_today_at_spoken">due today at %1$s</string>
+    <string name="tasks_due_on_spoken">due %1$s</string>
+    <string name="tasks_due_on_at_spoken">due %1$s at %2$s</string>
+    <string name="tasks_not_done_spoken">not done</string>
+    <string name="tasks_done_on_spoken">done on %1$s</string>
+    <!-- What the tick box and a tap on a row do, as TalkBack offers them. -->
+    <string name="tasks_mark_done">Mark as done</string>
+    <string name="tasks_mark_not_done">Mark as not done</string>
+    <string name="tasks_edit">Edit</string>
+
+    <!-- Today. -->
+    <string name="tasks_overdue">Overdue</string>
+    <string name="tasks_nothing_due_today">Nothing due today.</string>
+    <string name="tasks_add">Add a task</string>
+
+    <!-- Lists. A row: "Home", with "4 open" at its end; TalkBack reads "Home, 4 open tasks". -->
+    <plurals name="tasks_open_count">
+        <item quantity="one">%1$s open</item>
+        <item quantity="other">%1$s open</item>
+    </plurals>
+    <plurals name="tasks_open_count_spoken">
+        <item quantity="one">%1$s open task</item>
+        <item quantity="other">%1$s open tasks</item>
+    </plurals>
+    <string name="tasks_new_list">New list</string>
+    <!-- Beside Lists from 840dp, while no list is open. -->
+    <string name="tasks_choose_a_list">Choose a list.</string>
+
+    <!-- The dialog of New list and Rename, with one field. -->
+    <string name="tasks_rename_list">Rename list</string>
+    <string name="tasks_name">Name</string>
+    <string name="tasks_name_empty">Enter a name.</string>
+    <plurals name="tasks_name_too_long">
+        <item quantity="one">A name has at most %1$s character.</item>
+        <item quantity="other">A name has at most %1$s characters.</item>
+    </plurals>
+    <plurals name="tasks_lists_limit">
+        <item quantity="one">Tasks keeps %1$s list. Delete one to add another.</item>
+        <item quantity="other">Tasks keeps %1$s lists. Delete one to add another.</item>
+    </plurals>
+    <string name="tasks_list_not_saved">Could not save the list. Try again.</string>
+
+    <!-- One list. Its menu, its section of done tasks, and what it shows with no task. -->
+    <string name="tasks_rename">Rename</string>
+    <string name="tasks_delete_list">Delete list</string>
+    <string name="tasks_delete_done">Delete done tasks</string>
+    <string name="tasks_done">Done</string>
+    <string name="tasks_list_empty_title">No tasks in this list.</string>
+    <string name="tasks_list_empty_body">Tap Add a task to make one.</string>
+    <!-- The question of Delete list: "Delete the list Home?", and "This deletes 12 tasks." or "The list is empty." -->
+    <string name="tasks_delete_list_question">Delete the list %1$s?</string>
+    <plurals name="tasks_delete_list_text">
+        <item quantity="one">This deletes %1$s task.</item>
+        <item quantity="other">This deletes %1$s tasks.</item>
+    </plurals>
+    <string name="tasks_delete_list_empty">The list is empty.</string>
+    <!-- The question of Delete done tasks: "Delete 12 done tasks?" -->
+    <plurals name="tasks_delete_done_question">
+        <item quantity="one">Delete %1$s done task?</item>
+        <item quantity="other">Delete %1$s done tasks?</item>
+    </plurals>
+    <string name="tasks_delete">Delete</string>
+    <string name="tasks_cancel">Cancel</string>
+
+    <!-- The task form, a bottom sheet. -->
+    <string name="tasks_new_task">New task</string>
+    <string name="tasks_edit_task">Edit task</string>
+    <string name="tasks_title">Title</string>
+    <!-- The list of the task, and the dialog that chooses it. -->
+    <string name="tasks_list">List</string>
+    <string name="tasks_due_date">Due date</string>
+    <string name="tasks_no_due_date">No due date</string>
+    <string name="tasks_add_due_date">Add a due date</string>
+    <string name="tasks_remove">Remove</string>
+    <string name="tasks_repeat">Repeat</string>
+    <string name="tasks_days">Days</string>
+    <!-- What the form gives for a repeat: "Dates: Wed 18 Nov, Fri 20 Nov, Mon 23 Nov, ...". -->
+    <string name="tasks_dates">Dates: %1$s</string>
+    <string name="tasks_dates_more">%1$s, ...</string>
+    <!-- Days of the week, or dates, one after the other: "Mon, Wed, Fri". -->
+    <string name="tasks_list_of_two">%1$s, %2$s</string>
+    <string name="tasks_remind_me">Remind me</string>
+    <string name="tasks_time">Time</string>
+    <!-- For a done task: "Done on Mon 16 Nov." -->
+    <string name="tasks_form_done_on">Done on %1$s.</string>
+    <string name="tasks_save">Save</string>
+    <!-- A row of the form with a value under its name is read as both: "List, Home". -->
+    <string name="tasks_field_spoken">%1$s, %2$s</string>
+    <string name="tasks_title_empty">Enter a title.</string>
+    <plurals name="tasks_title_too_long">
+        <item quantity="one">A title has at most %1$s character.</item>
+        <item quantity="other">A title has at most %1$s characters.</item>
+    </plurals>
+    <string name="tasks_time_passed">That time has passed.</string>
+    <string name="tasks_choose_a_day">Choose at least one day.</string>
+    <plurals name="tasks_tasks_limit">
+        <item quantity="one">Tasks keeps %1$s task. Delete it to add another.</item>
+        <item quantity="other">Tasks keeps %1$s tasks. Delete some to add more.</item>
+    </plurals>
+    <!-- In the form, above its buttons, after a Save the database refused. The form is a sheet, where a snackbar would be hidden. -->
+    <string name="tasks_task_not_saved">Could not save the task. Try again.</string>
+
+    <!-- The snackbars. -->
+    <string name="tasks_task_done">Task done</string>
+    <!-- A repeating task moved to its next date: "Next: Wed 18 Nov". -->
+    <string name="tasks_next">Next: %1$s</string>
+    <string name="tasks_task_added">Task added</string>
+    <string name="tasks_task_deleted">Task deleted</string>
+    <string name="tasks_list_deleted">List deleted</string>
+    <plurals name="tasks_done_deleted">
+        <item quantity="one">%1$s task deleted</item>
+        <item quantity="other">%1$s tasks deleted</item>
+    </plurals>
+    <string name="tasks_could_not_change">Could not change your tasks. Try again.</string>
+    <string name="tasks_undo">Undo</string>
+
+    <!-- What a screen shows when the database cannot be read. -->
+    <string name="tasks_could_not_open">Could not open your tasks.</string>
+
+    <!-- Settings. -->
+    <string name="tasks_section_about">About</string>
+    <string name="tasks_version">Version</string>
+</resources>

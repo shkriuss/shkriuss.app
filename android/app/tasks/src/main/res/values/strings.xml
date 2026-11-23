@@ -2,7 +2,4 @@
 <resources>
     <!-- The app's name under its icon. -->
     <string name="app_name">Tasks</string>
-    <!-- The screen that stands in for Tasks' screens until they are built: its title and its one line. -->
-    <string name="placeholder_title">Tasks</string>
-    <string name="placeholder_line">Tasks\' screens are not built yet.</string>
 </resources>

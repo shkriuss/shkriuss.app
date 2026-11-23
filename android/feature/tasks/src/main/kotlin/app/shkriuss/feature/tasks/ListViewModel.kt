@@ -2,7 +2,10 @@ package app.shkriuss.feature.tasks
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +38,8 @@ data class ListScreen(
     val failed: Boolean = false,
     /** Today, so that a row can say its date. */
     val today: LocalDate,
+    /** The phone's time zone when [today] was read, so that a row of Done can say the day it was done. */
+    val zone: ZoneId,
     /** The open list's `listId`: [INBOX], or a list's `id`. Null with no list open: "Choose a list." */
     val listId: String? = null,
     /** The open list, or null for Inbox. Its name is the top bar's. */
@@ -63,6 +68,10 @@ data class ListScreen(
     /** True with no task: "No tasks in this list. Tap Add a task to make one." */
     val isEmpty: Boolean
         get() = loaded && !failed && listId != null && open.isEmpty() && done.isEmpty()
+
+    /** The day [row] was done, by the phone's clock, for "Done Mon 16 Nov", or null while it is open. */
+    fun doneOn(row: TaskRow): LocalDate? =
+        row.task.doneAt?.let { LocalDateTime.ofInstant(Instant.ofEpochMilli(it), zone).toLocalDate() }
 }
 
 /**
@@ -107,6 +116,7 @@ class ListViewModel(
         ListScreen(
             loaded = true,
             today = reading.today,
+            zone = reading.zone,
             listId = shownId,
             list = list,
             open = sections?.open.orEmpty(),
@@ -114,8 +124,8 @@ class ListViewModel(
             question = openQuestion?.takeIf { shownId != null },
             snackbar = shownSnackbar,
         )
-    }.onReadFailure { ListScreen(loaded = true, failed = true, today = now.reading.value.today, listId = openId.value) }
-        .stateIn(viewModelScope + work, SharingStarted.Eagerly, ListScreen(loaded = false, today = now.reading.value.today))
+    }.onReadFailure { now.reading.value.let { ListScreen(loaded = true, failed = true, today = it.today, zone = it.zone, listId = openId.value) } }
+        .stateIn(viewModelScope + work, SharingStarted.Eagerly, now.reading.value.let { ListScreen(loaded = false, today = it.today, zone = it.zone) })
 
     /** A tap on a row of Lists: the list [listId], or Inbox for [INBOX]. */
     fun open(listId: String) {

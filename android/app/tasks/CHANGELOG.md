@@ -9,13 +9,31 @@ specification is
 
 Not released yet.
 
-- The app starts, and shows one line: "Tasks' screens are not built
-  yet." The screens replace it.
-- Everything Tasks stores is in place, behind the screens that come
-  next: lists, with their names, and tasks, with their title, list, due
-  date, repeat, days of the week, reminder time and when they were
-  done, in one database on the phone; and what this phone remembers of
-  the reminder of each task, in one small file.
+- The screens. **Today**, where Tasks opens: what is overdue, then what
+  is due today, each section only while it has a task, or "Nothing due
+  today.". **Lists**: Inbox, then your lists by name, each with its
+  count of open tasks; **New list**; and one list open, with its open
+  tasks by due day, its done tasks under **Done**, and a menu with
+  **Rename**, **Delete list** and **Delete done tasks**. On a tablet the
+  open list is beside Lists. **Settings**, with the version.
+- A tick box on each task: a tick marks it done, or moves a repeating
+  task to its next date, with **Undo**. Clearing a tick under Done opens
+  the task again.
+- The task form, a sheet that slides up at every width: the title, the
+  list, the due date, the repeat and its days, the dates it gives, and a
+  reminder time. Every limit and error of the specification shows under
+  its field. A save that fails says so in the form, above its buttons.
+- A row of a list says its due day, "Today" or its date, and not the
+  list's name. A date has its year only when it is not this year.
+- TalkBack reads each task as one item, with "Mark as done" and "Edit".
+- Not there yet: backup and restore, the recovery key and the app lock
+  in Settings, and the reminders themselves. A reminder time is saved,
+  but no notification shows.
+- Everything Tasks stores is in place: lists, with their names, and
+  tasks, with their title, list, due date, repeat, days of the week,
+  reminder time and when they were done, in one database on the phone;
+  and what this phone remembers of the reminder of each task, in one
+  small file.
 - The rules of the specification work as plain code, with tests: the
   dates of each repeat, with the last day of a shorter month and 29
   February; the next due date when a repeating task is done; the limits
@@ -26,8 +44,8 @@ Not released yet.
   which changes nothing; and the form: its defaults, the limits of a
   title and a name, a reminder time that has passed, Every week with no
   day, at most 5,000 tasks and 100 lists.
-- Every screen of Tasks is behind the app lock, and a test checks it
-  for every screen, from now on.
+- Every screen of Tasks is behind the app lock, with every sheet,
+  dialog and menu, and a test checks each of them.
 - Permissions: the two of the app lock's screens
   ([permissions.md](../../../docs/security/permissions.md#tasks-appshkriusstasks)).
   Tasks does not ask for the three of reminders before it shows

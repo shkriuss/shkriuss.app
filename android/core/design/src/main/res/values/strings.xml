@@ -20,6 +20,12 @@
     <string name="shk_cancel">Cancel</string>
     <!-- The button of a date or time picker that chooses the date or time shown. -->
     <string name="shk_ok">OK</string>
+    <!-- What TalkBack reads after the text of a list item with a tick box, unless the app gives its own words. -->
+    <string name="shk_ticked">Ticked</string>
+    <string name="shk_not_ticked">Not ticked</string>
+    <!-- The action TalkBack offers on a list item with a tick box, unless the app gives its own words. -->
+    <string name="shk_tick">Tick</string>
+    <string name="shk_clear_tick">Clear the tick</string>
     <!-- Shown large in a date picker, in place of the date, until a date is chosen. -->
     <string name="shk_no_date">No date chosen</string>
 </resources>

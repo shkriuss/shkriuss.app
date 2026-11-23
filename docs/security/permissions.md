@@ -250,8 +250,8 @@ Tasks' manifest removes one permission that a library asks for:
 Other components that libraries add, none of them a permission:
 
 - The eight screens of `core/security` ([Screens](#screens)). Tasks has
-  no Settings yet, so nothing in Tasks opens seven of them, and the app
-  lock cannot be turned on. The eighth, the handover screen, is
+  Settings, with About only: it has no Security section yet, so nothing
+  in Tasks opens seven of them, and the app lock cannot be turned on. The eighth, the handover screen, is
   exported with no permission, as in Water. A screen of the module
   needs both permissions, and the APK rules check fails a build of
   Tasks without them. `TasksManifestTest` checks that Tasks' screens are
