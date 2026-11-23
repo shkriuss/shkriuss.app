@@ -727,7 +727,7 @@ decision). It changes nothing on screen, so the Catalog has no sample.
 
 | Component | Part | What it does |
 |---|---|---|
-| `ShkTextField` | `keyboardLearns = false` | The field asks the keyboard not to learn what is typed (`IME_FLAG_NO_PERSONALIZED_LEARNING`), so the keyboard does not keep the words in its own dictionary. It still suggests and corrects. A keyboard can ignore the request. Use it for the user's own text, such as a reminder's title. The default, `true`, leaves every other field as it is. |
+| `ShkTextField` | `keyboardLearns = false` | The field asks the keyboard not to learn what is typed (`IME_FLAG_NO_PERSONALIZED_LEARNING`), so the keyboard does not keep the words in its own dictionary. It still suggests and corrects. A keyboard can ignore the request. Use it for the user's own text, such as a reminder's title or a list's name. The default, `true`, leaves every other field as it is. |
 
 ### States
 

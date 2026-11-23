@@ -91,7 +91,8 @@ on your phone, with no account and no network.
    the phone's language order. Ties: `createdAt`, then `id`. Each row has
    its count of open tasks at the end: "4 open".
 2. A floating button, "New list": a dialog with one field, **Name**, and
-   **Save** and **Cancel**.
+   **Save** and **Cancel**. The field asks the keyboard not to learn
+   what is typed, as the title does.
 3. A tap opens the list. Under 840dp it opens in place, with Back. From
    840dp, `ShkListDetailScaffold`: the lists, 360dp wide, and the open
    list beside them, or "Choose a list."
@@ -489,7 +490,7 @@ the clock or the time zone changes
    Inbox is fixed: it cannot be renamed or deleted.
 5. The buttons **Done** and **Snooze 10 min**, as in Reminders.
 
-For the screens, four more:
+For the screens, five more:
 
 6. A save of the form that fails says so in the form, above its
    buttons, not in a snackbar, which the sheet would hide
@@ -501,6 +502,8 @@ For the screens, four more:
    only when both are empty ([Today](#today), points 3 and 6).
 9. In the form's list dialog, a tap chooses a list. Its one button is
    **Cancel** ([The task form](#the-task-form), point 2).
+10. The field of a list's name asks the keyboard not to learn what is
+    typed, as the title does ([Lists](#lists), point 2).
 
 ## Assumptions
 

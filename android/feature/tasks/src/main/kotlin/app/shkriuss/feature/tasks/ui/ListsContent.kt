@@ -293,7 +293,8 @@ private fun ListQuestionDialog(question: ListQuestion, model: ListViewModel, for
  * The dialog of **New list** or **Rename**, with one field, **Name**, and
  * **Save** and **Cancel**. Save checks the name first: a wrong name, the
  * 100 lists, or a write that failed, says so under the field, and the
- * dialog stays open with the name. The keyboard opens on the field.
+ * dialog stays open with the name. The keyboard opens on the field, and
+ * is asked not to learn the name.
  */
 @Composable
 private fun NameDialogContent(dialog: NameDialog, model: ListNameViewModel, format: TasksFormat) {
@@ -312,6 +313,8 @@ private fun NameDialogContent(dialog: NameDialog, model: ListNameViewModel, form
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { model.save() }),
             modifier = Modifier.focusRequester(field),
+            // A list's name is the user's own text, as a title is: the keyboard is asked not to learn it (the owner's decision).
+            keyboardLearns = false,
         )
         // In the dialog's own window, once the field is in it.
         LaunchedEffect(Unit) { field.requestFocus() }

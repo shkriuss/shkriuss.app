@@ -23,6 +23,8 @@ Not released yet.
   list, the due date, the repeat and its days, the dates it gives, and a
   reminder time. Every limit and error of the specification shows under
   its field. A save that fails says so in the form, above its buttons.
+- The keyboard is asked not to learn the titles of tasks and the names
+  of lists. It still suggests and corrects.
 - A row of a list says its due day, "Today" or its date, and not the
   list's name. A date has its year only when it is not this year.
 - TalkBack reads each task as one item, with "Mark as done" and "Edit".

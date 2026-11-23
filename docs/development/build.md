@@ -631,7 +631,9 @@ second build must write the same mapping file, or the release stops. See
     only exported parts Tasks' screen and the two parts of the handover.
   - `TasksScreensTest`: what the screens do and what TalkBack hears, on
     a phone and on a tablet. A tick is a real touch on the tick box, or
-    TalkBack's action on the row.
+    TalkBack's action on the row. It also checks that the keyboard is
+    asked not to learn a title or a list's name, in the windows of the
+    sheet and the dialog.
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.

@@ -1,5 +1,9 @@
 package app.shkriuss.tasks
 
+import android.text.InputType
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
@@ -373,6 +377,58 @@ class TasksScreensTest {
         compose.waitForGone(hasText(words(R.string.tasks_edit_task)))
         assertTrue(storedTasks().any { it.title == "Pills" })
         assertFalse(storedTasks().any { it.title == "Vitamins" })
+    }
+
+    /**
+     * A title and a list's name are the user's own text: the keyboard is
+     * asked not to learn them, and may still suggest (spec, "The task
+     * form", point 1, and the owner's decision 10). The form is a sheet
+     * and the name a dialog, each in a window of its own.
+     */
+    @Test
+    fun theKeyboardIsAskedNotToLearnATitleOrAListName() {
+        start()
+        compose.tap(R.string.tasks_add)
+        compose.field(words(R.string.tasks_title)).assertIsFocused()
+        assertTheKeyboardDoesNotLearn("the title")
+        compose.tap(R.string.tasks_cancel)
+        compose.waitForGone(hasText(words(R.string.tasks_new_task)))
+
+        compose.tap(R.string.tasks_lists)
+        compose.tap(R.string.tasks_new_list)
+        compose.field(words(R.string.tasks_name)).assertIsFocused()
+        assertTheKeyboardDoesNotLearn("a list's name")
+    }
+
+    /** The field that has the focus asks the keyboard not to learn what is typed, and still lets it suggest. */
+    private fun assertTheKeyboardDoesNotLearn(what: String) {
+        compose.waitForIdle()
+        val info = EditorInfo()
+        compose.runOnUiThread { checkNotNull(rootViews().firstNotNullOfOrNull(::textEditor)) { "no field has the focus" }.onCreateInputConnection(info) }
+        assertTrue("$what: no learning", info.imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING != 0)
+        assertEquals("$what: suggestions stay", 0, info.inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
+    }
+
+    /**
+     * The root view of every window of the app: the screen's, and those of
+     * a sheet or a dialog. Android keeps them in `WindowManagerGlobal`,
+     * which it does not show to apps, so the test reads it by reflection.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun rootViews(): List<View> {
+        val global = Class.forName("android.view.WindowManagerGlobal")
+        val instance = global.getMethod("getInstance").invoke(null)
+        val views = global.getDeclaredField("mViews").apply { isAccessible = true }.get(instance) as List<View>
+        return views.toList()
+    }
+
+    /** The view that takes the keyboard's input: a Compose view, once one of its fields has the focus. */
+    private fun textEditor(view: View): View? {
+        if (view.onCheckIsTextEditor()) return view
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) textEditor(view.getChildAt(index))?.let { return it }
+        }
+        return null
     }
 
     // Lists.
