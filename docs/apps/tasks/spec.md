@@ -146,8 +146,8 @@ Rules:
 2. For Every week, at least one day: "Choose at least one day."
 3. A reminder moment that is not later than the current minute is
    refused, by the time picker and at Save: "That time has passed." It
-   is checked only when the due date, the repeat, the time or **Remind
-   me** changed. A change of the title or the list alone keeps a
+   is checked only when the due date, the repeat, the days, the time
+   or **Remind me** changed. A change of the title or the list alone keeps a
    reminder that passed.
 4. At most 5,000 tasks that are not deleted: "Tasks keeps 5,000 tasks.
    Delete some to add more." A list name has 1 to 60 code points, as a
@@ -193,7 +193,7 @@ Rules:
 
 | What | Where |
 |---|---|
-| For each task, by its `id`: the mark (`mark.<id>`, minutes since 1970-01-01 00:00 local, 0 to 4,223,371,679), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`), both in milliseconds since 1970 UTC, 0 to 253,402,300,799,999 | One preferences file, `app.shkriuss.tasks`, in Tasks' private storage. Ids and times only, never a title. A value that cannot be read or is outside its limits counts as missing. |
+| For each task, by its `id`: the mark (`mark.<id>`, minutes since 1970-01-01 00:00 local, 0 to 4,223,371,679), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`), both in milliseconds since 1970 UTC, 0 to 253,402,300,799,999, and the [reminder number](#reminders-of-a-task) they were written for (`for.<id>`, 0 to 33,786,969,119) | One preferences file, `app.shkriuss.tasks`, in Tasks' private storage. Ids, times and numbers only, never a title. A value that cannot be read or is outside its limits counts as missing. The first three count only while `for.<id>` is the task's reminder number now; otherwise all three count as missing. Every write of them writes `for.<id>` too. |
 
 ## Repeats
 
@@ -240,6 +240,12 @@ Nov. "Gym": every Mon, Wed and Fri.
    [how it uses `core/notify`](../reminders/spec.md#how-reminders-uses-corenotify),
    with the channel `tasks`. A missed reminder shows late, once.
 3. A done or deleted task, or one with no reminder, has no alarm.
+4. The **reminder number** of a task with a reminder is (due day × 8 +
+   `repeat`) × 1440 + reminder time in minutes: (20773 × 8 + 1) × 1440 +
+   540 = 239306940 for an every-day task due Mon 16 Nov at 09:00. A
+   task with no reminder has none. A change of the due day, the repeat
+   or the time changes it, so the entries of the phone-only file that
+   were written for the old one count as missing.
 
 | Change | What follows |
 |---|---|
@@ -262,22 +268,21 @@ same rules for who sees the title. Differences:
    today · Every day".
 2. A tap opens Tasks, after the app lock, on the task's list with its
    form open. If the task is deleted or not stored, Today.
-3. **Done** (action `done`) carries as its value the due day it is
-   for, in days since 1970-01-01, times 8, plus the task's `repeat` at
-   that moment: 20773 × 8 + 1 = 166185 for an every-day task due Mon 16
-   Nov. **Snooze 10 min** (action `snooze`, value 10) is as in
-   Reminders. Both follow
+3. **Done** (action `done`) carries as its value the task's reminder
+   number when the notification was shown. **Snooze 10 min** (action
+   `snooze`, value 10) is as in Reminders. Both follow
    [ADR 0034](../../adr/0034-notification-buttons.md): a button does
    what it did when it was shown.
 4. A press is current when its time is `showing`. **Done** is current
-   only when the task is also open, has a reminder, and has the due day
-   and the repeat of its value.
+   only when its value is also the task's reminder number now, so the
+   task is open, has a reminder, and has the same due day, repeat and
+   time.
 5. The review at every start removes a notification when its task is
    deleted, not stored, done or has no reminder; when its time is not
    the task's `showing`; or when the value of its **Done** button, where
-   it has one, does not give the task's due day and repeat. Except when
-   the time is not `showing`, it also removes the task's `showing`. So
-   a press that another app kept from that notification is not current.
+   it has one, is not the task's reminder number. Except when the time
+   is not `showing`, it also removes the task's `showing`. So a press
+   that another app kept from that notification is not current.
 6. The channel: id `tasks`, name "Task reminders", description "Shows a
    task's reminder at its time.", Urgent at the start, as Reminders.
 
@@ -304,11 +309,11 @@ current minute.
 
 | Action | Writes, in order | If Tasks stops after the database write |
 |---|---|---|
-| Save a task | The task; then mark now, no snooze, no `showing` | The task is saved. An old notification can stay until the next start. Its **Done** counts only while the due day and the repeat are as it showed them, so it does what it did when it was shown. |
+| Save a task | The task; then mark now, no snooze, no `showing` | The task is saved. If its reminder number changed, the old entries count as missing, so the next start removes the old notification and its **Done** is not current. A change of the title or the list alone writes no entries. |
 | A tick, or **Done** on the notification | The task, done or moved; then the entries go, or the mark is now | The next start sets no alarm for a done task, and the new one for a moved task. The review removes the notification. A second press is not current. |
 | A delete: a task, a list with its tasks, the done tasks | One transaction marks them all deleted; then their entries go | They are deleted. The next start removes their notifications. **Undo** is gone with the snackbar. |
 | **Undo** | The records back; then the mark is now | They are back. An old mark can stay, so a reminder that passed can show late, once. |
-| A restore | One transaction; then for each task it took: mark now, no snooze, no `showing`, and its notification goes | A task the restore took keeps the mark it had on this phone, so its reminder can show late, once. A new task gets the current minute. |
+| A restore | One transaction; then for each task it took: mark now, no snooze, no `showing`, and its notification goes | A task the restore took with the same reminder number keeps the mark it had on this phone, so its reminder can show late, once. Any other task gets the current minute. |
 | **Snooze 10 min** | One write of the phone-only file | Nothing is half done. |
 | The alarm handler | As [Reminders' handler](../reminders/spec.md#the-rule) | As there: a reminder is never lost, and can show once more. |
 
@@ -319,7 +324,7 @@ current minute.
 | Saving the form | Nothing changes. The form stays open with what was typed. A snackbar: "Could not save the task. Try again." |
 | Saving a list's name, in **New list** or **Rename** | Nothing changes. The dialog stays open with the name, and says under the field: "Could not save the list. Try again." |
 | A tick, a delete, an Undo | Nothing changes. The row stays as it was. A snackbar: "Could not change your tasks. Try again." |
-| The phone-only file, after the database | The database change stays. The next sync and start repair the entries from it. |
+| The phone-only file, after the database | The database change stays. Entries written for an old reminder number, or for a task that is done, deleted or not stored, count as missing: the mark is the current minute, with no snooze and no `showing`. So an old snooze never fires for a new due day. |
 | A press on **Done** or **Snooze 10 min** | Nothing more changes. The notification stays with its buttons ([notifications.md](../../architecture/notifications.md#buttons-on-a-notification), point 8). |
 | The alarm handler | The notice of `core/notify` takes its place. The next reminder still comes. |
 | Reading the database for a screen | `ShkErrorState`: "Could not open your tasks." |
@@ -329,14 +334,14 @@ current minute.
 
 | Press | What follows |
 |---|---|
-| **Save** twice, in the form or in a list's name dialog | Each takes one save at a time and closes after it: one task, or one list. |
+| **Save** or **Delete** twice, in the form or in a list's name dialog | Each takes one press at a time and closes after it: one task or list is saved, or one task is deleted. |
 | A tick twice, before the row shows the change | A tick carries the due day and the repeat its row showed. It counts only while the task is open with both. A repeating task moves one date; a done task is done once. |
 | A cleared tick twice | The task is open once. |
 | A tick on a task deleted in that moment | Nothing. The row goes. |
 | **Done** on a notification twice, or on an old one | Not current: it only removes its own notification, never a newer one. |
-| **Done** after the task's reminder was turned off | Not current: the task has no reminder. |
+| **Done** after the task's reminder was turned off, or its time changed | Not current: the task's reminder number is not the one it carries. |
 | **Snooze 10 min** twice | As in Reminders: the snooze stays at its first end. |
-| **Undo** after the records changed again | It acts only on the records of its own snackbar, and only on those still as the action left them: still deleted, still done at the same `doneAt`, or still open with the due day the tick gave. |
+| **Undo** after the records changed again | It acts only on the records of its own snackbar, and only on those whose `updatedAt` is still the one the action wrote. A record changed since then, by an edit, a tick or a restore, stays as it is. |
 | A dialog's **Delete** twice | One delete. The dialog closes at the first. |
 | A tap on the notification of a deleted task | Today opens. |
 
@@ -485,7 +490,8 @@ Choices this page made without a decision by the owner on that point.
    hour today.
 7. Done tasks stay under Done until deleted. Clearing a tick opens a
    task again.
-8. A tick and **Done** carry the due day and the repeat they are for.
+8. A tick carries the due day and the repeat it is for; **Done** carries
+   the reminder number. The phone-only entries carry it too.
 9. The channel starts at Urgent, as in Reminders.
 10. The optional tick box of `ShkListItem`.
 11. The words of every screen, dialog and notification.
