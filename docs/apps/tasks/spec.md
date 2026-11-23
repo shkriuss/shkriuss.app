@@ -301,7 +301,12 @@ lists or 5,000 tasks.
 
 Tasks writes to two places: the database, one transaction per action,
 and the phone-only file. The database comes first and is the truth.
-Then its notification goes, then `notify.sync()`. At every start, the
+Then its notification goes, then `notify.sync()`. One exception: an
+action that brings a task back to a reminder, **Undo** or opening a done
+task again, writes the entries first, for the reminder number the task
+will have. If Tasks stops before the database write, the task does not
+have that number, so the entries count for nothing, and old ones can
+never count again. At every start, the
 review and the `AlarmSource` repair the rest from the database: they
 remove a notification that does not fit, drop the entries of a task
 that is done, deleted or not stored, and give a task with no mark the
@@ -312,7 +317,7 @@ current minute.
 | Save a task | The task; then mark now, no snooze, no `showing` | The task is saved. If its reminder number changed, the old entries count as missing, so the next start removes the old notification and its **Done** is not current. A change of the title or the list alone writes no entries. |
 | A tick, or **Done** on the notification | The task, done or moved; then the entries go, or the mark is now | The next start sets no alarm for a done task, and the new one for a moved task. The review removes the notification. A second press is not current. |
 | A delete: a task, a list with its tasks, the done tasks | One transaction marks them all deleted; then their entries go | They are deleted. The next start removes their notifications. **Undo** is gone with the snackbar. |
-| **Undo** | The records back; then the mark is now | They are back. An old mark can stay, so a reminder that passed can show late, once. |
+| **Undo**, or a done task opened again | The entries: mark now, no snooze, no `showing`, for the number the task will have; then the records | If it stops after the entries, the records are as they were and the entries count for nothing. After the database write, nothing is left to do. |
 | A restore | One transaction; then for each task it took: mark now, no snooze, no `showing`, and its notification goes | A task the restore took with the same reminder number keeps the mark it had on this phone, so its reminder can show late, once. Any other task gets the current minute. |
 | **Snooze 10 min** | One write of the phone-only file | Nothing is half done. |
 | The alarm handler | As [Reminders' handler](../reminders/spec.md#the-rule) | As there: a reminder is never lost, and can show once more. |
@@ -341,7 +346,7 @@ current minute.
 | **Done** on a notification twice, or on an old one | Not current: it only removes its own notification, never a newer one. |
 | **Done** after the task's reminder was turned off, or its time changed | Not current: the task's reminder number is not the one it carries. |
 | **Snooze 10 min** twice | As in Reminders: the snooze stays at its first end. |
-| **Undo** after the records changed again | It acts only on the records of its own snackbar, and only on those whose `updatedAt` is still the one the action wrote. A record changed since then, by an edit, a tick or a restore, stays as it is. |
+| **Undo** after the records changed again | It acts only on the records of its own snackbar, and only on those whose `changeNumber` is still the one the action's write gave them. Every write gives a record a new one ([data.md](../../architecture/data.md#the-change-number)), also when `updatedAt` stays at its last value. A record changed since then, by an edit, a tick or a restore, stays as it is. |
 | A dialog's **Delete** twice | One delete. The dialog closes at the first. |
 | A tap on the notification of a deleted task | Today opens. |
 
