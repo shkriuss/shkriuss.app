@@ -7,6 +7,10 @@ year. Its specification is
 
 ## Unreleased
 
+## 1.0.1 (2026-11-23)
+
+Released as `reminders-v1.0.1`.
+
 Added:
 
 - **Get the keys from another app.** When another app of the suite on

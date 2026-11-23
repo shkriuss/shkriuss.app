@@ -13,7 +13,7 @@ Pages:
 For users:
 
 - The user guide: [reminders-app.md](../../user/reminders-app.md), with
-  the known problems of 1.0.0.
+  the known problems of 1.0.1.
 - What Reminders stores, and what leaves the phone:
   [data-inventory.md](../../security/data-inventory.md#reminders-appshkriussreminders).
 
