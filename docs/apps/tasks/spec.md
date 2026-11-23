@@ -131,8 +131,10 @@ A bottom sheet at every width. "New task" or "Edit task":
    of the date. For a repeat, a line: "Dates: Wed 18 Nov, Fri 20 Nov,
    Mon 23 Nov, ...".
 5. With a due date: **Remind me**, a `ShkCheckbox`, and when it is on,
-   **Time**, which opens `ShkTimePicker`. It starts at 09:00, or at the
-   next full hour when the due day is today and 09:00 has passed.
+   **Time**, which opens `ShkTimePicker`. It starts at 09:00. When the
+   due day is today and 09:00 has passed, it starts at the next full
+   hour of today, or at 23:59 when no full hour is left. In the minute
+   23:59 that time has passed too, and rule 3 says so.
 6. For a done task, a line: "Done on Mon 16 Nov."
 7. **Save** and **Cancel**, and **Delete** when editing.
 
@@ -200,9 +202,10 @@ Rules:
    `repeatFrom` in place of `day`: each day, each chosen weekday, the
    same day of each month (the last day of a shorter month), or the same
    day of each year (28 February for 29 February).
-2. Saving a new due date, repeat or days sets `repeatFrom` to the date
-   in the form, and `dueDay` to the first date of the repeat on or after
-   it.
+2. Saving a new due date, repeat or days on a repeating task sets
+   `repeatFrom` to the date in the form, and `dueDay` to the first date
+   of the repeat on or after it. On a task without a repeat, `dueDay` is
+   the date in the form and `repeatFrom` is null.
 3. **Done** on a repeating task sets `dueDay` to the first date of the
    repeat that is later than both the old `dueDay` and today. The task
    stays open, and `repeatFrom` stays. With no such date up to
@@ -259,16 +262,20 @@ same rules for who sees the title. Differences:
    today · Every day".
 2. A tap opens Tasks, after the app lock, on the task's list with its
    form open. If the task is deleted or not stored, Today.
-3. **Done** (action `done`) carries the due day it is for as its value,
-   in days since 1970-01-01. **Snooze 10 min** (action `snooze`, value
-   10) is as in Reminders. Both follow
-   [ADR 0034](../../adr/0034-notification-buttons.md).
+3. **Done** (action `done`) carries as its value the due day it is
+   for, in days since 1970-01-01, times 8, plus the task's `repeat` at
+   that moment: 20773 × 8 + 1 = 166185 for an every-day task due Mon 16
+   Nov. **Snooze 10 min** (action `snooze`, value 10) is as in
+   Reminders. Both follow
+   [ADR 0034](../../adr/0034-notification-buttons.md): a button does
+   what it did when it was shown.
 4. A press is current when its time is `showing`. **Done** is current
-   only when the task is also open with the due day of its value.
+   only when the task is also open with the due day and the repeat of
+   its value.
 5. The review at every start removes a notification when its task is
    deleted, not stored, done or has no reminder; when its time is not
    the task's `showing`; or when the value of its **Done** button, where
-   it has one, is not the task's due day.
+   it has one, does not give the task's due day and repeat.
 6. The channel: id `tasks`, name "Task reminders", description "Shows a
    task's reminder at its time.", Urgent at the start, as Reminders.
 
@@ -295,7 +302,7 @@ current minute.
 
 | Action | Writes, in order | If Tasks stops after the database write |
 |---|---|---|
-| Save a task | The task; then mark now, no snooze, no `showing` | The task is saved. An old notification can stay until the next start; a press on it does what its label says. |
+| Save a task | The task; then mark now, no snooze, no `showing` | The task is saved. An old notification can stay until the next start. Its **Done** counts only while the due day and the repeat are as it showed them, so it does what it did when it was shown. |
 | A tick, or **Done** on the notification | The task, done or moved; then the entries go, or the mark is now | The next start sets no alarm for a done task, and the new one for a moved task. The review removes the notification. A second press is not current. |
 | A delete: a task, a list with its tasks, the done tasks | One transaction marks them all deleted; then their entries go | They are deleted. The next start removes their notifications. **Undo** is gone with the snackbar. |
 | **Undo** | The records back; then the mark is now | They are back. An old mark can stay, so a reminder that passed can show late, once. |
@@ -308,6 +315,7 @@ current minute.
 | What fails | What follows |
 |---|---|
 | Saving the form | Nothing changes. The form stays open with what was typed. A snackbar: "Could not save the task. Try again." |
+| Saving a list's name, in **New list** or **Rename** | Nothing changes. The dialog stays open with the name, and says under the field: "Could not save the list. Try again." |
 | A tick, a delete, an Undo | Nothing changes. The row stays as it was. A snackbar: "Could not change your tasks. Try again." |
 | The phone-only file, after the database | The database change stays. The next sync and start repair the entries from it. |
 | A press on **Done** or **Snooze 10 min** | Nothing more changes. The notification stays with its buttons ([notifications.md](../../architecture/notifications.md#buttons-on-a-notification), point 8). |
@@ -319,8 +327,8 @@ current minute.
 
 | Press | What follows |
 |---|---|
-| **Save** twice | The form takes one save at a time and closes after it: one task. |
-| A tick twice, before the row shows the change | A tick carries the due day its row showed. It counts only while the task is open with that due day. A repeating task moves one date; a done task is done once. |
+| **Save** twice, in the form or in a list's name dialog | Each takes one save at a time and closes after it: one task, or one list. |
+| A tick twice, before the row shows the change | A tick carries the due day and the repeat its row showed. It counts only while the task is open with both. A repeating task moves one date; a done task is done once. |
 | A cleared tick twice | The task is open once. |
 | A tick on a task deleted in that moment | Nothing. The row goes. |
 | **Done** on a notification twice, or on an old one | Not current: it only removes its own notification, never a newer one. |
@@ -474,7 +482,7 @@ Choices this page made without a decision by the owner on that point.
    hour today.
 7. Done tasks stay under Done until deleted. Clearing a tick opens a
    task again.
-8. A tick and **Done** carry the due day they are for.
+8. A tick and **Done** carry the due day and the repeat they are for.
 9. The channel starts at Urgent, as in Reminders.
 10. The optional tick box of `ShkListItem`.
 11. The words of every screen, dialog and notification.
