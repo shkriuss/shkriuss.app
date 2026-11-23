@@ -201,7 +201,8 @@ class TaskFormViewModel(
     /**
      * What the form shows. A read of the lists that fails shows as
      * [FormScreen.failed], and the form goes on taking what is typed, so
-     * Cancel still closes it.
+     * Cancel still closes it. The list dialog's order is the phone's
+     * language order at each reading of [now], as on Lists.
      */
     val state: StateFlow<FormScreen> =
         combine(form, repository.lists().orNullOnReadFailure(), now.reading, snackbar, opened) { open, read, reading, shown, opening ->

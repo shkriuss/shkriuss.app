@@ -58,7 +58,10 @@ class ViewModelsTest {
 
     private fun today() = TodayViewModel(repository, time, now, Dispatchers.Unconfined)
 
-    private fun lists() = ListsViewModel(repository, Dispatchers.Unconfined) { Locale.ENGLISH }
+    /** The phone's language, for the order of the lists. */
+    private var language: Locale = Locale.ENGLISH
+
+    private fun lists() = ListsViewModel(repository, now, Dispatchers.Unconfined) { language }
 
     private fun names() = ListNameViewModel(repository, Dispatchers.Unconfined)
 
@@ -201,6 +204,22 @@ class ViewModelsTest {
 
         assertEquals(listOf(null, home, work), rows.map { it.list })
         assertEquals(listOf(1, 2, 0), rows.map { it.openCount })
+    }
+
+    @Test
+    fun listsFollowANewLanguageOfThePhoneWhenTheScreenStartsAgain() {
+        addList("Zebra")
+        addList("Äpfel")
+        val model = lists()
+        // In English, Ä sorts as A.
+        assertEquals(listOf(null, "Äpfel", "Zebra"), model.state.await { it.rows.size == 3 }.rows.map { it.list?.name })
+
+        // In Swedish, Ä comes after Z. The screen starts again after the change, and reads the clock.
+        language = Locale.forLanguageTag("sv")
+        clockTo(monday(9, 31))
+
+        val rows = model.state.await { it.rows.getOrNull(1)?.list?.name == "Zebra" }.rows
+        assertEquals(listOf(null, "Zebra", "Äpfel"), rows.map { it.list?.name })
     }
 
     // The name dialog.

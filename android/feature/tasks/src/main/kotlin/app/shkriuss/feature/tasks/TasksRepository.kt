@@ -296,12 +296,19 @@ class TasksRepository(
      * have, counting from [now]; then the task. Null if the task is not
      * done, deleted or not stored, or changed in that moment: a cleared
      * tick twice opens it once.
+     *
+     * The read, the entries and the write take their turn on [turns] as
+     * one, so a second cleared tick waits for the first and then finds the
+     * task open: it writes no entries, and the mark stays that of the
+     * press that counted.
      */
     suspend fun reopen(id: String, now: ClockReading = time.reading()): Task? = withContext(NonCancellable) {
-        val before = tasks.find(id)?.takeIf { !it.record.isDeleted && it.doneAt != null } ?: return@withContext null
-        countFrom(now, listOf(before.copy(doneAt = null)))
-        val after = database.withWriteTransaction<TaskEntity?> {
-            if (tasks.find(id)?.changeNumber != before.changeNumber) null else taskWriter.update(id) { it.copy(doneAt = null) }
+        val after = inTurn {
+            val before = tasks.find(id)?.takeIf { !it.record.isDeleted && it.doneAt != null } ?: return@inTurn null
+            writeCounting(now, listOf(before.copy(doneAt = null)))
+            database.withWriteTransaction<TaskEntity?> {
+                if (tasks.find(id)?.changeNumber != before.changeNumber) null else taskWriter.update(id) { it.copy(doneAt = null) }
+            }
         } ?: return@withContext null
         onChange(TaskChange(TaskChange.Kind.OPENED_AGAIN, listOf(id)))
         taskOf(after)
@@ -351,17 +358,23 @@ class TasksRepository(
      * write gave them. It writes the entries first, for the reminder
      * number each task will have, counting from [now]; then the records,
      * in one transaction. Returns the tasks it brought back or put back.
-     * Undo may bring the count past the limits of the form.
+     * Undo may bring the count past the limits of the form. As in
+     * [reopen], the reads, the entries and the write take their turn on
+     * [turns] as one, so an Undo that does not count writes no entries.
      */
     suspend fun undo(undo: Undo, now: ClockReading = time.reading()): List<Task> = withContext(NonCancellable) {
         val taskSteps = undo.steps.filter { it !is UndoStep.BringBackList }
-        val coming = taskSteps.mapNotNull { step -> tasks.find(step.id)?.takeIf { it.changeNumber == step.changeNumber }?.let { undone(it, step) } }
-        countFrom(now, coming)
-        val done = database.withWriteTransaction<List<TaskEntity>> {
-            undo.steps.filterIsInstance<UndoStep.BringBackList>().forEach { step ->
-                if (lists.find(step.id)?.changeNumber == step.changeNumber) listWriter.restore(step.id)
+        val done = inTurn {
+            val coming = taskSteps.mapNotNull { step ->
+                tasks.find(step.id)?.takeIf { it.changeNumber == step.changeNumber }?.let { undone(it, step) }
             }
-            taskSteps.mapNotNull { step -> if (tasks.find(step.id)?.changeNumber == step.changeNumber) undoTask(step) else null }
+            writeCounting(now, coming)
+            database.withWriteTransaction<List<TaskEntity>> {
+                undo.steps.filterIsInstance<UndoStep.BringBackList>().forEach { step ->
+                    if (lists.find(step.id)?.changeNumber == step.changeNumber) listWriter.restore(step.id)
+                }
+                taskSteps.mapNotNull { step -> if (tasks.find(step.id)?.changeNumber == step.changeNumber) undoTask(step) else null }
+            }
         }
         if (done.isNotEmpty()) onChange(TaskChange(TaskChange.Kind.BROUGHT_BACK, done.map { it.record.id }))
         done.map(::taskOf)
@@ -409,13 +422,18 @@ class TasksRepository(
      */
     private suspend fun countFrom(now: ClockReading, rows: List<TaskEntity>) {
         if (rows.isEmpty()) return
-        val numbers = rows.associate { it.record.id to TaskReminders.numberOf(it) }
-        withContext(work) {
-            turns.withLock {
-                book.update(numbers.keys) { id, _ -> numbers[id]?.let { TaskEntry.countingFrom(it, now.currentMinute) } ?: TaskEntry() }
-            }
-        }
+        inTurn { writeCounting(now, rows) }
     }
+
+    /** [countFrom], for a caller that already has its turn on [turns]. */
+    private fun writeCounting(now: ClockReading, rows: List<TaskEntity>) {
+        if (rows.isEmpty()) return
+        val numbers = rows.associate { it.record.id to TaskReminders.numberOf(it) }
+        book.update(numbers.keys) { id, _ -> numbers[id]?.let { TaskEntry.countingFrom(it, now.currentMinute) } ?: TaskEntry() }
+    }
+
+    /** Runs [block] in [work], in its turn on [turns]: the one lock of the book's work, the alarms and the buttons. */
+    private suspend fun <T> inTurn(block: suspend () -> T): T = withContext(work) { turns.withLock { block() } }
 
     /** The entries of [ids] go: their marks, snoozes and notifications on screen. */
     private suspend fun forget(ids: List<String>) {

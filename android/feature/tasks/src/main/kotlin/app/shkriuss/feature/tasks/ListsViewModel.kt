@@ -27,17 +27,20 @@ data class ListsScreen(
 
 /**
  * The ViewModel of Lists. The rows follow the database: Inbox first, then
- * each list by name in the phone's language order, [locale]. **New
- * list** opens the [ListNameViewModel]. A tap opens the list in the
- * [ListViewModel].
+ * each list by name in the phone's language order, [locale]. They are
+ * put in order again at each reading of [now], so when the phone's
+ * language changes, which starts the screen again, the order follows it
+ * (`TasksNow.check`). **New list** opens the [ListNameViewModel]. A tap
+ * opens the list in the [ListViewModel].
  */
 class ListsViewModel(
     repository: TasksRepository,
+    now: TasksNow,
     work: CoroutineContext = EmptyCoroutineContext,
     locale: () -> Locale = Locale::getDefault,
 ) : ViewModel() {
     /** What the screen shows. */
-    val state: StateFlow<ListsScreen> = combine(repository.tasks(), repository.lists()) { tasks, lists ->
+    val state: StateFlow<ListsScreen> = combine(repository.tasks(), repository.lists(), now.reading) { tasks, lists, _ ->
         ListsScreen(loaded = true, rows = TaskOrder.lists(tasks, lists, locale()))
     }.onReadFailure { ListsScreen(loaded = true, failed = true) }
         .stateIn(viewModelScope + work, SharingStarted.Eagerly, ListsScreen(loaded = false))

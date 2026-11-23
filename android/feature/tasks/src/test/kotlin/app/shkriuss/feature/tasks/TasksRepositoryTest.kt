@@ -1,13 +1,18 @@
 package app.shkriuss.feature.tasks
 
 import android.database.SQLException
+import app.shkriuss.core.data.Clock
 import app.shkriuss.core.data.RecordWriter
+import app.shkriuss.core.data.systemSqliteDatabaseBuilder
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.tasks.data.TaskEntity
 import app.shkriuss.feature.tasks.data.TaskListEntity
 import app.shkriuss.feature.tasks.data.TasksDatabase
 import java.time.LocalDate
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -343,6 +348,51 @@ class TasksRepositoryTest {
     }
 
     @Test
+    fun aClearedTickTwiceKeepsTheMarkOfThePressThatCounted() {
+        // A database in a file, so that a read can run while a write is open, as in the app.
+        context.deleteDatabase(FILE_DATABASE)
+        val fileDatabase = systemSqliteDatabaseBuilder<TasksDatabase>(context, FILE_DATABASE).build()
+        val inWrite = CompletableDeferred<Unit>()
+        val mayCommit = CompletableDeferred<Unit>()
+        // The first reopen's write waits, inside its transaction, until the test lets it commit.
+        val holdingClock = object : Clock {
+            @Volatile var hold = false
+
+            override fun nowMillis(): Long {
+                if (hold) {
+                    hold = false
+                    inWrite.complete(Unit)
+                    runBlocking { mayCommit.await() }
+                }
+                return clock.nowMillis
+            }
+        }
+        val fileRepository = TasksRepository(fileDatabase, holdingClock, TestIdSource(), time, book, work = Dispatchers.Unconfined)
+        try {
+            runBlocking {
+                val bank = checkNotNull(fileRepository.addTask(NewTask("Call the bank", INBOX, Due(MONDAY, null, 10 * 60))))
+                checkNotNull(fileRepository.tick(bank.id, MONDAY, Repeat.ONCE))
+                holdingClock.hold = true
+
+                val first = async(Dispatchers.IO) { fileRepository.reopen(bank.id, readingAt(monday(9, 59, 50))) }
+                inWrite.await()
+                // The second press, a minute later, comes while the first is writing.
+                val second = async(Dispatchers.IO) { fileRepository.reopen(bank.id, readingAt(monday(10, 0, 5))) }
+                delay(300)
+                mayCommit.complete(Unit)
+
+                assertNotNull(first.await())
+                assertNull(second.await())
+                assertEquals("the mark of the press that counted", monday(9, 59), book.entryOf(bank.id, TaskReminders.numberOf(bank)).mark)
+            }
+        } finally {
+            mayCommit.complete(Unit)
+            fileDatabase.close()
+            context.deleteDatabase(FILE_DATABASE)
+        }
+    }
+
+    @Test
     fun theEntriesOfAnOpeningAgainThatTheDatabaseRefusedCountForNothing() = runBlocking {
         val bank = add("Call the bank", Due(day(1), null, 600))
         tick(bank)
@@ -464,5 +514,10 @@ class TasksRepositoryTest {
         assertThrows(SQLException::class.java) { runBlocking { repository.addList("Work") } }
         assertThrows(SQLException::class.java) { runBlocking { repository.renameList(home.id, "House") } }
         assertEquals(listOf(home), lists())
+    }
+
+    private companion object {
+        /** The file of the database of the test that needs two connections. */
+        const val FILE_DATABASE = "tasks-test.db"
     }
 }
