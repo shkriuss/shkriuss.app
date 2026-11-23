@@ -60,10 +60,14 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   database, with the committed schemas in `schemas/`, its rules, its
   ViewModels and its backup content, and its screens, in the package
   `ui`. See [apps/reminders/spec.md](../apps/reminders/spec.md).
+- `android/feature/tasks/`: the data and logic of Tasks: its database,
+  with the committed schemas in `schemas/`, its rules and its
+  ViewModels. See [apps/tasks/spec.md](../apps/tasks/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
 - `android/app/water/`: the Water app, `app.shkriuss.water`.
 - `android/app/reminders/`: the Reminders app, `app.shkriuss.reminders`.
+- `android/app/tasks/`: the Tasks app, `app.shkriuss.tasks`.
 
 How the modules depend on each other is in
 [architecture/modules.md](../architecture/modules.md).
@@ -598,6 +602,27 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
     and dialog. The date picker shows June 2100, because Material's
     picker marks the real today in the month it shows.
+- `feature/tasks` has 9 test classes with 111 tests: the dates of each
+  repeat with the examples of the spec, the limits of every column and
+  the rules that join two, the reminder number and moment, also in the
+  two hours of summer time, the order of each screen, and the rules of
+  the form, as plain code (`RepeatDatesTest`, `TaskLimitsTest`,
+  `TaskRemindersTest`, `TaskOrderTest`, `FormRulesTest`), the phone-only
+  file, its limits and the reminder number its entries count for, also
+  after the disk refused a write (`TaskBookTest`), the schema
+  (`TasksDatabaseTest`), and the repository and the ViewModels on a
+  database in memory (`TasksRepositoryTest`, `ViewModelsTest`). The
+  ViewModels run their work at once, as Water's do. A trigger that
+  aborts every write to a table stands for a disk that refuses a
+  write, and a table that is gone for a database that cannot be read:
+  the tests check that nothing changes and what the screen says.
+- `app/tasks` has three test classes:
+  `EveryScreenIsBehindTheAppLockTest`, a copy of Water's;
+  `TasksManifestTest`, which names everything Tasks' merged manifest
+  lets another app reach: two permissions and none that it defines, no
+  receiver, Tasks' screen and the eight of `core/security`, and as the
+  only exported parts Tasks' screen and the two parts of the handover;
+  and the screenshots of the line that stands in for the screens.
 
 ### Instrumented tests
 
@@ -615,8 +640,8 @@ Test helpers that the tests of other modules may use
 1. A module that applies `shkriuss.android.test-fixtures` has a folder
    `src/testFixtures/`. Today `core/crypto` and `core/notify` do.
    `core/backup`, `core/security`, `feature/water`, `app/water`,
-   `feature/reminders` and `app/reminders` use those of `core/crypto` in
-   their tests, and `core/testing` compiles
+   `feature/reminders`, `app/reminders` and `app/tasks` use those of
+   `core/crypto` in their tests, and `core/testing` compiles
    against them ([Shared test helpers](#shared-test-helpers)).
    `feature/water` and `app/water` use those of `core/notify` in their
    tests.
@@ -713,7 +738,7 @@ Why the helper lives in `core/testing`:
 
 Every app has one test that calls the check: Water's
 `EveryScreenIsBehindTheAppLockTest`, which every later app copies, with
-its own locked app class. Reminders has its copy.
+its own locked app class. Reminders and Tasks have their copies.
 
 `TestDocuments` stands for the documents of the system file picker in
 unit tests. It is a content provider that keeps each
@@ -1066,7 +1091,7 @@ does not. The owner asked for them.
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. In a compiled XML file, an element named `WebView` or after each WebView class fails, so does a `class` attribute with such a name, and an `android:name` with one. A layout without them passes. Every compiled XML file of an APK is found by its content, also under a short name, and one the reader cannot read fails. Each WebView class as a value in `resources.arsc` fails, and so does a `<fragment>` that names `android.webkit.WebViewFragment` through a string resource. Values without one pass. A resource table the reader cannot read fails. |
 | `DaoRulesSqlTest` | The DAO rules check reads comments and quoted text in one pass. A marked purge whose `OR` hides behind `--` or `/*` inside `'...'`, `"..."`, `` `...` `` or `[...]` fails, and so does one behind a quote inside a comment, or behind an escaped quote. A `DELETE` behind `'--'` in a read fails. A purge of deleted rows passes, with quoted names, comments and text. |
-| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water and of Reminders pass. `INTERNET` fails in both, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
+| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water, of Reminders and of Tasks pass. `INTERNET` fails in all three, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 | `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The eight screens of `core/security` with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the eight screens alone needs both, and so does a new screen of the module: the rule matches every screen by the start of its name. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
 The tests catch a weaker check. They fail when `allowBackup` true is
@@ -1366,8 +1391,8 @@ and fails the build if:
 1. it contains a native library (hard rule 2),
 2. its manifest declares any permission, or requests one that is not on
    the app's allow list (hard rule 4). The list is per app, by module
-   name, the same for every build type. Water's list and Reminders'
-   list hold the same five: the three permissions of `core/notify`, and
+   name, the same for every build type. The lists of Water, Reminders
+   and Tasks hold the same five: the three permissions of `core/notify`, and
    the two of `core/security`, `USE_BIOMETRIC` and
    `HIDE_OVERLAY_WINDOWS`. Every other app's list is empty.
    Only the owner changes it ([permissions.md](../security/permissions.md)).

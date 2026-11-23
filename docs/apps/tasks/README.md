@@ -10,7 +10,12 @@ Pages:
   backup contents, permissions and TalkBack notes, and what is out of
   scope for version 1.
 
-Code, not built yet:
+Code:
 
-- `android/feature/tasks`: the data and logic, and the screens.
-- `android/app/tasks`: the app.
+- `android/feature/tasks`: the data and logic. The screens are not
+  built yet. They go there too.
+- `android/app/tasks`: the app. Until the screens come, it shows one
+  line in their place.
+- What changed: [CHANGELOG.md](../../../android/app/tasks/CHANGELOG.md).
+- How the modules fit together:
+  [modules.md](../../architecture/modules.md).

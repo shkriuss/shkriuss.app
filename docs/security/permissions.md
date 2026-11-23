@@ -15,10 +15,10 @@ permission updates this page and has its own decision record
   permission it is not allowed. Each app has an allow list in the APK
   rules check. Only the owner changes it, after the app's ADR and its
   entry on this page. The sentence the owner uses for it is in
-  [PROMPTS.md](../development/PROMPTS.md#2-build). Today Water and
-  Reminders are allowed the same five: the three of `core/notify` and
-  the two of `core/security`. An app that is not on the list may request
-  none, and no app may
+  [PROMPTS.md](../development/PROMPTS.md#2-build). Today Water,
+  Reminders and Tasks are allowed the same five: the three of
+  `core/notify` and the two of `core/security`. An app that is not on
+  the list may request none, and no app may
   declare a permission of its own. The check is described in
   [build.md](../development/build.md#apk-rules-check).
 
@@ -218,6 +218,69 @@ Reminders stores its data in its own database and backs it up only into
 the backup file of the suite, so Android backup and device-to-device
 transfer are turned off.
 
+### Tasks (`app.shkriuss.tasks`)
+
+Two permissions, from `core/security`, for the recovery key screens and
+the app lock.
+
+| Permission | From | Why |
+|---|---|---|
+| `android.permission.USE_BIOMETRIC` | `core/security` | To show Android's system prompt: for the recovery key that the phone keeps, and for the app lock ([ADR 0031](../adr/0031-use-biometric-for-the-system-prompt.md)). Granted at install. |
+| `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | To hide other apps' windows while a screen of the recovery key or the lock screen shows ([ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)). Granted at install. |
+
+- Tasks' allow list in the APK rules check has five permissions, the
+  same as Water's, which its
+  [specification](../apps/tasks/spec.md#as-in-water-and-reminders)
+  names: these two, and the three of `core/notify`,
+  `POST_NOTIFICATIONS`, `USE_EXACT_ALARM` and `RECEIVE_BOOT_COMPLETED`.
+  The owner asked for all five. A build of Tasks with any other
+  permission fails.
+- Tasks does not use `core/notify` yet, so it does not hold the three.
+  They come with the module, for the reminders of its tasks. Their
+  reasons are those of Reminders, above.
+- Tasks asks the user for none of the two. Android grants both at
+  install.
+
+Tasks' manifest removes one permission that a library asks for:
+
+| Permission | Added by | What happens to it |
+|---|---|---|
+| `app.shkriuss.tasks.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed in Tasks' manifest, for good, as in Water. `androidx.core` uses it only on Android 12 and older. |
+
+Other components that libraries add, none of them a permission:
+
+- The eight screens of `core/security` ([Screens](#screens)). Tasks has
+  no Settings yet, so nothing in Tasks opens seven of them, and the app
+  lock cannot be turned on. The eighth, the handover screen, is
+  exported with no permission, as in Water. A screen of the module
+  needs both permissions, and the APK rules check fails a build of
+  Tasks without them. `TasksManifestTest` checks that Tasks' screens are
+  its own and these eight, and that none but the handover screen is
+  exported or has an intent filter.
+- The status provider of `core/security`, authority
+  `app.shkriuss.tasks.keeper`, exported with no permission, as in
+  Water.
+- `androidx.room3.MultiInstanceInvalidationService`: added by Room, not
+  exported. Tasks does not use multi-instance invalidation.
+- `androidx.startup.InitializationProvider`: not exported. The emoji
+  font loader is removed from it, as in Water.
+- `androidx.profileinstaller.ProfileInstallReceiver`: removed in Tasks'
+  manifest, as in Water.
+- The app lock's screen-off receiver, registered while the app runs,
+  not exported ([A receiver registered at runtime](#a-receiver-registered-at-runtime)).
+  Tasks starts its `AppLockWatcher`.
+- `<queries>` for the action `app.shkriuss.action.HANDOVER`, as in
+  Water.
+- No receiver in the manifest. `TasksManifestTest` checks that there is
+  none, and fails unless `TasksActivity`, the handover screen and the
+  status provider are the only exported parts of Tasks' merged
+  manifest, and unless the two parts of the handover have no
+  permission.
+
+Tasks stores its data in its own database. Android backup and
+device-to-device transfer are turned off. Its backup goes only into the
+backup file of the suite, once the backup screens are built.
+
 ## Apps that use `core/notify`
 
 `core/notify` sets the alarms and shows the notifications of an app with
@@ -291,10 +354,10 @@ intent filter on the receiver of alarms or of buttons.
 the app lock ([security-screens.md](../architecture/security-screens.md)).
 Its manifest declares two permissions, eight screens, one status
 provider and one `<queries>` entry. It defines no permission. Every app
-that uses the module gets them when the app is built. Water and
-Reminders have them ([Water](#water-appshkriusswater),
-[Reminders](#reminders-appshkriussreminders)). Catalog removes them for
-good.
+that uses the module gets them when the app is built. Water, Reminders
+and Tasks have them ([Water](#water-appshkriusswater),
+[Reminders](#reminders-appshkriussreminders),
+[Tasks](#tasks-appshkriusstasks)). Catalog removes them for good.
 
 An app does not get the permissions unnoticed. The APK rules check fails
 the app until the owner allows them for that app, and this page then

@@ -188,7 +188,7 @@ What stops it:
    on or off.
 6. Android's own backup and device transfer are off. crypto-design.md
    asks this of every app ("Where keys are stored", point 1). Catalog,
-   Water and Reminders turn both off.
+   Water, Reminders and Tasks turn both off.
 
 What does not:
 
@@ -236,7 +236,7 @@ What stops it:
    - One exception, in Catalog only: the receiver of
      `androidx.profileinstaller` is exported to callers with
      `android.permission.DUMP`, which only the system and the developer
-     shell hold. Water and Reminders remove it (owner's decision).
+     shell hold. Water, Reminders and Tasks remove it (owner's decision).
      Open, for the next change to Catalog: remove it there too
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 4. There is one content provider of our own, the status provider of the
@@ -357,8 +357,8 @@ What stops it:
 1. Data apps have no network permission
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). The
    APK rules check fails the build of an app that asks for a permission
-   it is not allowed. Today only Water and Reminders are allowed any:
-   the same five each, none of them a network permission
+   it is not allowed. Today only Water, Reminders and Tasks are allowed
+   any: the same five each, none of them a network permission
    ([permissions.md](permissions.md#rules)). So a data app sends nothing.
 2. Only the Sync app will talk to the network. It will move only sealed
    records and encrypted files, which it cannot open
@@ -1148,7 +1148,7 @@ Status: **Open (the sync design).**
   two have no permission: each checks the caller's certificate first,
   and gives a refused caller nothing. Open: Catalog still exports the receiver of
   `androidx.profileinstaller` to callers with `android.permission.DUMP`,
-  until its next change. Water and Reminders remove it
+  until its next change. Water, Reminders and Tasks remove it
   ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 - MASWE-0019, autofill for credential managers: does not apply. There
   are no passwords. The word field turns autofill off on purpose.
