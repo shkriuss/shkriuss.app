@@ -12,8 +12,8 @@ Folders:
   specification.
 - [reminders/](reminders/README.md): Reminders, the second app, with
   its specification.
-- [tasks/](tasks/README.md): Tasks, with its specification. Not built
-  yet.
+- [tasks/](tasks/README.md): Tasks, with its specification. Being
+  built.
 
 What else belongs here:
 

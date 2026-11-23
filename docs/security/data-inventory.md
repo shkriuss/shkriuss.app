@@ -3,8 +3,8 @@
 What each app stores on the phone, where, whether it is in a backup, and
 what leaves the phone and how.
 
-- Status: covers Catalog, Water and Reminders. It is written from the
-  code, not from other pages. The file names and keys below are the ones in the
+- Status: covers Catalog, Water, Reminders and Tasks. It is written
+  from the code, not from other pages. The file names and keys below are the ones in the
   code.
 - Each later app adds its section before its first release.
 - The same, in plain words for users: [privacy.md](../user/privacy.md).
@@ -294,3 +294,45 @@ hold no user data.
   Uninstalling Reminders does the same.
 - Backup files stay where you put them. Delete them there.
 - Without the recovery words, nobody can open those backups.
+
+## Tasks (`app.shkriuss.tasks`)
+
+Tasks is being built. Its code stores lists, tasks and what this phone
+remembers of the reminder of each task, as below. Its screens are not
+built yet: the app shows one line and writes none of it. It has no
+backup, shows no notification and cannot set up the recovery key.
+
+### On the phone
+
+Everything is in Tasks' private storage.
+
+| What | Where | What it holds | In a backup |
+|---|---|---|---|
+| The database `tasks.db` | Tasks' database folder | Two record tables ([spec.md](../apps/tasks/spec.md#data)). `task_list`, one row per list: its name. `task`, one row per task: the random ID of its list, or none for Inbox, its title, its due day, its repeat, its days of the week, the day the repeat counts from, its reminder time and when it was done. Each row also has its random ID, its times and its deletion marker. A deleted list keeps its name and a deleted task its title. The table `change_counter` holds one number. **Text: the names of lists and the titles of tasks.** | `task_list` and `task`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
+| The preferences file `app.shkriuss.tasks` | Tasks' preferences folder | For each task with a reminder, by its random ID: the reminder number its entries were written for (`for.<id>`, made of the due day, the repeat and the reminder time), its mark (`mark.<id>`, a local date and minute), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`) ([spec.md](../apps/tasks/spec.md#on-this-phone-only)). IDs, times and numbers only. Never a title or a name. | No |
+
+- No key files and no hardware keys: the recovery key cannot be set up
+  in Tasks yet.
+- No preferences file of `core/security`: the settings of the app lock
+  cannot be changed in Tasks yet.
+- Tasks stores no files: it never asks `core/crypto` for a file key.
+- Android's SQLite keeps the write-ahead files `tasks.db-wal` and
+  `tasks.db-shm` next to the database. They can hold rows of it, names
+  and titles too, until SQLite writes them into `tasks.db`.
+
+### What leaves the phone, and how
+
+Nothing of the user's. Tasks has no network permission and shows no
+notification. Android backup and device transfer are off. It writes no
+file outside its storage, puts nothing on the clipboard and writes no
+log. The two parts of the handover of `core/security` are in its
+manifest, as in every data app: its status provider says only that
+Tasks keeps no recovery key, and its handover screen says the same to a
+suite app that asks, and gives nothing
+([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+
+### How to delete it
+
+In Android's Settings, open **Apps**, then **Tasks**, **Storage**, and
+tap **Clear storage**. Everything above goes. Uninstalling Tasks does
+the same.

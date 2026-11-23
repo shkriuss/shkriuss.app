@@ -31,6 +31,9 @@ class PermissionAllowListTest {
     /** Reminders' allow list: the same five as Water's (docs/apps/reminders/spec.md, "Permissions"). */
     private val reminders = water
 
+    /** Tasks' allow list: the same five as Water's (docs/apps/tasks/spec.md, "As in Water and Reminders", permissions). */
+    private val tasks = water
+
     /** A merged manifest with one element per entry of [tags]: the tag and its `android:name`. */
     private fun manifest(vararg tags: Pair<String, String>): Document {
         val body = tags.joinToString("\n") { (tag, name) -> """    <$tag android:name="$name" />""" }
@@ -56,8 +59,11 @@ class PermissionAllowListTest {
     }
 
     @Test
-    fun theCheckKnowsTheAllowListsOfWaterAndRemindersAndNoOther() {
-        assertEquals(mapOf("water" to water.toSet(), "reminders" to reminders.toSet()), CheckApkRulesTask.ALLOWED_PERMISSIONS)
+    fun theCheckKnowsTheAllowListsOfWaterRemindersAndTasksAndNoOther() {
+        assertEquals(
+            mapOf("water" to water.toSet(), "reminders" to reminders.toSet(), "tasks" to tasks.toSet()),
+            CheckApkRulesTask.ALLOWED_PERMISSIONS,
+        )
     }
 
     @Test
@@ -74,6 +80,17 @@ class PermissionAllowListTest {
     fun theNetworkPermissionFailsInReminders() = assertOneProblem(
         "android.permission.INTERNET in the manifest (rule 4: not on the allow list of reminders)",
         CheckApkRulesTask.permissionProblems(requests(*(reminders + "android.permission.INTERNET").toTypedArray()), "reminders"),
+    )
+
+    @Test
+    fun tasksFivePermissionsPass() {
+        assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(requests(*tasks.toTypedArray()), "tasks"))
+    }
+
+    @Test
+    fun theNetworkPermissionFailsInTasks() = assertOneProblem(
+        "android.permission.INTERNET in the manifest (rule 4: not on the allow list of tasks)",
+        CheckApkRulesTask.permissionProblems(requests(*(tasks + "android.permission.INTERNET").toTypedArray()), "tasks"),
     )
 
     @Test
@@ -109,7 +126,7 @@ class PermissionAllowListTest {
 
     @Test
     fun watersPermissionsAreNotAllowedInAnotherApp() {
-        val problems = CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "tasks")
+        val problems = CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "notes")
         assertEquals(water.map { "<uses-permission> $it in the manifest (rule 4: no permissions)" }, problems)
     }
 
