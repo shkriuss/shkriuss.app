@@ -61,11 +61,11 @@ Not released yet.
   day, at most 5,000 tasks and 100 lists.
 - Every screen of Tasks is behind the app lock, with every sheet,
   dialog and menu, and a test checks each of them.
-- Permissions: the five of Water, the three of reminders and the two of
-  the app lock's screens
+- Permissions: the five of Water, which are the three of reminders and
+  the two of the app lock's screens
   ([permissions.md](../../../docs/security/permissions.md#tasks-appshkriusstasks)).
-  Tasks asks only for notifications, and only after a save that sets a
-  reminder.
+  Tasks asks the user only for notifications: after a save that sets a
+  reminder, or from **Allow** on Today.
 - No other app can reach any part of Tasks but its screen and the two
   parts of the handover between apps, which give nothing: Tasks keeps
   no recovery key. The three receivers of reminders are not exported.

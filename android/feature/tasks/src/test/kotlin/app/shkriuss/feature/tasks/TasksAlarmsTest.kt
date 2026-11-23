@@ -10,6 +10,7 @@ import app.shkriuss.core.notify.ChannelImportance
 import app.shkriuss.core.notify.R as NotifyR
 import app.shkriuss.core.notify.ShkNotification
 import app.shkriuss.core.testing.TestIdSource
+import app.shkriuss.feature.tasks.data.TaskEntity
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlinx.coroutines.runBlocking
@@ -397,6 +398,23 @@ class TasksAlarmsTest {
 
         assertEquals("Tuesday's stays", setup.millisOf(day(1, 9)), shownOf(pills).atMillis)
         assertEquals(day(1), setup.find(pills)?.due?.day)
+    }
+
+    @Test
+    fun aDoneWhoseWriteIsRefusedChangesNothingAndTheNotificationStays() {
+        val pills = savePills()
+        setup.fireAt(monday(9))
+        val entry = setup.entryOf(pills)
+        setup.database.refuseWritesTo(TaskEntity.TABLE)
+
+        setup.press(pills, DONE, monday(9, 5))
+
+        setup.database.acceptWritesTo(TaskEntity.TABLE)
+        assertEquals("Pills is still due on Monday", MONDAY, setup.find(pills)?.due?.day)
+        assertEquals(entry, setup.entryOf(pills))
+        assertNotNull("the notification stays, with its buttons", setup.shown(pills))
+        assertEquals(listOf("Done", "Snooze 10 min"), shownOf(pills).buttons)
+        assertEquals("no alarm for Tuesday", emptyList<Long>(), setup.waiting())
     }
 
     @Test

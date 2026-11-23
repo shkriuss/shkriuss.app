@@ -604,7 +604,7 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
     and dialog. The date picker shows June 2100, because Material's
     picker marks the real today in the month it shows.
-- `feature/tasks` has 12 test classes with 195 tests: the dates of each
+- `feature/tasks` has 12 test classes with 196 tests: the dates of each
   repeat with the examples of the spec, the limits of every column and
   the rules that join two, the reminder number and moment, also in the
   two hours of summer time, the one alarm of a task, the order of each
