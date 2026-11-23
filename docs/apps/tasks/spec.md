@@ -270,12 +270,14 @@ same rules for who sees the title. Differences:
    [ADR 0034](../../adr/0034-notification-buttons.md): a button does
    what it did when it was shown.
 4. A press is current when its time is `showing`. **Done** is current
-   only when the task is also open with the due day and the repeat of
-   its value.
+   only when the task is also open, has a reminder, and has the due day
+   and the repeat of its value.
 5. The review at every start removes a notification when its task is
    deleted, not stored, done or has no reminder; when its time is not
    the task's `showing`; or when the value of its **Done** button, where
-   it has one, does not give the task's due day and repeat.
+   it has one, does not give the task's due day and repeat. Except when
+   the time is not `showing`, it also removes the task's `showing`. So
+   a press that another app kept from that notification is not current.
 6. The channel: id `tasks`, name "Task reminders", description "Shows a
    task's reminder at its time.", Urgent at the start, as Reminders.
 
@@ -332,6 +334,7 @@ current minute.
 | A cleared tick twice | The task is open once. |
 | A tick on a task deleted in that moment | Nothing. The row goes. |
 | **Done** on a notification twice, or on an old one | Not current: it only removes its own notification, never a newer one. |
+| **Done** after the task's reminder was turned off | Not current: the task has no reminder. |
 | **Snooze 10 min** twice | As in Reminders: the snooze stays at its first end. |
 | **Undo** after the records changed again | It acts only on the records of its own snackbar, and only on those still as the action left them: still deleted, still done at the same `doneAt`, or still open with the due day the tick gave. |
 | A dialog's **Delete** twice | One delete. The dialog closes at the first. |
