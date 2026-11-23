@@ -10,8 +10,9 @@ import org.w3c.dom.Element
 
 /**
  * What Tasks' merged manifest holds (docs/security/permissions.md,
- * "Tasks"): the two permissions of core/security and no other, and none
- * that it defines; no receiver; Tasks' one screen and the eight screens of
+ * "Tasks"): five permissions and no other, the three of core/notify and
+ * the two of core/security, and none that it defines; the three receivers
+ * of core/notify; Tasks' one screen and the eight screens of
  * core/security; and nothing that another app can reach but Tasks' own
  * screen and the two parts of the handover between apps (ADR 0041).
  * Those two have no permission: each checks its caller itself. The
@@ -19,9 +20,7 @@ import org.w3c.dom.Element
  *
  * The APK rules check fails an APK with any permission that is not on
  * Tasks' allow list too. This test also checks which parts are exported,
- * so a library that adds another fails here first. When the reminders
- * come, with core/notify, its three permissions and three receivers join
- * this test, as in Reminders' manifest test.
+ * so a library that adds another fails here first.
  */
 class TasksManifestTest {
     private val manifest: Element = DocumentBuilderFactory.newInstance().apply {
@@ -36,10 +35,13 @@ class TasksManifestTest {
     private fun Element.android(name: String): String = getAttributeNS(ANDROID, name)
 
     @Test
-    fun tasksHoldsTheTwoPermissionsOfCoreSecurityAndNoOther() {
+    fun tasksHoldsTheThreePermissionsOfCoreNotifyTheTwoOfCoreSecurityAndNoOther() {
         val tags = listOf("uses-permission", "uses-permission-sdk-23", "permission", "permission-group", "permission-tree")
         assertEquals(
             listOf(
+                "<uses-permission> android.permission.POST_NOTIFICATIONS",
+                "<uses-permission> android.permission.USE_EXACT_ALARM",
+                "<uses-permission> android.permission.RECEIVE_BOOT_COMPLETED",
                 "<uses-permission> android.permission.USE_BIOMETRIC",
                 "<uses-permission> android.permission.HIDE_OVERLAY_WINDOWS",
             ).sorted(),
@@ -48,9 +50,19 @@ class TasksManifestTest {
     }
 
     @Test
-    fun tasksHasNoReceiver() {
+    fun theReceiversAreTheThreeOfCoreNotifyAndNoneIsExported() {
         // The receiver of the profile installer is removed.
-        assertEquals(emptyList<String>(), elements("receiver").map { it.android("name") })
+        val receivers = elements("receiver")
+        assertEquals(
+            setOf(
+                "app.shkriuss.core.notify.AlarmReceiver",
+                "app.shkriuss.core.notify.SystemEventReceiver",
+                "app.shkriuss.core.notify.ButtonReceiver",
+            ),
+            receivers.map { it.android("name") }.toSet(),
+        )
+        assertEquals("each receiver once", 3, receivers.size)
+        receivers.forEach { assertEquals(it.android("name"), "false", it.android("exported")) }
     }
 
     @Test

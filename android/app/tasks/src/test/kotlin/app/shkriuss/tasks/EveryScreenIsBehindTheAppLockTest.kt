@@ -9,6 +9,7 @@ import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.testing.AppLockCheck
 import app.shkriuss.feature.tasks.Due
 import app.shkriuss.feature.tasks.R
@@ -36,8 +37,8 @@ import app.shkriuss.core.design.R as DesignR
  *   fails unless only the lock screen shows, in every window. These are
  *   the form, new and to edit, a bottom sheet at every width, with its
  *   list dialog and its date and time pickers; the dialog of New list
- *   and Rename; a list's menu; and the questions of Delete list and
- *   Delete done tasks.
+ *   and Rename; a list's menu; the questions of Delete list and Delete
+ *   done tasks; and the question for notifications.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = LockedTasksApp::class)
@@ -133,6 +134,14 @@ class EveryScreenIsBehindTheAppLockTest {
             openTheMenuOf("Home")
             tap(R.string.tasks_delete_done)
         }
+    }
+
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun theQuestionForNotificationsGoesWhenTheAppLocks() {
+        NotifyTestDevice(ApplicationProvider.getApplicationContext()).allowNotifications(false)
+        seed { addTask("Call the bank", Due(THE_TIME.toLocalDate().plusDays(1), null, 14 * 60)) }
+        openThenLock(ready = words(R.string.tasks_line_not_asked)) { tap(R.string.tasks_allow) }
     }
 
     /** Opens Lists, then the list [name], then the menu of its top bar. */

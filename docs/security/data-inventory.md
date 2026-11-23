@@ -299,8 +299,8 @@ hold no user data.
 
 Tasks is being built. It stores lists, tasks and what this phone
 remembers of the reminder of each task, as below. Its screens write all
-of it. It has no backup yet, shows no notification and cannot set up the
-recovery key.
+of it, and it shows the reminder of a task as a notification. It has no
+backup yet and cannot set up the recovery key.
 
 ### On the phone
 
@@ -310,6 +310,7 @@ Everything is in Tasks' private storage.
 |---|---|---|---|
 | The database `tasks.db` | Tasks' database folder | Two record tables ([spec.md](../apps/tasks/spec.md#data)). `task_list`, one row per list: its name. `task`, one row per task: the random ID of its list, or none for Inbox, its title, its due day, its repeat, its days of the week, the day the repeat counts from, its reminder time and when it was done. Each row also has its random ID, its times and its deletion marker. A deleted list keeps its name and a deleted task its title. The table `change_counter` holds one number. **Text: the names of lists and the titles of tasks.** | `task_list` and `task`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
 | The preferences file `app.shkriuss.tasks` | Tasks' preferences folder | For each task with a reminder, by its random ID: the reminder number its entries were written for (`for.<id>`, made of the due day, the repeat and the reminder time), its mark (`mark.<id>`, a local date and minute), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`) ([spec.md](../apps/tasks/spec.md#on-this-phone-only)). IDs, times and numbers only. Never a title or a name. | No |
+| The preferences file `app.shkriuss.core.notify` | Tasks' preferences folder | For each alarm, named by the random ID of its task: the time it is set for (`registered:<id>`) and the time it last fired (`fired:<id>`). And `permission-asked`: whether Android's question for notifications was answered ([notifications.md](../architecture/notifications.md#what-goes-where)). IDs and times only. | No |
 
 - No key files and no hardware keys: the recovery key cannot be set up
   in Tasks yet.
@@ -322,14 +323,43 @@ Everything is in Tasks' private storage.
 
 ### What leaves the phone, and how
 
-Nothing of the user's. Tasks has no network permission and shows no
-notification. Android backup and device transfer are off. It writes no
-file outside its storage, puts nothing on the clipboard and writes no
-log. The two parts of the handover of `core/security` are in its
-manifest, as in every data app: its status provider says only that
-Tasks keeps no recovery key, and its handover screen says the same to a
-suite app that asks, and gives nothing
-([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+Nothing of the user's leaves the phone. Tasks has no network
+permission. Android backup and device transfer are off.
+
+Three things leave Tasks' storage. They stay inside the phone:
+
+1. **Notifications.** A task's reminder shows its title, and "Due
+   today", "Due today · Every day", "Missed: 09:00" or "Snoozed. It was
+   due at 09:00.", with the buttons **Done** and **Snooze 10 min**.
+   - On the lock screen it is private: Android shows its title only if
+     the phone's setting allows it.
+   - A task's title and buttons reach another app only if you gave that
+     app notification access. Such an app can pass them on to a watch.
+   - Tasks does not mark its reminders "local only", as Water and
+     Reminders do not ([spec.md](../apps/tasks/spec.md#open), item 3).
+   - With the app lock on, a reminder shows only its hidden form: "Task
+     reminders" and "The app lock hides this notification. Open the app
+     to see it.", without its title and without buttons. Unless **Show
+     the text in notifications** is on. Tasks has no Security section
+     yet, so its app lock cannot be turned on.
+   - If a reminder cannot be shown, a notice comes in its place: "Task
+     reminders" and "A reminder could not be shown. Open the app to see
+     it.", with no title and no buttons.
+2. **Intents**, which stay inside the phone. An alarm carries only the
+   random ID of its task. A tap on a reminder opens Tasks with that ID.
+   A button's press goes only to Tasks' own receiver, and carries the
+   ID, the button, the reminder's time and, for **Done**, the task's
+   reminder number, made of its due day, repeat and reminder time, or
+   for **Snooze 10 min**, the 10 minutes. Never a title. Tasks opens
+   Android's own pages for its notification settings.
+3. **The handover of `core/security`**, whose two parts are in its
+   manifest, as in every data app: its status provider says only that
+   Tasks keeps no recovery key, and its handover screen says the same
+   to a suite app that asks, and gives nothing
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+
+Tasks writes no file outside its storage, puts nothing on the clipboard
+and writes no log.
 
 ### How to delete it
 

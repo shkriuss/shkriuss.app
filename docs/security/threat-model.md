@@ -233,6 +233,12 @@ What stops it:
      screen. A reminder's ID, a random UUID, reaches another app only if
      that app has notification access: it is the key of the
      notification ([permissions.md](permissions.md#reminders-appshkriussreminders)).
+   - Tasks' launcher screen reads the identifier in the same way: a tap
+     on a reminder sets it to the task's random ID. Another app can
+     start the screen with any identifier. Then Tasks opens the task's
+     list with its form, behind its app lock, or Today. The other app
+     cannot see the screen
+     ([permissions.md](permissions.md#tasks-appshkriusstasks)).
    - One exception, in Catalog only: the receiver of
      `androidx.profileinstaller` is exported to callers with
      `android.permission.DUMP`, which only the system and the developer
@@ -303,22 +309,25 @@ What does not:
      stop an app with notification access, which can wait for the
      unlock. Water's buttons add one drink or put the reminder off.
      Reminders' buttons mark the reminder done or snooze it for 10
-     minutes. Neither does anything else.
+     minutes. Tasks' buttons mark the task done, or move a task that
+     repeats to its next date, or snooze its reminder for 10 minutes.
+     None does anything else.
    - A button that such an app kept from an older reminder keeps the
      time of that reminder, and the app refuses it.
    - A button that such an app kept does nothing while the app lock
      hides the text.
 
-   A reminder of Reminders shows its title, which is the user's own
-   text. With the app lock on, a reminder shows its hidden form, without
-   Water's amounts or Reminders' title and without buttons, unless "Show
-   the text in notifications" is on. Marking a reminder "local only"
-   would not change what an app with notification access gets. It only
-   asks apps that pass notifications to a watch not to pass that one.
-   Neither Water nor Reminders marks its reminders so. Whether they
-   should, or offer a setting, is Open
+   A reminder of Reminders or of Tasks shows its title, which is the
+   user's own text. With the app lock on, a reminder shows its hidden
+   form, without Water's amounts or the title and without buttons,
+   unless "Show the text in notifications" is on. Marking a reminder
+   "local only" would not change what an app with notification access
+   gets. It only asks apps that pass notifications to a watch not to
+   pass that one. Water, Reminders and Tasks do not mark their reminders
+   so. Whether they should, or offer a setting, is Open
    ([Water's spec](../apps/water/spec.md#open), item 9;
-   [Reminders' spec](../apps/reminders/spec.md#open), item 1).
+   [Reminders' spec](../apps/reminders/spec.md#open), item 1;
+   [Tasks' spec](../apps/tasks/spec.md#open), item 3).
 3. An app that the user lets record the screen captures every screen
    except the word screens, unless the user turns on "Hide in recent apps
    and block screenshots"
@@ -1231,8 +1240,8 @@ Status: **Met for what is built.**
   Android, and read nothing from the request but its version and mode,
   after the check and inside a catch
   ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Of the intent
-  that starts the launcher screen, only Reminders reads
-  anything: its identifier, a reminder's ID. Receivers are not exported
+  that starts the launcher screen, only Reminders and Tasks read
+  anything: its identifier, the ID of a reminder or of a task. Receivers are not exported
   and ignore actions they do not expect. A notification opens only the
   same app, through an explicit, immutable intent ([permissions.md](permissions.md),
   [notifications.md](../architecture/notifications.md#what-goes-where)).

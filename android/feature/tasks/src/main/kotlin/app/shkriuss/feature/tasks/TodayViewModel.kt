@@ -26,6 +26,12 @@ data class TodayScreen(
     val dueToday: List<TaskRow> = emptyList(),
     /** The snackbar of a tick or an Undo, while it shows. */
     val snackbar: TasksSnackbar? = null,
+    /**
+     * True while an open task has a reminder to come: its alarm waits, or
+     * is due and not shown yet. Only then does the line about
+     * notifications show (spec, "Today", point 2).
+     */
+    val reminderToCome: Boolean = false,
 ) {
     /** True with nothing overdue and nothing due today: "Nothing due today." */
     val isEmpty: Boolean
@@ -35,7 +41,8 @@ data class TodayScreen(
 /**
  * The ViewModel of Today, the start destination. The sections follow the
  * database and [now], the one source of the clock: from midnight on, a
- * task due yesterday is overdue. A tick marks a task done, or moves a
+ * task due yesterday is overdue. Whether a reminder is to come follows
+ * the phone-only entries too. A tick marks a task done, or moves a
  * repeating task to its next date, with a snackbar that offers Undo.
  * **Add a task** opens the [TaskFormViewModel], due today, in Inbox.
  *
@@ -52,10 +59,18 @@ class TodayViewModel(
     private val rows = RowActions(repository, time, viewModelScope, work, snackbar)
 
     /** What the screen shows. */
-    val state: StateFlow<TodayScreen> = combine(repository.tasks(), repository.lists(), now.reading, snackbar) { tasks, lists, reading, shown ->
-        val sections = TaskOrder.today(tasks, lists, reading.today)
-        TodayScreen(loaded = true, today = reading.today, overdue = sections.overdue, dueToday = sections.dueToday, snackbar = shown)
-    }.onReadFailure { TodayScreen(loaded = true, failed = true, today = now.reading.value.today) }
+    val state: StateFlow<TodayScreen> =
+        combine(repository.tasks(), repository.lists(), now.reading, snackbar, repository.entries) { tasks, lists, reading, shown, entries ->
+            val sections = TaskOrder.today(tasks, lists, reading.today)
+            TodayScreen(
+                loaded = true,
+                today = reading.today,
+                overdue = sections.overdue,
+                dueToday = sections.dueToday,
+                snackbar = shown,
+                reminderToCome = tasks.any { TaskReminders.alarmOf(it, entries[it.id], reading) != null },
+            )
+        }.onReadFailure { TodayScreen(loaded = true, failed = true, today = now.reading.value.today) }
         .stateIn(viewModelScope + work, SharingStarted.Eagerly, TodayScreen(loaded = false, today = now.reading.value.today))
 
     /** A tick on [row]. */

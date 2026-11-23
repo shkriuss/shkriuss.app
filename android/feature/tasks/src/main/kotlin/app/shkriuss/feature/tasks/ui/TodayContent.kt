@@ -1,6 +1,7 @@
 package app.shkriuss.feature.tasks.ui
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -20,23 +21,26 @@ import app.shkriuss.core.design.ShkScreen
 import app.shkriuss.core.design.ShkSpacing
 import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.core.design.rememberShkSnackbarHostState
+import app.shkriuss.feature.tasks.NotificationsViewModel
 import app.shkriuss.feature.tasks.R
 import app.shkriuss.feature.tasks.TaskFormViewModel
 import app.shkriuss.feature.tasks.TaskRow
 import app.shkriuss.feature.tasks.TodayViewModel
 
 /**
- * Today, the start screen (docs/apps/tasks/spec.md, "Today"): the
- * sections Overdue and Today, each only while it has a task (the owner's
- * decision), or "Nothing due today."; a tick on a row, with its
- * snackbar; and the floating button "Add a task", which opens the [form]
- * due today, in Inbox. A tap on a row opens its form. The form is a
- * bottom sheet at every width ([TaskFormSheet]).
+ * Today, the start screen (docs/apps/tasks/spec.md, "Today"): while an
+ * open task has a reminder to come and notifications cannot show, the
+ * line that says so; the sections Overdue and Today, each only while it
+ * has a task (the owner's decision), or "Nothing due today."; a tick on a
+ * row, with its snackbar; and the floating button "Add a task", which
+ * opens the [form] due today, in Inbox. A tap on a row opens its form.
+ * The form is a bottom sheet at every width ([TaskFormSheet]).
  */
 @Composable
-internal fun TodayContent(model: TodayViewModel, form: TaskFormViewModel) {
+internal fun TodayContent(model: TodayViewModel, form: TaskFormViewModel, notifications: NotificationsViewModel) {
     val screen by model.state.collectAsState()
     val formScreen by form.state.collectAsState()
+    val notificationsScreen by notifications.state.collectAsState()
     val format = rememberTasksFormat()
     val snackbars = rememberShkSnackbarHostState()
     TasksSnackbarOn(snackbars, screen.snackbar, screen.today, format, model::undo, model::snackbarDismissed)
@@ -55,6 +59,11 @@ internal fun TodayContent(model: TodayViewModel, form: TaskFormViewModel) {
         },
         snackbarHostState = snackbars,
     ) {
+        if (screen.loaded && !screen.failed && screen.reminderToCome) {
+            notificationsScreen.line?.let { line ->
+                NotificationLineRow(line, notifications, Modifier.padding(bottom = ShkSpacing.Small))
+            }
+        }
         when {
             !screen.loaded -> Unit
             screen.failed -> ShkErrorState(title = stringResource(R.string.tasks_could_not_open), modifier = Modifier.weight(1f))

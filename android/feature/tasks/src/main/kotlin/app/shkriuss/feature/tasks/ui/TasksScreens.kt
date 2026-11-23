@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -14,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.design.ShkDestination
 import app.shkriuss.core.design.ShkNavigationScaffold
 import app.shkriuss.feature.tasks.R
+import app.shkriuss.feature.tasks.TappedTask
 
 /**
  * Every screen of Tasks (docs/apps/tasks/spec.md, "As in Water and
@@ -27,6 +30,11 @@ import app.shkriuss.feature.tasks.R
  *   open in place of Lists closes first: Back from an open list goes to
  *   Lists. Back from Today leaves the app.
  *
+ * A tap on a notification opens Lists, on the task's list, with its form
+ * open, or Today if that task is gone (spec, "The notification", point
+ * 2). The question for notifications is drawn here, over every
+ * destination.
+ *
  * There is no navigation library (ADR 0003, point 2): the chosen
  * destination is saved state, and the open list and forms are in the
  * [TasksModels]. The activity puts this in `AppLockGate`, and every sheet
@@ -36,6 +44,19 @@ import app.shkriuss.feature.tasks.R
 @Composable
 fun TasksScreens(models: TasksModels, versionName: String) {
     var destination by rememberSaveable { mutableStateOf(TasksDestination.TODAY) }
+    val notifications by models.notifications.state.collectAsState()
+    LaunchedEffect(notifications.tapped) {
+        when (val tapped = notifications.tapped) {
+            null -> return@LaunchedEffect
+            is TappedTask.Open -> {
+                destination = TasksDestination.LISTS
+                models.list.open(tapped.listId)
+                models.listForm.openEdit(tapped.task)
+            }
+            TappedTask.Missing -> destination = TasksDestination.TODAY
+        }
+        models.notifications.tapOpened()
+    }
     // Before the content, so that the Back of an open list, a form or a dialog comes first.
     BackHandler(enabled = destination != TasksDestination.TODAY) { destination = TasksDestination.TODAY }
     val saved = rememberSaveableStateHolder()
@@ -46,12 +67,13 @@ fun TasksScreens(models: TasksModels, versionName: String) {
     ) {
         saved.SaveableStateProvider(destination.name) {
             when (destination) {
-                TasksDestination.TODAY -> TodayContent(models.today, models.todayForm)
+                TasksDestination.TODAY -> TodayContent(models.today, models.todayForm, models.notifications)
                 TasksDestination.LISTS -> ListsContent(models.lists, models.list, models.listName, models.listForm)
                 TasksDestination.SETTINGS -> SettingsContent(versionName)
             }
         }
     }
+    NotificationQuestion(models.notifications)
 }
 
 /** The three destinations of Tasks, in the order the navigation shows them. */

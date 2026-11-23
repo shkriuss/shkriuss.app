@@ -164,4 +164,39 @@
     <!-- Settings. -->
     <string name="tasks_section_about">About</string>
     <string name="tasks_version">Version</string>
+
+    <!-- The line at the top of Today while an open task has a reminder to come and notifications cannot show, and its button. -->
+    <string name="tasks_line_not_asked">Tasks may not show notifications yet.</string>
+    <string name="tasks_line_denied">Notifications are off for Tasks. Your reminders are silent.</string>
+    <string name="tasks_line_channel_off">Tasks are turned off in Android\'s settings. Your reminders are silent.</string>
+    <string name="tasks_allow">Allow</string>
+    <string name="tasks_open_settings">Open settings</string>
+
+    <!-- The dialog before Android's own question for notifications, after a save that sets a reminder. The title is Water's. -->
+    <string name="tasks_question_title">Allow notifications</string>
+    <string name="tasks_question_text">Tasks reminds you of a task with a notification. Android asks next whether Tasks may show notifications.</string>
+    <string name="tasks_continue">Continue</string>
+    <string name="tasks_not_now">Not now</string>
+
+    <!-- The channel, as Android's settings show it. -->
+    <string name="tasks_channel_name">Task reminders</string>
+    <string name="tasks_channel_description">Shows a task\'s reminder at its time.</string>
+
+    <!--
+        The text of a task's notification. On time: "Due today", and the
+        repeat after it: "Due today · Every day". Late: "Missed: 09:00", or
+        "Missed: Mon 16 Nov, 09:00" when not today. After a snooze:
+        "Snoozed. It was due at 09:00.", with the date in the same way.
+    -->
+    <string name="tasks_notification_due_today">Due today</string>
+    <string name="tasks_date_at">%1$s, %2$s</string>
+    <string name="tasks_missed">Missed: %1$s</string>
+    <string name="tasks_snoozed_was_due">Snoozed. It was due at %1$s.</string>
+
+    <!-- The two buttons of the notification. The snooze is fixed at 10 minutes. -->
+    <string name="tasks_notification_done">Done</string>
+    <plurals name="tasks_snooze_minutes">
+        <item quantity="one">Snooze %1$s min</item>
+        <item quantity="other">Snooze %1$s min</item>
+    </plurals>
 </resources>

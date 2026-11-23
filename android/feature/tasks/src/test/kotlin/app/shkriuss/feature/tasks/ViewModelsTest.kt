@@ -115,6 +115,21 @@ class ViewModelsTest {
     }
 
     @Test
+    fun todaySaysWhetherAnOpenTaskHasAReminderToCome() {
+        val model = today()
+        // Saved at 09:30: a reminder at 09:00 today has passed and counts from now, and Someday has none.
+        add("Pills", Due(MONDAY, PILLS, 540))
+        add("Someday", Due(day(3)))
+        assertFalse(model.state.await { it.loaded && it.dueToday.isNotEmpty() }.reminderToCome)
+
+        val bank = add("Call the bank", Due(day(3), null, 14 * 60))
+        assertTrue("one in three days is to come", model.state.await { it.reminderToCome }.reminderToCome)
+
+        runBlocking { repository.tick(bank.id, day(3), Repeat.ONCE) }
+        assertFalse("a done task has none", model.state.await { !it.reminderToCome }.reminderToCome)
+    }
+
+    @Test
     fun fromMidnightATaskDueTodayIsOverdue() {
         val bank = add("Call the bank", Due(MONDAY))
         val model = today()

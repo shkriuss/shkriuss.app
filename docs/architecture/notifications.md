@@ -6,7 +6,7 @@ notifications ([CLAUDE.md](../../CLAUDE.md)). The decisions are in
 [ADR 0010](../adr/0010-exact-alarms-and-reminder-storage.md) and
 [ADR 0030](../adr/0030-how-core-notify-keeps-alarms.md).
 
-Water and Reminders use it.
+Water, Reminders and Tasks use it.
 
 ## At a glance
 
@@ -188,9 +188,10 @@ When Android fires an alarm:
    the alarm's id, so the app's next notification for that alarm
    replaces it. A tap starts the app anew on its start screen, with the
    alarm's id as the intent's identifier, as a tap on a reminder of
-   Water or Reminders does: a screen of the app that is open closes, so
-   no second one opens on top of it. Reminders opens the form of the
-   reminder with that id. Then the sync runs as after any alarm, so the
+   Water, Reminders or Tasks does: a screen of the app that is open
+   closes, so no second one opens on top of it. Reminders opens the form
+   of the reminder with that id, and Tasks the list and the form of the
+   task with that id. Then the sync runs as after any alarm, so the
    next reminder is set. This is the owner's
    decision, for every app ([Open](#open), item 6). Without it, the
    failure would stop the app's process in the background, and the next
@@ -363,7 +364,10 @@ broadcasts with `timeChanged` true. A review that fails changes nothing
 more: the sync still runs.
 
 - Reminders removes a notification whose reminder is deleted or not
-  stored.
+  stored. Tasks removes one whose task is deleted, not stored, done or
+  has no reminder, and one whose **Done** carries another reminder
+  number than the task has now
+  ([spec.md](../apps/tasks/spec.md#the-notification), point 5).
 - Water removes its reminder when it is from an earlier day, or when it
   is not the reminder Water stored as showing. The notice of a failed
   reminder, which has no end, stays until the next reminder replaces

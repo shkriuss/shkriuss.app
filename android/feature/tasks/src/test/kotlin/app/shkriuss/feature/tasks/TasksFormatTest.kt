@@ -117,4 +117,18 @@ class TasksFormatTest {
         /** "Pay rent": every month from Monday 16 November, so due that day. */
         val RENT_FROM_MONDAY = repeat(Repeat.MONTHLY, MONDAY)
     }
+
+    @Test
+    fun aNotificationSaysATimeTodayAndADateWithItsTimeOnAnotherDay() {
+        assertEquals("09:00", uk.timeOrDateTime(monday(9), MONDAY))
+        assertEquals("Mon 16 Nov, 09:00", uk.timeOrDateTime(monday(9), day(1)))
+        assertEquals("Mon, 16 Nov 2026, 09:00", uk.timeOrDateTime(monday(9), LocalDate.of(2027, 1, 4)))
+    }
+
+    @Test
+    fun onTimeANotificationSaysDueTodayAndItsRepeat() {
+        assertEquals("Due today", uk.dueToday(Repeat.ONCE))
+        assertEquals("Due today · Every day", uk.dueToday(Repeat.DAILY))
+        assertEquals("Due today · Every week", uk.dueToday(Repeat.WEEKLY))
+    }
 }

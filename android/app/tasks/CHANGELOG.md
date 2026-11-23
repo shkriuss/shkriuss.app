@@ -9,6 +9,20 @@ specification is
 
 Not released yet.
 
+- The reminders. A task with a due date and a time reminds you on its
+  due day at that time, with its title, "Due today" and its repeat, and
+  the buttons **Done** and **Snooze 10 min**. **Done** does what a tick
+  does: the task is done, or a task that repeats moves to its next date
+  and reminds you there. A reminder missed while the phone was off or
+  locked shows late, once: "Missed: 09:00". A new due date, repeat or
+  time, a tick or a delete takes the reminder off the screen; a new
+  title or list alone does not. A tap opens the task's list with the
+  task open, or Today if the task is gone. With the app lock on, a
+  reminder shows only "Task reminders", without its title or buttons.
+- After a save that sets a reminder, while Android has not asked, a
+  dialog explains why Tasks shows notifications, and then Android asks.
+  While a reminder is to come and notifications cannot show, Today says
+  so at the top, with **Allow** or **Open settings**.
 - The screens. **Today**, where Tasks opens: what is overdue, then what
   is due today, each section only while it has a task, or "Nothing due
   today.". **Lists**: Inbox, then your lists by name, each with its
@@ -29,8 +43,7 @@ Not released yet.
   list's name. A date has its year only when it is not this year.
 - TalkBack reads each task as one item, with "Mark as done" and "Edit".
 - Not there yet: backup and restore, the recovery key and the app lock
-  in Settings, and the reminders themselves. A reminder time is saved,
-  but no notification shows.
+  in Settings.
 - Everything Tasks stores is in place: lists, with their names, and
   tasks, with their title, list, due date, repeat, days of the week,
   reminder time and when they were done, in one database on the phone;
@@ -48,10 +61,11 @@ Not released yet.
   day, at most 5,000 tasks and 100 lists.
 - Every screen of Tasks is behind the app lock, with every sheet,
   dialog and menu, and a test checks each of them.
-- Permissions: the two of the app lock's screens
+- Permissions: the five of Water, the three of reminders and the two of
+  the app lock's screens
   ([permissions.md](../../../docs/security/permissions.md#tasks-appshkriusstasks)).
-  Tasks does not ask for the three of reminders before it shows
-  reminders.
+  Tasks asks only for notifications, and only after a save that sets a
+  reminder.
 - No other app can reach any part of Tasks but its screen and the two
   parts of the handover between apps, which give nothing: Tasks keeps
-  no recovery key.
+  no recovery key. The three receivers of reminders are not exported.

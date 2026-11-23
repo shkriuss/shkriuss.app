@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import app.shkriuss.feature.tasks.ListNameViewModel
 import app.shkriuss.feature.tasks.ListViewModel
 import app.shkriuss.feature.tasks.ListsViewModel
+import app.shkriuss.feature.tasks.NotificationsViewModel
 import app.shkriuss.feature.tasks.TaskFormViewModel
 import app.shkriuss.feature.tasks.TasksServices
 import app.shkriuss.feature.tasks.TodayViewModel
@@ -25,16 +26,25 @@ class TasksModels(owner: ViewModelStoreOwner, services: TasksServices) {
     /** The clock of the screens: the one source that every ViewModel observes. */
     private val now = services.now.also { it.check() }
 
-    private val provider = ViewModelProvider(
+    /** The line about notifications, the question for notifications, and a tap on a notification. */
+    val notifications: NotificationsViewModel = ViewModelProvider(
         owner,
-        viewModelFactory {
-            initializer { TodayViewModel(services.repository, services.time, now) }
-            initializer { ListsViewModel(services.repository, now) }
-            initializer { ListViewModel(services.repository, services.time, now) }
-            initializer { ListNameViewModel(services.repository) }
-            initializer { TaskFormViewModel(services.repository, services.time, now) }
-        },
-    )
+        viewModelFactory { initializer { NotificationsViewModel(services.alarms, services.repository) } },
+    )[NotificationsViewModel::class.java]
+
+    private val provider = notifications.let { asks ->
+        ViewModelProvider(
+            owner,
+            viewModelFactory {
+                initializer { TodayViewModel(services.repository, services.time, now) }
+                initializer { ListsViewModel(services.repository, now) }
+                initializer { ListViewModel(services.repository, services.time, now) }
+                initializer { ListNameViewModel(services.repository) }
+                // A form outlives this object when the phone is turned, so it holds the question's ViewModel only, not this.
+                initializer { TaskFormViewModel(services.repository, services.time, now, onSaved = asks::saved) }
+            },
+        )
+    }
 
     /** Today, with its two sections. */
     val today: TodayViewModel = provider[TodayViewModel::class.java]
@@ -57,11 +67,14 @@ class TasksModels(owner: ViewModelStoreOwner, services: TasksServices) {
     /**
      * The clock is read again, so every screen shows what is overdue and
      * what is due today now, also if the clock, the time zone or the
-     * phone's language changed while the app was away. The activity calls
-     * it each time it comes to the front.
+     * phone's language changed while the app was away. The line about
+     * notifications reads their state again: the user can change it in
+     * Android's settings at any moment. The activity calls it each time it
+     * comes to the front.
      */
     fun check() {
         now.check()
+        notifications.refresh()
     }
 
     private companion object {
