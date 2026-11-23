@@ -9,7 +9,12 @@ import app.shkriuss.feature.tasks.data.TaskEntity
 import app.shkriuss.feature.tasks.data.TaskListEntity
 import app.shkriuss.feature.tasks.data.TasksDatabase
 import java.time.LocalDate
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -393,6 +398,26 @@ class TasksRepositoryTest {
     }
 
     @Test
+    fun aClearedTickThatComesWhileATickFinishesKeepsItsMark() {
+        val work = HoldingDispatcher()
+        val held = TasksRepository(database, clock, TestIdSource(), time, book, work = work)
+        val bank = runBlocking { checkNotNull(held.addTask(NewTask("Call the bank", INBOX, Due(MONDAY, null, 10 * 60)))) }
+
+        // The tick's next turn on the lock waits. Another screen clears the tick meanwhile.
+        work.holdNext = true
+        val tick = thread { runBlocking { held.tick(bank.id, MONDAY, Repeat.ONCE, readingAt(monday(9, 40))) } }
+        work.holding.await(5, TimeUnit.SECONDS)
+        runBlocking { held.reopen(bank.id, readingAt(monday(9, 41))) }
+        work.release.countDown()
+        tick.join(5_000)
+
+        // Either the reopen came first and found the task open, or it came after the tick and counts from its press.
+        val task = checkNotNull(runBlocking { held.findTask(bank.id) })
+        val entry = book.entryOf(task.id, TaskReminders.numberOf(task))
+        if (task.isOpen) assertEquals(monday(9, 41), entry.mark) else assertEquals(TaskEntry(), book.storedOf(bank.id))
+    }
+
+    @Test
     fun theEntriesOfAnOpeningAgainThatTheDatabaseRefusedCountForNothing() = runBlocking {
         val bank = add("Call the bank", Due(day(1), null, 600))
         tick(bank)
@@ -519,5 +544,31 @@ class TasksRepositoryTest {
     private companion object {
         /** The file of the database of the test that needs two connections. */
         const val FILE_DATABASE = "tasks-test.db"
+    }
+}
+
+/**
+ * Runs work at once on the thread that asks, except the next piece after
+ * [holdNext] is set: that one waits on a thread of its own until
+ * [release], and [holding] tells the test it is waiting.
+ */
+private class HoldingDispatcher : CoroutineDispatcher() {
+    /** When true, the next piece of work waits. */
+    @Volatile var holdNext = false
+
+    /** Counts down when a piece of work is waiting. */
+    val holding = CountDownLatch(1)
+
+    /** Lets the waiting piece of work run. */
+    val release = CountDownLatch(1)
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        if (holdNext) {
+            holdNext = false
+            holding.countDown()
+            thread { release.await(); block.run() }
+        } else {
+            block.run()
+        }
     }
 }

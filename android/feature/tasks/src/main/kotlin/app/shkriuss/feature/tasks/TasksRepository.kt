@@ -242,11 +242,16 @@ class TasksRepository(
      * gone (spec, "Data", point 2).
      */
     suspend fun changeTask(id: String, edit: TaskEdit, now: ClockReading = time.reading()): Task? = withContext(NonCancellable) {
-        val written = database.withWriteTransaction<Pair<TaskEntity, TaskEntity>?> {
-            val before = tasks.find(id)?.takeUnless { it.record.isDeleted } ?: return@withWriteTransaction null
-            val checked = edit.listId?.let { edit.copy(listId = listToWrite(it)) } ?: edit
-            val after = taskWriter.update(id) { stored -> stored(edited(stored, checked)) } ?: return@withWriteTransaction null
-            before to after
+        // The write and its entries take one turn, so a cleared tick on another screen cannot come between them.
+        val written = inTurn {
+            val pair = database.withWriteTransaction<Pair<TaskEntity, TaskEntity>?> {
+                val before = tasks.find(id)?.takeUnless { it.record.isDeleted } ?: return@withWriteTransaction null
+                val checked = edit.listId?.let { edit.copy(listId = listToWrite(it)) } ?: edit
+                val after = taskWriter.update(id) { stored -> stored(edited(stored, checked)) } ?: return@withWriteTransaction null
+                before to after
+            }
+            if (pair != null && !sameWhen(pair.first, pair.second)) writeCounting(now, listOf(pair.second))
+            pair
         } ?: return@withContext null
         val (before, after) = written
         val kind = when {
@@ -254,7 +259,6 @@ class TasksRepository(
             before.title != after.title || before.listId != after.listId -> TaskChange.Kind.NEW_TITLE_OR_LIST
             else -> return@withContext taskOf(after)
         }
-        if (kind == TaskChange.Kind.NEW_TIME) countFrom(now, listOf(after))
         onChange(TaskChange(kind, listOf(id)))
         taskOf(after)
     }
@@ -273,19 +277,26 @@ class TasksRepository(
      */
     suspend fun tick(id: String, shownDue: LocalDate?, shownRepeat: Repeat, now: ClockReading = time.reading()): Tick? =
         withContext(NonCancellable) {
-            val written = database.withWriteTransaction<Triple<TaskEntity, TaskEntity, LocalDate?>?> {
-                val before = tasks.find(id) ?: return@withWriteTransaction null
-                val shown = before.dueDay == shownDue?.let(::epochDayOf) && before.repeat == shownRepeat.code
-                if (before.record.isDeleted || before.doneAt != null || !shown) return@withWriteTransaction null
-                val due = taskOf(before).due
-                val next = due?.repeat?.let { RepeatDates.firstAfter(it, maxOf(due.day, now.today)) }
-                val after = taskWriter.update(id) { stored ->
-                    if (next != null) stored.copy(dueDay = epochDayOf(next)) else stored.copy(doneAt = doneAtOf(now))
-                } ?: return@withWriteTransaction null
-                Triple(before, after, next)
+            // The write and its entries take one turn: a cleared tick on another screen, which opens the task again and
+            // writes its new mark, comes before both or after both, never between them.
+            val written = inTurn {
+                val triple = database.withWriteTransaction<Triple<TaskEntity, TaskEntity, LocalDate?>?> {
+                    val before = tasks.find(id) ?: return@withWriteTransaction null
+                    val shown = before.dueDay == shownDue?.let(::epochDayOf) && before.repeat == shownRepeat.code
+                    if (before.record.isDeleted || before.doneAt != null || !shown) return@withWriteTransaction null
+                    val due = taskOf(before).due
+                    val next = due?.repeat?.let { RepeatDates.firstAfter(it, maxOf(due.day, now.today)) }
+                    val after = taskWriter.update(id) { stored ->
+                        if (next != null) stored.copy(dueDay = epochDayOf(next)) else stored.copy(doneAt = doneAtOf(now))
+                    } ?: return@withWriteTransaction null
+                    Triple(before, after, next)
+                }
+                if (triple != null) {
+                    if (triple.third != null) writeCounting(now, listOf(triple.second)) else book.remove(listOf(id))
+                }
+                triple
             } ?: return@withContext null
             val (before, after, next) = written
-            if (next != null) countFrom(now, listOf(after)) else forget(listOf(id))
             onChange(TaskChange(if (next != null) TaskChange.Kind.MOVED else TaskChange.Kind.DONE, listOf(id)))
             Tick(taskOf(after), next, Undo(listOf(UndoStep.PutBack(id, after.changeNumber, before.dueDay, before.doneAt))))
         }
