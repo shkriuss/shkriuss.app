@@ -52,6 +52,9 @@ If a task seems to need it, stop and say so in the PR description.
 - `.claude/rules/` rules that apply only to some paths. Read the ones that match
   the files you touch.
 
+`core/sync-client`, `app/sync` and `backend/` come with Sync. They do not
+exist yet.
+
 ## Commands
 
 Run from `android/`. Keep this list correct when tasks change.

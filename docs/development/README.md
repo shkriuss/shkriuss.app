@@ -38,7 +38,7 @@ Pages:
 - [Cloud environment](cloud-environment.md): the Claude Code cloud
   environment `android`.
 - [Prompts](PROMPTS.md): ready-to-paste prompts: the four for every app,
-  the handover, sync, and the recurring ones.
+  sync, and the recurring ones.
 
 What else belongs here, as each part is built:
 

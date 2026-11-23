@@ -14,7 +14,8 @@ These add to CLAUDE.md. They never replace it.
   repositories. Never add the cloud-only Maven mirror to the project.
 - A dependency change updates `gradle/libs.versions.toml` and
   `gradle/verification-metadata.xml` together, and a new dependency needs an
-  ADR. Stay within the stack in section 3 of `docs/plan/PLAN.md`.
+  ADR. Stay within the stack that the version catalog holds and the
+  decision records in `docs/adr/` decided.
 - `gradle/verification-metadata.xml` and `gradle/wrapper/` are owner-only.
   Change them only when the owner asks for exactly that change.
 - Min SDK 35. Target and compile SDK 37.

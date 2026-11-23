@@ -2121,7 +2121,7 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 | Question | Decision |
 |---|---|
 | App lock on, screen lock removed, words lost | Accepted. The app-lock screen and the user guide say it plainly. |
-| When the handover between apps is built | A piece of work of its own, with its decision record ([PROMPTS.md](../development/PROMPTS.md#30-handover)). |
+| When the handover between apps is built | A piece of work of its own, with its decision record ([ADR 0041](../adr/0041-the-handover-between-apps.md)). |
 | Protecting the handover on its way | No extra encryption. The keeper also checks the caller's signing certificate itself. [ADR 0041](../adr/0041-the-handover-between-apps.md) confirms both. |
 | Entering the words in a second app | It asks "keep it here too" only when another keeper of the same recovery key is on the phone. Otherwise it keeps the key without asking. |
 | A permission for the handover | None. The handover screen and the status provider are exported with no permission, and each checks the caller's certificate itself before anything else ([ADR 0041](../adr/0041-the-handover-between-apps.md), points 6 to 8). |

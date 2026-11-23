@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-11-21
 - Source: the step "3.0 Handover"
-  ([PROMPTS.md](../development/PROMPTS.md#30-handover)). ADR 0007,
+  ([PROMPTS.md](../development/PROMPTS.md)). ADR 0007,
   point 12, had decided the outline: a keeper sets up a second app
   through a signature-protected screen, after the system prompt, with
   derived keys only, and checks the caller's certificate itself. Claude

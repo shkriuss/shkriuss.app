@@ -58,13 +58,14 @@ The four steps of "How an app is built" in
 Model: `opus`. Effort: `high`. Mode: **Plan**.
 
 ```text
-Read CLAUDE.md and docs/plan/PLAN.md. Write the specification of <app>
-in docs/apps/<app>/spec.md, with a README.md for the folder, and add the
+Read CLAUDE.md and docs/apps/tasks/spec.md, the model for a
+specification. Write the specification of <app> in
+docs/apps/<app>/spec.md, with a README.md for the folder, and add the
 folder to docs/apps/README.md. No code.
 
 Ask me up to five questions first if the answer changes the design.
 
-Aim at 300 lines. Cover: what the app does, in two sentences; each
+Aim at 550 lines. Cover: what the app does, in two sentences; each
 screen, in words, for phone and tablet; the data; limits and defaults;
 units; reminders, if any; settings; permissions; TalkBack; and what is
 left out of the first version. Keep the first version small. For the
@@ -91,6 +92,10 @@ Read CLAUDE.md and docs/apps/<app>/spec.md. Build <part> of <app>.
 Follow the spec. If it is wrong or silent, stop and ask me. Include
 tests, screenshot tests for new or changed screens, the docs the change
 makes wrong, and the changelog under "Unreleased".
+
+Before the first push, run the command that CI runs (CLAUDE.md,
+"Commands"), and have a subagent with a fresh context review the diff
+against the "Code Review Rules" of AGENTS.md. Fix what both find.
 ```
 
 The parts, in as few pull requests as stay easy to read:
@@ -107,6 +112,9 @@ The parts, in as few pull requests as stay easy to read:
   `core/backup` and `core/security`, as Water does. The settings get
   **Licences**, and docs/development/third-party.md lists everything
   that ships in the app.
+- **Sync**, once the Sync app is built: the signature-protected
+  interface for the Sync app, through `core/sync-client`, as
+  docs/architecture/sync-protocol.md says.
 
 Every permission of the app is in docs/security/permissions.md and in
 the app's allow list of the APK rules check. For the allow list, add:
@@ -147,43 +155,6 @@ Add the lines for the app to the specification prompt:
 - **Grammar**: read ADR 0011 first. Plan mode, `opus` at `xhigh` or `fable`.
   The Rust build, its supply chain and memory tagging tests need their own
   design doc and my approval before any code.
-
----
-
-## The handover between apps
-
-### 3.0 Handover
-
-Model: `opus` (or `fable`). Effort: `xhigh`. Mode: **Plan** first.
-
-```text
-Read CLAUDE.md, docs/security/crypto-design.md (sections "Keeper apps and
-other apps" and "Setting up a second app on the same phone") and ADRs 0005,
-0006 and 0007. Design and build the handover: how a keeper app gives a
-second app of the suite its own derived keys, and never the recovery key.
-
-First write its decision record and show me. No code until I agree. Cover:
-- The screen of the keeper that the asking app opens, and what the user
-  sees and allows.
-- The signature permission: which app defines it, what happens when the
-  apps are installed in any order, and its entry in
-  docs/security/permissions.md.
-- How the keeper checks the caller's signing certificate itself.
-- That the keys travel with no further encryption, and why that is enough.
-  Confirm both, or tell me why not.
-- How an app finds out which apps on the phone are keepers, for "keep it
-  here too" and for "the recovery key is kept in ...".
-- How an app that is not a keeper checks the paper copy before its app lock
-  is turned on.
-- What a preview build can and cannot do.
-- Every way another app could try to get keys, and how each one fails.
-
-Then build it with tests, update crypto-design.md and the user guide, and
-tell me how to try it on a phone with two apps.
-
-I am the owner and I ask you to add the include lines for the new
-modules to android/settings.gradle.kts, and nothing else in that file.
-```
 
 ---
 
@@ -243,7 +214,9 @@ Steps:
 - 5.4 `app/sync` and the signature-protected interface in Water. Only
   `app/sync` declares the network permission. I am the owner and I ask you
   to add the include lines for the new modules to
-  android/settings.gradle.kts, and nothing else in that file.
+  android/settings.gradle.kts, and nothing else in that file. Then the
+  same interface in every other released data app, one session and one
+  pull request for each.
 - 5.5 `docs/self-hosting/`: deploy from a phone browser, upgrade, costs,
   limits, how to delete everything.
 
@@ -410,4 +383,28 @@ my phone.
 ```text
 Stop. Do not widen the scope. Tell me what you tried, what failed, and the
 options you see, with the one you recommend.
+```
+
+### R9 The next step
+
+Model: `opus`. Effort: `high`. It also fits a scheduled task that starts
+when a pull request is merged.
+
+```text
+Read CLAUDE.md, docs/development/PROMPTS.md and docs/user/apps.md. Do
+the next step of the project, and only that one.
+
+1. The app is the one "In development" on apps.md. If there is none, it
+   is the first "Planned" one in the order of that page.
+2. Its next step is the first of "Every app" in PROMPTS.md that is not
+   done: the specification, each part of the build in its order, the
+   audit, then the pull request that prepares the release. For Sync,
+   the steps are those of "Sync". Find out what is done from
+   docs/apps/<app>/spec.md, from "Unreleased" in
+   android/app/<app>/CHANGELOG.md and from the merged pull requests.
+3. If a pull request for that step is open, change nothing and tell me
+   which one.
+4. Otherwise do the step as its prompt says. Where that prompt needs an
+   answer from me, such as a version, or a sentence that starts "I am
+   the owner and I ask you", ask me first and wait.
 ```
