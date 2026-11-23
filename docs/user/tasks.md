@@ -95,7 +95,8 @@ The menu at the top of a list, **More options**:
   example, "Delete 12 done tasks?" Tap **Delete**. A message says "12
   tasks deleted". Tap **Undo** to bring them back.
 
-Inbox has only **Delete done tasks**.
+In Inbox, the menu has only **Delete done tasks**, while Inbox has done
+tasks.
 
 ## Add a task
 
@@ -302,7 +303,7 @@ as a snooze, and your recovery key.
 - The errors of the form are read out.
 - The line about notifications and its button come before the tasks.
 - The messages after a tick, a save or a deletion are read out, with
-  their **Undo**.
+  **Undo** where they have one.
 - The buttons of a notification have only their visible text.
 
 ## Permissions
