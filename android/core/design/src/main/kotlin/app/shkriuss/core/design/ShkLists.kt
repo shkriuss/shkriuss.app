@@ -113,7 +113,9 @@ fun ShkListItem(
         Modifier.semantics(mergeDescendants = true) { if (!enabled) disabled() }
     }
     val tick = if (onCheckedChange != null) {
-        tickSemantics(checked, onCheckedChange, enabled, checkedDescription, checkActionLabel)
+        val state = checkedDescription ?: stringResource(if (checked) R.string.shk_ticked else R.string.shk_not_ticked)
+        val label = checkActionLabel ?: stringResource(if (checked) R.string.shk_clear_tick else R.string.shk_tick)
+        Modifier.tickSemantics(checked, onCheckedChange, enabled, state, label)
     } else {
         Modifier
     }
@@ -160,31 +162,26 @@ fun ShkListItem(
 }
 
 /**
- * What TalkBack hears of a row's tick box, on the row itself: the state,
- * after the row's text, and the tick as an action. The box has no TalkBack
- * item of its own ([TickBox]), so the row stays one item. A row that is
- * turned off offers no action.
+ * What TalkBack hears of a row's tick box, on the row itself: the [state]
+ * after the row's text, and the tick as an action named [label]. The box
+ * has no TalkBack item of its own ([TickBox]), so the row stays one item.
+ * A row that is turned off offers no action.
  */
-@Composable
-private fun tickSemantics(
+private fun Modifier.tickSemantics(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean,
-    checkedDescription: String?,
-    checkActionLabel: String?,
-): Modifier {
-    val state = checkedDescription ?: stringResource(if (checked) R.string.shk_ticked else R.string.shk_not_ticked)
-    val label = checkActionLabel ?: stringResource(if (checked) R.string.shk_clear_tick else R.string.shk_tick)
-    return Modifier.semantics {
-        stateDescription = state
-        if (enabled) {
-            customActions = listOf(
-                CustomAccessibilityAction(label) {
-                    onCheckedChange(!checked)
-                    true
-                },
-            )
-        }
+    state: String,
+    label: String,
+): Modifier = semantics {
+    stateDescription = state
+    if (enabled) {
+        customActions = listOf(
+            CustomAccessibilityAction(label) {
+                onCheckedChange(!checked)
+                true
+            },
+        )
     }
 }
 
