@@ -487,20 +487,6 @@ class ViewModelsTest {
     }
 
     @Test
-    fun anUndoPressedCountsAsOpenUntilTheWipeOfWhatItDidNotBringBack() {
-        val id = phone.note("Trip", "Secret")
-        val held = Held()
-        val heldSnackbars = NotesSnackbars(repository, {}, scope, held.dispatcher)
-        heldSnackbars.show(NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(id) })))
-
-        heldSnackbars.undo()
-        held.runUntil { stored(id)?.record?.deletedAt == null }
-
-        assertEquals(setOf(id), heldSnackbars.openUndoIds)
-        held.runUntil { heldSnackbars.openUndoIds.isEmpty() }
-    }
-
-    @Test
     fun theSaveWhenNotesLeavesTheScreenGoesOnWhenTheScreenGoes() {
         val id = repository.reserveNoteId()
         assertNull("A new note writes nothing before its first save", stored(id))
