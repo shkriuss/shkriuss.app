@@ -294,9 +294,11 @@ phone's time zone and format.
 
 1. **Add a file** opens Android's "open document" screen for any type,
    several files allowed. Notes keeps no lasting permission.
-2. Notes takes the picked files one by one. Before each, it checks the
-   counts: "A note holds at most 20 files. 3 files were not added." or
-   "Notes keeps 1 GB of files. Remove some to add more."
+2. Adds run one at a time in all of Notes, in the order the files were
+   picked, also across notes. Each add checks the counts when it starts:
+   "A note holds at most 20 files. 3 files were not added." or "Notes
+   keeps 1 GB of files. Remove some to add more." So two adds never pass
+   a count together.
 3. It reads the name and the type from the picker. In this order: line
    breaks and control characters become spaces, the name keeps its first
    255 characters, spaces at both ends go, and a name that is then empty
@@ -384,12 +386,14 @@ phone's time zone and format.
    ([crypto-design.md](../../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key)).
 2. When Notes has its keys from a recovery key and a move is pending
    (`fileKeyMoveIsPending()`), it moves the keys: at every start, when it
-   comes back from a screen of `core/security`, after a wipe, and before
-   it goes on after the first-need dialog.
+   comes back from a screen of `core/security`, when an **Undo** ends,
+   pressed or not, and before it goes on after the first-need dialog.
 3. For each file whose wrapped key is not sealed by the current key,
    deleted ones that are not wiped too, it seals the key again
    (`FileCrypto.sealAgain`) through the `RecordWriter` function for
-   that, one record per transaction, with `updatedAt` as it was.
+   that, one record per transaction, with `updatedAt` as it was. It
+   leaves alone the records of an **Undo** that is still open: a new
+   change number would stop that **Undo**, and the file would be wiped.
 4. Only when every such key is sealed again, and no file is being added,
    does Notes call `finishFileKeyMove()`. A file being added holds a key
    wrapped before its record exists, so the move waits for every add to
@@ -444,7 +448,7 @@ record needs, and the next start removes it.
 | What fails | What follows |
 |---|---|
 | Saving a note | Nothing changes in the database. The text stays on the screen, with a line above the title: "Could not save the note. Notes tries again." It tries again at the next change. Closing the note then asks "This note is not saved", with **Try again** and **Discard changes**. |
-| Adding a file | The part is deleted, and the file is not added: "Could not add ticket.jpg. The phone may be full." |
+| Adding a file | The part, or the stream if it was already renamed, is deleted at once, and the file is not added: "Could not add ticket.jpg. The phone may be full." |
 | Delete, remove, **Undo**, **Pin** | Nothing changes. A snackbar: "Could not change your notes. Try again." |
 | The wipe, removing a stream, or the checkpoint | Tried again at the next start. Nothing shows. |
 | Reading a stream | The row's [state](#files-that-cannot-be-opened). |
@@ -581,7 +585,8 @@ for each segment.
    after the transaction, has no stream on the phone, and its record was
    taken or the same
    ([backup-format.md](../../architecture/backup-format.md#the-restore-rule),
-   point 5).
+   point 5). A stream on the phone that is not 45 + `size` + 16 for each
+   segment long counts as no stream: the staged one replaces it.
 2. Then Notes marks deleted each file that is not deleted and whose note
    is, and wipes, as at every start.
 3. The open screens show the restored notes at once.
@@ -737,3 +742,10 @@ Choices this page made without a decision by the owner on that point.
    check on a phone has noted it yet.
 5. **The keyboard that does not learn** ([assumption 5](#assumptions)),
    if it makes long texts too hard to type.
+6. **Search at the limits.** With no index, a search reads every title,
+   text and file name. 5,000 notes of 100,000 characters each would make
+   it slow. The build measures it; an index or a lower limit would be a
+   change to this page.
+7. **A damaged stream of the right length** stays damaged after a restore
+   that holds a good copy: only a wrong length is seen without reading
+   the whole stream.
