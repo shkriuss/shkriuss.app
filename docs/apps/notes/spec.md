@@ -102,7 +102,9 @@ no account and no network, and encrypts every file.
    Marks are text.
 2. The rows keep their order and sections. Under the title they show the
    first line of the text that matches, as it is stored, with the match
-   in bold, or "File: ticket.jpg" for a match in a file name only.
+   in bold, or "File: ticket.jpg" for a match in a file name only. A
+   match in the title only shows the row as in the list, with the match
+   in bold in the title.
 3. With no match: "No notes match “rent”.", announced by TalkBack.
 4. Back with text in the field clears it. The field asks the keyboard
    not to learn. Nothing of a search is stored.
@@ -396,8 +398,9 @@ phone's time zone and format.
    open, is done at the next wipe or start.
 5. A backup made before the wipe still holds the text and the files. The
    flash storage may keep old blocks, under Android's file-based
-   encryption. A wiped file's key is gone with its wrapped key, so such
-   blocks of its stream can never be opened.
+   encryption. A wiped file's key is gone from the phone with its
+   wrapped key, so such blocks of its stream open only with a key kept
+   elsewhere: in a backup made before the wipe, with the recovery key.
 
 ### Before the recovery key: the file key move
 
@@ -769,6 +772,9 @@ Choices this page made without a decision by the owner on that point.
    text and file name. 5,000 notes of 100,000 characters each would make
    it slow. The build measures it; an index or a lower limit would be a
    change to this page.
-7. **A damaged stream of the right length** stays damaged after a restore
-   that holds a good copy: only a wrong length is seen without reading
-   the whole stream.
+7. **A damaged stream of the right length, or a damaged wrapped key,**
+   stays damaged after a restore that holds a good copy, when the stored
+   file has the same `updatedAt`: the restore writes nothing for it.
+   Only a wrong length is seen without reading the whole stream, and
+   repairing a key would need a `RecordWriter` write that `core/data`
+   does not have.

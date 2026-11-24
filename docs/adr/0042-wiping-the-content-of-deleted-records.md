@@ -45,8 +45,10 @@
 4. A wiped record is never brought back with `restore`. **Undo** is for
    the time before the wipe.
 5. A file's wrapped key is content, so a wipe clears it. The app removes
-   the file's stream after the wipe commits. Without the key, any copy of
-   the stream that the flash storage keeps can never be opened.
+   the file's stream after the wipe commits. Then no copy of the key is
+   left on the phone, so a copy of the stream that the flash storage
+   keeps opens only with a key kept elsewhere: in a backup made before
+   the wipe, with the recovery key.
 6. An app that wipes opens its database with SQLite's `secure_delete` on.
    After a wipe, and at every start whether or not anything was wiped,
    it checkpoints the write-ahead file and cuts it to zero. So the
