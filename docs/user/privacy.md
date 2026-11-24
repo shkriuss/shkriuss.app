@@ -68,6 +68,33 @@ Your keyboard sees what you type into a title, as in any app. Reminders
 asks it not to learn the words of a title, so that it does not keep them
 or suggest them in other apps. A keyboard can ignore this.
 
+### Tasks
+
+On your phone, Tasks stores:
+
+- your lists, with their names;
+- your tasks: the title, the list, the due date, the repeat, the days of
+  the week, the day the repeat counts from, the reminder time, and when
+  each was done;
+- for each task with a reminder, times and numbers only: when its
+  reminder was last dealt with, the end of a snooze, and the times of
+  its alarm and its notification;
+- the settings of its app lock;
+- its keys, kept as Water's are.
+
+The titles and the names of lists are text you write. Tasks keeps them
+in its own storage, on one line and without spaces at either end. A
+deleted task stays as a marked row, with its title, and a deleted list
+with its name, until you clear Tasks' storage. Backups you make after
+the deletion hold them too, marked as deleted. Clearing the storage does
+not change backup files you already made: delete those where you put
+them. Tasks stores no name of yours, no location and no data from other
+apps.
+
+Your keyboard sees what you type into a title or the name of a list, as
+in any app. Tasks asks it not to learn those words, so that it does not
+keep them or suggest them in other apps. A keyboard can ignore this.
+
 ### Later apps
 
 Each app adds its part to this page before its first release.
@@ -92,26 +119,28 @@ Without the words, whoever has the file can still see:
 
 ### Notifications
 
-The reminders of Water and of Reminders show on your phone, like every
-notification. A reminder of Reminders shows your title.
+The reminders of Water, Reminders and Tasks show on your phone, like
+every notification. A reminder of Reminders or of Tasks shows your
+title.
 
 - On the lock screen, Android shows their text only if your phone's
   setting allows it.
 - A reminder's text and buttons reach another app only if you gave that
   app notification access. Such an app can pass them on to a watch.
-- Water and Reminders do not mark their reminders "local only". That
-  mark would not hide them from apps with notification access. It only
-  asks apps that pass notifications to a watch not to pass them on.
-  Whether the apps mark them, or offer a setting, is not decided yet.
-- With the app lock on, a reminder shows only "Drink reminders" in Water
-  or "Reminders" in Reminders, and "The app lock hides this
-  notification. Open the app to see it.", without amounts or titles and
-  without buttons. Unless you turn on **Show the text in notifications**
-  ([The app lock](app-lock.md)).
+- Water, Reminders and Tasks do not mark their reminders "local only".
+  That mark would not hide them from apps with notification access. It
+  only asks apps that pass notifications to a watch not to pass them
+  on. Whether the apps mark them, or offer a setting, is not decided
+  yet.
+- With the app lock on, a reminder shows only "Drink reminders" in
+  Water, "Reminders" in Reminders or "Task reminders" in Tasks, and "The
+  app lock hides this notification. Open the app to see it.", without
+  amounts or titles and without buttons. Unless you turn on **Show the
+  text in notifications** ([The app lock](app-lock.md)).
 - If you turned on Android's notification history, Android keeps the
   notifications of the last 24 hours there, with their text: in
-  Reminders, the title. It keeps them also after you deleted the
-  reminder.
+  Reminders and Tasks, the title. It keeps them also after you deleted
+  the reminder or the task.
 
 ### Nothing else
 

@@ -347,38 +347,43 @@ Not known yet:
 1. How TalkBack reads "Snooze 10 min" on the button of a notification.
 2. Whether reminders are lost when many were missed at once. Android
    limits how many notifications one app shows.
+3. Whether TalkBack goes back to the item that opened a sheet or a
+   dialog, when it closes. Tasks does nothing of its own for it.
 
 Limits of reminders:
 
-3. No reminder comes after a restart until you unlock the phone once.
+4. No reminder comes after a restart until you unlock the phone once.
    Tasks cannot run before that. Then a missed reminder shows late.
-4. No reminder comes while Tasks' profile or Private Space is stopped,
+5. No reminder comes while Tasks' profile or Private Space is stopped,
    or after **Force stop**, until Tasks runs again. Then a missed
    reminder shows late, once.
-5. After you set the clock back, or move to a time zone further west, a
+6. After you set the clock back, or move to a time zone further west, a
    reminder that showed can show again.
-6. A task's title and buttons reach apps you gave notification access.
+7. On the night the clocks go back, a task you restore, bring back with
+   **Undo** or open again between 02:00 and 03:00 can remind at once as
+   "Missed", if its time in that hour already went by once.
+8. A task's title and buttons reach apps you gave notification access.
    Such an app can pass them on to a watch, and can press the buttons
    without the phone's unlock. Tasks does not mark its reminders "local
    only". Whether it should is not decided yet.
-7. With the app lock off, the lock screen shows a task's title if your
+9. With the app lock off, the lock screen shows a task's title if your
    phone's setting allows it.
-8. With Android's notification history on, a task's title stays there
-   for 24 hours, also after you delete the task. Turn the history off in
-   Android's notification settings if you do not want that.
-9. A keyboard can ignore the request not to learn the words of a title
-   or a name.
+10. With Android's notification history on, a task's title stays there
+    for 24 hours, also after you delete the task. Turn the history off in
+    Android's notification settings if you do not want that.
+11. A keyboard can ignore the request not to learn the words of a title
+    or a name.
 
 Limits of the clock:
 
-10. A tick on a task that repeats counts from the phone's date. If the
+12. A tick on a task that repeats counts from the phone's date. If the
     phone's clock is far ahead, dates are skipped. Change the due date
     to put it right.
-11. After you set the clock back, the order under **Done** can be wrong.
+13. After you set the clock back, the order under **Done** can be wrong.
 
 Limits of the recovery key:
 
-12. Tasks sees only the apps of the suite that keep your recovery key
+14. Tasks sees only the apps of the suite that keep your recovery key
     and are signed like it. If another app has your key but does not
     keep it on this phone, tap **I already have one** yourself, and enter
     the same words. If it keeps it, Tasks offers **Get the keys from**
@@ -386,21 +391,21 @@ Limits of the recovery key:
 
 Limits of the app lock:
 
-13. If you choose a time in **Lock the app** and turn the screen off
+15. If you choose a time in **Lock the app** and turn the screen off
     from another app, Tasks may stay unlocked until that time has passed
     ([The app lock](app-lock.md#when-the-app-locks)).
-14. The app lock hides your tasks. It does not encrypt them. Android's
+16. The app lock hides your tasks. It does not encrypt them. Android's
     own encryption protects them, with your screen lock.
 
 Limits of backups:
 
-15. A restore keeps the newest edit of each list and task. It cannot
+17. A restore keeps the newest edit of each list and task. It cannot
     bring back exactly how Tasks was on the day of the backup.
-16. Some storage apps do not let Tasks read a file again right away, or
+18. Some storage apps do not let Tasks read a file again right away, or
     hand back an older copy. Tasks then says "Backup written, not
     checked". Check such a file with **Restore a backup**, and tap
     **Cancel** at the question.
-17. A deleted task stays in Tasks' storage, with its title, and a
+19. A deleted task stays in Tasks' storage, with its title, and a
     deleted list with its name, marked as deleted, until you clear
     Tasks' storage. Backups you make after the deletion hold them too.
     Clearing the storage does not change backup files you already made:
@@ -409,11 +414,17 @@ Limits of backups:
 
 Other:
 
-18. When the phone's storage is completely full, a save fails, and a
-    snooze or a change in the app lock's settings can be lost when Tasks
-    stops. Free some room on the phone.
-19. Never type your real recovery words into a preview build of a pull
+20. When the phone's storage is completely full, a save can fail, and a
+    save, a tick or a delete can close Tasks. What was saved before
+    stays. A snooze or a change in the app lock's settings can be lost
+    when Tasks stops. Free some room on the phone.
+21. Never type your real recovery words into a preview build of a pull
     request. Use test words.
+22. No accessibility checks run on an emulator for Tasks. A TalkBack
+    pass on a phone stands in for them.
+23. Two dialogs have no screenshot test, because a test cannot reach
+    them: "No backup was made" and the answer "No keys" of a restore.
+    Their words were not checked at a large font size.
 
 Not in the first version:
 

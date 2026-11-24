@@ -17,6 +17,18 @@ import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.backup.BackupContent
+import app.shkriuss.core.backup.BackupRecord
+import app.shkriuss.core.backup.BackupSink
+import app.shkriuss.core.backup.Backups
+import app.shkriuss.core.backup.CheckedBackup
+import app.shkriuss.core.backup.ExportResult
+import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.crypto.RecoveryWords
+import app.shkriuss.core.crypto.RecoveryWordsResult
+import app.shkriuss.core.crypto.ShkCrypto
+import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
+import app.shkriuss.core.data.RecordFields
 import app.shkriuss.core.security.SecurityHost
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.feature.tasks.BackupStep
@@ -26,7 +38,9 @@ import app.shkriuss.feature.tasks.NewTask
 import app.shkriuss.feature.tasks.Task
 import app.shkriuss.feature.tasks.TaskList
 import app.shkriuss.feature.tasks.TasksRepository
+import app.shkriuss.feature.tasks.TasksServices
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.robolectric.Robolectric
@@ -204,5 +218,55 @@ fun writeABackup(name: String = BACKUP_NAME): Uri {
     check(ended is BackupStep.Written) { "The backup of the test was not written: $ended" }
     return document
 }
+
+/**
+ * Writes a backup of [content] into the document [name], past the
+ * screens, with the backup keys of [crypto] for the app [appName]: as
+ * another app, other recovery words or a newer version of Tasks would
+ * write it.
+ */
+fun writeABackupOf(
+    content: BackupContent,
+    crypto: ShkCrypto = (ApplicationProvider.getApplicationContext<Application>() as SecurityHost).crypto,
+    appName: AppName = TasksServices.APP_NAME,
+    name: String = BACKUP_NAME,
+): Uri {
+    val app = ApplicationProvider.getApplicationContext<Application>()
+    val document = TestDocuments.uri(name)
+    val staging = File(app.cacheDir, "staging-of-another-writer").apply { mkdirs() }
+    val written = runBlocking {
+        Backups(app.contentResolver, crypto.backups, appName, content, staging, testApp.test.clock, Dispatchers.Unconfined).export(document)
+    }
+    check(written is ExportResult.Written) { "The backup of the test was not written: $written" }
+    return document
+}
+
+/** What a backup of another writer holds: [records], with the data version [dataVersion]. It is only written, never restored. */
+class OtherContent(override val dataVersion: Int, private val records: List<BackupRecord> = emptyList()) : BackupContent {
+    override suspend fun list(into: BackupSink) = records.forEach { into.record(it) }
+
+    override suspend fun restore(from: CheckedBackup) = error("Only written, never restored")
+}
+
+/** One record of the type [type], which Tasks does not know, not deleted. */
+fun otherRecord(type: String): BackupRecord =
+    BackupRecord(type, RecordFields("00000000-0000-4000-8000-000000abc001", 1_000, 2_000, null), ByteArray(4))
+
+/**
+ * The keys of a second app named [appName], with its keyset files in a
+ * folder of its own, from recovery words that are not those of the test's
+ * app. The words are fixed, so the short name of their key is the same in
+ * every run, and a screenshot that shows it stays the same.
+ */
+fun keysOfOtherWords(appName: AppName): ShkCrypto {
+    val app = ApplicationProvider.getApplicationContext<Application>()
+    val folder = File(app.cacheDir, "keys-of-other-words-$appName").apply { deleteRecursively() }
+    val other = SoftwareKeysApp(folder, appName)
+    other.crypto.setup.storeDerivedKeys((RecoveryWords.parse(OTHER_WORDS) as RecoveryWordsResult.Accepted).recoveryKey)
+    return other.crypto
+}
+
+/** 24 recovery words: the BIP-39 words of 32 zero bytes. */
+private val OTHER_WORDS = (List(23) { "abandon" } + "art").joinToString(" ")
 
 private const val WAIT_MILLIS = 5_000L
