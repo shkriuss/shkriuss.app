@@ -300,8 +300,9 @@ class FileReader(
         } finally {
             try {
                 output.close()
-            } catch (_: IOException) {
-                // Closed already, or the failure is reported.
+            } catch (_: Exception) {
+                // Closed already, or the failure is reported: a provider can fail its own way here too, such as with a
+                // SecurityException, and the copy has its outcome already.
             }
         }
     }

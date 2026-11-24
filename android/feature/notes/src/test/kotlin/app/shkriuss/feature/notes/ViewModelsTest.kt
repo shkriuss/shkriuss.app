@@ -469,6 +469,24 @@ class ViewModelsTest {
     }
 
     @Test
+    fun anUndoWhoseWriteEndsAfterNotesLeftEndsAtOnce() {
+        val id = phone.note("Trip", "Secret")
+
+        val message = runBlocking {
+            snackbars.offer {
+                val undo = checkNotNull(repository.deleteNote(id))
+                // Notes leaves the screen while the write runs.
+                snackbars.endUndo()
+                NotesMessage.NoteDeleted(undo)
+            }
+        }
+
+        assertNotNull("The note is deleted", message)
+        assertNull("No snackbar shows after the leave", snackbars.current.value)
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+    }
+
+    @Test
     fun anUndoThatEndedCountsAsOpenUntilItsWipeIsDone() {
         val id = phone.note("Trip", "Secret")
         val held = Held()

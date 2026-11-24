@@ -87,6 +87,10 @@ class NotesSnackbars(
     /** The Undos that ended and whose wipe is not done yet. */
     private val ending = mutableListOf<Undo>()
 
+    /** Counts the times Notes left the screen or the destination changed ([endUndo]), under [leaveLock]. */
+    private var leaves = 0L
+    private val leaveLock = Any()
+
     /** The snackbar that shows now, or null. */
     val current: StateFlow<NotesMessage?> = shown.asStateFlow()
 
@@ -97,10 +101,23 @@ class NotesSnackbars(
     /**
      * Runs [write], an action with **Undo** such as **Delete note**, and
      * shows the snackbar it gives, in one turn. Null when it wrote
-     * nothing. A refusal of the database goes to the caller.
+     * nothing. A refusal of the database goes to the caller. If Notes left
+     * the screen, or the destination changed, while [write] ran, its
+     * snackbar would show after the leave: its Undo ends at once instead.
      */
     suspend fun offer(write: suspend () -> NotesMessage?): NotesMessage? = turns.withLock {
-        write()?.also(::show)
+        val leavesBefore = synchronized(leaveLock) { leaves }
+        val message = write() ?: return@withLock null
+        synchronized(leaveLock) {
+            val undo = message.offeredUndo
+            if (leaves == leavesBefore || undo == null) {
+                show(message)
+            } else {
+                startEnding(undo)
+                ended(undo)
+            }
+        }
+        message
     }
 
     override suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T = turns.withLock {
@@ -163,8 +180,11 @@ class NotesSnackbars(
 
     /** Notes leaves the screen, or the destination changes: a snackbar with Undo goes, and its Undo ends. */
     fun endUndo() {
-        val message = shown.value ?: return
-        if (message.offeredUndo != null) replace(message, null)
+        synchronized(leaveLock) {
+            leaves++
+            val message = shown.value
+            if (message?.offeredUndo != null) replace(message, null)
+        }
     }
 
     private fun startEnding(undo: Undo) = synchronized(ending) { ending += undo }

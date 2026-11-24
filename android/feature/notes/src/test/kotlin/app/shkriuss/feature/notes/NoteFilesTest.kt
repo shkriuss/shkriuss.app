@@ -464,6 +464,27 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aDocumentThatFailsItsOwnWayAsItClosesFailsTheCopy() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick())
+        val closing = object : CopyTarget {
+            var deleted = false
+
+            override fun open(): java.io.OutputStream = object : java.io.OutputStream() {
+                override fun write(byte: Int) = Unit
+
+                override fun close() = throw SecurityException("The permission ended")
+            }
+
+            override fun delete(): Boolean = true.also { deleted = true }
+        }
+
+        assertEquals(CopyResult.FAILED, reader.saveCopy(shown(id).single(), closing))
+        assertTrue("It tried to delete the document", closing.deleted)
+        assertEquals("The next copy is not busy", CopyResult.SAVED, reader.saveCopy(shown(id).single(), TestTarget()))
+    }
+
+    @Test
     fun aStreamThatFailsOnlyAsItClosesStillGivesTheCopyItsResult() = runBlocking {
         val id = phone.note()
         val pick = TestPick(bytes = ByteArray(1_500_000) { (it % 7).toByte() })
