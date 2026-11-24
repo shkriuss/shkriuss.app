@@ -3,6 +3,7 @@ package app.shkriuss.feature.notes
 import android.database.SQLException
 import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.ShkCrypto
+import java.io.IOException
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -196,6 +197,9 @@ class FileKeyMove(
                 false
             } catch (_: IllegalStateException) {
                 // finishFileKeyMove() refuses an app that has no keys from a recovery key yet.
+                false
+            } catch (_: IOException) {
+                // A keyset file that cannot be read or written now, such as on a full disk: the move stays pending.
                 false
             }
         }

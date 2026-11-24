@@ -139,7 +139,10 @@ class NoteViewModel(
             it.copy(loading = false, title = stored?.title.orEmpty(), body = TextEdit(stored?.body.orEmpty(), 0), pinned = stored?.pinned == true)
         }
         // A restore, or later sync, can delete the note while it is open: it closes. Pin follows the stored note.
-        repository.note(noteId).catch { error -> if (error !is SQLException) throw error }.collect { note ->
+        repository.note(noteId).catch { error ->
+            // A read that fails once the note is open: the screen shows that it cannot open the notes, not an old state.
+            if (error is SQLException) shown.update { it.copy(failed = true) } else throw error
+        }.collect { note ->
             if (note != null) {
                 wasStored = true
                 shown.update { it.copy(pinned = note.pinned) }

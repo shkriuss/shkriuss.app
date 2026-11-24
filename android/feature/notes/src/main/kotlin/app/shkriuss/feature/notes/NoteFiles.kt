@@ -152,7 +152,9 @@ class FileReader(
 
     /**
      * The state of [file], from its stream on the phone and from what
-     * `FileCrypto` answers for its key. A stream of the right length is
+     * `FileCrypto` answers for its key. A read of the database that fails
+     * throws its `SQLException`: the screen shows that it cannot open the
+     * notes. A stream of the right length is
      * checked segment by segment only as it is read: once a read, an
      * image or a copy, met damage, the file is damaged from then on.
      */
@@ -167,8 +169,6 @@ class FileReader(
                 FileState.READY
             } catch (refused: BlobException) {
                 stateOf(refused.answer)
-            } catch (_: SQLException) {
-                FileState.KEYS_NOT_USABLE
             }
         }
     }
@@ -527,6 +527,12 @@ class FileAdds(
             copyInto(waiting, source, key.encryptingStream(fileId, part.output), name, startBytes)
         } catch (_: IOException) {
             CopyEnd(0, AddProblem.CouldNotAdd(name))
+        } catch (cancelled: CancellationException) {
+            part.abandon()
+            throw cancelled
+        } catch (_: Exception) {
+            // A provider that fails in its own way while it is read, such as with a SecurityException.
+            CopyEnd(0, AddProblem.CouldNotRead(name))
         }
         if (problem.stop == null) {
             try {

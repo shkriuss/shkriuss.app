@@ -234,6 +234,56 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aProviderThatFailsInItsOwnWayWhileItIsReadLeavesNoPart() {
+        val id = phone.note()
+        val failing = object : PickedFile {
+            override fun name(): String = "odd.bin"
+
+            override fun type(): String = "application/octet-stream"
+
+            override fun reportedSize(): Long? = null
+
+            override fun open(): InputStream = object : InputStream() {
+                private var read = 0
+
+                override fun read(): Int = if (read++ < 70_000) 1 else throw SecurityException("The permission ended")
+            }
+        }
+
+        add(id, failing)
+
+        assertEquals(listOf<AddProblem>(AddProblem.CouldNotRead("odd.bin")), problems)
+        assertEquals(emptyList<File>(), phone.store.list())
+    }
+
+    @Test
+    fun theStateOfARowLetsAFailedReadOfTheDatabaseThrough() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick())
+        val file = shown(id).single()
+        phone.database.refuseReadsOf("attachment")
+
+        val failure = runCatching { reader.stateOf(file) }.exceptionOrNull()
+
+        assertTrue("Not a state of the keys: $failure", failure is android.database.SQLException)
+    }
+
+    @Test
+    fun aFailureOfTheStorageWhileTheMoveRunsLeavesItPending() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick())
+        crypto.getRecoveryKey()
+        val failing = object : UndoTurns {
+            override suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T = throw java.io.IOException("The disk is full")
+        }
+
+        assertFalse(FileKeyMove(repository, crypto, fileKeys, failing, Dispatchers.IO).run())
+
+        assertTrue(crypto.setup.fileKeyMoveIsPending())
+        assertTrue("It goes on later", keyMove.run())
+    }
+
+    @Test
     fun aRecordTheDatabaseRefusesLeavesNoStream() {
         val id = phone.note()
         phone.database.refuseWritesTo("attachment")

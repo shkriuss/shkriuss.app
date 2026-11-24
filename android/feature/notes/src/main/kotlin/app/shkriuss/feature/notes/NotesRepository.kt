@@ -166,7 +166,9 @@ class NotesRepository(
      * together.
      */
     suspend fun reserveNewNote(): String? = newNotes.withLock {
-        if (notes.shownCount() + noteWriter.reservedIds().size >= NoteLimits.MOST_NOTES) null else noteWriter.reserveId()
+        // The reserved ones first: a note made and released between the two reads is then counted twice, never not at all.
+        val reserved = noteWriter.reservedIds().size
+        if (notes.shownCount() + reserved >= NoteLimits.MOST_NOTES) null else noteWriter.reserveId()
     }
 
     /** Gives up the new note [id] that is not made: an add that ends later does not make it. Nothing happens to a note that is made. */

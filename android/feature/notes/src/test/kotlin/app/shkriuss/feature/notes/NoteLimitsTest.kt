@@ -47,6 +47,8 @@ class NoteLimitsTest {
         assertEquals("a\nb\nc\n", NoteText.body("a\r\nb\rc\n"))
         assertEquals("a\tb", NoteText.body("a\tb"))
         assertEquals("Other control characters go", "ab", NoteText.body("a\u0000\u001b\u0085b"))
+        assertEquals("The line and paragraph separators are line breaks", "a\nb\nc", NoteText.body("a\u2028b\u2029c"))
+        assertFalse(NoteRules.isBody("a\u2028b"))
     }
 
     @Test

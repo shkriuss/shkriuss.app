@@ -74,7 +74,7 @@ object NoteText {
     /** The title as it is stored: [title] without the spaces at either end. */
     fun savedTitle(typed: String): String = title(typed).trim()
 
-    /** [typed] as the text field keeps it: `\r\n` and `\r` become `\n`, and no control character but `\n` and tab. */
+    /** [typed] as the text field keeps it: `\r\n`, `\r` and the line and paragraph separators become `\n`, and no control character but `\n` and tab. */
     fun body(typed: String): String = buildString(typed.length) {
         var index = 0
         while (index < typed.length) {
@@ -84,7 +84,7 @@ object NoteText {
                     append('\n')
                     index++
                 }
-                char == '\r' || char == '\n' -> append('\n')
+                char == '\r' || char == '\n' || char == '\u2028' || char == '\u2029' -> append('\n')
                 char == '\t' -> append(char)
                 char.isControl() -> Unit
                 else -> append(char)
