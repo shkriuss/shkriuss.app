@@ -547,6 +547,7 @@ class TasksScreenshotTest(private val config: ScreenshotConfig) {
         start(ready = words(R.string.tasks_could_not_open))
         compose.tap(R.string.tasks_lists)
         compose.waitFor(hasText(words(R.string.tasks_lists)) and isHeading())
+        compose.waitForText(words(R.string.tasks_could_not_open))
         compose.captureWholeScreen("ListsCouldNotOpen", config)
     }
 
