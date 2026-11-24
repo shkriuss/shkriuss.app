@@ -66,8 +66,8 @@ no account and no network, and encrypts every file.
   A shown file is not deleted, and its note is shown.
 - **Marks.** The characters in the text that give it its formatting,
   such as `**` for bold.
-- **Last change.** The latest `updatedAt` of a note and of its files,
-  deleted files too.
+- **Last change.** The note's `updatedAt`. Adding or removing one of its
+  files writes the note too ([Table `note`](#table-note)).
 - **Wipe.** Clearing the content of a deleted record, and removing its
   stream ([ADR 0042](../../adr/0042-wiping-the-content-of-deleted-records.md)).
 - **Characters** are Unicode code points.
@@ -218,8 +218,16 @@ these, and nothing else:
 | `title` | `TEXT NOT NULL` | The title | 0 to 200 characters, one line, no space at either end, no control character |
 | `body` | `TEXT NOT NULL` | The text, with its marks | 0 to 100,000 characters. No control character but `\n` and tab. |
 | `pinned` | `INTEGER NOT NULL` | 1 if pinned, 0 if not | 0 or 1 |
+| `fileChanges` | `INTEGER NOT NULL` | How many times a file of the note was added, removed or brought back | 0 to 2,147,483,647 |
 
 Index on `updatedAt`, for the order of the list.
+
+Each add, remove or **Undo** of a file raises `fileChanges` by one, in
+the transaction that writes the file. So the note's `updatedAt` always
+moves with its files, and a restore that compares a note's times also
+sees its files' changes: a deletion of the note made elsewhere before a
+file was added is older, and does not win. At 2,147,483,647 it stays,
+and the file is still written.
 
 ### Table `attachment`
 
@@ -244,7 +252,7 @@ A deleted record keeps its content only until it is
 
 | Table | Wiped content |
 |---|---|
-| `note` | `title` `""`, `body` `""`, `pinned` 0 |
+| `note` | `title` `""`, `body` `""`, `pinned` 0, `fileChanges` 0 |
 | `attachment` | `noteId` kept, `name` `""`, `mimeType` `""`, `size` 0, `wrappedKey` empty |
 
 1. The wiped form of a note is within the limits of `note`: an empty
@@ -311,8 +319,9 @@ phone's time zone and format.
    MB." When the count takes all files past 1 GB, it stops the same way,
    with the words of point 2.
 5. It closes the stream, flushes the file, renames it to `<id>` and
-   flushes the folder. Then one transaction writes the record, and the
-   note too if it was a new one with nothing in it yet. That transaction
+   flushes the folder. Then one transaction writes the record and the
+   note: it raises the note's `fileChanges`, or makes the note if it was
+   a new one with nothing in it yet. That transaction
    first checks that the note is still shown. If it was deleted while
    the file was copied, nothing is written, the stream is deleted at
    once, and Notes says "The note was deleted. The file was not added."
@@ -362,7 +371,8 @@ phone's time zone and format.
 
 ### Removing a file, and the wipe
 
-1. **Remove** marks the file deleted, in one transaction, with the
+1. **Remove** marks the file deleted and raises its note's
+   `fileChanges`, in one transaction, with the
    snackbar "File removed" and **Undo**.
 2. The **Undo** of a removed file or a deleted note ends when its
    snackbar goes: its time runs out, another snackbar takes its place,
@@ -506,15 +516,16 @@ container. Numbers are big-endian. Each stream is a File entry under its
 file's `id`, the stored stream byte for byte; its key is only in the
 record, wrapped.
 
-`note`, 7 + n + m bytes:
+`note`, 11 + n + m bytes:
 
 | Offset | Size | Content |
 |---|---|---|
 | 0 | 1 | `pinned`, `00` or `01` |
-| 1 | 2 | n, the title's length in bytes, unsigned, 0 to 800 |
-| 3 | n | The title, in UTF-8 |
-| 3 + n | 4 | m, the text's length in bytes, 0 to 400,000 |
-| 7 + n | m | The text, in UTF-8 |
+| 1 | 4 | `fileChanges`, int32 |
+| 5 | 2 | n, the title's length in bytes, unsigned, 0 to 800 |
+| 7 | n | The title, in UTF-8 |
+| 7 + n | 4 | m, the text's length in bytes, 0 to 400,000 |
+| 11 + n | m | The text, in UTF-8 |
 
 `attachment`, 29 + t + n + k bytes:
 
@@ -534,11 +545,11 @@ A pinned note "Trip" with the text "- [ ] Passport", a line break and
 (the wrapped key, 173 bytes, cut short here):
 
 ```text
-01 0004 54726970 00000020 2d205b205d2050617373706f72740a2d205b785d202a2a5469636b6574732a2a
+01 00000001 0004 54726970 00000020 2d205b205d2050617373706f72740a2d205b785d202a2a5469636b6574732a2a
 7c9e6679742540de944be07fc1f90ae7 0000000000249f00 0a 696d6167652f6a706567 000a 7469636b65742e6a7067 00ad 53484b010401…
 ```
 
-The same two records, wiped: `00 0000 00000000`, and
+The same two records, wiped: `00 00000000 0000 00000000`, and
 `7c9e6679742540de944be07fc1f90ae7 0000000000000000 00 0000 0000`.
 
 ### Writing
@@ -603,8 +614,8 @@ for each segment.
 
 ### Size
 
-A note with a title of 20 bytes and a text of 1,000 takes 39 + 4 + 7 +
-1,020 = 1,070 bytes in the body. A file's record takes about 270 bytes,
+A note with a title of 20 bytes and a text of 1,000 takes 39 + 4 + 11 +
+1,020 = 1,074 bytes in the body. A file's record takes about 270 bytes,
 and its File entry 25 bytes and the stream: the file, 45 bytes, and 16
 for each MiB. 1 GB of files makes a backup of about 1 GB.
 
