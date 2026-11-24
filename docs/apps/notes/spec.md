@@ -206,7 +206,7 @@ these, and nothing else:
 5. Enter at the end of a bullet, a numbered item or a checklist item
    starts the next line with the same mark: the next number, an open
    box. Enter on an item with no text after its mark removes the mark.
-6. A tap on the box of a checklist item, `[ ]` or `[x]`, ticks it or
+6. A tap on the box of a checklist item, `[ ]`, `[x]` or `[X]`, ticks it or
    opens it again. The cursor does not move.
 
 ## Data
@@ -385,7 +385,9 @@ phone's time zone and format.
    wiped yet; and removes every stream that no unwiped file names. So a
    stop between any two of these steps is mended at the next start. At
    start it also deletes every `.part` file. No stream is removed while
-   a backup is written.
+   a backup is written. The sweep before a backup and after a restore
+   leaves alone the part and the stream of an add that is running: its
+   `id` is reserved, and its record may not be written yet.
 4. Notes opens `notes.db` with SQLite's `secure_delete` on. After a wipe,
    and at every start whether or not anything was wiped, it checkpoints
    the write-ahead file and cuts it to zero. So the cleared bytes are
