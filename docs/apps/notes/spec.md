@@ -488,7 +488,7 @@ record needs, and the next start removes it.
 | **Delete note**, **Remove** twice | One delete. The note or the image view closes at the first. |
 | **Pin** twice | A press carries the state it showed: **Pin** on a pinned note does nothing. |
 | **Undo** twice | Once. |
-| **Undo** after the records changed again | As in [Tasks](../tasks/spec.md#a-press-twice-or-late): only on the records of its own snackbar whose change number is still the one its action gave them. A note or a file made meanwhile does not stop it, also when a count then passes its [limit](#limits-and-defaults). |
+| **Undo** after the records changed again | As in [Tasks](../tasks/spec.md#a-press-twice-or-late): only on the records of its own snackbar whose change number is still the one its action gave them. A note or a file made meanwhile does not stop it, also when a count then passes its [limit](#limits-and-defaults). The **Undo** of a removed file checks only the file's change number. It always raises its note's `fileChanges` in the same transaction, also when the note was edited or pinned meanwhile, so the note's `updatedAt` moves with the file that came back. |
 | Back while a save runs | The note closes after the save. |
 | A picked file that arrives after its note was deleted | It is not added: "The note was deleted. The file was not added." |
 
