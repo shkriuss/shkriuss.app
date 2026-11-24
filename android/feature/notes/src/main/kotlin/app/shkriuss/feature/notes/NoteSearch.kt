@@ -1,10 +1,12 @@
 package app.shkriuss.feature.notes
 
+import java.util.Locale
+
 /**
  * Search, as you type (docs/apps/notes/spec.md, "Search"). A note matches
  * when its title, its text or the name of one of its shown files holds
  * what was typed. Case is ignored: both sides are lower-cased by Unicode's
- * rules, one code point at a time, so a match keeps its place in the text.
+ * rules, the final sigma too, and a match keeps its place in the text.
  * Nothing else is folded: "e" does not match "é". Marks are text. There is
  * no index, and nothing of a search is stored.
  */
@@ -45,27 +47,32 @@ object NoteSearch {
     }
 
     /**
-     * [original] lower-cased one code point at a time, with the place of
-     * each of its characters in [original]. Lower-casing a code point can
-     * change how many characters it takes, so the places are kept.
+     * [original] lower-cased by Unicode's rules, as `String.lowercase`
+     * does, with the place of each of its characters in [original].
+     * Lower-casing a code point can change how many characters it takes,
+     * so the places come from each code point lower-cased on its own. The
+     * one rule that looks at the letters around, the final sigma, changes
+     * a letter but never a length, so the places still fit the whole text
+     * lower-cased.
      */
     private class Lowered(original: String) {
         val text: String
         private val places: IntArray
 
         init {
-            val builder = StringBuilder(original.length)
-            val at = IntArray(original.length * 2 + 1)
+            val oneByOne = StringBuilder(original.length)
+            val at = IntArray(original.length * 3 + 1)
             var index = 0
             while (index < original.length) {
-                val codePoint = original.codePointAt(index)
-                val lower = Character.toLowerCase(codePoint)
-                repeat(Character.charCount(lower)) { at[builder.length + it] = index }
-                builder.appendCodePoint(lower)
-                index += Character.charCount(codePoint)
+                val size = Character.charCount(original.codePointAt(index))
+                val lower = original.substring(index, index + size).lowercase(Locale.ROOT)
+                repeat(lower.length) { at[oneByOne.length + it] = index }
+                oneByOne.append(lower)
+                index += size
             }
-            at[builder.length] = original.length
-            text = builder.toString()
+            at[oneByOne.length] = original.length
+            val whole = original.lowercase(Locale.ROOT)
+            text = if (whole.length == oneByOne.length) whole else oneByOne.toString()
             places = at
         }
 

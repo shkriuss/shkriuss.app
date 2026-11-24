@@ -52,10 +52,21 @@ class NoteSearchTest {
 
     @Test
     fun aMatchKeepsItsPlaceWhenLowerCasingChangesTheLength() {
-        // U+0130, a capital I with a dot, is one character; its lower case, one code point at a time, is "i".
-        val text = "İstanbul trip"
+        // U+0130, a capital I with a dot, is one character; its lower case by Unicode's rules is two, "i" and a dot above.
+        val text = "\u0130stanbul trip"
 
         assertEquals(listOf(9..12), NoteSearch.rangesIn(text, "trip"))
+        assertEquals(listOf(0..7), NoteSearch.match(note(title = text), emptyList(), "\u0130STANBUL")?.inTitle)
+    }
+
+    @Test
+    fun theFinalSigmaIsLowerCasedByUnicodesRules() {
+        // "ΟΣ" lower-cased by Unicode's rules is "ος", with the final sigma, not "οσ".
+        val greek = note(title = "\u039f\u03a3 \u03a4\u0391")
+
+        assertEquals(listOf(0..1), NoteSearch.match(greek, emptyList(), "\u03bf\u03c2")?.inTitle)
+        assertEquals(listOf(0..1), NoteSearch.match(greek, emptyList(), "\u039f\u03a3")?.inTitle)
+        assertEquals(listOf(0..4), NoteSearch.match(greek, emptyList(), "\u03bf\u03c2 \u03c4\u03b1")?.inTitle)
     }
 
     @Test
