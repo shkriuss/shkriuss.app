@@ -31,8 +31,9 @@ Pages:
   keys and what they showed, and what an emulator cannot check.
 - [Third-party material](third-party.md): what others made and the apps
   contain, with the source, the licence and the notice of each:
-  everything that ships in Water, which its Licences screen shows, and
-  what is on the build's class path and does not ship.
+  everything that ships in Water, Reminders and Tasks, which their
+  Licences screens show, and what is on the build's class path and
+  does not ship.
 - [Working with Claude](working-with-claude.md): who can do what, and how a
   change gets from a session to `main`.
 - [Cloud environment](cloud-environment.md): the Claude Code cloud

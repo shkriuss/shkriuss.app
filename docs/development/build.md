@@ -689,7 +689,8 @@ Test helpers that the tests of other modules may use
    `feature/reminders`, `app/reminders`, `feature/tasks` and `app/tasks`
    use those of `core/crypto` in their tests, and `core/testing` compiles
    against them ([Shared test helpers](#shared-test-helpers)).
-   `feature/water` and `app/water` use those of `core/notify` in their
+   `feature/water`, `app/water`, `feature/reminders`, `app/reminders`,
+   `feature/tasks` and `app/tasks` use those of `core/notify` in their
    tests.
 2. Code there sees the `internal` declarations of its module. The
    module's own unit tests and emulator tests see what is in the
@@ -791,8 +792,8 @@ unit tests. It is a content provider that keeps each
 document as a file in a folder of the test. A test sets it up with
 Robolectric, gets a `content:` URI for a name, and can make the next
 open fail, to try a storage app that refuses. The tests of
-`feature/water`, `app/water` and `feature/reminders` write and read
-backups through it.
+`feature/water`, `app/water`, `feature/reminders`, `app/reminders`,
+`feature/tasks` and `app/tasks` write and read backups through it.
 
 ### Tests that wait for a background thread
 

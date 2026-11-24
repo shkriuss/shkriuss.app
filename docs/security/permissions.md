@@ -258,14 +258,13 @@ Other components that libraries add, none of them a permission:
   **Snooze 10 min** on a reminder. `TasksManifestTest` checks that these
   three are Tasks' receivers.
 - The eight screens of `core/security` ([Screens](#screens)). Tasks'
-  Settings opens them from **Recovery key** and **App lock**, and from
-  the dialog for the moment the recovery key is first needed. The
-  handover screen is exported with no permission, as in Water. A
-  screen of the module
-  needs both permissions, and the APK rules check fails a build of
-  Tasks without them. `TasksManifestTest` checks that Tasks' screens are
-  its own and these eight, and that none but the handover screen is
-  exported or has an intent filter.
+  Settings opens seven of them from **Recovery key** and **App lock**,
+  and from the dialog for the moment the recovery key is first needed.
+  The eighth, the handover screen, is exported with no permission, as
+  in Water. A screen of the module needs both permissions, and the APK
+  rules check fails a build of Tasks without them. `TasksManifestTest`
+  checks that Tasks' screens are its own and these eight, and that none
+  but the handover screen is exported or has an intent filter.
 - The status provider of `core/security`, authority
   `app.shkriuss.tasks.keeper`, exported with no permission, as in
   Water.

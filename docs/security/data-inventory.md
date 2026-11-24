@@ -297,10 +297,10 @@ hold no user data.
 
 ## Tasks (`app.shkriuss.tasks`)
 
-Tasks is being built. On its screens you add, change and delete lists
-and tasks. It stores them and what this phone remembers of the reminder
-of each task, shows the reminder of a task as a notification, and makes
-and restores backups, as below.
+On Tasks' screens you add, change and delete lists and tasks. It stores
+them and what this phone remembers of the reminder of each task, shows
+the reminder of a task as a notification, and makes and restores
+backups, as below.
 
 ### On the phone
 
@@ -322,6 +322,29 @@ Android Keystore holds.
 - Android's SQLite keeps the write-ahead files `tasks.db-wal` and
   `tasks.db-shm` next to the database. They can hold rows of it, names
   and titles too, until SQLite writes them into `tasks.db`.
+
+Android also keeps some things for Tasks, outside Tasks' folders:
+
+- The alarm of each task with a reminder to come: its time and the
+  random ID of its task. No title.
+- A task's notification while it shows, with its title. If the user
+  turned on Android's notification history, Android keeps the
+  notifications of the last 24 hours there, titles too, also after the
+  notification is gone or the task is deleted.
+- A picture of Tasks' screen in the recent apps, which can show titles
+  and the names of lists. While the app lock is on, or "Hide in recent
+  apps and block screenshots" is on, the picture is blank.
+- The saved state of Tasks' screen while it waits in the background: the
+  place that is open, a part of Licences, the dialog of the form that is
+  open, with the date or time in an open picker, and how far each list
+  is scrolled. Never a title or a name: the open form, the open list and
+  the dialog of a list's name live only while Tasks runs.
+
+The keyboard app sees what is typed into a title or the name of a list,
+as in any app. Tasks asks it not to learn them, so that it keeps no
+words of them in its own dictionary
+(`IME_FLAG_NO_PERSONALIZED_LEARNING`). A keyboard can ignore the request
+([threat-model.md](threat-model.md#out-of-scope), point 3).
 
 ### What leaves the phone, and how
 
@@ -381,7 +404,14 @@ Three more things leave Tasks' storage. They stay inside the phone:
 Tasks has no network permission. Android backup and device transfer
 are off. It writes no file outside its storage but the backup you make,
 shares nothing else with other apps, puts nothing on the clipboard
-itself and writes no log.
+itself and writes no log. The title and name fields offer the usual
+copy and paste, so a title or a name you copy goes to the clipboard.
+
+### Not checked in the code
+
+As for Water: the files of AndroidX's profile installer about the app's
+start-up profile, and the app's compiled code, which Android keeps. They
+hold no user data.
 
 ### How to delete it
 

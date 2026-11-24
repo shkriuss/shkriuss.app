@@ -43,6 +43,13 @@ Not released yet.
   title or list alone does not. A tap opens the task's list with the
   task open, or Today if the task is gone. With the app lock on, a
   reminder shows only "Task reminders", without its title or buttons.
+- **Snooze 10 min** shows the reminder again 10 minutes later: "Snoozed.
+  It was due at 09:00." Reminders follow a new time zone and summer
+  time. After the clock is set back, a reminder that showed can show
+  again. When a reminder could not be shown, a notice takes its place:
+  "A reminder could not be shown. Open the app to see it." A tap on it
+  opens the task. At each start, a notification that no longer fits its
+  task goes.
 - After a save that sets a reminder, while Android has not asked, a
   dialog explains why Tasks shows notifications, and then Android asks.
   While a reminder is to come and notifications cannot show, Today says
@@ -69,8 +76,8 @@ Not released yet.
 - Everything Tasks stores is in place: lists, with their names, and
   tasks, with their title, list, due date, repeat, days of the week,
   reminder time and when they were done, in one database on the phone;
-  what this phone remembers of the reminder of each task, in one small
-  file; the settings of the app lock; and the keys
+  what this phone remembers of the reminder of each task and of its
+  alarm, in two small files; the settings of the app lock; and the keys
   ([data-inventory.md](../../../docs/security/data-inventory.md#tasks-appshkriusstasks)).
   A backup file leaves the phone only when you make one, to the place
   you pick.

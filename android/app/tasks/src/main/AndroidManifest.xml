@@ -13,8 +13,8 @@
       each checks the calling app first (ADR 0041). The APK rules check
       fails an app that has the screens without both permissions.
 
-    Tasks stores its data in its own database and will back it up only
-    into the backup file of the suite, so Android backup and
+    Tasks stores its data in its own database and backs it up only into
+    the backup file of the suite, so Android backup and
     device-to-device transfer are turned off (docs/user/backup.md).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"

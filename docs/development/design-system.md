@@ -722,8 +722,9 @@ the Lists page of the Catalog.
 
 ### Optional part for the user's own text
 
-Reminders' title field uses one part of the text field (owner's
-decision). It changes nothing on screen, so the Catalog has no sample.
+Reminders' title field, and Tasks' title and list name fields, use one
+part of the text field (owner's decisions). It changes nothing on
+screen, so the Catalog has no sample.
 
 | Component | Part | What it does |
 |---|---|---|
@@ -1624,7 +1625,7 @@ while the snackbar shows, so it does not go away before the capture.
 - The "Use" columns above are starting guidance, which the components
   may refine.
 - `ScreenshotConfig` and `captureWholeScreen` live in the tests of the
-  Catalog, and copies in Water's and Reminders'. Moving them to
+  Catalog, and copies in Water's, Reminders' and Tasks'. Moving them to
   `core/testing` is left for later.
 - A shared icon set for the apps. Each icon is drawn for the suite until
   then.

@@ -42,4 +42,8 @@ dependencies {
     // Android, without naming Android's alarm or notification classes.
     testImplementation(testFixtures(project(":core:notify")))
     testImplementation(testFixtures(project(":core:crypto")))
+    // Backups that Tasks does not take, written as another app, other
+    // recovery words or a newer version would write them, for the
+    // screenshots of the answers. A module of this project, not a library.
+    testImplementation(project(":core:backup"))
 }

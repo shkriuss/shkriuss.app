@@ -11,12 +11,13 @@ does not. It ends with the OWASP MASVS controls and every open question.
   [The owner's decisions](#the-owners-decisions). Where
   nothing is decided, it says **Open**. Every open point is listed at
   the [end](#open-questions).
-- What exists today: Catalog, Water, Reminders and the core modules
-  ([modules.md](../architecture/modules.md)). Water is the first data
-  app and Reminders the second. There is no Sync app and no sync server
-  yet. Where this page speaks of sync, it describes what is decided for
-  it, not what is built. The handover between apps is built. What each
-  app stores is in the [data inventory](data-inventory.md).
+- What exists today: Catalog, Water, Reminders, Tasks and the core
+  modules ([modules.md](../architecture/modules.md)). Water is the first
+  data app, Reminders the second and Tasks the third. There is no Sync
+  app and no sync server yet. Where this page speaks of sync, it
+  describes what is decided for it, not what is built. The handover
+  between apps is built. What each app stores is in the
+  [data inventory](data-inventory.md).
 
 ## At a glance
 

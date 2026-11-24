@@ -97,8 +97,8 @@ class ListViewModel(
     private val snackbar = MutableStateFlow<TasksSnackbar?>(null)
     private val rows = RowActions(repository, time, viewModelScope, work, snackbar)
 
-    /** The open list once this screen's read of the lists has shown it. Read and written only by [closeIfGone]. */
-    private var seenOpen: String? = null
+    /** The `id` of each list in this screen's last read of the lists. Read and written only by [closeIfGone]. */
+    private var lastRead: Set<String> = emptySet()
 
     /** What the screen shows. */
     val state: StateFlow<ListScreen> = combine(
@@ -144,16 +144,23 @@ class ListViewModel(
      * restore, closes with its question, and stays closed should it come
      * back: the screen is on Lists again. It runs on each read of [lists],
      * before the state takes it, so no read can show the list again first.
-     * Lists may show a new list a moment before this screen's read of the
-     * lists does, so an open list that this read has not shown yet is
-     * looked up in the database instead. A read that fails closes nothing:
-     * the state shows it.
+     *
+     * An open list that the last read held and this one leaves out is
+     * deleted: it closes at once. That holds also for a list the screen
+     * read before it was opened, so an Undo that brings the list back
+     * right after its delete cannot open it again. Lists may show a new
+     * list a moment before this screen's read of the lists does, so an
+     * open list that no read has held yet is looked up in the database
+     * instead. A read that fails closes nothing: the state shows it.
      */
     private fun closeIfGone(lists: List<TaskList>) {
+        val before = lastRead
+        val read = lists.mapTo(HashSet()) { it.id }
+        lastRead = read
         val listId = openId.value?.takeIf { it != INBOX } ?: return
-        when {
-            lists.any { it.id == listId } -> seenOpen = listId
-            seenOpen == listId -> closeIfOpen(listId)
+        when (listId) {
+            in read -> Unit
+            in before -> closeIfOpen(listId)
             else -> viewModelScope.launch(work) { if (isGone { repository.findList(listId) }) closeIfOpen(listId) }
         }
     }
