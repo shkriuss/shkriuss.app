@@ -37,8 +37,11 @@
 3. Each table that is wiped has a **wiped form**: the value of every
    content column after a wipe. Its spec names it, and says whether a
    record that is not deleted can hold the same values, such as an empty
-   note. A restore refuses a deleted record that is partly wiped, and a
-   record that is not deleted follows the table's usual limits.
+   note. Where the wiped form is outside the table's usual limits, as
+   for a file, a restore refuses a deleted record that is partly wiped.
+   Where it is within them, as for a note, a partly wiped record cannot
+   be told from a good one, and any content within the limits is taken.
+   A record that is not deleted follows the table's usual limits.
 4. A wiped record is never brought back with `restore`. **Undo** is for
    the time before the wipe.
 5. A file's wrapped key is content, so a wipe clears it. The app removes

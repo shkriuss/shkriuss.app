@@ -355,7 +355,9 @@ phone's time zone and format.
    phone and from what `FileCrypto` answers. A stream is checked segment
    by segment as it is read, and is whole only when it has ended without
    an error. A copy that meets damage stops, and Notes tries to delete
-   the document: "This file is damaged. No copy was saved."
+   the document: "This file is damaged. No copy was saved." If the
+   document cannot be deleted: "This file is damaged. Part of it may be
+   in the place you chose. Delete it there."
 2. Such a file counts in the limits until it is removed.
 
 ### Removing a file, and the wipe
@@ -367,9 +369,12 @@ phone's time zone and format.
    Notes leaves the screen, the destination changes, or Notes stops.
    Then Notes wipes the records of that action that are still deleted,
    in one transaction, and after it removes their streams.
-3. Notes also wipes every deleted record that is not wiped yet, and
-   removes every stream that no unwiped file names, at every start,
-   before a backup lists its records, and after a restore. At start it
+3. At every start, before a backup lists its records, and after a
+   restore, Notes, in this order: marks deleted each file that is not
+   deleted and whose note is; wipes every deleted record that is not
+   wiped yet; and removes every stream that no unwiped file names. So a
+   stop between any two of these steps is mended at the next start. At
+   start it
    also deletes every `.part` file. No stream is removed while a backup
    is written.
 4. Notes opens `notes.db` with SQLite's `secure_delete` on. After a wipe,
@@ -456,7 +461,7 @@ record needs, and the next start removes it.
 | Delete, remove, **Undo**, **Pin** | Nothing changes. A snackbar: "Could not change your notes. Try again." |
 | The wipe, removing a stream, or the checkpoint | Tried again at the next start. Nothing shows. |
 | Reading a stream | The row's [state](#files-that-cannot-be-opened). |
-| Writing a copy | Notes tries to delete the document: "Could not save the copy." |
+| Writing a copy | Notes tries to delete the document: "Could not save the copy." If it cannot: "Could not save the copy. Part of it may be in the place you chose. Delete it there." |
 | Reading the database for a screen | `ShkErrorState`: "Could not open your notes." |
 | A backup or a restore | As in [Water](../water/spec.md#backup-and-restore-screens). A restore rolls back. |
 
@@ -592,7 +597,9 @@ for each segment.
    point 5). A stream on the phone that is not 45 + `size` + 16 for each
    segment long counts as no stream: the staged one replaces it.
 2. Then Notes marks deleted each file that is not deleted and whose note
-   is, and wipes, as at every start.
+   is, and wipes, as at every start
+   ([Removing a file, and the wipe](#removing-a-file-and-the-wipe),
+   point 3). A stop before that is mended at the next start.
 3. The open screens show the restored notes at once.
 
 ### Size
