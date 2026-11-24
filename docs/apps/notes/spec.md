@@ -226,8 +226,8 @@ Each add, remove or **Undo** of a file raises `fileChanges` by one, in
 the transaction that writes the file. So the note's `updatedAt` always
 moves with its files, and a restore that compares a note's times also
 sees its files' changes: a deletion of the note made elsewhere before a
-file was added is older, and does not win. At 2,147,483,647 it stays,
-and the file is still written.
+file was added is older, and does not win. After 2,147,483,647 it goes
+back to 0, so each change still writes the note.
 
 ### Table `attachment`
 
