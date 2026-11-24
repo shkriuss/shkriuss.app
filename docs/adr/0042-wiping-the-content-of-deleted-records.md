@@ -1,13 +1,15 @@
 # 0042 Wiping the content of deleted records
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-24
 - Source: the specification of Notes
   ([spec.md](../apps/notes/spec.md#removing-a-file-and-the-wipe)). The
   owner decided that the text and the files of a deleted note are wiped
   when its **Undo** ends, with a new write in `core/data` for every app.
   Claude proposed the details in
-  [pull request 109](https://github.com/shkriuss/shkriuss.app/pull/109).
+  [pull request 109](https://github.com/shkriuss/shkriuss.app/pull/109),
+  and the owner accepted them in the review of that pull request, on
+  2026-11-24.
 
 ## Context
 

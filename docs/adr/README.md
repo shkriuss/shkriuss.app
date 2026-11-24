@@ -72,7 +72,8 @@ Record 0042 comes from the specification of Notes
 ([spec.md](../apps/notes/spec.md)): wiping the content of a deleted
 record. The owner decided on 2026-11-24 that the text and the files of
 a deleted note are wiped when its Undo ends. Claude proposed the
-details in pull request 109.
+details in pull request 109, and the owner accepted them in the review
+of that pull request, on 2026-11-24.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -120,4 +121,4 @@ How a record may be edited or replaced is in point 7 of
 | 0039 | [No manual checklist for a release](0039-no-manual-checklist-for-a-release.md) | Accepted |
 | 0040 | [Minimum Android 15](0040-minimum-android-15.md) | Accepted |
 | 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Accepted |
-| 0042 | [Wiping the content of deleted records](0042-wiping-the-content-of-deleted-records.md) | Proposed |
+| 0042 | [Wiping the content of deleted records](0042-wiping-the-content-of-deleted-records.md) | Accepted |
