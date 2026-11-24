@@ -489,7 +489,15 @@ class FileAdds(
             } catch (_: SecurityException) {
                 return AddProblem.CouldNotRead(name)
             }
-            val copied = input.use { source -> encrypt(waiting, source, fileId, key, name, startBytes) }
+            val copied = try {
+                encrypt(waiting, input, fileId, key, name, startBytes)
+            } finally {
+                try {
+                    input.close()
+                } catch (_: Exception) {
+                    // Every byte was read already, or the copy failed for its own reason: a close that fails changes nothing.
+                }
+            }
             if (copied is Copied.Stopped) return copied.problem
             val size = (copied as Copied.Whole).size
             val added = try {

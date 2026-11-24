@@ -257,6 +257,29 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aPickedFileThatFailsOnlyWhenItClosesIsAdded() {
+        val id = phone.note()
+        val bytes = ByteArray(5_000) { 3 }
+        val closingBadly = object : PickedFile {
+            override fun name(): String = "late.bin"
+
+            override fun type(): String = "application/octet-stream"
+
+            override fun reportedSize(): Long = bytes.size.toLong()
+
+            override fun open(): InputStream = object : java.io.ByteArrayInputStream(bytes) {
+                override fun close() = throw java.io.IOException("The provider fails as it closes")
+            }
+        }
+
+        add(id, closingBadly)
+
+        assertEquals(emptyList<AddProblem>(), problems)
+        assertEquals(listOf("late.bin"), files(id).map { it.name })
+        assertArrayEquals(bytes, read(shown(id).single()))
+    }
+
+    @Test
     fun theStateOfARowLetsAFailedReadOfTheDatabaseThrough() = runBlocking {
         val id = phone.note()
         add(id, TestPick())
