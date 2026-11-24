@@ -149,7 +149,8 @@ no account and no network, and encrypts every file.
    the screen or locks. Each save is one transaction. A save with no
    change writes nothing.
 2. A new note writes nothing until it has a title, a text or a file.
-3. A note that is empty when it closes, with no title, text or file, is
+3. A note that is empty when it closes, with no title, text or file, and
+   no file being added to it, is
    deleted and wiped, with no snackbar: nothing is lost.
 
 ### The image view
@@ -199,7 +200,8 @@ these, and nothing else:
    selection touches:
    - **Heading**, **Bulleted list**: add the mark, or remove it when every
      such line has it. A line mark replaces another one.
-   - **Numbered list**: numbers the lines 1, 2, 3, or removes the marks.
+   - **Numbered list**: numbers the lines 1, 2, 3, or removes the marks
+     when every such line is numbered already.
    - **Checklist**: a line that is not an item becomes an open item; an
      open item is ticked; a done item is opened again.
    - **Bold**, **Italic**: put the marks around the selection, or take
@@ -330,7 +332,10 @@ phone's time zone and format.
    So no file of a deleted or wiped note is ever written. The key is made
    before the copy starts, so a lock or a screen that turns off does not
    stop it ([crypto-design.md](../../security/crypto-design.md#keys-in-memory)).
-   Adding goes on when the note closes.
+   Adding goes on when the note closes. The files of a batch that have
+   not started yet start only while Notes is on the screen and the gate
+   is open, because no new file key is made otherwise. They wait in the
+   view model until then.
 6. With the app lock on, the picker locks Notes. The picked files wait in
    the view model until the gate is open again
    ([security-screens.md](../../architecture/security-screens.md#pickers-and-the-share-sheet)).
@@ -390,17 +395,20 @@ phone's time zone and format.
    a backup is written. The sweep before a backup and after a restore
    leaves alone the part and the stream of an add that is running: its
    `id` is reserved, and its record may not be written yet.
-4. Notes opens `notes.db` with SQLite's `secure_delete` on. After a wipe,
-   and at every start whether or not anything was wiped, it checkpoints
-   the write-ahead file and cuts it to zero. So the cleared bytes are
-   written over in both files, also after a stop between the wipe and
-   the checkpoint. A checkpoint that cannot finish, because a read is
-   open, is done at the next wipe or start.
-5. A backup made before the wipe still holds the text and the files. The
-   flash storage may keep old blocks, under Android's file-based
-   encryption. A wiped file's key is gone from the phone with its
-   wrapped key, so such blocks of its stream open only with a key kept
-   elsewhere: in a backup made before the wipe, with the recovery key.
+4. Notes opens `notes.db` with SQLite's `secure_delete` on, so the
+   cleared bytes are written over in `notes.db`. After a wipe, and at
+   every start whether or not anything was wiped, it checkpoints the
+   write-ahead file and cuts it to zero, also after a stop between the
+   wipe and the checkpoint. Cutting the file does not write over its old
+   frames. A checkpoint that cannot finish, because a read is open, is
+   done at the next wipe or start.
+5. So after a wipe, no file of Notes holds the text, the name or the
+   wrapped key. What a wipe cannot reach: a backup made before it, which
+   still holds the text and the files; and old blocks that the flash
+   storage may keep, of the streams, of `notes.db` and of the
+   write-ahead file. Such blocks are under Android's file-based
+   encryption and are out of reach of apps. An old block that held a
+   wrapped key could still be opened with `file-key`.
 
 ### Before the recovery key: the file key move
 
@@ -473,7 +481,7 @@ record needs, and the next start removes it.
 | Saving a note | Nothing changes in the database. The text stays on the screen, with a line above the title: "Could not save the note. Notes tries again." It tries again at the next change. Closing the note then asks "This note is not saved", with **Try again** and **Discard changes**. |
 | Adding a file | The part, or the stream if it was already renamed, is deleted at once, and the file is not added: "Could not add ticket.jpg. The phone may be full." |
 | Delete, remove, **Undo**, **Pin** | Nothing changes. A snackbar: "Could not change your notes. Try again." |
-| The wipe, removing a stream, or the checkpoint | Tried again at the next start. Nothing shows. |
+| The wipe, removing a stream, or the checkpoint | Tried again at the next start. Nothing shows, except before a backup: then the backup stops ([Writing](#writing), point 1). |
 | Reading a stream | The row's [state](#files-that-cannot-be-opened). |
 | Writing a copy | Notes tries to delete the document: "Could not save the copy." If it cannot: "Could not save the copy. Part of it may be in the place you chose. Delete it there." |
 | Reading the database for a screen | `ShkErrorState`: "Could not open your notes." |
@@ -561,7 +569,10 @@ The same two records, wiped: `00 00000000 0000 00000000`, and
 
 1. `BackupContent.dataVersion` is 1. First comes the wipe of every
    deleted record that is not wiped. No **Undo** is open while Settings
-   shows.
+   shows. If that wipe fails, the backup stops and writes nothing, so a
+   backup never holds deleted content: "The backup could not be
+   written", "Notes could not finish deleting some notes first. Try
+   again."
 2. One read of the database gives every record of both tables, deleted
    ones too, and the list of files. A change made while the backup runs
    is not in it. After the records come the streams of the files in that

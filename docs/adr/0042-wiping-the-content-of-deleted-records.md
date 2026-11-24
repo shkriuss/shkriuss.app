@@ -47,15 +47,18 @@
 4. A wiped record is never brought back with `restore`. **Undo** is for
    the time before the wipe.
 5. A file's wrapped key is content, so a wipe clears it. The app removes
-   the file's stream after the wipe commits. Then no copy of the key is
-   left on the phone, so a copy of the stream that the flash storage
-   keeps opens only with a key kept elsewhere: in a backup made before
-   the wipe, with the recovery key.
-6. An app that wipes opens its database with SQLite's `secure_delete` on.
-   After a wipe, and at every start whether or not anything was wiped,
-   it checkpoints the write-ahead file and cuts it to zero. So the
-   cleared bytes are written over in both files, also after a stop
-   between the wipe and the checkpoint.
+   the file's stream after the wipe commits. Then no file of the app
+   holds the key or the stream. Old blocks that the flash storage keeps,
+   of the stream or of the database, are out of reach of apps and under
+   Android's file-based encryption. An old block that held the wrapped
+   key could still be opened with `file-key`, and a backup made before
+   the wipe still holds both.
+6. An app that wipes opens its database with SQLite's `secure_delete` on,
+   so the cleared bytes are written over in the database file. After a
+   wipe, and at every start whether or not anything was wiped, it
+   checkpoints the write-ahead file and cuts it to zero, also after a
+   stop between the wipe and the checkpoint. Cutting the write-ahead
+   file does not write over its old frames.
 7. Each app decides whether and when it wipes. Notes is the first: when
    the **Undo** of a delete ends, at every start, before a backup lists
    its records, and after a restore.
