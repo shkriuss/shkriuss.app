@@ -7,7 +7,12 @@ specification is
 
 ## Unreleased
 
-Not released yet.
+## 1.0.0 (2026-11-24)
+
+Released as `tasks-v1.0.0`.
+
+The first release of Tasks. How to use it:
+[Tasks](../../../docs/user/tasks.md).
 
 - Settings has the sections Backup, Security and About, as in Water and
   Reminders. About shows the version and **Licences**, which lists
