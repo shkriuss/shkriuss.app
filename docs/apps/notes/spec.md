@@ -374,9 +374,8 @@ phone's time zone and format.
    deleted and whose note is; wipes every deleted record that is not
    wiped yet; and removes every stream that no unwiped file names. So a
    stop between any two of these steps is mended at the next start. At
-   start it
-   also deletes every `.part` file. No stream is removed while a backup
-   is written.
+   start it also deletes every `.part` file. No stream is removed while
+   a backup is written.
 4. Notes opens `notes.db` with SQLite's `secure_delete` on. After a wipe,
    and at every start whether or not anything was wiped, it checkpoints
    the write-ahead file and cuts it to zero. So the cleared bytes are
