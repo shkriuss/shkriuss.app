@@ -64,7 +64,7 @@ class NotesServices(
     val snackbars: NotesSnackbars = NotesSnackbars(repository, { keyMove.run() }, scope, work)
 
     /** The move of the file keys to the recovery key. */
-    val keyMove: FileKeyMove = FileKeyMove(repository, crypto, fileKeys, { snackbars.openUndoIds }, work)
+    val keyMove: FileKeyMove = FileKeyMove(repository, crypto, fileKeys, snackbars, work)
 
     /** The adds of files, one at a time, while Notes is on the screen and the gate is open. */
     val adds: FileAdds = FileAdds(

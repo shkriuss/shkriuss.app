@@ -3,6 +3,7 @@ package app.shkriuss.feature.notes
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.feature.notes.data.AttachmentEntity
 import java.io.File
+import java.io.InputStream
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +50,15 @@ class NoteFilesTest {
 
     private val adds by lazy { FileAdds(repository, crypto.files, canStart, fileKeys, { problems += it }, scope, Dispatchers.IO) }
     private val reader by lazy { FileReader(repository, crypto.files, { crypto.status().let { it.needsRepair || it.filesCanBeGivenUp } }, Dispatchers.IO) }
-    private val keyMove by lazy { FileKeyMove(repository, crypto, fileKeys, { openUndo }, Dispatchers.IO) }
+    /** The open Undo as the move asks for it, record by record; [asked] counts the questions. */
+    private var asked = 0
+    private val undoTurns = object : UndoTurns {
+        override suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T? {
+            asked++
+            return if (id in openUndo) null else action()
+        }
+    }
+    private val keyMove by lazy { FileKeyMove(repository, crypto, fileKeys, undoTurns, Dispatchers.IO) }
 
     @After
     fun close() {
@@ -193,6 +202,38 @@ class NoteFilesTest {
     }
 
     @Test
+    fun withNoKeyThatCanBeMadeNowTheFileIsNotAdded() {
+        val id = phone.note()
+        keys.phoneLocked = true
+
+        add(id, TestPick())
+
+        assertEquals(listOf<AddProblem>(AddProblem.KeysNotUsable), problems)
+        assertEquals(emptyList<AttachmentEntity>(), files(id))
+        assertEquals(emptyList<File>(), phone.store.list())
+    }
+
+    @Test
+    fun anyOtherFailureOfAnAddEndsInItsSnackbarAndTheNextFileStillComes() {
+        val id = phone.note()
+        val failing = object : PickedFile {
+            override fun name(): String = "odd.bin"
+
+            override fun type(): String = "application/octet-stream"
+
+            override fun reportedSize(): Long? = null
+
+            override fun open(): InputStream = throw IllegalStateException("A provider that fails in its own way")
+        }
+
+        add(id, failing, TestPick("next.jpg"))
+
+        assertEquals(listOf<AddProblem>(AddProblem.CouldNotAdd("odd.bin")), problems)
+        assertEquals(listOf("next.jpg"), files(id).map { it.name })
+        assertEquals(1, phone.store.list().size)
+    }
+
+    @Test
     fun aRecordTheDatabaseRefusesLeavesNoStream() {
         val id = phone.note()
         phone.database.refuseWritesTo("attachment")
@@ -287,6 +328,44 @@ class NoteFilesTest {
         openUndo = emptySet()
         assertTrue(keyMove.run())
         assertFalse(crypto.setup.fileKeyMoveIsPending())
+    }
+
+    @Test
+    fun anUndoMadeWhileTheMoveRunsKeepsItsChangeNumbers() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick("a.jpg"), TestPick("b.jpg"))
+        val (first, second) = shown(id)
+        crypto.getRecoveryKey()
+        // The note is deleted once the move has sealed its first file: the move asks again for the second one.
+        val deleting = object : UndoTurns {
+            var undo: Undo? = null
+
+            override suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T? {
+                val open = undo?.ids.orEmpty()
+                if (id in open) return null
+                val done = action()
+                if (undo == null) undo = repository.deleteNote(first.noteId)
+                return done
+            }
+        }
+
+        assertFalse(FileKeyMove(repository, crypto, fileKeys, deleting, Dispatchers.IO).run())
+
+        assertTrue("The Undo still counts for both files", repository.undo(checkNotNull(deleting.undo)))
+        assertEquals(setOf(first.id, second.id), shown(id).map { it.id }.toSet())
+        assertTrue(crypto.setup.fileKeyMoveIsPending())
+        assertTrue(keyMove.run())
+    }
+
+    @Test
+    fun theMoveAsksForTheOpenUndoForEachRecord() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick("a.jpg"), TestPick("b.jpg"), TestPick("c.jpg"))
+        crypto.getRecoveryKey()
+
+        assertTrue(keyMove.run())
+
+        assertEquals(3, asked)
     }
 
     @Test

@@ -15,6 +15,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -419,7 +420,11 @@ class FileAdds(
             val total = readOrNull { waiting.picked.reportedSize() }
             show(waiting) { it.copy(name = name, total = total) }
             fileKeys.withLock { copyAndWrite(waiting, name, type, startBytes) }?.let(tell)
-        } catch (_: SQLException) {
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // A database that refuses, a full disk while the first file key is stored, or anything else: the file is
+            // not added, its part and stream are gone, and the files after it still wait their turn.
             tell(AddProblem.CouldNotAdd(FileText.name(readOrNull { waiting.picked.name() })))
         }
     }
@@ -433,6 +438,9 @@ class FileAdds(
                 files.wrap(fileId, key)
             } catch (_: BlobException) {
                 return AddProblem.KeysNotUsable
+            } catch (_: IOException) {
+                // The first file key of an app with no recovery key is stored here: the phone may be full.
+                return AddProblem.CouldNotAdd(name)
             }
             val input = try {
                 waiting.picked.open()
@@ -446,7 +454,7 @@ class FileAdds(
             val size = (copied as Copied.Whole).size
             val added = try {
                 repository.addFile(waiting.noteId, fileId, name, type, size, wrapped)
-            } catch (failed: SQLException) {
+            } catch (failed: Exception) {
                 repository.store.remove(fileId)
                 throw failed
             }

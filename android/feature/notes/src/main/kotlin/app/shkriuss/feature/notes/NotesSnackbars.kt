@@ -43,6 +43,20 @@ val NotesMessage.offeredUndo: Undo?
     }
 
 /**
+ * The turns that the making and the press of an **Undo** take, so that a
+ * write that gives a record a new change number, such as the move of the
+ * file keys, never comes between them for a record of that Undo.
+ */
+interface UndoTurns {
+    /**
+     * Runs [action] for the record [id] in a turn of its own, unless the
+     * record belongs to the Undo that is open: then it returns null and
+     * runs nothing.
+     */
+    suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T?
+}
+
+/**
  * The one snackbar of Notes, which the list, an open note and the image
  * view share, and the end of its **Undo** (docs/apps/notes/spec.md,
  * "Removing a file, and the wipe", point 2). The Undo ends when its
@@ -51,21 +65,42 @@ val NotesMessage.offeredUndo: Undo?
  * the destination changes ([endUndo]). If Notes stops, the next start
  * wipes. Then Notes wipes the records of that action that are still
  * deleted, and goes on with the move of the file keys ([afterUndo]).
+ *
+ * The write that makes an Undo and its snackbar take one turn ([offer]),
+ * and so does a press of Undo and its write. The move of the file keys
+ * seals each record in a turn of its own and leaves alone the records of
+ * the open Undo ([unlessInOpenUndo]), so it never gives such a record a
+ * new change number, which would stop the Undo
+ * (spec, "Before the recovery key: the file key move", point 3).
  */
 class NotesSnackbars(
     private val repository: NotesRepository,
     private val afterUndo: suspend () -> Unit,
     private val scope: CoroutineScope,
     private val work: CoroutineContext,
-) {
+) : UndoTurns {
     private val shown = MutableStateFlow<NotesMessage?>(null)
+    private val turns = Mutex()
 
     /** The snackbar that shows now, or null. */
     val current: StateFlow<NotesMessage?> = shown.asStateFlow()
 
-    /** The records of the Undo that is open now. The move of the file keys leaves them alone: a new change number would stop it. */
+    /** The records of the Undo that is open now. */
     val openUndoIds: Set<String>
         get() = shown.value?.offeredUndo?.ids.orEmpty()
+
+    /**
+     * Runs [write], an action with **Undo** such as **Delete note**, and
+     * shows the snackbar it gives, in one turn. Null when it wrote
+     * nothing. A refusal of the database goes to the caller.
+     */
+    suspend fun offer(write: suspend () -> NotesMessage?): NotesMessage? = turns.withLock {
+        write()?.also(::show)
+    }
+
+    override suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T? = turns.withLock {
+        if (id in openUndoIds) null else action()
+    }
 
     /** Shows [message] in place of the snackbar that shows now, whose Undo then ends. */
     fun show(message: NotesMessage) {
@@ -89,14 +124,18 @@ class NotesSnackbars(
     fun undo() {
         val message = shown.value ?: return
         val undo = message.offeredUndo ?: return
-        if (!shown.compareAndSet(message, null)) return
         scope.launch(work) {
-            try {
-                repository.undo(undo)
-            } catch (_: SQLException) {
-                show(NotesMessage.CouldNotChange)
+            val pressed = turns.withLock {
+                // Another snackbar may have taken its place meanwhile: then that ended the Undo, and the press counts for nothing.
+                if (!shown.compareAndSet(message, null)) return@withLock false
+                try {
+                    repository.undo(undo)
+                } catch (_: SQLException) {
+                    show(NotesMessage.CouldNotChange)
+                }
+                true
             }
-            end(undo)
+            if (pressed) end(undo)
         }
     }
 
@@ -132,7 +171,8 @@ class NotesSnackbars(
  * For each file whose wrapped key is not sealed by the current key,
  * deleted ones that are not wiped too, it seals the key again, one record
  * per transaction, with `updatedAt` as it was. It leaves alone the
- * records of the Undo that is still open ([openUndo]). Only when every
+ * records of the Undo that is still open, asked for each record in the
+ * turn of the Undo ([undoTurns]). Only when every
  * such key is sealed again, holding [fileKeys] so that no add runs, does
  * it call `finishFileKeyMove()`. A key that cannot be sealed again keeps
  * the move pending: Notes never ends it by itself.
@@ -141,7 +181,7 @@ class FileKeyMove(
     private val repository: NotesRepository,
     private val crypto: ShkCrypto,
     private val fileKeys: Mutex,
-    private val openUndo: () -> Set<String>,
+    private val undoTurns: UndoTurns,
     private val work: CoroutineContext,
 ) {
     private val moving = Mutex()
@@ -169,9 +209,10 @@ class FileKeyMove(
         val files = crypto.files
         val needsNewSeal = { wrapped: ByteArray -> !files.isSealedByCurrentKey(wrapped) }
         var allSealed = true
-        repository.filesToSealAgain(openUndo(), needsNewSeal).forEach { id ->
+        repository.filesToSealAgain(emptySet(), needsNewSeal).forEach { id ->
             try {
-                repository.sealAgain(id, needsNewSeal, files::sealAgain)
+                // Asked again for each record, in the turn of the Undo: an Undo made meanwhile keeps its change numbers.
+                undoTurns.unlessInOpenUndo(id) { repository.sealAgain(id, needsNewSeal, files::sealAgain) }
             } catch (_: BlobException) {
                 // Damaged, or sealed by a key that is gone: the move stays pending (spec, point 5).
                 allSealed = false

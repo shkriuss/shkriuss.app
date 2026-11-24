@@ -218,6 +218,20 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun aNoteWhoseRemovedFileIsNotWipedYetIsNotEmpty() = runBlocking {
+        val id = phone.note("Trip").also { repository.save(it, "", "") }
+        val ticket = file(id)
+        val undo = checkNotNull(repository.removeFile(ticket))
+
+        assertFalse("The Undo of the file is still open", repository.deleteIfEmpty(id))
+        assertTrue(repository.undo(undo))
+        assertNull(storedFile(ticket)?.record?.deletedAt)
+
+        repository.wipe(checkNotNull(repository.removeFile(ticket)))
+        assertTrue("Once the file is wiped, the note is empty", repository.deleteIfEmpty(id))
+    }
+
+    @Test
     fun aFileOfANoteThatWasDeletedWhileItWasCopiedIsNotWritten() = runBlocking {
         val id = phone.note()
         checkNotNull(repository.deleteNote(id))

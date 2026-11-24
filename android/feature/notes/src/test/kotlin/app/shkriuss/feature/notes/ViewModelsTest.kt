@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import org.junit.After
@@ -328,6 +329,67 @@ class ViewModelsTest {
 
         eventually { stored(id)?.let(NoteRules::isWiped) == true }
         eventually { keyMoves.size == 1 }
+    }
+
+    @Test
+    fun aSnackbarWhoseTimeRanOutEndsItsUndo() {
+        val id = phone.note("Trip", "Secret")
+        val message = NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(id) }))
+        snackbars.show(message)
+
+        snackbars.gone(NotesMessage.CouldNotChange)
+        assertEquals("Another snackbar's time says nothing about this one", message, snackbars.current.value)
+        snackbars.gone(message)
+
+        assertNull(snackbars.current.value)
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+        eventually { keyMoves.size == 1 }
+    }
+
+    @Test
+    fun anUndoPressedAfterAnotherSnackbarTookItsPlaceCountsForNothing() {
+        val id = phone.note("Trip", "Secret")
+        val message = NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(id) }))
+        snackbars.show(message)
+
+        snackbars.show(NotesMessage.CouldNotChange)
+        snackbars.undo()
+
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+        assertNotNull(stored(id)?.record?.deletedAt)
+        assertEquals(NotesMessage.CouldNotChange, snackbars.current.value)
+    }
+
+    @Test
+    fun removingAFileThenClosingTheEmptyNoteKeepsTheNoteSoThatUndoBringsTheFileBack() {
+        val id = phone.note("Photo", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        note.onTitleChange("")
+
+        note.removeFile(file)
+        snackbars.current.await { it is NotesMessage.FileRemoved }
+        note.close()
+        note.state.await { it.closed }
+        snackbars.undo()
+
+        eventually { runBlocking { repository.filesOf(id).first() }.size == 1 }
+        assertNull(stored(id)?.record?.deletedAt)
+        assertEquals("", stored(id)?.title)
+    }
+
+    @Test
+    fun leavingTheScreenSavesWhatIsTyped() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.onBodyChange(TextEdit("Passport", 8))
+
+        note.leftScreen()
+
+        eventually { stored(id)?.body == "Passport" }
     }
 
     @Test

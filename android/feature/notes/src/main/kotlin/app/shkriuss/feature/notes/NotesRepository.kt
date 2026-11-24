@@ -12,6 +12,7 @@ import app.shkriuss.feature.notes.data.NoteEntity
 import app.shkriuss.feature.notes.data.NotesDatabase
 import app.shkriuss.feature.notes.data.checkpoint
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -262,19 +263,21 @@ class NotesRepository(
             undo.files.mapNotNull { step -> fileWriter.wipe(step.id, NoteRules::wiped)?.record?.id }
         }
         streams.withLock { wiped.forEach(store::remove) }
-        tryCheckpoint()
+        checkpointSoon()
     }
 
     /**
      * Deletes and wipes the note [id] when it is empty as it closes: no
-     * title, no text, no shown file (spec, "Saving", point 3). The caller
-     * knows that no file is being added to it. True if it was.
+     * title, no text, no file (spec, "Saving", point 3). A removed file
+     * that is not wiped yet counts as a file: its Undo may still bring it
+     * back, and it would find its note deleted. The caller knows that no
+     * file is being added to it. True if it was.
      */
     suspend fun deleteIfEmpty(id: String): Boolean = withContext(NonCancellable) {
         val deleted = database.withWriteTransaction<Boolean> {
             val stored = notes.find(id)
             if (stored == null || stored.record.isDeleted || stored.title.isNotEmpty() || stored.body.isNotEmpty() ||
-                attachments.shownCountOf(id) > 0
+                attachments.unwipedCountOf(id) > 0
             ) {
                 false
             } else {
@@ -309,7 +312,18 @@ class NotesRepository(
         size: Long,
         wrappedKey: ByteArray,
     ): FileAdded = withContext(NonCancellable) {
-        val added = database.withWriteTransaction<FileAdded> {
+        val added = try {
+            writeFile(noteId, fileId, name, mimeType, size, wrappedKey)
+        } catch (givenUp: IllegalArgumentException) {
+            // The new note was given up between the check and its create: the create refuses an ID no longer reserved.
+            if (notes.find(noteId) == null && !isNewNote(noteId)) FileAdded.NOTE_DELETED else throw givenUp
+        }
+        if (added == FileAdded.ADDED) noteWriter.release(noteId)
+        added
+    }
+
+    private suspend fun writeFile(noteId: String, fileId: String, name: String, mimeType: String, size: Long, wrappedKey: ByteArray): FileAdded =
+        database.withWriteTransaction {
             val note = notes.find(noteId)
             when {
                 note == null && !isNewNote(noteId) -> return@withWriteTransaction FileAdded.NOTE_DELETED
@@ -324,9 +338,6 @@ class NotesRepository(
             }
             FileAdded.ADDED
         }
-        if (added == FileAdded.ADDED) noteWriter.release(noteId)
-        added
-    }
 
     /**
      * What Notes does at every start, before a backup lists its records,
@@ -351,7 +362,23 @@ class NotesRepository(
             attachments.deletedNotWiped().forEach { fileWriter.wipe(it.record.id, NoteRules::wiped) }
         }
         val removed = removeUnneededStreams()
-        tryCheckpoint() && removed
+        checkpointSoon() && removed
+    }
+
+    /**
+     * Checkpoints the write-ahead file. A checkpoint that cannot finish,
+     * because a read stays open past SQLite's busy time, is tried again
+     * shortly, three times; then at the next wipe or start
+     * (spec, "Removing a file, and the wipe", point 4). True once it
+     * finished.
+     */
+    private suspend fun checkpointSoon(): Boolean {
+        if (tryCheckpoint()) return true
+        CHECKPOINT_RETRY_MILLIS.forEach { pause ->
+            delay(pause)
+            if (tryCheckpoint()) return true
+        }
+        return false
     }
 
     /** Checkpoints the write-ahead file ([checkpoint]). False if it could not finish or failed: the next wipe or start tries again. */
@@ -400,6 +427,11 @@ class NotesRepository(
     /** Raises the `fileChanges` of the note [id], if it is shown. Inside the caller's transaction. */
     private suspend fun raiseFileChanges(id: String): NoteEntity? =
         noteWriter.update(id) { it.copy(fileChanges = NoteRules.nextFileChanges(it.fileChanges)) }
+
+    private companion object {
+        /** The pauses before each new try of a checkpoint that could not finish. */
+        val CHECKPOINT_RETRY_MILLIS = listOf(1_000L, 5_000L, 30_000L)
+    }
 
     /** [row], checked against the limits: the repository never writes a value outside them. */
     private fun stored(row: NoteEntity): NoteEntity = row.also { check(NoteRules.isStored(it)) { "A note outside its limits" } }

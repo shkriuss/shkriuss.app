@@ -339,8 +339,8 @@ class NoteViewModel(
         viewModelScope.launch(work) {
             saveNow()
             try {
-                val undo = repository.deleteNote(noteId)
-                if (undo == null) repository.giveUpNewNote(noteId) else snackbars.show(NotesMessage.NoteDeleted(undo))
+                val deleted = snackbars.offer { repository.deleteNote(noteId)?.let(NotesMessage::NoteDeleted) }
+                if (deleted == null) repository.giveUpNewNote(noteId)
                 shown.update { it.copy(closed = true) }
             } catch (_: SQLException) {
                 closing = false
@@ -358,7 +358,7 @@ class NoteViewModel(
     fun removeFile(file: NoteFile) {
         viewModelScope.launch(work) {
             try {
-                repository.removeFile(file.id)?.let { snackbars.show(NotesMessage.FileRemoved(it)) }
+                snackbars.offer { repository.removeFile(file.id)?.let(NotesMessage::FileRemoved) }
             } catch (_: SQLException) {
                 snackbars.show(NotesMessage.CouldNotChange)
             }

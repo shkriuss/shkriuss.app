@@ -94,6 +94,17 @@ interface AttachmentDao : RecordDao<AttachmentEntity> {
     @Query("SELECT * FROM attachment WHERE noteId = :noteId AND deletedAt IS NULL")
     suspend fun shownOf(noteId: String): List<AttachmentEntity>
 
+    /**
+     * How many files of the note [noteId] are not wiped: shown, or removed
+     * while their Undo may still bring them back. A note with one is not
+     * empty when it closes.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM attachment WHERE noteId = :noteId AND (deletedAt IS NULL " +
+            "OR name != '' OR mimeType != '' OR size != 0 OR length(wrappedKey) != 0)",
+    )
+    suspend fun unwipedCountOf(noteId: String): Int
+
     /** How many files of the note [noteId] are not deleted, for the limit of 20. */
     @Query("SELECT COUNT(*) FROM attachment WHERE noteId = :noteId AND deletedAt IS NULL")
     suspend fun shownCountOf(noteId: String): Int
