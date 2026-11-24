@@ -5,7 +5,7 @@ and its notice.
 
 - Status: complete for Water, Reminders and Tasks: everything that
   ships in the release APK of Water `1.0.2`, of Reminders `1.0.1` and
-  of Tasks `1.0.0-alpha.1`, and the screen that shows it in each app.
+  of Tasks `1.0.0`, and the screen that shows it in each app.
   [How to check again](#how-to-check-again) says how to keep it right.
 - The project's own licences are in
   [ADR 0018](../adr/0018-licences.md).
@@ -54,8 +54,8 @@ that each app keeps its own list, and that no shared module holds it.
 ## What ships in Tasks
 
 The same seven parts, in the same versions, in the release APK of
-Tasks `1.0.0-alpha.1`, which is not released. Its release runtime class
-path is the same as Water's and Reminders', and so is what R8 removes
+Tasks `1.0.0`. Its release runtime class path is the same as Water's
+and Reminders', and so is what R8 removes
 ([How the list is made](#how-the-list-is-made)).
 
 The app's list is `Licences` in `android/feature/tasks`, with its own
@@ -400,7 +400,7 @@ R8 removes, no Google Play services, no `WebView`, no native library, 54
 files `META-INF/*.version`, and the three licence texts by their
 SHA-256.
 
-### What the APK of Tasks 1.0.0-alpha.1 holds
+### What the APK of Tasks 1.0.0 holds
 
 The same as Water's: the 110 modules on the class path, one dex file
 with classes of the seven parts and of none of the seven libraries that
