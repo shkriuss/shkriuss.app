@@ -629,6 +629,11 @@ for each segment.
    ([Removing a file, and the wipe](#removing-a-file-and-the-wipe),
    point 3). A stop before that is mended at the next start.
 3. The open screens show the restored notes at once.
+4. A wipe does not change which edit wins. A note that this phone
+   deleted and wiped comes back when the backup holds a later edit of
+   it, made on another copy of Notes, with that copy's text and files.
+   This is the owner's decision
+   ([Decided by the owner](#decided-by-the-owner), point 5).
 
 ### Size
 
@@ -712,7 +717,7 @@ files through the system picker, search. The owner asked this page to
 give every value its limits, and to say what happens when Notes stops
 between two writes, when a write fails, when a press comes twice or
 late, and when the clock or the time zone changes
-([When things go wrong](#when-things-go-wrong)). And four answers:
+([When things go wrong](#when-things-go-wrong)). And five answers:
 
 1. **Formatting** is marks in the plain text, shown styled as you type,
    with the marks visible: headings, bold, italic, bullets, numbers and
@@ -727,6 +732,10 @@ late, and when the clock or the time zone changes
    its files are wiped, with a new `RecordWriter` write for every app
    and [ADR 0042](../../adr/0042-wiping-the-content-of-deleted-records.md)
    ([Removing a file, and the wipe](#removing-a-file-and-the-wipe)).
+5. **A wiped note and a later edit elsewhere**: the newest edit wins, as
+   in every restore. A backup from another copy of Notes that edited the
+   note after this phone wiped it brings the note back
+   ([After a restore](#after-a-restore), point 4).
 
 ## Assumptions
 
