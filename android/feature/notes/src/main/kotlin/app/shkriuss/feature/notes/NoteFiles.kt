@@ -9,6 +9,7 @@ import app.shkriuss.core.crypto.BlobAnswer
 import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.FileCrypto
 import app.shkriuss.core.crypto.FileKey
+import java.io.File
 import java.io.FileInputStream
 import java.io.FilterInputStream
 import java.io.FileNotFoundException
@@ -144,6 +145,8 @@ class FileReader(
     /** True if a keyset file is damaged: then no file opens until the recovery key repairs it or the files are given up. */
     private val keysetIsDamaged: () -> Boolean,
     private val work: CoroutineContext,
+    /** Opens the stream file of a file for reading. Tests pass one that fails. */
+    private val openStream: (File) -> InputStream = ::FileInputStream,
 ) {
     private val copying = Mutex()
 
@@ -182,7 +185,7 @@ class FileReader(
     suspend fun open(file: NoteFile): InputStream = withContext(work) {
         val wrapped = repository.wrappedKeyOf(file.id) ?: throw FileNotFoundException("The file is deleted")
         val key = files.unwrap(file.id, wrapped)
-        val input = FileInputStream(repository.store.stream(file.id))
+        val input = openStream(repository.store.stream(file.id))
         val decrypting = try {
             key.decryptingStream(file.id, input)
         } catch (failed: Exception) {
@@ -244,50 +247,61 @@ class FileReader(
         } catch (_: SQLException) {
             return Outcome.FAILED
         }
-        return source.use { input ->
-            val output = try {
-                target.open()
-            } catch (_: Exception) {
-                // A provider that refuses to write fails the copy as a full disk does.
-                return Outcome.FAILED
-            }
+        try {
+            return writeCopy(source, file, target, progress)
+        } finally {
             try {
-                var written = 0L
-                val buffer = ByteArray(BUFFER)
-                while (true) {
-                    val read = try {
-                        input.read(buffer)
-                    } catch (damaged: BlobException) {
-                        return if (damaged.answer == BlobAnswer.DAMAGED_OR_CHANGED) Outcome.DAMAGED else Outcome.FAILED
-                    } catch (_: IOException) {
-                        return Outcome.FAILED
-                    }
-                    if (read < 0) break
-                    output.write(buffer, 0, read)
-                    written += read
-                    progress(written)
-                }
-                output.close()
-                // A stream that decrypts to another length than its record says is not the file that was picked.
-                if (written == file.size) {
-                    Outcome.SAVED
-                } else {
-                    foundDamaged += file.id
-                    Outcome.DAMAGED
-                }
+                source.close()
             } catch (_: IOException) {
-                Outcome.FAILED
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                // A provider that fails in its own way while it is written, such as with a SecurityException.
-                Outcome.FAILED
-            } finally {
-                try {
-                    output.close()
+                // The reads and writes gave the copy its outcome: a close that fails after them changes nothing.
+            }
+        }
+    }
+
+    /** Writes [input], the decrypted stream of [file], into [target]. */
+    private fun writeCopy(input: InputStream, file: NoteFile, target: CopyTarget, progress: (Long) -> Unit): Outcome {
+        val output = try {
+            target.open()
+        } catch (_: Exception) {
+            // A provider that refuses to write fails the copy as a full disk does.
+            return Outcome.FAILED
+        }
+        return try {
+            var written = 0L
+            val buffer = ByteArray(BUFFER)
+            while (true) {
+                val read = try {
+                    input.read(buffer)
+                } catch (damaged: BlobException) {
+                    return if (damaged.answer == BlobAnswer.DAMAGED_OR_CHANGED) Outcome.DAMAGED else Outcome.FAILED
                 } catch (_: IOException) {
-                    // Closed already, or the failure is reported.
+                    return Outcome.FAILED
                 }
+                if (read < 0) break
+                output.write(buffer, 0, read)
+                written += read
+                progress(written)
+            }
+            output.close()
+            // A stream that decrypts to another length than its record says is not the file that was picked.
+            if (written == file.size) {
+                Outcome.SAVED
+            } else {
+                foundDamaged += file.id
+                Outcome.DAMAGED
+            }
+        } catch (_: IOException) {
+            Outcome.FAILED
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // A provider that fails in its own way while it is written, such as with a SecurityException.
+            Outcome.FAILED
+        } finally {
+            try {
+                output.close()
+            } catch (_: IOException) {
+                // Closed already, or the failure is reported.
             }
         }
     }

@@ -71,7 +71,9 @@ interface UndoTurns {
  * seals each record in a turn of its own and leaves alone the records of
  * the open Undo ([inTurn]), so it never gives such a record a
  * new change number, which would stop the Undo
- * (spec, "Before the recovery key: the file key move", point 3).
+ * (spec, "Before the recovery key: the file key move", point 3). An Undo
+ * that ended counts as open until its wipe is done, because the wipe
+ * leaves alone a record whose change number moved.
  */
 class NotesSnackbars(
     private val repository: NotesRepository,
@@ -82,12 +84,15 @@ class NotesSnackbars(
     private val shown = MutableStateFlow<NotesMessage?>(null)
     private val turns = Mutex()
 
+    /** The Undos that ended and whose wipe is not done yet. */
+    private val ending = mutableListOf<Undo>()
+
     /** The snackbar that shows now, or null. */
     val current: StateFlow<NotesMessage?> = shown.asStateFlow()
 
-    /** The records of the Undo that is open now. */
+    /** The records of the Undo that is open now, and of those that ended and whose wipe is not done yet. */
     val openUndoIds: Set<String>
-        get() = shown.value?.offeredUndo?.ids.orEmpty()
+        get() = shown.value?.offeredUndo?.ids.orEmpty() + synchronized(ending) { ending.flatMap { it.ids } }
 
     /**
      * Runs [write], an action with **Undo** such as **Delete note**, and
@@ -104,16 +109,29 @@ class NotesSnackbars(
 
     /** Shows [message] in place of the snackbar that shows now, whose Undo then ends. */
     fun show(message: NotesMessage) {
-        var before: NotesMessage?
         do {
-            before = shown.value
-        } while (!shown.compareAndSet(before, message))
-        before?.offeredUndo?.let(::ended)
+            val before = shown.value
+        } while (!replace(before, message))
     }
 
     /** The snackbar [message] went by itself: its time ran out, or it was swiped away. Its Undo ends. */
     fun gone(message: NotesMessage) {
-        if (shown.compareAndSet(message, null)) message.offeredUndo?.let(::ended)
+        replace(message, null)
+    }
+
+    /**
+     * Shows [next] in place of [before], if [before] still shows, and ends
+     * the Undo of [before]. Its records count as ending before they stop
+     * counting as open, so the move never finds them as neither.
+     */
+    private fun replace(before: NotesMessage?, next: NotesMessage?): Boolean {
+        val undo = before?.offeredUndo
+        undo?.let(::startEnding)
+        val replaced = shown.compareAndSet(before, next)
+        if (undo != null) {
+            if (replaced) ended(undo) else stopEnding(undo)
+        }
+        return replaced
     }
 
     /**
@@ -126,8 +144,12 @@ class NotesSnackbars(
         val undo = message.offeredUndo ?: return
         scope.launch(work) {
             val pressed = turns.withLock {
+                startEnding(undo)
                 // Another snackbar may have taken its place meanwhile: then that ended the Undo, and the press counts for nothing.
-                if (!shown.compareAndSet(message, null)) return@withLock false
+                if (!shown.compareAndSet(message, null)) {
+                    stopEnding(undo)
+                    return@withLock false
+                }
                 try {
                     repository.undo(undo)
                 } catch (_: SQLException) {
@@ -142,20 +164,29 @@ class NotesSnackbars(
     /** Notes leaves the screen, or the destination changes: a snackbar with Undo goes, and its Undo ends. */
     fun endUndo() {
         val message = shown.value ?: return
-        val undo = message.offeredUndo ?: return
-        if (shown.compareAndSet(message, null)) ended(undo)
+        if (message.offeredUndo != null) replace(message, null)
     }
+
+    private fun startEnding(undo: Undo) = synchronized(ending) { ending += undo }
+
+    private fun stopEnding(undo: Undo) = synchronized(ending) { ending.remove(undo) }
 
     private fun ended(undo: Undo) {
         scope.launch(work) { end(undo) }
     }
 
-    /** Wipes what is still deleted of [undo]. A wipe that fails is tried again at the next start, and nothing shows. */
+    /**
+     * Wipes what is still deleted of [undo]. A wipe that fails is tried
+     * again at the next start, and nothing shows. Only then do its records
+     * stop counting as open.
+     */
     private suspend fun end(undo: Undo) {
         try {
             repository.wipe(undo)
         } catch (_: SQLException) {
             // The next start wipes it (spec, "A write fails").
+        } finally {
+            stopEnding(undo)
         }
         afterUndo()
     }

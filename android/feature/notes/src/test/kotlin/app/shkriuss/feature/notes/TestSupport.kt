@@ -19,6 +19,10 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.util.concurrent.Executor
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -171,6 +175,23 @@ internal fun eventually(condition: () -> Boolean) {
     while (!condition()) {
         check(System.currentTimeMillis() < end) { "Waited ten seconds in vain" }
         Thread.sleep(5)
+    }
+}
+
+/** A dispatcher whose work waits until the test runs it, so that a test can stop between two steps of a coroutine. */
+internal class Held {
+    private val queued = LinkedBlockingQueue<Runnable>()
+
+    /** The dispatcher: what it is given waits in a queue. */
+    val dispatcher = Executor { queued.add(it) }.asCoroutineDispatcher()
+
+    /** Runs the waiting work, and the work that it gives, until [condition] is true, for up to ten seconds. */
+    fun runUntil(condition: () -> Boolean) {
+        val end = System.currentTimeMillis() + 10_000
+        while (!condition()) {
+            check(System.currentTimeMillis() < end) { "Waited ten seconds in vain" }
+            queued.poll(5, TimeUnit.MILLISECONDS)?.run()
+        }
     }
 }
 

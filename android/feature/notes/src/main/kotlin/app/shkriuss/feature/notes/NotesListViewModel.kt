@@ -3,7 +3,6 @@ package app.shkriuss.feature.notes
 import android.database.SQLException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -70,7 +69,10 @@ class NotesListViewModel(
 ) : ViewModel() {
     private val typed = MutableStateFlow("")
     private val opening = MutableStateFlow<String?>(null)
-    private val asking = AtomicBoolean(false)
+
+    /** True while a press of **New note** reserves. It and [opening] change together, under [pressLock]. */
+    private var asking = false
+    private val pressLock = Any()
 
     /** What the field holds now, as typed. */
     val query: StateFlow<String> = typed
@@ -109,18 +111,23 @@ class NotesListViewModel(
      * one note opens.
      */
     fun newNote() {
-        if (opening.value != null || !asking.compareAndSet(false, true)) return
+        synchronized(pressLock) {
+            if (opening.value != null || asking) return
+            asking = true
+        }
         viewModelScope.launch(work) {
+            var reserved: String? = null
             try {
-                val reserved = try {
-                    repository.reserveNewNote()
-                } catch (_: SQLException) {
-                    snackbars.show(NotesMessage.CouldNotChange)
-                    return@launch
-                }
-                if (reserved == null) snackbars.show(NotesMessage.NotesFull) else opening.value = reserved
+                reserved = repository.reserveNewNote()
+                if (reserved == null) snackbars.show(NotesMessage.NotesFull)
+            } catch (_: SQLException) {
+                snackbars.show(NotesMessage.CouldNotChange)
             } finally {
-                asking.set(false)
+                // The note to open and the end of the press show together, so a press just after it is not lost.
+                synchronized(pressLock) {
+                    asking = false
+                    if (reserved != null) opening.value = reserved
+                }
             }
         }
     }

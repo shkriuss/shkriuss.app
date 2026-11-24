@@ -77,7 +77,7 @@ class ViewModelsTest {
 
     private fun list() = NotesListViewModel(repository, snackbars, Dispatchers.IO, wait)
 
-    private fun open(id: String) = NoteViewModel(repository, adds, reader, snackbars, id, Dispatchers.IO, wait) { elapsed }
+    private fun open(id: String) = NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait) { elapsed }
 
     private fun stored(id: String): NoteEntity? = runBlocking { phone.database.notes().find(id) }
 
@@ -466,6 +466,75 @@ class ViewModelsTest {
 
         assertNull(snackbars.current.value)
         eventually { stored(id)?.let(NoteRules::isWiped) == true }
+    }
+
+    @Test
+    fun anUndoThatEndedCountsAsOpenUntilItsWipeIsDone() {
+        val id = phone.note("Trip", "Secret")
+        val held = Held()
+        val heldSnackbars = NotesSnackbars(repository, {}, scope, held.dispatcher)
+        val message = NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(id) }))
+        heldSnackbars.show(message)
+
+        heldSnackbars.gone(message)
+
+        // The wipe has not run yet. The move of the file keys must still leave the note alone: a new change number would
+        // make the wipe pass it over. (The move gets these ids in its turn; the test reads them without the turn, which
+        // the held work may hold.)
+        assertEquals(setOf(id), heldSnackbars.openUndoIds)
+        held.runUntil { stored(id)?.let(NoteRules::isWiped) == true }
+        held.runUntil { heldSnackbars.openUndoIds.isEmpty() }
+    }
+
+    @Test
+    fun anUndoPressedCountsAsOpenUntilTheWipeOfWhatItDidNotBringBack() {
+        val id = phone.note("Trip", "Secret")
+        val held = Held()
+        val heldSnackbars = NotesSnackbars(repository, {}, scope, held.dispatcher)
+        heldSnackbars.show(NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(id) })))
+
+        heldSnackbars.undo()
+        held.runUntil { stored(id)?.record?.deletedAt == null }
+
+        assertEquals(setOf(id), heldSnackbars.openUndoIds)
+        held.runUntil { heldSnackbars.openUndoIds.isEmpty() }
+    }
+
+    @Test
+    fun theSaveWhenNotesLeavesTheScreenGoesOnWhenTheScreenGoes() {
+        val id = repository.reserveNoteId()
+        assertNull("A new note writes nothing before its first save", stored(id))
+        val held = Held()
+        val store = ViewModelStore()
+        val note = ViewModelProvider.create(
+            store,
+            viewModelFactory { initializer { NoteViewModel(repository, adds, reader, snackbars, id, scope, held.dispatcher, wait) { elapsed } } },
+        )[NoteViewModel::class]
+        held.runUntil { !note.state.value.loading }
+        note.onTitleChange("Trip")
+
+        note.leftScreen()
+        // The screen goes before the save could start.
+        store.clear()
+
+        held.runUntil { stored(id) != null && !repository.isNewNote(id) }
+        assertEquals("Trip", stored(id)?.title)
+    }
+
+    @Test
+    fun whatIsTypedIsSavedWhenTheScreenGoesBeforeItsSave() {
+        val id = repository.reserveNoteId()
+        assertNull("A new note writes nothing before its first save", stored(id))
+        val store = ViewModelStore()
+        val note = ViewModelProvider.create(store, viewModelFactory { initializer { open(id) } })[NoteViewModel::class]
+        note.state.await { !it.loading }
+        note.onBodyChange(TextEdit("Passport", 8))
+        eventually { pauses.isNotEmpty() }
+
+        store.clear()
+
+        eventually { stored(id)?.body == "Passport" }
+        eventually { !repository.isNewNote(id) }
     }
 
     @Test

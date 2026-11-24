@@ -3,6 +3,9 @@ package app.shkriuss.feature.notes
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.feature.notes.data.AttachmentEntity
 import java.io.File
+import java.io.FileInputStream
+import java.io.FilterInputStream
+import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -458,6 +461,26 @@ class NoteFilesTest {
         }
         assertEquals("A provider that fails in its own way", CopyResult.FAILED, reader.saveCopy(good, refusing))
         assertTrue(refusing.deleted)
+    }
+
+    @Test
+    fun aStreamThatFailsOnlyAsItClosesStillGivesTheCopyItsResult() = runBlocking {
+        val id = phone.note()
+        val pick = TestPick(bytes = ByteArray(1_500_000) { (it % 7).toByte() })
+        add(id, pick)
+        val failingClose = FileReader(repository, crypto.files, { false }, Dispatchers.IO) { file ->
+            object : FilterInputStream(FileInputStream(file)) {
+                override fun close() {
+                    super.close()
+                    throw IOException("The stream file did not close")
+                }
+            }
+        }
+        val target = TestTarget()
+
+        assertEquals(CopyResult.SAVED, failingClose.saveCopy(shown(id).single(), target))
+        assertArrayEquals(pick.bytes, target.written.toByteArray())
+        assertEquals("The next copy is not busy", CopyResult.SAVED, failingClose.saveCopy(shown(id).single(), TestTarget()))
     }
 
     @Test

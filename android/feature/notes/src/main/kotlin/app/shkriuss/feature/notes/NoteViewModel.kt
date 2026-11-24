@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -70,7 +71,10 @@ data class NoteState(
  * while changes go on without a pause, and when the note closes or Notes
  * leaves the screen or locks ([saveNow]). [wait] and [elapsed] are the
  * pause and the clock of those times, which tests control. [work] runs
- * the reads and writes.
+ * the reads and writes. [lasting] is a scope that outlives the screen,
+ * the one of `NotesServices`: the save when Notes leaves the screen, and
+ * the one when the screen goes, run there, so that the end of this
+ * ViewModel never cuts them off.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NoteViewModel(
@@ -80,6 +84,7 @@ class NoteViewModel(
     private val snackbars: NotesSnackbars,
     /** The note that is open. */
     val noteId: String,
+    private val lasting: CoroutineScope,
     private val work: CoroutineContext = Dispatchers.IO,
     private val wait: suspend (Long) -> Unit = { delay(it) },
     private val elapsed: () -> Long = SystemClock::elapsedRealtime,
@@ -273,10 +278,10 @@ class NoteViewModel(
         true
     }
 
-    /** Notes leaves the screen or locks: what is typed is saved. */
+    /** Notes leaves the screen or locks: what is typed is saved, also if the screen goes meanwhile. */
     fun leftScreen() {
         cancelTimer()
-        viewModelScope.launch(work) { saveNow() }
+        lasting.launch(work) { saveNow() }
     }
 
     /**
@@ -301,9 +306,17 @@ class NoteViewModel(
         }
     }
 
-    /** A new note that the screen left without closing it is given up once no add can make it any more: it was never made. */
+    /**
+     * The screen went without closing the note: what is typed and not
+     * saved yet is saved. Then a new note is given up once no add can make
+     * it any more; one that the save made stays.
+     */
     override fun onCleared() {
-        if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
+        cancelTimer()
+        lasting.launch(work) {
+            saveAll()
+            if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
+        }
     }
 
     /** **Try again** in "This note is not saved". */
