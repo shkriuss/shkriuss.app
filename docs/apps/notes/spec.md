@@ -176,7 +176,7 @@ these, and nothing else:
 |---|---|---|
 | `# ` | At the start of a line | The line is a heading |
 | `- ` | At the start of a line | A bullet |
-| A number from 1 to 999, `.`, a space | At the start of a line | A numbered item |
+| A number from 1 to 99,999, `.`, a space | At the start of a line | A numbered item. A text of 100,000 characters never needs a higher one. |
 | `- [ ] ` | At the start of a line | An open checklist item |
 | `- [x] ` or `- [X] ` | At the start of a line | A done checklist item |
 | `**text**` | Inside one line | Bold |
@@ -390,10 +390,12 @@ phone's time zone and format.
    deleted ones that are not wiped too, it seals the key again
    (`FileCrypto.sealAgain`) through the `RecordWriter` function for
    that, one record per transaction, with `updatedAt` as it was.
-4. Only when every such key is sealed again does Notes call
-   `finishFileKeyMove()`. A stop in the middle goes on at the next
-   start. Until then `core/crypto` refuses a backup and the app lock
-   ("file keys still moving").
+4. Only when every such key is sealed again, and no file is being added,
+   does Notes call `finishFileKeyMove()`. A file being added holds a key
+   wrapped before its record exists, so the move waits for every add to
+   end, and no add starts while the move finishes. A stop in the middle
+   goes on at the next start. Until then `core/crypto` refuses a backup
+   and the app lock ("file keys still moving").
 5. A key that cannot be sealed again keeps the move pending. Notes never
    ends it by itself:
    - A damaged `file-key-old` counts as absent, so none of the keys it
@@ -469,7 +471,7 @@ record needs, and the next start removes it.
 |---|---|
 | Another time zone | The last change shows in the new zone. |
 | Midnight, or a change of time, date or zone, while a screen is open | "14:05" becomes "Mon 16 Nov" as the day changes. |
-| The clock is set back | `updatedAt` still moves forward, so the order of the list stays right. A last change can show a time later than now. |
+| The clock is set back | A write moves a record's `updatedAt` past its own last value only, not past other records ([data.md](../../architecture/data.md#writing-records), point 8). So a note edited then can sort below notes changed earlier under the right clock. A last change can show a time later than now. |
 | An edit made under a clock far behind | A restore keeps the newest edit by `updatedAt`, so it can lose to an older one, as in every app. |
 
 Notes has no times of its own: no due day, no reminder, no timer but the
@@ -540,9 +542,12 @@ The same two records, wiped: `00 0000 00000000`, and
    snapshot that
    [backup-format.md](../../architecture/backup-format.md#open-questions)
    asks for (question 4).
-3. A file that is not deleted and has no stream on the phone is left out
-   and counted: "2 files are not on this phone and are not in this
-   backup."
+3. A file that is not deleted is left out and counted when it has no
+   stream on the phone, or when its stream is not 45 + `size` + 16 for
+   each segment long. Its record still goes in. So one damaged file
+   never makes the whole backup one that the restore refuses. The result
+   says: "2 files are not on this phone or are damaged, and are not in
+   this backup."
 4. The dialogs show a progress bar and the percent: "Writing the backup
    · 40%", then "Checking the backup · 40%". Without a known total, the
    circle. The screen stays on while a backup, its check or a restore
