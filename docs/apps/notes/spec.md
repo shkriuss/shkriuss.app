@@ -211,6 +211,7 @@ these, and nothing else:
 5. Enter at the end of a bullet, a numbered item or a checklist item
    starts the next line with the same mark: the next number, an open
    box. Enter on an item with no text after its mark removes the mark.
+   Enter after item 99,999 starts a line with no mark.
 6. A tap on the box of a checklist item, `[ ]`, `[x]` or `[X]`, ticks it or
    opens it again. The cursor does not move.
 
