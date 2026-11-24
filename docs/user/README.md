@@ -18,8 +18,8 @@ One guide per app:
 - [Tasks](tasks.md): keep the things you have to do in lists, with a
   due date, a repeat and a reminder. Everything on Today, Lists and
   Settings, ticks and Undo, the notifications, backup and restore, the
-  five permissions, and the known problems. Not on the hub website
-  until its first release.
+  five permissions, and the known problems of 1.0.0. On the hub
+  website at `/tasks/`.
 
 Pages:
 

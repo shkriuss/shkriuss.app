@@ -339,8 +339,7 @@ Tasks' keys. A backup then opens only with your 24 words.
 
 ## Known problems
 
-Tasks is not released yet. Its first version has these known problems
-and limits.
+Version 1.0.0 has these known problems and limits.
 
 Not known yet:
 
@@ -426,7 +425,7 @@ Other:
     them: "No backup was made" and the answer "No keys" of a restore.
     Their words were not checked at a large font size.
 
-Not in the first version:
+Not in version 1.0.0:
 
 - Subtasks, checklists, a note on a task, priorities, tags, an order you
   choose by hand, colours or icons for lists, archived lists, search and
