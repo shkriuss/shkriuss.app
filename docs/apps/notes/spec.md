@@ -145,7 +145,8 @@ no account and no network, and encrypts every file.
 ### Saving
 
 1. There is no Save button. Notes saves a note one second after the last
-   change, and when the note closes, another note opens, or Notes leaves
+   change, at least every 10 seconds while changes go on without a
+   pause, and when the note closes, another note opens, or Notes leaves
    the screen or locks. Each save is one transaction. A save with no
    change writes nothing.
 2. A new note writes nothing until it has a title, a text or a file.
@@ -289,7 +290,7 @@ and `core/crypto` are as in Water.
 | All files | At most 1 GB: 1,000,000,000 bytes, of files that are not deleted |
 | File name | 1 to 255 characters. A longer one keeps its first 255. |
 | Pinned | Off for a new note |
-| Saving | One second after the last change |
+| Saving | One second after the last change, and at least every 10 seconds while typing goes on |
 
 A count is not a limit of a value: a restore can bring more notes, more
 files in a note, or more than 1 GB. The counts stop only **New note** and
@@ -401,9 +402,11 @@ phone's time zone and format.
    write-ahead file and cuts it to zero, also after a stop between the
    wipe and the checkpoint. Cutting the file does not write over its old
    frames. A checkpoint that cannot finish, because a read is open, is
-   done at the next wipe or start.
-5. So after a wipe, no file of Notes holds the text, the name or the
-   wrapped key. What a wipe cannot reach: a backup made before it, which
+   tried again as soon as that read ends, and else at the next wipe or
+   start.
+5. So once the checkpoint after a wipe has run, no file of Notes holds
+   the text, the name or the wrapped key. Until then the write-ahead file
+   can still hold them. What a wipe cannot reach: a backup made before it, which
    still holds the text and the files; and old blocks that the flash
    storage may keep, of the streams, of `notes.db` and of the
    write-ahead file. Such blocks are under Android's file-based
@@ -465,7 +468,7 @@ record needs, and the next start removes it.
 
 | Action | Writes, in order | If Notes stops in between |
 |---|---|---|
-| Typing | One transaction per save | What was typed since the last save is lost: about a second at most, because Notes saves when it leaves the screen. |
+| Typing | One transaction per save | What was typed since the last save is lost: at most the last 10 seconds, because Notes saves at least that often while typing goes on, and when it leaves the screen. |
 | Add a file | The part; the rename; the record | Before the record, the next start removes the part or the stream. The file is not added. |
 | Delete a note, remove a file | One transaction | Done. The next start wipes them: **Undo** is gone with the snackbar. |
 | The wipe | One transaction; then the streams; then the checkpoint | The next start removes the streams and checkpoints the write-ahead file. |
@@ -749,8 +752,9 @@ Choices this page made without a decision by the owner on that point.
    destinations, and the image view in the note's pane.
 2. A title and a text, as two fields. With no title, the list shows the
    first line of the text.
-3. Saving is automatic, one second after the last change. An empty note
-   is deleted when it closes.
+3. Saving is automatic, one second after the last change and at least
+   every 10 seconds while typing goes on. An empty note is deleted when
+   it closes.
 4. Limits: 5,000 notes, a title of 200 characters, a text of 100,000, a
    file name of 255.
 5. Both fields ask the keyboard not to learn, as Reminders and Tasks do.
