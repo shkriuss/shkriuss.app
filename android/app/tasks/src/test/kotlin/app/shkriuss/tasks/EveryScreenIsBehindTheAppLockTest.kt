@@ -1,6 +1,7 @@
 package app.shkriuss.tasks
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Looper
 import android.os.PowerManager
 import androidx.annotation.StringRes
@@ -11,10 +12,14 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import app.shkriuss.core.notify.fixtures.NotifyTestDevice
 import app.shkriuss.core.testing.AppLockCheck
+import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.feature.tasks.Due
 import app.shkriuss.feature.tasks.R
 import app.shkriuss.feature.tasks.Repeat
+import java.util.concurrent.CountDownLatch
+import org.junit.After
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,7 +43,14 @@ import app.shkriuss.core.design.R as DesignR
  *   the form, new and to edit, a bottom sheet at every width, with its
  *   list dialog and its date and time pickers; the dialog of New list
  *   and Rename; a list's menu; the questions of Delete list and Delete
- *   done tasks; and the question for notifications.
+ *   done tasks; the question for notifications; the dialogs of a backup
+ *   and a restore; and Licences with an open notice, which Settings shows
+ *   in its own place.
+ *
+ * One dialog is not here: the one for the moment the recovery key is first
+ * needed. It can never show while the app lock is on, because the app lock
+ * needs the recovery key. core/security checks it, drawn inside a gate
+ * (`FirstNeedBehindTheAppLockTest`).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = LockedTasksApp::class)
@@ -46,6 +58,18 @@ import app.shkriuss.core.design.R as DesignR
 class EveryScreenIsBehindTheAppLockTest {
     @get:Rule
     val compose = createEmptyComposeRule()
+
+    /** Holds a backup that is being written, so that its progress dialog stays. Opened again at the end of the test. */
+    private val held = CountDownLatch(1)
+
+    @Before
+    fun aFilePicker() = pickerDocuments()
+
+    @After
+    fun letTheWorkEnd() {
+        held.countDown()
+        TestDocuments.onOpen = {}
+    }
 
     @Test
     fun everyScreenShowsTheLockScreenAndNothingOfItsOwn() {
@@ -144,6 +168,88 @@ class EveryScreenIsBehindTheAppLockTest {
         openThenLock(ready = words(R.string.tasks_line_not_asked)) { tap(R.string.tasks_allow) }
     }
 
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun theProgressDialogOfABackupGoesWhenTheAppLocks() {
+        // The storage does not answer, so "Writing the backup" stays on screen.
+        TestDocuments.onOpen = { held.await() }
+        openThenLock {
+            pick(R.string.tasks_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+            compose.waitForText(words(R.string.tasks_backup_writing))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun theDialogBackupWrittenGoesWhenTheAppLocks() = openThenLock {
+        pick(R.string.tasks_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.tasks_backup_written_title))
+    }
+
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun theQuestionBeforeARestoreGoesWhenTheAppLocks() {
+        val backup = writeABackup()
+        openThenLock {
+            pick(R.string.tasks_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+            compose.waitForText(words(R.string.tasks_restore_question_title))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun theDialogBackupRestoredGoesWhenTheAppLocks() {
+        val backup = writeABackup()
+        openThenLock {
+            pick(R.string.tasks_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+            tap(R.string.tasks_restore)
+            compose.waitForText(words(R.string.tasks_restored_title))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun theAnswerForAFileTasksDoesNotTakeGoesWhenTheAppLocks() {
+        TestDocuments.file("photo.jpg").writeText("not a backup")
+        openThenLock {
+            pick(R.string.tasks_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri("photo.jpg"))
+            compose.waitForText(words(R.string.tasks_refused_not_a_backup_title))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun licencesGoesWhenTheAppLocks() = openThenLock(inAWindowOfItsOwn = false) {
+        tap(R.string.tasks_settings)
+        tap(R.string.tasks_licences)
+        compose.waitForText(words(R.string.tasks_licences_intro))
+    }
+
+    @Test
+    @Config(application = AppLockOnTasksApp::class)
+    fun anOpenNoticeOfLicencesGoesWhenTheAppLocks() = openThenLock(inAWindowOfItsOwn = false) {
+        tap(R.string.tasks_settings)
+        tap(R.string.tasks_licences)
+        compose.tap("BIP-39 English word list")
+        compose.waitForText("Copyright (c) 2013-2016 Pavol Rusnak", substring = true)
+    }
+
+    /**
+     * Opens Settings, taps the row named [row], and picks [document] in the
+     * file picker that Tasks opens with [action]. The app has its recovery
+     * key, so the picker comes without the first-need dialog.
+     */
+    private fun pick(@StringRes row: Int, action: String, document: Uri) {
+        tap(R.string.tasks_settings)
+        tap(row)
+        val scenario = checkNotNull(shown) { "The screen is not started" }
+        compose.waitForOpened(scenario) { it.action == action }
+        compose.theOpenedScreenCloses(scenario, picked = document)
+    }
+
+    /** The screen of the test that runs now, for the result of a file picker. */
+    private var shown: ActivityScenario<TasksActivity>? = null
+
     /** Opens Lists, then the list [name], then the menu of its top bar. */
     private fun openTheMenuOf(name: String) {
         tap(R.string.tasks_lists)
@@ -155,18 +261,25 @@ class EveryScreenIsBehindTheAppLockTest {
      * Starts Tasks with the app open, waits until Today shows [ready],
      * does [open], checks that something opened in a window of its own,
      * turns the screen off so that the app locks, and checks that only the
-     * lock screen shows.
+     * lock screen shows. [inAWindowOfItsOwn] is false for a screen that
+     * Tasks shows in place of another, as Licences in place of Settings:
+     * it opens no window.
      */
-    private fun openThenLock(ready: String = words(R.string.tasks_nothing_due_today), open: () -> Unit) {
+    private fun openThenLock(
+        ready: String = words(R.string.tasks_nothing_due_today),
+        inAWindowOfItsOwn: Boolean = true,
+        open: () -> Unit,
+    ) {
         use24HourClock()
-        ActivityScenario.launch(TasksActivity::class.java).use {
+        ActivityScenario.launch(TasksActivity::class.java).use { scenario ->
+            shown = scenario
             // Today shows its rows, or the line for none, once the first read of the database is in.
             compose.waitForText(ready)
             val windowsBefore = compose.onAllNodes(isRoot()).fetchSemanticsNodes().size
             open()
             compose.waitForIdle()
             val windows = compose.onAllNodes(isRoot()).fetchSemanticsNodes().size
-            assertTrue("A sheet, a dialog or a menu opened in a window of its own", windows > windowsBefore)
+            if (inAWindowOfItsOwn) assertTrue("A sheet, a dialog or a menu opened in a window of its own", windows > windowsBefore)
 
             val app = ApplicationProvider.getApplicationContext<AppLockOnTasksApp>()
             shadowOf(app.getSystemService(PowerManager::class.java)).turnScreenOn(false)

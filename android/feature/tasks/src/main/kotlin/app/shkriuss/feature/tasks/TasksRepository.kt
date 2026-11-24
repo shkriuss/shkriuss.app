@@ -52,6 +52,9 @@ data class TaskChange(
 
         /** Brought back by Undo. It counts from now. */
         BROUGHT_BACK,
+
+        /** Taken from a backup. It counts from the moment of the restore: no snooze, and its notification goes. */
+        RESTORED,
     }
 }
 
@@ -424,6 +427,29 @@ class TasksRepository(
         }
         if (done.isNotEmpty()) onChange(TaskChange(TaskChange.Kind.BROUGHT_BACK, done.map { it.record.id }))
         done.map(::taskOf)
+    }
+
+    /**
+     * Runs after a restore, with the tasks it took, [taken]
+     * (docs/apps/tasks/spec.md, "Backup contents", point 3, and "Stopped
+     * between two writes"). The restore wrote them past this repository.
+     * Each one with a reminder counts from the current minute of [now],
+     * the moment after the restore, for the reminder number it has now:
+     * its snooze ends, and its notification goes. One that came back done
+     * or deleted, or with no reminder, loses its entries, as a tick or a
+     * delete does. Then the notifications follow, also when the restore
+     * took none. Like every write here, it runs to its end once it has
+     * begun.
+     */
+    suspend fun afterRestore(taken: List<String>, now: ClockReading = time.reading()) = withContext(NonCancellable) {
+        val ids = taken.distinct()
+        if (ids.isNotEmpty()) {
+            inTurn {
+                val wanted = ids.toHashSet()
+                writeCounting(now, tasks.all().filter { it.record.id in wanted })
+            }
+        }
+        onChange(TaskChange(TaskChange.Kind.RESTORED, ids))
     }
 
     /**

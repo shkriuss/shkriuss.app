@@ -297,25 +297,27 @@ hold no user data.
 
 ## Tasks (`app.shkriuss.tasks`)
 
-Tasks is being built. It stores lists, tasks and what this phone
-remembers of the reminder of each task, as below. Its screens write all
-of it, and it shows the reminder of a task as a notification. It has no
-backup yet and cannot set up the recovery key.
+Tasks is being built. On its screens you add, change and delete lists
+and tasks. It stores them and what this phone remembers of the reminder
+of each task, shows the reminder of a task as a notification, and makes
+and restores backups, as below.
 
 ### On the phone
 
-Everything is in Tasks' private storage.
+Everything is in Tasks' private storage, except the keys that the
+Android Keystore holds.
 
 | What | Where | What it holds | In a backup |
 |---|---|---|---|
-| The database `tasks.db` | Tasks' database folder | Two record tables ([spec.md](../apps/tasks/spec.md#data)). `task_list`, one row per list: its name. `task`, one row per task: the random ID of its list, or none for Inbox, its title, its due day, its repeat, its days of the week, the day the repeat counts from, its reminder time and when it was done. Each row also has its random ID, its times and its deletion marker. A deleted list keeps its name and a deleted task its title. The table `change_counter` holds one number. **Text: the names of lists and the titles of tasks.** | `task_list` and `task`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
+| The database `tasks.db` | Tasks' database folder | Two record tables ([spec.md](../apps/tasks/spec.md#data)). `task_list`, one row per list: its name. `task`, one row per task: the random ID of its list, or none for Inbox, its title, its due day, its repeat, its days of the week, the day the repeat counts from, its reminder time and when it was done. Each row also has its random ID, its times and its deletion marker. A deleted list keeps its name and a deleted task its title. The table `change_counter` holds one number. **Text: the names of lists and the titles of tasks.** | `task_list` and `task`: yes, deleted rows too. The change numbers and `change_counter`: no |
 | The preferences file `app.shkriuss.tasks` | Tasks' preferences folder | For each task with a reminder, by its random ID: the reminder number its entries were written for (`for.<id>`, made of the due day, the repeat and the reminder time), its mark (`mark.<id>`, a local date and minute), the end of its snooze (`snooze.<id>`) and the time of its notification on screen (`showing.<id>`) ([spec.md](../apps/tasks/spec.md#on-this-phone-only)). IDs, times and numbers only. Never a title or a name. | No |
 | The preferences file `app.shkriuss.core.notify` | Tasks' preferences folder | For each alarm, named by the random ID of its task: the time it is set for (`registered:<id>`) and the time it last fired (`fired:<id>`). And `permission-asked`: whether Android's question for notifications was answered ([notifications.md](../architecture/notifications.md#what-goes-where)). IDs and times only. | No |
+| The preferences file `app.shkriuss.core.security` | Tasks' preferences folder | Three settings of the app lock: `lock-after` (when it locks), `block-screenshots` and `notification-text` ([ADR 0032](../adr/0032-app-lock-settings-in-android-preferences.md)). Whether the app lock is on is not a setting in this file. It is which hardware key wraps the `file-key` keyset. | No |
+| Key files, `shk-keys/` | Tasks' no-backup folder | The keysets `record`, `backup` and `file-key`, each wrapped by a hardware key. `recovery`, the recovery key, only if the phone keeps it, wrapped by a key that needs the system prompt for every use. `file-key-old` only for a moment after a setup was started over. None of them exists before the recovery key is set up ([crypto-design.md](crypto-design.md#where-keys-are-stored)). | No |
+| Set-aside key files, `shk-keys-set-aside/` | Tasks' no-backup folder | A copy of a keyset file that could not be read, kept before the file is written again. Still wrapped. | No |
+| Hardware keys | The Android Keystore, in StrongBox where the phone has it | Up to four keys per app, which cannot be read out: the Background key, the Unlocked key, the Lock key (while the app lock is on) and the Recovery guard (while the phone keeps the recovery key) ([crypto-design.md](crypto-design.md#hardware-keys)). | No |
+| The restore staging folder, `shk-restore/` | Tasks' no-backup folder | Only while a restore runs: the records of the backup, **not encrypted**, names and titles too, so that nothing changes until the whole file is checked. Deleted when the restore ends, well or badly, and again at every start of Tasks. It is an ordinary delete ([backup-format.md](../architecture/backup-format.md#staging)). | Not applicable |
 
-- No key files and no hardware keys: the recovery key cannot be set up
-  in Tasks yet.
-- No preferences file of `core/security`: the settings of the app lock
-  cannot be changed in Tasks yet.
 - Tasks stores no files: it never asks `core/crypto` for a file key.
 - Android's SQLite keeps the write-ahead files `tasks.db-wal` and
   `tasks.db-shm` next to the database. They can hold rows of it, names
@@ -323,12 +325,27 @@ Everything is in Tasks' private storage.
 
 ### What leaves the phone, and how
 
-Nothing of the user's leaves the phone. Tasks has no network
-permission. Android backup and device transfer are off.
+1. **A backup file**, only when you make one, to the place you pick in
+   Android's file picker. That place can be a USB stick or a cloud
+   storage app. Tasks suggests the name `tasks-<date>.shkbackup`, for
+   example `tasks-2026-11-16.shkbackup`.
+   - In the clear, at its start: that it is a backup of the suite, its
+     format version, the app name `tasks`, and the short name (key ID)
+     of the recovery key it needs
+     ([backup-format.md](../architecture/backup-format.md)).
+   - Encrypted with the backup key of the recovery key: when it was
+     made, Tasks' data version, every record of `task_list` and `task`,
+     deleted ones too, with their names and titles, and their counts.
+   - Not in it: keys, the recovery key, the three preferences files,
+     change numbers.
+   - Its size shows roughly how many lists and tasks it holds, and how
+     long their names and titles are. The date is in the suggested name.
+2. **A restore** reads one file that you pick. It writes nothing outside
+   Tasks.
 
-Three things leave Tasks' storage. They stay inside the phone:
+Three more things leave Tasks' storage. They stay inside the phone:
 
-1. **Notifications.** A task's reminder shows its title, and "Due
+3. **Notifications.** A task's reminder shows its title, and "Due
    today", "Due today · Every day", "Missed: 09:00" or "Snoozed. It was
    due at 09:00.", with the buttons **Done** and **Snooze 10 min**.
    - On the lock screen it is private: Android shows its title only if
@@ -340,29 +357,36 @@ Three things leave Tasks' storage. They stay inside the phone:
    - With the app lock on, a reminder shows only its hidden form: "Task
      reminders" and "The app lock hides this notification. Open the app
      to see it.", without its title and without buttons. Unless **Show
-     the text in notifications** is on. Tasks has no Security section
-     yet, so its app lock cannot be turned on.
+     the text in notifications** is on.
    - If a reminder cannot be shown, a notice comes in its place: "Task
      reminders" and "A reminder could not be shown. Open the app to see
      it.", with no title and no buttons.
-2. **Intents**, which stay inside the phone. An alarm carries only the
+4. **Intents**, which stay inside the phone. An alarm carries only the
    random ID of its task. A tap on a reminder opens Tasks with that ID.
    A button's press goes only to Tasks' own receiver, and carries the
    ID, the button, the reminder's time and, for **Done**, the task's
    reminder number, made of its due day, repeat and reminder time, or
    for **Snooze 10 min**, the 10 minutes. Never a title. Tasks opens
    Android's own pages for its notification settings.
-3. **The handover of `core/security`**, whose two parts are in its
-   manifest, as in every data app: its status provider says only that
-   Tasks keeps no recovery key, and its handover screen says the same
-   to a suite app that asks, and gives nothing
-   ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+5. **Keys to another app of the suite on the phone**, through the
+   handover between apps, as in Water: only when you allow it on
+   Tasks' screen and answer the system prompt, only that app's own
+   keysets, made from the recovery key Tasks keeps, and only to a data
+   app of the suite signed with exactly Tasks' own current certificate
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)). The check of
+   four words works as in Water. Its status provider says only whether
+   Tasks keeps the recovery key now, and its short name. Tasks takes its
+   own keys from a keeper the same way.
 
-Tasks writes no file outside its storage, puts nothing on the clipboard
-and writes no log.
+Tasks has no network permission. Android backup and device transfer
+are off. It writes no file outside its storage but the backup you make,
+shares nothing else with other apps, puts nothing on the clipboard
+itself and writes no log.
 
 ### How to delete it
 
-In Android's Settings, open **Apps**, then **Tasks**, **Storage**, and
-tap **Clear storage**. Everything above goes. Uninstalling Tasks does
-the same.
+- In Android's Settings, open **Apps**, then **Tasks**, **Storage**,
+  and tap **Clear storage**. Everything above goes, the keys too.
+  Uninstalling Tasks does the same.
+- Backup files stay where you put them. Delete them there.
+- Without the recovery words, nobody can open those backups.

@@ -3,9 +3,9 @@
 What others made and the apps contain: where it comes from, its licence
 and its notice.
 
-- Status: complete for Water and Reminders: everything that ships in
-  the release APK of Water `1.0.2` and of Reminders `1.0.1`, and
-  the screen that shows it in each app.
+- Status: complete for Water, Reminders and Tasks: everything that
+  ships in the release APK of Water `1.0.2`, of Reminders `1.0.1` and
+  of Tasks `1.0.0-alpha.1`, and the screen that shows it in each app.
   [How to check again](#how-to-check-again) says how to keep it right.
 - The project's own licences are in
   [ADR 0018](../adr/0018-licences.md).
@@ -51,11 +51,23 @@ notices and licence texts in that module's `res/raw`. The owner decided
 that each app keeps its own list, and that no shared module holds it.
 `LicencesTest` of Reminders checks the seven, as Water's does.
 
+## What ships in Tasks
+
+The same seven parts, in the same versions, in the release APK of
+Tasks `1.0.0-alpha.1`, which is not released. Its release runtime class
+path is the same as Water's and Reminders', and so is what R8 removes
+([How the list is made](#how-the-list-is-made)).
+
+The app's list is `Licences` in `android/feature/tasks`, with its own
+notices and licence texts in that module's `res/raw`, as the owner
+decided for every app. `LicencesTest` of Tasks checks the seven, as
+Water's does.
+
 ## On the class path, not in the APK
 
-Seven libraries are on the release runtime class path of Water and of
-Reminders, and R8 removes all of them, because nothing in either app
-uses them. No class of theirs is
+Seven libraries are on the release runtime class path of Water, of
+Reminders and of Tasks, and R8 removes all of them, because nothing in
+these apps uses them. No class of theirs is
 named in the APK's dex files. They are not in the app's list.
 
 | Library | Version | Licence | Who brings it |
@@ -82,7 +94,9 @@ Catalog has no Licences screen. That is [open](#open).
 
 Three files in `android/feature/water/src/main/res/raw/`, and the same
 three in `android/feature/reminders/src/main/res/raw/`, named
-`reminders_licence_<part>.txt`. Each is byte for byte the file of its
+`reminders_licence_<part>.txt`, and in
+`android/feature/tasks/src/main/res/raw/`, named
+`tasks_licence_<part>.txt`. Each is byte for byte the file of its
 source. Each app's `LicencesTest` checks the SHA-256.
 
 | File | The source's file | SHA-256 |
@@ -93,8 +107,8 @@ source. Each app's `LicencesTest` checks the SHA-256.
 
 - The Apache-2.0 text is shown once for each of the five parts under it.
 - The notice of each part is a file of its own in the same folder,
-  `water_notice_<part>.txt` and `reminders_notice_<part>.txt`. The two
-  differ only in the app they name. It says whose the part is, with the copyright
+  `water_notice_<part>.txt`, `reminders_notice_<part>.txt` and
+  `tasks_notice_<part>.txt`. They differ only in the app they name. It says whose the part is, with the copyright
   lines read at the source, and where the source is. The notices are
   written for this project; only the copyright lines and Kotlin's
   `NOTICE` lines are quoted.
@@ -210,8 +224,9 @@ not a library.
   licence text go with every copy. Both are in `LICENSE.txt`, in the same
   folder as the list. It is the source's own `LICENSE` file, unchanged.
   Both files are packed into the app together. The Licences screen of
-  each app shows a copy of it, `water_licence_bip39.txt` and
-  `reminders_licence_bip39.txt`, byte for byte the same.
+  each app shows a copy of it, `water_licence_bip39.txt`,
+  `reminders_licence_bip39.txt` and `tasks_licence_bip39.txt`, byte for
+  byte the same.
 
 ## Tink for Java
 
@@ -249,9 +264,8 @@ keysets. It is not a separate dependency.
 them as they come
 ([crypto-design.md](../security/crypto-design.md#the-library)). None of
 the four jars holds a licence text or a notice file. Three of them are
-not in the APK of Water or Reminders; the fourth, AndroidX Annotation,
-is one of the
-[AndroidX libraries](#androidx-libraries).
+not in the APK of Water, Reminders or Tasks; the fourth, AndroidX
+Annotation, is one of the [AndroidX libraries](#androidx-libraries).
 
 ### Gson
 
@@ -332,9 +346,9 @@ is one of the
 In the cloud environment, with dependency verification on:
 
 1. `./gradlew :app:<app>:dependencies --configuration
-   releaseRuntimeClasspath`, from `android/`, for `water` and for
-   `reminders`. Each lists 110 modules, the same for both. They are the
-   14 projects of the two tables above.
+   releaseRuntimeClasspath`, from `android/`, for `water`, `reminders`
+   and `tasks`. Each lists 110 modules, the same for all three. They are
+   the 14 projects of the two tables above.
 2. `./gradlew :app:<app>:assembleRelease`. Then the APK,
    `app/<app>/build/outputs/apk/release/`, is read as a zip file:
    - the class names in its dex files, by package. The seven libraries of
@@ -358,9 +372,9 @@ page names the version that was checked
 1. Run step 1 above. Compare the list with this page.
 2. Run step 2. Look for a package in the dex files that no row of
    [What ships in Water](#what-ships-in-water) covers.
-3. Change this page, `Licences` in `android/feature/water` and in
-   `android/feature/reminders`, and the files in their `res/raw`,
-   together. Each `LicencesTest` then needs the new count.
+3. Change this page, `Licences` in `android/feature/water`, in
+   `android/feature/reminders` and in `android/feature/tasks`, and the
+   files in their `res/raw`, together. Each `LicencesTest` then needs the new count.
 
 ### What the APK of Water 1.0.2 holds
 
@@ -379,6 +393,14 @@ What steps 1 and 2 give for version `1.0.2`, to compare with:
 - The three licence texts are in it, by their SHA-256.
 
 ### What the APK of Reminders 1.0.1 holds
+
+The same as Water's: the 110 modules on the class path, one dex file
+with classes of the seven parts and of none of the seven libraries that
+R8 removes, no Google Play services, no `WebView`, no native library, 54
+files `META-INF/*.version`, and the three licence texts by their
+SHA-256.
+
+### What the APK of Tasks 1.0.0-alpha.1 holds
 
 The same as Water's: the 110 modules on the class path, one dex file
 with classes of the seven parts and of none of the seven libraries that

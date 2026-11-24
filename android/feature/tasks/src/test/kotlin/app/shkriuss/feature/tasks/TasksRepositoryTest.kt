@@ -512,6 +512,58 @@ class TasksRepositoryTest {
         assertEquals(0, repository.undo(tick.undo).size)
     }
 
+    // After a restore (spec, "Backup contents", point 3).
+
+    @Test
+    fun afterARestoreEachTaskItTookCountsFromThenAndOneWithNoReminderKeepsNoEntry() = runBlocking {
+        val pills = add(due = Due(MONDAY, PILLS, 540))
+        val bank = add("Call the bank", Due(MONDAY, remindMinute = 600))
+        val gym = add("Gym", Due(day(2), GYM, 1_110))
+        val dishes = add("Dishes")
+        val pillsNumber = checkNotNull(TaskReminders.numberOf(pills.due!!))
+        // "Pills" was snoozed and shows. "Gym" came back deleted from the backup, and still had entries here.
+        book.update(listOf(pills.id)) { _, entry -> entry.copy(snoozeMillis = 5L, showingMillis = 6L) }
+        RecordWriter(database, database.tasks(), clock, TestIdSource()).markDeleted(gym.id)
+        // "Dishes" came back with its reminder turned off, and still had the entries of its old reminder here.
+        book.update(listOf(dishes.id)) { _, _ -> TaskEntry.countingFrom(pillsNumber, monday(9)) }
+        val bankBefore = book.storedOf(bank.id)
+        changes.clear()
+
+        // As the backup content hands them on. "Call the bank" was not taken.
+        clock.setTo(monday(12, 0, 30))
+        repository.afterRestore(listOf(pills.id, gym.id, dishes.id, pills.id))
+
+        assertEquals("no snooze and nothing on screen, counted from 12:00", TaskEntry.countingFrom(pillsNumber, monday(12)), book.storedOf(pills.id))
+        assertEquals("a deleted one keeps no entry", TaskEntry(), book.storedOf(gym.id))
+        assertEquals("nor one with no reminder", TaskEntry(), book.storedOf(dishes.id))
+        assertEquals("one that was not taken stays as it was", bankBefore, book.storedOf(bank.id))
+        assertEquals(listOf(TaskChange(TaskChange.Kind.RESTORED, listOf(pills.id, gym.id, dishes.id))), changes)
+    }
+
+    @Test
+    fun afterARestoreADoneTaskLosesItsEntries() = runBlocking {
+        val bank = add("Call the bank", Due(MONDAY, remindMinute = 600))
+        // The restore took it done: a newer edit from another phone.
+        RecordWriter(database, database.tasks(), clock, TestIdSource()).update(bank.id) { it.copy(doneAt = 1_000L) }
+        assertTrue("its entries are still there", !book.storedOf(bank.id).isEmpty)
+
+        repository.afterRestore(listOf(bank.id))
+
+        assertEquals(TaskEntry(), book.storedOf(bank.id))
+    }
+
+    @Test
+    fun aRestoreThatTookNothingStillLetsTheNotificationsFollow() = runBlocking {
+        val pills = add(due = Due(MONDAY, PILLS, 540))
+        val before = book.storedOf(pills.id)
+        changes.clear()
+
+        repository.afterRestore(emptyList())
+
+        assertEquals(before, book.storedOf(pills.id))
+        assertEquals(listOf(TaskChange(TaskChange.Kind.RESTORED, emptyList())), changes)
+    }
+
     @Test
     fun aWriteTheDatabaseRefusesChangesNothing() = runBlocking {
         val home = addList()

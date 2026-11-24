@@ -9,6 +9,30 @@ specification is
 
 Not released yet.
 
+- Settings has the sections Backup, Security and About, as in Water and
+  Reminders. About shows the version and **Licences**, which lists
+  everything made by others that is inside Tasks, with its notice and
+  its licence.
+- **Make a backup** and **Restore a backup**, as in Reminders: the file
+  picker, a name such as `tasks-2026-11-16.shkbackup`, a check of every
+  backup right after it is written, "It holds 42 tasks", the question
+  before a restore, and every answer for a file Tasks does not take. A
+  backup holds the lists and tasks, deleted ones too, with data
+  version 1. A restore refuses a list or a task with any value outside
+  its limits, and then changes nothing.
+- After a restore, each task the restore took counts from that moment:
+  a reminder time that passed does not show late, its snooze ends and
+  its notification goes. A task that came back done or deleted loses
+  what this phone remembered of its reminder. Then the notifications
+  follow.
+- **Recovery key** opens the security screen, and **App lock** the app
+  lock screen. A backup, a restore and the app lock ask for the
+  recovery key when they first need it, and offer the keys of another
+  app of the suite that keeps them.
+- With the app lock on, Tasks asks for your fingerprint, or your
+  phone's PIN, pattern or password, before it shows anything. Its
+  reminders go on, in their hidden form.
+- The user guide, [tasks.md](../../../docs/user/tasks.md).
 - The reminders. A task with a due date and a time reminds you on its
   due day at that time, with its title, "Due today" and its repeat, and
   the buttons **Done** and **Snooze 10 min**. **Done** does what a tick
@@ -29,7 +53,7 @@ Not released yet.
   count of open tasks; **New list**; and one list open, with its open
   tasks by due day, its done tasks under **Done**, and a menu with
   **Rename**, **Delete list** and **Delete done tasks**. On a tablet the
-  open list is beside Lists. **Settings**, with the version.
+  open list is beside Lists. **Settings**.
 - A tick box on each task: a tick marks it done, or moves a repeating
   task to its next date, with **Undo**. Clearing a tick under Done opens
   the task again.
@@ -42,13 +66,14 @@ Not released yet.
 - A row of a list says its due day, "Today" or its date, and not the
   list's name. A date has its year only when it is not this year.
 - TalkBack reads each task as one item, with "Mark as done" and "Edit".
-- Not there yet: backup and restore, the recovery key and the app lock
-  in Settings.
 - Everything Tasks stores is in place: lists, with their names, and
   tasks, with their title, list, due date, repeat, days of the week,
   reminder time and when they were done, in one database on the phone;
-  and what this phone remembers of the reminder of each task, in one
-  small file.
+  what this phone remembers of the reminder of each task, in one small
+  file; the settings of the app lock; and the keys
+  ([data-inventory.md](../../../docs/security/data-inventory.md#tasks-appshkriusstasks)).
+  A backup file leaves the phone only when you make one, to the place
+  you pick.
 - The rules of the specification work as plain code, with tests: the
   dates of each repeat, with the last day of a shorter month and 29
   February; the next due date when a repeating task is done; the limits
@@ -67,5 +92,6 @@ Not released yet.
   Tasks asks the user only for notifications: after a save that sets a
   reminder, or from **Allow** on Today.
 - No other app can reach any part of Tasks but its screen and the two
-  parts of the handover between apps, which give nothing: Tasks keeps
-  no recovery key. The three receivers of reminders are not exported.
+  parts of the handover between apps, which give keys only when you
+  allow it, as in Water. The three receivers of reminders are not
+  exported.

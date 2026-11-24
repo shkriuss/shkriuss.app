@@ -4,7 +4,7 @@ A backup is one file that holds everything one app has stored. You choose
 where the file goes. You can restore it later, on the same phone or on
 another one.
 
-Water and Reminders make backups.
+Water, Reminders and Tasks make backups.
 
 Where the buttons are: open the app's **Settings**. Under **Backup** are
 **Make a backup** and **Restore a backup**. Later apps have the same two
@@ -47,7 +47,8 @@ Which settings of each app are in its backup: each app's own guide says
 so. For Water, see [Back up and restore](water.md#back-up-and-restore) in
 its guide. For Reminders, see
 [Back up and restore](reminders-app.md#back-up-and-restore) in its
-guide.
+guide. For Tasks, see [Back up and restore](tasks.md#back-up-and-restore)
+in its guide.
 
 What the file shows to anyone who has it, without the words:
 
@@ -126,6 +127,12 @@ that moment: a time that passed before the restore does not show late.
 Its snooze ends, and its notification goes. If this phone does not
 allow Reminders' notifications yet, **Upcoming** says so and offers
 **Allow**.
+
+After a restore in Tasks, each task the restore took counts from that
+moment, as in Reminders: a reminder time that passed before the restore
+does not show late. Its snooze ends, and its notification goes. If this
+phone does not allow Tasks' notifications yet, **Today** says so and
+offers **Allow**.
 
 ## What a restore does
 

@@ -20,6 +20,9 @@ import app.shkriuss.feature.tasks.data.TasksDatabase
  * app, and hands them to the screens and the receivers, which Android
  * creates itself (docs/architecture/security-screens.md, "What an app
  * does", and docs/architecture/notifications.md, "What an app does").
+ * [TasksServices] builds the app's `Backups` with the backup keys of
+ * [crypto], and [onCreate] starts it (docs/architecture/backup-format.md,
+ * "Staging").
  */
 class TasksApp : Application(), SecurityHost, TasksHost, NotifyHost {
     override val crypto: ShkCrypto by lazy { ShkCrypto.create(this, TasksServices.APP_NAME).also { it.start() } }
@@ -30,7 +33,15 @@ class TasksApp : Application(), SecurityHost, TasksHost, NotifyHost {
     }
 
     override val tasks: TasksServices by lazy {
-        TasksServices(this, TasksDatabase.open(this), Clock.System, IdSource.RandomUuid, openTasks(), notify = { notify })
+        TasksServices(
+            this,
+            TasksDatabase.open(this),
+            Clock.System,
+            IdSource.RandomUuid,
+            openTasks(),
+            notify = { notify },
+            crypto = crypto,
+        )
     }
 
     override val notify: Notify by lazy {
@@ -50,6 +61,9 @@ class TasksApp : Application(), SecurityHost, TasksHost, NotifyHost {
         super.onCreate()
         // Before any screen starts, so that every screen's gate knows it (AppLockGate).
         appLock.start()
+        // Backups.start(): empties what a restore left behind when the app stopped in the middle of it. Then, off the
+        // main thread, a pending move of the file keys is finished (docs/apps/water/spec.md, "Files").
+        tasks.start()
         // Tells Android the channel and registers the alarms again: Android may have dropped them.
         notify.start()
     }

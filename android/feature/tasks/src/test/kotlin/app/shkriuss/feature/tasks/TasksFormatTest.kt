@@ -35,6 +35,18 @@ class TasksFormatTest {
     }
 
     @Test
+    fun theQuestionBeforeARestoreSaysWhenTheBackupWasMadeInTheLongDateOfThePhone() {
+        assertEquals("16 November 2026, 14:05", uk.madeAt(monday(14, 5)))
+        assertEquals("November 16, 2026, 2:05 PM", us.madeAt(monday(14, 5)))
+    }
+
+    @Test
+    fun aCountOfABackupIsInThePhonesNumberFormat() {
+        assertEquals("1,250", uk.count(1_250))
+        assertEquals("42", us.count(42))
+    }
+
+    @Test
     fun theDueDateOfTheFormHasItsYear() {
         assertEquals("Mon, 16 Nov 2026", uk.date(MONDAY))
         assertEquals("Mon, Nov 16, 2026", us.date(MONDAY))
