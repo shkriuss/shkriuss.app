@@ -58,7 +58,7 @@ class NotesServices(
 
     /** The notes and the records of their files, and the folder of their streams. */
     val repository: NotesRepository =
-        NotesRepository(database, clock, ids, NoteFileStore(File(context.noBackupFilesDir, ATTACHMENTS_FOLDER)))
+        NotesRepository(database, clock, ids, NoteFileStore(File(context.noBackupFilesDir, ATTACHMENTS_FOLDER)), background = scope)
 
     /** The one snackbar of Notes. When its Undo ends, the move of the file keys goes on. */
     val snackbars: NotesSnackbars = NotesSnackbars(repository, { keyMove.run() }, scope, work)
@@ -91,7 +91,7 @@ class NotesServices(
     fun start() {
         scope.launch {
             try {
-                repository.sweep()
+                repository.sweep(snackbars)
             } catch (_: SQLException) {
                 // Tried again at the next start (docs/apps/notes/spec.md, "A write fails").
             }

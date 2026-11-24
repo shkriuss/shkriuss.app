@@ -10,10 +10,12 @@ import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.FileCrypto
 import app.shkriuss.core.crypto.FileKey
 import java.io.FileInputStream
+import java.io.FilterInputStream
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.Collections
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -145,12 +147,20 @@ class FileReader(
 ) {
     private val copying = Mutex()
 
-    /** The state of [file], from its stream on the phone and from what `FileCrypto` answers for its key. */
+    /** The files whose stream a read found damaged while Notes runs. A stream never changes, so it stays damaged. */
+    private val foundDamaged: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
+
+    /**
+     * The state of [file], from its stream on the phone and from what
+     * `FileCrypto` answers for its key. A stream of the right length is
+     * checked segment by segment only as it is read: once a read, an
+     * image or a copy, met damage, the file is damaged from then on.
+     */
     suspend fun stateOf(file: NoteFile): FileState = withContext(work) {
         val store = repository.store
         when {
             !store.has(file.id) -> FileState.NOT_ON_PHONE
-            !store.isWhole(file.id, file.size) -> FileState.DAMAGED
+            !store.isWhole(file.id, file.size) || file.id in foundDamaged -> FileState.DAMAGED
             else -> try {
                 val wrapped = repository.wrappedKeyOf(file.id) ?: return@withContext FileState.NOT_ON_PHONE
                 files.unwrap(file.id, wrapped)
@@ -173,11 +183,31 @@ class FileReader(
         val wrapped = repository.wrappedKeyOf(file.id) ?: throw FileNotFoundException("The file is deleted")
         val key = files.unwrap(file.id, wrapped)
         val input = FileInputStream(repository.store.stream(file.id))
-        try {
+        val decrypting = try {
             key.decryptingStream(file.id, input)
-        } catch (failed: IOException) {
+        } catch (failed: Exception) {
             input.close()
+            if (failed is BlobException && failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) foundDamaged += file.id
             throw failed
+        }
+        Noticing(decrypting) { foundDamaged += file.id }
+    }
+
+    /** A decrypted stream that tells [onDamage] when a read meets a damaged segment. */
+    private class Noticing(input: InputStream, private val onDamage: () -> Unit) : FilterInputStream(input) {
+        override fun read(): Int = noticing { super.read() }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int = noticing { super.read(buffer, offset, length) }
+
+        override fun skip(count: Long): Long = noticing { super.skip(count) }
+
+        private inline fun <T> noticing(read: () -> T): T {
+            try {
+                return read()
+            } catch (damaged: BlobException) {
+                if (damaged.answer == BlobAnswer.DAMAGED_OR_CHANGED) onDamage()
+                throw damaged
+            }
         }
     }
 
@@ -239,7 +269,12 @@ class FileReader(
                 }
                 output.close()
                 // A stream that decrypts to another length than its record says is not the file that was picked.
-                if (written == file.size) Outcome.SAVED else Outcome.DAMAGED
+                if (written == file.size) {
+                    Outcome.SAVED
+                } else {
+                    foundDamaged += file.id
+                    Outcome.DAMAGED
+                }
             } catch (_: IOException) {
                 Outcome.FAILED
             } finally {

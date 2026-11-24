@@ -1,6 +1,7 @@
 package app.shkriuss.feature.notes
 
 import android.database.SQLException
+import androidx.room3.withWriteTransaction
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.feature.notes.data.AttachmentEntity
 import app.shkriuss.feature.notes.data.NoteEntity
@@ -269,7 +270,7 @@ class NotesRepositoryTest {
         val stray = phone.store.stream("00000000-0000-4000-8000-0000000000ff").apply { writeBytes(ByteArray(3)) }
         val part = phone.store.part("00000000-0000-4000-8000-0000000000fe").apply { writeBytes(ByteArray(3)) }
 
-        assertTrue(repository.sweep())
+        assertTrue(repository.sweep(NoUndo))
 
         assertTrue(NoteRules.isWiped(checkNotNull(stored(gone))))
         assertNotNull(storedFile(ofGone)?.record?.deletedAt)
@@ -279,7 +280,61 @@ class NotesRepositoryTest {
         assertFalse(part.exists())
         assertTrue(phone.store.has(kept))
         assertEquals("Kept", stored(shown)?.body)
-        assertTrue("A second sweep finds nothing to do", repository.sweep())
+        assertTrue("A second sweep finds nothing to do", repository.sweep(NoUndo))
+    }
+
+    @Test
+    fun theSweepLeavesAloneTheRecordsOfTheUndoThatIsOpen() = runBlocking {
+        val id = phone.note("Trip", "Secret")
+        val ticket = file(id)
+        val undo = checkNotNull(repository.deleteNote(id))
+        val open = object : UndoTurns {
+            override suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T = action(undo.ids)
+        }
+
+        repository.sweep(open)
+
+        assertEquals("Secret", stored(id)?.body)
+        assertTrue(phone.store.has(ticket))
+        assertTrue("Its Undo still counts", repository.undo(undo))
+    }
+
+    @Test
+    fun aCheckpointThatCannotFinishIsTriedAgainShortlyWithoutKeepingTheCallerWaiting() = runBlocking {
+        val results = ArrayDeque(listOf(false, false, true))
+        val pauses = mutableListOf<Long>()
+        val background = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
+        val retrying = NotesRepository(
+            phone.database,
+            phone.clock,
+            phone.ids,
+            phone.store,
+            background,
+            checkpoint = { results.removeFirst() },
+            wait = { pauses += it },
+        )
+        val id = phone.note()
+
+        assertFalse("The first try did not finish", retrying.sweep(NoUndo))
+
+        assertEquals(listOf(1_000L, 5_000L), pauses)
+        assertTrue("It finished at the third try", results.isEmpty())
+        assertNotNull(stored(id))
+    }
+
+    @Test
+    fun newNoteCountsTheNewNotesThatAreNotMadeYet() = runBlocking {
+        val writer = RecordWriter(phone.database, phone.database.notes(), phone.clock, phone.ids)
+        phone.database.withWriteTransaction {
+            repeat(NoteLimits.MOST_NOTES - 2) { writer.create { fields, number -> NoteEntity(fields, number, "n$it", "", false, 0) } }
+        }
+
+        val first = checkNotNull(repository.reserveNewNote())
+        assertNotNull(repository.reserveNewNote())
+        assertNull("Two reserved and 4,998 shown make 5,000", repository.reserveNewNote())
+
+        repository.giveUpNewNote(first)
+        assertNotNull(repository.reserveNewNote())
     }
 
     @Test
@@ -289,12 +344,12 @@ class NotesRepositoryTest {
         val part = phone.store.part(running).apply { writeBytes(ByteArray(3)) }
         val stream = phone.store.stream(running).apply { writeBytes(ByteArray(3)) }
 
-        repository.sweep()
+        repository.sweep(NoUndo)
 
         assertTrue(part.exists())
         assertTrue(stream.exists())
         repository.releaseFileId(running)
-        repository.sweep()
+        repository.sweep(NoUndo)
         assertFalse(stream.exists())
     }
 

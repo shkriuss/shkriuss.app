@@ -173,3 +173,8 @@ internal fun eventually(condition: () -> Boolean) {
         Thread.sleep(5)
     }
 }
+
+/** The turns of Undo in a test with no snackbar: no Undo is ever open. */
+internal object NoUndo : UndoTurns {
+    override suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T = action(emptySet())
+}

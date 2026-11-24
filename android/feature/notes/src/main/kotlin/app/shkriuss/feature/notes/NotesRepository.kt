@@ -11,10 +11,12 @@ import app.shkriuss.feature.notes.data.FileTotals
 import app.shkriuss.feature.notes.data.NoteEntity
 import app.shkriuss.feature.notes.data.NotesDatabase
 import app.shkriuss.feature.notes.data.checkpoint
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -98,6 +100,10 @@ class NotesRepository(
     ids: IdSource,
     /** The streams of the files. */
     val store: NoteFileStore,
+    /** Where a checkpoint that could not finish is tried again, so that no caller waits for it. None: it waits for the next wipe or start. */
+    private val background: CoroutineScope? = null,
+    private val checkpoint: suspend () -> Boolean = { database.checkpoint() },
+    private val wait: suspend (Long) -> Unit = { delay(it) },
 ) {
     private val notes = database.notes()
     private val attachments = database.attachments()
@@ -149,6 +155,19 @@ class NotesRepository(
      * it has a title, a text or a file (spec, "Saving", point 2).
      */
     fun reserveNoteId(): String = noteWriter.reserveId()
+
+    private val newNotes = Mutex()
+
+    /**
+     * **New note**: reserves the `id` of a new note ([reserveNoteId]),
+     * unless the shown notes and the new notes reserved and not made yet
+     * are [NoteLimits.MOST_NOTES] together: then null. The count and the
+     * reservation are one step, so two presses never pass the limit
+     * together.
+     */
+    suspend fun reserveNewNote(): String? = newNotes.withLock {
+        if (notes.shownCount() + noteWriter.reservedIds().size >= NoteLimits.MOST_NOTES) null else noteWriter.reserveId()
+    }
 
     /** Gives up the new note [id] that is not made: an add that ends later does not make it. Nothing happens to a note that is made. */
     fun giveUpNewNote(id: String) = noteWriter.release(id)
@@ -263,7 +282,7 @@ class NotesRepository(
             undo.files.mapNotNull { step -> fileWriter.wipe(step.id, NoteRules::wiped)?.record?.id }
         }
         streams.withLock { wiped.forEach(store::remove) }
-        checkpointSoon()
+        checkpointOrRetry()
     }
 
     /**
@@ -286,7 +305,7 @@ class NotesRepository(
                 true
             }
         }
-        if (deleted) tryCheckpoint()
+        if (deleted) checkpointOrRetry()
         deleted
     }
 
@@ -348,42 +367,49 @@ class NotesRepository(
      * write-ahead file. A stop between any two of these is mended at the
      * next start.
      *
-     * The caller ends any open Undo first. The sweep leaves alone the part
-     * and the stream of an add that is running: its `id` is reserved. At
-     * start no add runs, so every `.part` file goes. Returns false if a
-     * wipe or a stream could not be removed: the next start tries again.
+     * The wipe takes its turn with the making and the press of Undo
+     * ([turns]) and leaves alone the records of the Undo that is open: a
+     * note deleted while the sweep at start runs keeps its Undo. The sweep
+     * leaves alone the part and the stream of an add that is running: its
+     * `id` is reserved. At start no add runs, so every `.part` file goes.
+     * Returns false if a wipe, a stream or the checkpoint could not be
+     * done now.
      */
-    suspend fun sweep(): Boolean = withContext(NonCancellable) {
+    suspend fun sweep(turns: UndoTurns): Boolean = withContext(NonCancellable) {
         database.withWriteTransaction {
             attachments.shownOfDeletedNotes().forEach { fileWriter.markDeleted(it.record.id) }
         }
-        database.withWriteTransaction {
-            notes.deletedNotWiped().forEach { noteWriter.wipe(it.record.id, NoteRules::wiped) }
-            attachments.deletedNotWiped().forEach { fileWriter.wipe(it.record.id, NoteRules::wiped) }
+        turns.inTurn { openUndo ->
+            database.withWriteTransaction {
+                notes.deletedNotWiped().filter { it.record.id !in openUndo }.forEach { noteWriter.wipe(it.record.id, NoteRules::wiped) }
+                attachments.deletedNotWiped().filter { it.record.id !in openUndo }.forEach { fileWriter.wipe(it.record.id, NoteRules::wiped) }
+            }
         }
         val removed = removeUnneededStreams()
-        checkpointSoon() && removed
+        checkpointOrRetry() && removed
     }
 
     /**
      * Checkpoints the write-ahead file. A checkpoint that cannot finish,
      * because a read stays open past SQLite's busy time, is tried again
-     * shortly, three times; then at the next wipe or start
-     * (spec, "Removing a file, and the wipe", point 4). True once it
-     * finished.
+     * in [background] after 1, 5 and 30 seconds, so that no caller waits;
+     * then at the next wipe or start (spec, "Removing a file, and the
+     * wipe", point 4). True if it finished now.
      */
-    private suspend fun checkpointSoon(): Boolean {
+    private suspend fun checkpointOrRetry(): Boolean {
         if (tryCheckpoint()) return true
-        CHECKPOINT_RETRY_MILLIS.forEach { pause ->
-            delay(pause)
-            if (tryCheckpoint()) return true
+        background?.launch {
+            for (pause in CHECKPOINT_RETRY_MILLIS) {
+                wait(pause)
+                if (tryCheckpoint()) break
+            }
         }
         return false
     }
 
     /** Checkpoints the write-ahead file ([checkpoint]). False if it could not finish or failed: the next wipe or start tries again. */
     private suspend fun tryCheckpoint(): Boolean = try {
-        database.checkpoint()
+        checkpoint()
     } catch (_: SQLException) {
         false
     }

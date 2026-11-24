@@ -49,11 +49,10 @@ val NotesMessage.offeredUndo: Undo?
  */
 interface UndoTurns {
     /**
-     * Runs [action] for the record [id] in a turn of its own, unless the
-     * record belongs to the Undo that is open: then it returns null and
-     * runs nothing.
+     * Runs [action] in a turn of its own, with the `id`s of the records of
+     * the Undo that is open now. No Undo is made or pressed while it runs.
      */
-    suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T?
+    suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T
 }
 
 /**
@@ -69,7 +68,7 @@ interface UndoTurns {
  * The write that makes an Undo and its snackbar take one turn ([offer]),
  * and so does a press of Undo and its write. The move of the file keys
  * seals each record in a turn of its own and leaves alone the records of
- * the open Undo ([unlessInOpenUndo]), so it never gives such a record a
+ * the open Undo ([inTurn]), so it never gives such a record a
  * new change number, which would stop the Undo
  * (spec, "Before the recovery key: the file key move", point 3).
  */
@@ -98,8 +97,8 @@ class NotesSnackbars(
         write()?.also(::show)
     }
 
-    override suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T? = turns.withLock {
-        if (id in openUndoIds) null else action()
+    override suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T = turns.withLock {
+        action(openUndoIds)
     }
 
     /** Shows [message] in place of the snackbar that shows now, whose Undo then ends. */
@@ -212,7 +211,7 @@ class FileKeyMove(
         repository.filesToSealAgain(emptySet(), needsNewSeal).forEach { id ->
             try {
                 // Asked again for each record, in the turn of the Undo: an Undo made meanwhile keeps its change numbers.
-                undoTurns.unlessInOpenUndo(id) { repository.sealAgain(id, needsNewSeal, files::sealAgain) }
+                undoTurns.inTurn { openUndo -> if (id !in openUndo) repository.sealAgain(id, needsNewSeal, files::sealAgain) }
             } catch (_: BlobException) {
                 // Damaged, or sealed by a key that is gone: the move stays pending (spec, point 5).
                 allSealed = false

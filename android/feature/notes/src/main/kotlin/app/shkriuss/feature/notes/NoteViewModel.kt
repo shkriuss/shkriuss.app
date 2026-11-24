@@ -153,7 +153,10 @@ class NoteViewModel(
     private suspend fun watchFiles() {
         combine(repository.filesOf(noteId), checkAgain) { files, _ -> files }
             .mapLatest { files -> files.map { FileRowState(it, reader.stateOf(it)) } }
-            .catch { error -> if (error !is SQLException) throw error }
+            .catch { error ->
+                // The files cannot be read: the note shows "Could not open your notes." rather than no files.
+                if (error is SQLException) shown.update { it.copy(failed = true) } else throw error
+            }
             .collect { rows -> shown.update { it.copy(files = rows) } }
     }
 
@@ -328,16 +331,21 @@ class NoteViewModel(
 
     /**
      * **Delete note**: what is typed is saved first, so that **Undo**
-     * brings it back. The note closes, with "Note deleted" and **Undo**. A
-     * new note that is not made yet is given up. Pressed twice, it deletes
-     * once.
+     * brings it back; if that save fails, nothing is deleted. The note
+     * closes, with "Note deleted" and **Undo**. A new note that is not made
+     * yet is given up. Pressed twice, it deletes once.
      */
     fun delete() {
         if (closing || shown.value.closed) return
         closing = true
         cancelTimer()
         viewModelScope.launch(work) {
-            saveNow()
+            if (!saveNow()) {
+                // What is typed is not saved: the note stays open with it, and its line says so (spec, "A write fails").
+                closing = false
+                snackbars.show(NotesMessage.CouldNotChange)
+                return@launch
+            }
             try {
                 val deleted = snackbars.offer { repository.deleteNote(noteId)?.let(NotesMessage::NoteDeleted) }
                 if (deleted == null) repository.giveUpNewNote(noteId)
@@ -376,6 +384,7 @@ class NoteViewModel(
             }
             shown.update { it.copy(copying = null) }
             if (result != CopyResult.BUSY) snackbars.show(NotesMessage.Copy(result))
+            if (result == CopyResult.DAMAGED || result == CopyResult.DAMAGED_PART_LEFT) checkFilesAgain()
         }
     }
 

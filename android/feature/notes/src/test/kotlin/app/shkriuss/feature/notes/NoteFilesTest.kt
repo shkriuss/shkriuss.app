@@ -53,9 +53,9 @@ class NoteFilesTest {
     /** The open Undo as the move asks for it, record by record; [asked] counts the questions. */
     private var asked = 0
     private val undoTurns = object : UndoTurns {
-        override suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T? {
+        override suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T {
             asked++
-            return if (id in openUndo) null else action()
+            return action(openUndo)
         }
     }
     private val keyMove by lazy { FileKeyMove(repository, crypto, fileKeys, undoTurns, Dispatchers.IO) }
@@ -292,6 +292,34 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aStreamThatACopyFoundDamagedShowsAsDamagedFromThen() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick("damaged.jpg", bytes = ByteArray(1_500_000)))
+        val damaged = shown(id).single()
+        val stream = phone.store.stream(damaged.id)
+        stream.writeBytes(stream.readBytes().also { it[1_200_000] = (it[1_200_000] + 1).toByte() })
+        assertEquals("The length is right, and no segment was read yet", FileState.READY, reader.stateOf(damaged))
+
+        assertEquals(CopyResult.DAMAGED, reader.saveCopy(damaged, TestTarget()))
+
+        assertEquals(FileState.DAMAGED, reader.stateOf(damaged))
+    }
+
+    @Test
+    fun aReadThatMeetsDamageMarksTheFileDamaged() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick("damaged.jpg", bytes = ByteArray(1_500_000)))
+        val damaged = shown(id).single()
+        val stream = phone.store.stream(damaged.id)
+        stream.writeBytes(stream.readBytes().also { it[100] = (it[100] + 1).toByte() })
+
+        val failure = runCatching { read(damaged) }.exceptionOrNull()
+
+        assertTrue(failure is app.shkriuss.core.crypto.BlobException)
+        assertEquals(FileState.DAMAGED, reader.stateOf(damaged))
+    }
+
+    @Test
     fun theKeysOfFilesAddedBeforeTheRecoveryKeyMoveToItWithUpdatedAtAsItWas() = runBlocking {
         val id = phone.note()
         add(id, TestPick("a.jpg"), TestPick("b.jpg"))
@@ -340,10 +368,8 @@ class NoteFilesTest {
         val deleting = object : UndoTurns {
             var undo: Undo? = null
 
-            override suspend fun <T> unlessInOpenUndo(id: String, action: suspend () -> T): T? {
-                val open = undo?.ids.orEmpty()
-                if (id in open) return null
-                val done = action()
+            override suspend fun <T> inTurn(action: suspend (openUndo: Set<String>) -> T): T {
+                val done = action(undo?.ids.orEmpty())
                 if (undo == null) undo = repository.deleteNote(first.noteId)
                 return done
             }

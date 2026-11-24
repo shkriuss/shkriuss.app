@@ -103,21 +103,22 @@ class NotesListViewModel(
 
     /**
      * **New note**: reserves the `id` of a new note, for the screen to
-     * open, unless 5,000 notes are shown: then it shows "Notes keeps 5,000
-     * notes. Delete some to add more." A second press before the note
-     * opens does nothing, so one note opens.
+     * open, unless 5,000 notes are shown, new ones that are not made yet
+     * counted too: then it shows "Notes keeps 5,000 notes. Delete some to
+     * add more." A second press before the note opens does nothing, so
+     * one note opens.
      */
     fun newNote() {
         if (opening.value != null || !asking.compareAndSet(false, true)) return
         viewModelScope.launch(work) {
             try {
-                val full = try {
-                    repository.shownCount() >= NoteLimits.MOST_NOTES
+                val reserved = try {
+                    repository.reserveNewNote()
                 } catch (_: SQLException) {
                     snackbars.show(NotesMessage.CouldNotChange)
                     return@launch
                 }
-                if (full) snackbars.show(NotesMessage.NotesFull) else opening.value = repository.reserveNoteId()
+                if (reserved == null) snackbars.show(NotesMessage.NotesFull) else opening.value = reserved
             } finally {
                 asking.set(false)
             }

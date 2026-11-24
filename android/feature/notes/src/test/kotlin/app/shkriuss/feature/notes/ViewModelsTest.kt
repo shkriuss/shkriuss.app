@@ -1,5 +1,7 @@
 package app.shkriuss.feature.notes
 
+import androidx.room3.executeSQL
+import androidx.room3.useWriterConnection
 import androidx.room3.withWriteTransaction
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.testing.TestIdSource
@@ -276,6 +278,40 @@ class ViewModelsTest {
         note.tryAgain()
         note.state.await { it.closed }
         assertEquals("Passport and tickets", stored(id)?.body)
+    }
+
+    @Test
+    fun deleteDoesNothingWhenWhatIsTypedCannotBeSaved() {
+        val id = phone.note("Trip", "Passport")
+        val note = open(id)
+        note.state.await { !it.loading }
+        // The database refuses a new text, and would take the delete, which leaves the text as it is.
+        runBlocking {
+            phone.database.useWriterConnection { connection ->
+                connection.executeSQL(
+                    "CREATE TRIGGER refuse_text BEFORE UPDATE ON note WHEN NEW.body != OLD.body BEGIN SELECT RAISE(ABORT, 'refused'); END",
+                )
+            }
+        }
+        note.onBodyChange(TextEdit("Passport and tickets", 20))
+
+        note.delete()
+
+        assertEquals(NotesMessage.CouldNotChange, snackbars.current.await { it != null })
+        note.state.await { it.saveFailed }
+        assertFalse(note.state.value.closed)
+        assertNull(stored(id)?.record?.deletedAt)
+        assertEquals("Passport and tickets", note.state.value.body.text)
+    }
+
+    @Test
+    fun aNoteWhoseFilesCannotBeReadShowsThatNotesCannotBeOpened() {
+        val id = phone.note("Trip", "")
+        phone.database.refuseReadsOf("attachment")
+
+        val note = open(id)
+
+        note.state.await { it.failed }
     }
 
     @Test
