@@ -14,6 +14,8 @@ Folders:
   its specification.
 - [tasks/](tasks/README.md): Tasks, the third app, with its
   specification.
+- [notes/](notes/README.md): Notes, with its specification. Not built
+  yet.
 
 What else belongs here:
 
