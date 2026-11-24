@@ -30,6 +30,12 @@ enum class BackupTake {
  *   in the same write transaction as the write itself.
  * - [takeFromBackup] is the one write that keeps the [RecordFields] it is
  *   given: a record of a backup was stamped when it was first written.
+ * - [wipe] and [sealFileKeyAgain] are not edits by the user. They keep
+ *   the four [RecordFields] as they are, `updatedAt` too, and give the
+ *   record a new change number.
+ * - [reserveId] hands out the ID of a record before it is created, for a
+ *   record whose file must be written first. [create] with that ID stores
+ *   it.
  *
  * `updatedAt` always moves forward, even when the device's clock was set
  * back: a write sets it to now, or to one millisecond after the record's
@@ -47,18 +53,72 @@ class RecordWriter<T : Record<T>>(
     private val clock: Clock,
     private val ids: IdSource,
 ) {
+    /** The IDs that [reserveId] handed out and [release] did not give up yet. Guarded by itself. */
+    private val reserved = mutableSetOf<String>()
+
     /**
      * Stores a new record. [build] gets the new record's fields and change
      * number, and returns the record. Any change it makes to them is
      * ignored.
      */
     suspend fun create(build: (fields: RecordFields, changeNumber: Long) -> T): T = database.withWriteTransaction {
+        insertNew(ids.newId(), build)
+    }
+
+    /**
+     * Stores a new record with the ID [reservedId], which [reserveId] of
+     * this writer handed out, as [create] does with a new ID. It is for a
+     * record whose file must be written before the record, under the
+     * record's ID.
+     *
+     * Throws [IllegalArgumentException] if this writer did not reserve
+     * [reservedId], or [release] gave it up, and [IllegalStateException]
+     * if a record with that ID is stored already. The reservation stays
+     * until [release]: the record is seen by other reads only once the
+     * transaction around this call commits.
+     */
+    suspend fun create(reservedId: String, build: (fields: RecordFields, changeNumber: Long) -> T): T =
+        database.withWriteTransaction {
+            require(isReserved(reservedId)) { "Only an ID that this writer reserved" }
+            check(dao.find(reservedId) == null) { "A record with the reserved ID is stored already" }
+            insertNew(reservedId, build)
+        }
+
+    /**
+     * Hands out the ID of a record that is not created yet, from this
+     * writer's [IdSource], and keeps it reserved until [release]. A record
+     * whose file must be written first gets its ID here, writes its file
+     * under that ID, and is then stored with `create(reservedId)`. While
+     * the ID is reserved, the app leaves the file alone when it removes
+     * files that no record names ([reservedIds]).
+     */
+    fun reserveId(): String {
+        val id = ids.newId()
+        synchronized(reserved) { reserved += id }
+        return id
+    }
+
+    /**
+     * Gives up the reservation of [id]: the record was stored and its
+     * transaction committed, or it will not be created. Nothing happens if
+     * [id] is not reserved.
+     */
+    fun release(id: String) {
+        synchronized(reserved) { reserved -= id }
+    }
+
+    /** The IDs reserved now: handed out by [reserveId], and not given up by [release]. */
+    fun reservedIds(): Set<String> = synchronized(reserved) { reserved.toSet() }
+
+    private fun isReserved(id: String): Boolean = synchronized(reserved) { id in reserved }
+
+    private suspend fun PooledConnection.insertNew(id: String, build: (fields: RecordFields, changeNumber: Long) -> T): T {
         val now = clock.nowMillis()
-        val fields = RecordFields(id = ids.newId(), createdAt = now, updatedAt = now, deletedAt = null)
+        val fields = RecordFields(id = id, createdAt = now, updatedAt = now, deletedAt = null)
         val changeNumber = nextChangeNumber()
         val record = build(fields, changeNumber).withRecord(fields, changeNumber)
         dao.rawInsert(record)
-        record
+        return record
     }
 
     /**
@@ -104,6 +164,57 @@ class RecordWriter<T : Record<T>>(
         if (current == null || !current.record.isDeleted) return@withWriteTransaction null
         val fields = current.record.copy(updatedAt = nextUpdatedAt(current.record), deletedAt = null)
         write(current.withRecord(fields, nextChangeNumber()))
+    }
+
+    /**
+     * Clears the content of the deleted record with [id] (ADR 0042).
+     * [wiped] gets the stored record and returns it with every content
+     * column in its table's wiped form, which the app's specification
+     * names. Any change it makes to the [RecordFields] or the change
+     * number is ignored.
+     *
+     * A wipe is not an edit: it keeps the four record fields as they are,
+     * `updatedAt` too, so it does not change which edit wins in a restore.
+     * It gives the record a new change number. A wiped record is never
+     * brought back with [restore]: the app wipes only once **Undo** has
+     * ended.
+     *
+     * Returns the wiped record, or null if there is no record with [id], it
+     * is not deleted, or it is wiped already: [wiped] gave it back as it
+     * was, and nothing was written.
+     */
+    suspend fun wipe(id: String, wiped: (T) -> T): T? = database.withWriteTransaction {
+        val current = dao.find(id)
+        if (current == null || !current.record.isDeleted) return@withWriteTransaction null
+        val changed = wiped(current).withRecord(current.record, current.changeNumber)
+        if (changed == current) return@withWriteTransaction null
+        write(changed.withRecord(current.record, nextChangeNumber()))
+    }
+
+    /**
+     * Writes the record with [id] with its wrapped file key sealed again by
+     * the key that seals file keys now (crypto-design.md, "The file-key
+     * keyset without a recovery key", point 6). [sealedAgain] gets the
+     * stored record, inside the write transaction, and returns it with its
+     * wrapped file key sealed again and nothing else changed, or null to
+     * leave it: a record that holds no key, or whose key needs no new seal.
+     * Any change it makes to the [RecordFields] or the change number is
+     * ignored.
+     *
+     * Sealing a key again is not an edit by the user: the four record
+     * fields stay as they are, `updatedAt` too, and the record gets a new
+     * change number. It also writes a deleted record, because a deletion
+     * can be undone and the file must then open.
+     *
+     * Returns the written record, or null if there is no record with [id],
+     * or [sealedAgain] gave null or the record as it was: then nothing was
+     * written.
+     */
+    suspend fun sealFileKeyAgain(id: String, sealedAgain: (T) -> T?): T? = database.withWriteTransaction {
+        val current = dao.find(id) ?: return@withWriteTransaction null
+        val changed = sealedAgain(current)?.withRecord(current.record, current.changeNumber)
+        if (changed == null || changed == current) return@withWriteTransaction null
+        write(changed.withRecord(current.record, nextChangeNumber()))
     }
 
     /**

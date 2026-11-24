@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Notes (app.shkriuss.notes). Its permissions are listed in
+    docs/security/permissions.md. Its allow list in the APK rules check has
+    these two, and none of its own:
+
+    - the two of core/security, for the system prompt (ADR 0031) and for
+      hiding other apps' windows (ADR 0033). core/security adds them, its
+      eight screens and its status provider. Of these, only the handover
+      screen and the status provider are exported, with no permission:
+      each checks the calling app first (ADR 0041). The APK rules check
+      fails an app that has the screens without both permissions.
+
+    Notes shows no notifications and uses no alarm, so it never has the
+    three of core/notify. Files come and go through the system pickers
+    only: no storage and no camera permission (docs/apps/notes/spec.md,
+    "Permissions").
+
+    Notes stores its data in its own database and its files in its own
+    folder, and will back them up only into the backup file of the suite,
+    so Android backup and device-to-device transfer are turned off
+    (docs/user/backup.md).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        androidx.core adds this permission for Android 12 and older only,
+        below the minimum. Removed for good, as in Water.
+    -->
+    <permission
+        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        tools:node="remove" />
+    <uses-permission
+        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        tools:node="remove" />
+
+    <application
+        android:name=".NotesApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Shk">
+
+        <!--
+            The one screen of Notes' own, and its only exported part. All of
+            its content is in AppLockGate. The eight screens and the status
+            provider of core/security come from that module's manifest. Two
+            of them are exported, for the handover between apps: the handover
+            screen and the status provider (ADR 0041). NotesManifestTest
+            checks that these three are the only exported parts.
+        -->
+        <activity
+            android:name=".NotesActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            androidx.profileinstaller adds this receiver, exported to every
+            caller with android.permission.DUMP: the system and the developer
+            shell. Removed, as in Water: Notes lets no other app reach any
+            part of it but its screen and the two parts of the handover
+            (docs/apps/notes/spec.md, "Permissions"). The start-up profile
+            is still installed when the app starts, by the profile
+            installer's initializer in androidx.startup.
+
+            Lint cannot see this class: the library comes in only at run
+            time. The removal works, which NotesManifestTest checks in the
+            merged manifest. So MissingClass is ignored here only.
+        -->
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:ignore="MissingClass"
+            tools:node="remove" />
+
+        <!--
+            Emoji support would look for a downloadable font from a system
+            font provider. On most phones that is Google Play services, which
+            the suite never uses. Android ships its own emoji font. As in
+            Water's manifest.
+
+            Lint cannot see this provider class, because it comes from a
+            library that Compose uses only at run time (androidx.startup).
+            The class is in the APK, so MissingClass is ignored here only.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:ignore="MissingClass"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>

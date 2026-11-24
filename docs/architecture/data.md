@@ -152,6 +152,13 @@ the table's DAO, a `Clock` and an `IdSource` through its constructor.
 9. `takeFromBackup(record)` takes one record of a backup. It is the one
    write that keeps the record fields it is given, because that record
    was stamped when it was first written. See below.
+10. Two writes are not edits by the user. They keep the four record
+    fields as they are, `updatedAt` too, and give the record a new
+    change number: `wipe` and `sealFileKeyAgain`. See
+    [Writes that are not edits](#writes-that-are-not-edits).
+11. `reserveId()` hands out the ID of a record before it is created, for
+    a record whose file must be written first. See
+    [A reserved ID](#a-reserved-id).
 
 ### Records from a backup
 
@@ -183,6 +190,41 @@ newest edit wins.
      gives the answer it gives for any record it cannot read.
 6. It is the function for backups. Sync gets its own, because there the
    same `updatedAt` must end the same on every device.
+
+### Writes that are not edits
+
+Neither moves `updatedAt`, so neither changes which edit wins in a
+restore, or later in sync. Each takes a function that gets the stored
+record, inside the write transaction, and returns it changed. A change
+the function makes to the record fields or the change number is
+ignored.
+
+| Write | What it does | Nothing is written, and it returns null, when |
+|---|---|---|
+| `wipe(id) { current -> wiped }` | Clears the content of a deleted record: the function returns it with every content column in its table's wiped form ([ADR 0042](../adr/0042-wiping-the-content-of-deleted-records.md)). | There is no record with the ID, it is not deleted, or it is wiped already: the function gave it back as it was. |
+| `sealFileKeyAgain(id) { current -> sealed }` | Writes a record with its wrapped file key sealed again by the key that seals file keys now, and nothing else changed ([crypto-design.md](../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key), point 6). Also for a deleted record, because a deletion can be undone and the file must then open. | There is no record with the ID, or the function gave null or the record as it was. |
+
+1. An app wipes only once the **Undo** of a deletion has ended. A wiped
+   record is never brought back with `restore`.
+2. Each app that wipes says, in its specification, what the wiped form
+   of each table is, and which of its tables hold wrapped file keys.
+   Notes is the first ([its spec](../apps/notes/spec.md#the-wiped-form)).
+
+### A reserved ID
+
+A record whose file is written before the record, such as a file of
+Notes whose encrypted stream is named by the record's ID, needs its ID
+first.
+
+1. `reserveId()` takes a new ID from the writer's own `IdSource` and
+   keeps it reserved.
+2. `create(reservedId) { fields, changeNumber -> ... }` stores the record
+   under that ID, as `create` does with a new one. It takes only an ID
+   that this writer reserved, and refuses one that is stored already.
+3. The ID stays reserved until `release(id)`: the app calls it once the
+   transaction around the create has committed, or when the record will
+   not be created. `reservedIds()` lists the IDs reserved now, so the app
+   leaves alone the file of a record that is not stored yet.
 
 ### Clock and IDs
 
@@ -399,7 +441,7 @@ a wrong migration and a missing step fail.
 
 | Test | Module | What it checks |
 |---|---|---|
-| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back, stops at the last time a record can hold and never moves back; every write gets a new change number, across the tables of a database; a number is not used again after a purge; a failed write transaction rolls back, its numbers with it. For `takeFromBackup`: each of its three answers, the record fields kept, a change number only for a write, a deletion as an edit like any other, the same records taken twice, several calls that roll back together, and a time that no record can hold refused. |
+| `RecordWriterTest` | `core/data` | Stamping on create, update, delete and restore; deletes only mark; `updatedAt` moves forward when the clock is set back, stops at the last time a record can hold and never moves back; every write gets a new change number, across the tables of a database; a number is not used again after a purge; a failed write transaction rolls back, its numbers with it. For `takeFromBackup`: each of its three answers, the record fields kept, a change number only for a write, a deletion as an edit like any other, the same records taken twice, several calls that roll back together, and a time that no record can hold refused. For `wipe` and `sealFileKeyAgain`: the four record fields kept, `updatedAt` too, a new change number, the record fields the caller changes ignored, a deleted record sealed again, nothing written when there is nothing to do, and a wipe that does not change which edit wins in a restore. For a reserved ID: it comes from the writer's `IdSource`, a create stores the record under it, only an ID this writer reserved and that is not stored is taken, and a create that rolls back keeps the ID reserved. |
 | `ChangedSinceTest` | `core/data` | Paging reads every change once, in order, deleted records included; a clock set back hides no change; a write that commits while a reader is paging is read after it; the query plan uses the index. |
 | `SampleMigrationTest` | `core/data` | The example migration with its change numbers and counter, Room opening the migrated file and counting on, every version migrating to the newest, the record conventions, and that a wrong migration and a missing step fail. |
 | `RecordConventionsTest` | `core/testing` | The conventions check passes a good database and names each problem; the change number check finds shared and too high numbers. |

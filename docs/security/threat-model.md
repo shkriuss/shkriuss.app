@@ -11,9 +11,11 @@ does not. It ends with the OWASP MASVS controls and every open question.
   [The owner's decisions](#the-owners-decisions). Where
   nothing is decided, it says **Open**. Every open point is listed at
   the [end](#open-questions).
-- What exists today: Catalog, Water, Reminders, Tasks and the core
-  modules ([modules.md](../architecture/modules.md)). Water is the first
-  data app, Reminders the second and Tasks the third. There is no Sync
+- What exists today: Catalog, Water, Reminders, Tasks, the data and
+  logic of Notes, and the core modules
+  ([modules.md](../architecture/modules.md)). Water is the first data
+  app, Reminders the second and Tasks the third. Notes, the fourth, has
+  no screens yet. There is no Sync
   app and no sync server yet. Where this page speaks of sync, it
   describes what is decided for it, not what is built. The handover
   between apps is built. What each app stores is in the
@@ -189,7 +191,7 @@ What stops it:
    on or off.
 6. Android's own backup and device transfer are off. crypto-design.md
    asks this of every app ("Where keys are stored", point 1). Catalog,
-   Water, Reminders and Tasks turn both off.
+   Water, Reminders, Tasks and Notes turn both off.
 
 What does not:
 
@@ -207,6 +209,17 @@ What does not:
    keys of its file-based encryption. Someone who can break Android then
    can read the rows. A compromised operating system is
    [out of scope](#out-of-scope).
+5. Deleted content. A deleted record stays in the database as its
+   deletion marker, with its content
+   ([data.md](../architecture/data.md#writing-records)). Notes wipes the
+   content of a deleted note and its files once the note's **Undo** has
+   ended: the text, the file names and the wrapped keys are cleared, the
+   streams are removed, and the write-ahead file is cut to zero
+   ([ADR 0042](../adr/0042-wiping-the-content-of-deleted-records.md)).
+   What a wipe cannot reach: a backup made before it, and old blocks
+   that the flash storage keeps, under Android's file-based encryption.
+   An old block that held a wrapped key could still be opened with the
+   app's `file-key`. Water, Reminders and Tasks do not wipe.
 
 ### Other apps on the phone
 
@@ -243,7 +256,8 @@ What stops it:
    - One exception, in Catalog only: the receiver of
      `androidx.profileinstaller` is exported to callers with
      `android.permission.DUMP`, which only the system and the developer
-     shell hold. Water, Reminders and Tasks remove it (owner's decision).
+     shell hold. Water, Reminders, Tasks and Notes remove it (owner's
+     decision).
      Open, for the next change to Catalog: remove it there too
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 4. There is one content provider of our own, the status provider of the
@@ -367,8 +381,9 @@ What stops it:
 1. Data apps have no network permission
    ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). The
    APK rules check fails the build of an app that asks for a permission
-   it is not allowed. Today only Water, Reminders and Tasks are allowed
-   any: the same five each, none of them a network permission
+   it is not allowed. Today only Water, Reminders, Tasks and Notes are
+   allowed any: the same five each for the first three, the two of
+   `core/security` for Notes, none of them a network permission
    ([permissions.md](permissions.md#rules)). So a data app sends nothing.
 2. Only the Sync app will talk to the network. It will move only sealed
    records and encrypted files, which it cannot open
@@ -1158,7 +1173,7 @@ Status: **Open (the sync design).**
   two have no permission: each checks the caller's certificate first,
   and gives a refused caller nothing. Open: Catalog still exports the receiver of
   `androidx.profileinstaller` to callers with `android.permission.DUMP`,
-  until its next change. Water, Reminders and Tasks remove it
+  until its next change. Water, Reminders, Tasks and Notes remove it
   ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 - MASWE-0019, autofill for credential managers: does not apply. There
   are no passwords. The word field turns autofill off on purpose.
