@@ -72,7 +72,7 @@ Record 0042 comes from the specification of Notes
 ([spec.md](../apps/notes/spec.md)): wiping the content of a deleted
 record. The owner decided on 2026-11-24 that the text and the files of
 a deleted note are wiped when its Undo ends. Claude proposed the
-details.
+details in pull request 109.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).

@@ -6,7 +6,8 @@
   ([spec.md](../apps/notes/spec.md#removing-a-file-and-the-wipe)). The
   owner decided that the text and the files of a deleted note are wiped
   when its **Undo** ends, with a new write in `core/data` for every app.
-  Claude proposed the details.
+  Claude proposed the details in
+  [pull request 109](https://github.com/shkriuss/shkriuss.app/pull/109).
 
 ## Context
 
