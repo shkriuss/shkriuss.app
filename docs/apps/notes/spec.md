@@ -312,7 +312,11 @@ phone's time zone and format.
    with the words of point 2.
 5. It closes the stream, flushes the file, renames it to `<id>` and
    flushes the folder. Then one transaction writes the record, and the
-   note too if it was a new one with nothing in it yet. The key is made
+   note too if it was a new one with nothing in it yet. That transaction
+   first checks that the note is still shown. If it was deleted while
+   the file was copied, nothing is written, the stream is deleted at
+   once, and Notes says "The note was deleted. The file was not added."
+   So no file of a deleted or wiped note is ever written. The key is made
    before the copy starts, so a lock or a screen that turns off does not
    stop it ([crypto-design.md](../../security/crypto-design.md#keys-in-memory)).
    Adding goes on when the note closes.
