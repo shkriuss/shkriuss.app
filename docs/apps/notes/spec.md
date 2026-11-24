@@ -631,8 +631,12 @@ for each segment.
 3. The open screens show the restored notes at once.
 4. A wipe does not change which edit wins. A note that this phone
    deleted and wiped comes back when the backup holds a later edit of
-   it, made on another copy of Notes, with that copy's text and files.
-   This is the owner's decision
+   it, made on another copy of Notes, with that copy's text. The newest
+   edit wins for each record on its own: a file of that note comes back
+   only when the other copy added or brought it back after this phone
+   deleted it. A file it did not touch stays deleted and wiped, because
+   this phone's deletion of it is the newer edit. This is the owner's
+   decision
    ([Decided by the owner](#decided-by-the-owner), point 5).
 
 ### Size
@@ -734,8 +738,8 @@ late, and when the clock or the time zone changes
    ([Removing a file, and the wipe](#removing-a-file-and-the-wipe)).
 5. **A wiped note and a later edit elsewhere**: the newest edit wins, as
    in every restore. A backup from another copy of Notes that edited the
-   note after this phone wiped it brings the note back
-   ([After a restore](#after-a-restore), point 4).
+   note after this phone wiped it brings the note back, with its newer
+   files only ([After a restore](#after-a-restore), point 4).
 
 ## Assumptions
 
