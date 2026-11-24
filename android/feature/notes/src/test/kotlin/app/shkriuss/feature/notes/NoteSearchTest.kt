@@ -57,6 +57,7 @@ class NoteSearchTest {
 
         assertEquals(listOf(9..12), NoteSearch.rangesIn(text, "trip"))
         assertEquals(listOf(0..7), NoteSearch.match(note(title = text), emptyList(), "\u0130STANBUL")?.inTitle)
+        assertEquals("A match inside the two characters of one takes the whole of it", listOf(0..0), NoteSearch.rangesIn("\u0130", "i"))
     }
 
     @Test

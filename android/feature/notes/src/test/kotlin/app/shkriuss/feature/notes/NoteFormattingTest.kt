@@ -146,6 +146,19 @@ class NoteFormattingTest {
     }
 
     @Test
+    fun aLongLineOfMarksThatCloseNothingTakesOnePass() {
+        // 100,000 characters in which every mark opens and none closes: each later mark follows a space.
+        val line = "*a ".repeat(33_333)
+        val started = System.nanoTime()
+
+        assertEquals(emptyList<LookRange>(), NoteFormatting.looks(line).filter { it.look != Look.MARK })
+        assertEquals(line.replace(" ", " "), NoteFormatting.plain(line))
+
+        val seconds = (System.nanoTime() - started) / 1e9
+        assertTrue("It took $seconds seconds", seconds < 2.0)
+    }
+
+    @Test
     fun aRowShowsTheTextWithoutItsMarksAndLineBreaksAsSpaces() {
         assertEquals("Trip Passport Tickets", NoteFormatting.plain("# Trip\n- [ ] Passport\n- [x] **Tickets**"))
         assertEquals("Marks that do not count stay", "a ** b", NoteFormatting.plain("a ** b"))

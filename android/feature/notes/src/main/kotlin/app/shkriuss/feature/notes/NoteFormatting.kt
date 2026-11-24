@@ -238,13 +238,15 @@ object NoteFormatting {
 
     /** The bold and italic marks of one [line] that count: each from [InlineMark.start] to [InlineMark.end], marks included. */
     internal fun inlineMarks(line: String): List<InlineMark> = buildList {
+        val bold = Closers(line, "**")
+        val italic = Closers(line, "*")
         var index = 0
         while (index < line.length) {
             if (line[index] != '*') {
                 index++
                 continue
             }
-            val found = closing(line, index, "**") ?: closing(line, index, "*")
+            val found = bold.closing(index) ?: italic.closing(index)
             if (found == null) {
                 index++
             } else {
@@ -255,21 +257,33 @@ object NoteFormatting {
     }
 
     /**
-     * The mark [marks] that opens at [open] and the nearest one that closes
-     * it: the opening mark is followed by a character that is not a space,
-     * and the closing one follows such a character.
+     * The places in [line] where [marks] can close a mark: each follows a
+     * character that is not a space. They are found once for the line, so
+     * a line full of marks that close nothing takes one pass, not one pass
+     * for each mark.
      */
-    private fun closing(line: String, open: Int, marks: String): InlineMark? {
-        val size = marks.length
-        if (!line.regionMatches(open, marks, 0, size)) return null
-        val first = open + size
-        if (first >= line.length || line[first] == ' ') return null
-        var close = line.indexOf(marks, first + 1)
-        while (close >= 0) {
-            if (line[close - 1] != ' ') return InlineMark(open, close + size, size)
-            close = line.indexOf(marks, close + 1)
+    private class Closers(private val line: String, private val marks: String) {
+        private val places: IntArray = buildList {
+            var at = line.indexOf(marks, 1)
+            while (at >= 0) {
+                if (line[at - 1] != ' ') add(at)
+                at = line.indexOf(marks, at + 1)
+            }
+        }.toIntArray()
+
+        /**
+         * The mark [marks] that opens at [open] and the nearest one that
+         * closes it: the opening mark is followed by a character that is
+         * not a space, and the closing one follows such a character.
+         */
+        fun closing(open: Int): InlineMark? {
+            val size = marks.length
+            if (!line.regionMatches(open, marks, 0, size)) return null
+            val first = open + size
+            if (first >= line.length || line[first] == ' ') return null
+            val found = places.binarySearch(first + 1).let { if (it < 0) -it - 1 else it }
+            return if (found < places.size) InlineMark(open, places[found] + size, size) else null
         }
-        return null
     }
 
     /** The lines that [edit]'s cursor or selection touches, each with its start. */

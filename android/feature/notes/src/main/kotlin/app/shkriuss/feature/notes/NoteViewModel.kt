@@ -289,8 +289,21 @@ class NoteViewModel(
         if (closing || shown.value.closed) return
         cancelTimer()
         viewModelScope.launch(work) {
-            if (saveNow()) finishClosing() else shown.update { it.copy(askUnsaved = true) }
+            if (saveAll()) finishClosing() else shown.update { it.copy(askUnsaved = true) }
         }
+    }
+
+    /** Saves until nothing typed is left unsaved, also a change that came while a save wrote. False if a save failed. */
+    private suspend fun saveAll(): Boolean {
+        while (true) {
+            if (!saveNow()) return false
+            if (changes == savedThrough) return true
+        }
+    }
+
+    /** A new note that the screen left without closing it, and that no add makes, is given up: it was never made. */
+    override fun onCleared() {
+        if (repository.isNewNote(noteId) && !adds.isAddingTo(noteId)) repository.giveUpNewNote(noteId)
     }
 
     /** **Try again** in "This note is not saved". */
@@ -343,7 +356,7 @@ class NoteViewModel(
         closing = true
         cancelTimer()
         viewModelScope.launch(work) {
-            if (!saveNow()) {
+            if (!saveAll()) {
                 // What is typed is not saved: the note stays open with it, and its line says so (spec, "A write fails").
                 closing = false
                 snackbars.show(NotesMessage.CouldNotChange)

@@ -277,6 +277,11 @@ class FileReader(
                 }
             } catch (_: IOException) {
                 Outcome.FAILED
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // A provider that fails in its own way while it is written, such as with a SecurityException.
+                Outcome.FAILED
             } finally {
                 try {
                     output.close()

@@ -339,6 +339,18 @@ class NoteFilesTest {
         assertEquals(CopyResult.DAMAGED_PART_LEFT, reader.saveCopy(damaged, TestTarget(canDelete = false)))
         assertEquals(CopyResult.FAILED, reader.saveCopy(good, TestTarget(failWrite = true)))
         assertEquals(CopyResult.FAILED_PART_LEFT, reader.saveCopy(good, TestTarget(failWrite = true, canDelete = false)))
+
+        val refusing = object : CopyTarget {
+            var deleted = false
+
+            override fun open(): java.io.OutputStream = object : java.io.OutputStream() {
+                override fun write(byte: Int) = throw SecurityException("The permission ended")
+            }
+
+            override fun delete(): Boolean = true.also { deleted = true }
+        }
+        assertEquals("A provider that fails in its own way", CopyResult.FAILED, reader.saveCopy(good, refusing))
+        assertTrue(refusing.deleted)
     }
 
     @Test

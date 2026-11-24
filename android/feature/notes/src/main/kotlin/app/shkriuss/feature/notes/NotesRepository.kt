@@ -272,16 +272,24 @@ class NotesRepository(
     }
 
     /**
-     * Wipes the records of [undo] that are still deleted, in one
-     * transaction, once its Undo has ended (spec, "Removing a file, and
-     * the wipe", point 2). Then it removes their streams and checkpoints
+     * Wipes the records of [undo] that are still deleted, as its action
+     * left them, in one transaction, once its Undo has ended (spec,
+     * "Removing a file, and the wipe", point 2). A record that changed
+     * since, such as a file brought back and removed again, is left to its
+     * own Undo, or to the sweep at the next start. Then it removes their streams and checkpoints
      * the write-ahead file. A wipe, a stream or a checkpoint that fails is
      * tried again at the next start.
      */
     suspend fun wipe(undo: Undo) = withContext(NonCancellable) {
         val wiped = database.withWriteTransaction<List<String>> {
-            if (undo.action == Undo.Action.NOTE_DELETED) noteWriter.wipe(undo.note.id, NoteRules::wiped)
-            undo.files.mapNotNull { step -> fileWriter.wipe(step.id, NoteRules::wiped)?.record?.id }
+            // Only what this action deleted and nothing changed since: a file removed again after its Undo belongs to
+            // the new action, and its own Undo must still find it. The rest goes at the next start.
+            if (undo.action == Undo.Action.NOTE_DELETED && notes.find(undo.note.id)?.changeNumber == undo.note.changeNumber) {
+                noteWriter.wipe(undo.note.id, NoteRules::wiped)
+            }
+            undo.files.mapNotNull { step ->
+                if (attachments.find(step.id)?.changeNumber != step.changeNumber) null else fileWriter.wipe(step.id, NoteRules::wiped)?.record?.id
+            }
         }
         streams.withLock { wiped.forEach(store::remove) }
         checkpointOrRetry()

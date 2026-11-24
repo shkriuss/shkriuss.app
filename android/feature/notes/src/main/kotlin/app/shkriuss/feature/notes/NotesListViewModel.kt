@@ -125,9 +125,14 @@ class NotesListViewModel(
         }
     }
 
-    /** The screen opened the new note of [newNote]. */
+    /** The screen opened the new note of [newNote]: the note's ViewModel owns its reservation now. */
     fun newNoteOpened() {
         opening.value = null
+    }
+
+    /** A new note that was reserved and never opened is given up, so that it no longer counts towards 5,000. */
+    override fun onCleared() {
+        opening.value?.let(repository::giveUpNewNote)
     }
 
     private fun shown(notes: List<Note>, files: List<NoteFile>, query: String): NotesListState.Shown {
@@ -144,7 +149,7 @@ class NotesListViewModel(
             pinned = sections.pinned.map { byId.getValue(it.id) },
             others = sections.others.map { byId.getValue(it.id) },
             noNotes = notes.isEmpty(),
-            noMatch = query.isNotEmpty() && notes.isNotEmpty() && rows.isEmpty(),
+            noMatch = query.isNotEmpty() && rows.isEmpty(),
         )
     }
 

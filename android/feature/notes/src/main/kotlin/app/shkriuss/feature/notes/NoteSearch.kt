@@ -31,7 +31,7 @@ object NoteSearch {
             while (true) {
                 val at = lowered.text.indexOf(wanted, from)
                 if (at < 0) break
-                add(lowered.originalIndex(at)..lowered.originalIndex(at + wanted.length) - 1)
+                add(lowered.originalIndex(at)..lowered.originalEnd(at + wanted.length - 1) - 1)
                 from = at + wanted.length
             }
         }
@@ -57,27 +57,36 @@ object NoteSearch {
      */
     private class Lowered(original: String) {
         val text: String
-        private val places: IntArray
+        private val starts: IntArray
+        private val ends: IntArray
 
         init {
             val oneByOne = StringBuilder(original.length)
-            val at = IntArray(original.length * 3 + 1)
+            val from = IntArray(original.length * 3 + 1)
+            val to = IntArray(original.length * 3 + 1)
             var index = 0
             while (index < original.length) {
                 val size = Character.charCount(original.codePointAt(index))
                 val lower = original.substring(index, index + size).lowercase(Locale.ROOT)
-                repeat(lower.length) { at[oneByOne.length + it] = index }
+                repeat(lower.length) {
+                    from[oneByOne.length + it] = index
+                    to[oneByOne.length + it] = index + size
+                }
                 oneByOne.append(lower)
                 index += size
             }
-            at[oneByOne.length] = original.length
+            from[oneByOne.length] = original.length
             val whole = original.lowercase(Locale.ROOT)
             text = if (whole.length == oneByOne.length) whole else oneByOne.toString()
-            places = at
+            starts = from
+            ends = to
         }
 
-        /** The place in the original text of the character at [loweredIndex], or its length at the end. */
-        fun originalIndex(loweredIndex: Int): Int = places[loweredIndex]
+        /** Where the code point that gave the character at [loweredIndex] starts in the original text. */
+        fun originalIndex(loweredIndex: Int): Int = starts[loweredIndex]
+
+        /** Where the code point that gave the character at [loweredIndex] ends in the original text, not included. */
+        fun originalEnd(loweredIndex: Int): Int = ends[loweredIndex]
     }
 }
 

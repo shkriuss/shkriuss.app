@@ -1,5 +1,9 @@
 package app.shkriuss.feature.notes
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.room3.executeSQL
 import androidx.room3.useWriterConnection
 import androidx.room3.withWriteTransaction
@@ -101,6 +105,29 @@ class ViewModelsTest {
     @Test
     fun anEmptyListSaysSo() {
         assertTrue(list().shown().noNotes)
+    }
+
+    @Test
+    fun aSearchWithNoNoteAtAllSaysThatNoNoteMatches() {
+        val list = list()
+        list.search("rent")
+        endPause.trySend(Unit)
+
+        val shown = list.shown { it.query == "rent" }
+
+        assertTrue(shown.noMatch)
+    }
+
+    @Test
+    fun aNewNoteThatWasNeverOpenedIsGivenUpWhenTheListGoes() {
+        val store = ViewModelStore()
+        val list = ViewModelProvider.create(store, viewModelFactory { initializer { list() } })[NotesListViewModel::class]
+        list.newNote()
+        val reserved = checkNotNull(list.newNote.await { it != null })
+
+        store.clear()
+
+        assertFalse(repository.isNewNote(reserved))
     }
 
     @Test

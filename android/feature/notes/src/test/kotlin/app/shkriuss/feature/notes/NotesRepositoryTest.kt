@@ -189,6 +189,21 @@ class NotesRepositoryTest {
     }
 
     @Test
+    fun theWipeOfAnUndoLeavesAFileThatWasRemovedAgainToItsNewUndo() = runBlocking {
+        val id = phone.note("Trip", "Passport")
+        val ticket = file(id)
+        val first = checkNotNull(repository.removeFile(ticket))
+        assertTrue(repository.undo(first))
+        val second = checkNotNull(repository.removeFile(ticket))
+
+        repository.wipe(first)
+
+        assertEquals("ticket.jpg", storedFile(ticket)?.name)
+        assertTrue(phone.store.has(ticket))
+        assertTrue("The new Undo still brings it back", repository.undo(second))
+    }
+
+    @Test
     fun aRecordThatAnUndoBroughtBackIsNotWiped() = runBlocking {
         val id = phone.note("Trip", "Passport")
         val ticket = file(id)
