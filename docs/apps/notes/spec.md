@@ -606,8 +606,10 @@ not UTF-8 or breaks its limits; any value outside the limits of
 the wiped form that is not deleted, or a deleted file that is partly
 wiped; a
 record time outside its limits
-([data.md](../../architecture/data.md#records-from-a-backup)); an ID that
-is there twice in one type; an `attachment` whose `noteId` is not the ID
+([data.md](../../architecture/data.md#records-from-a-backup)); a record
+ID that is not a version 4 UUID, which `takeFromBackup` does not check
+by itself; an ID that is there twice in one type; an `attachment` whose
+`noteId` is not the ID
 of a `note` in the backup, deleted or not, since a note is never purged;
 or a File entry whose ID is not an
 `attachment` of the backup, belongs to a wiped one, comes a second time,
