@@ -280,7 +280,9 @@ and `core/crypto` are as in Water.
 | Saving | One second after the last change |
 
 A count is not a limit of a value: a restore can bring more notes, more
-files in a note, or more than 1 GB.
+files in a note, or more than 1 GB. The counts stop only **New note** and
+**Add a file**. **Undo** always brings back what its action deleted,
+also when a count then passes its limit.
 
 Units: sizes are stored in bytes and shown as Android shows sizes, in
 steps of 1,000: "2.4 MB". Times are the record times, shown in the
@@ -457,7 +459,7 @@ record needs, and the next start removes it.
 | **Delete note**, **Remove** twice | One delete. The note or the image view closes at the first. |
 | **Pin** twice | A press carries the state it showed: **Pin** on a pinned note does nothing. |
 | **Undo** twice | Once. |
-| **Undo** after the records changed again | As in [Tasks](../tasks/spec.md#a-press-twice-or-late): only on the records of its own snackbar whose change number is still the one its action gave them. |
+| **Undo** after the records changed again | As in [Tasks](../tasks/spec.md#a-press-twice-or-late): only on the records of its own snackbar whose change number is still the one its action gave them. A note or a file made meanwhile does not stop it, also when a count then passes its [limit](#limits-and-defaults). |
 | Back while a save runs | The note closes after the save. |
 | A picked file that arrives after its note was deleted | It is not added: "The note was deleted. The file was not added." |
 
@@ -561,7 +563,9 @@ the wiped form that is not deleted, or a deleted file that is partly
 wiped; a
 record time outside its limits
 ([data.md](../../architecture/data.md#records-from-a-backup)); an ID that
-is there twice in one type; or a File entry whose ID is not an
+is there twice in one type; an `attachment` whose `noteId` is not the ID
+of a `note` in the backup, deleted or not, since a note is never purged;
+or a File entry whose ID is not an
 `attachment` of the backup, belongs to a wiped one, comes a second time,
 or whose length is not that of a stream of its `size`: 45 + `size` + 16
 for each segment.
