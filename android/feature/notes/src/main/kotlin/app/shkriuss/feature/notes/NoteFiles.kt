@@ -402,6 +402,27 @@ class FileAdds(
     /** True while a file waits to be added to the note [noteId], or is being added to it. */
     fun isAddingTo(noteId: String): Boolean = synchronized(lock) { queue.any { it.noteId == noteId } }
 
+    /** New notes whose screen closed while files waited for them: given up once their last add ends without making them. */
+    private val handedOver = mutableSetOf<String>()
+
+    /**
+     * The screen of the new note [noteId] closed, or went, while files may
+     * still be added to it. Once no file waits for it any more, the note is
+     * given up if no add made it, so that it no longer counts towards
+     * 5,000. A note that an add made is kept.
+     */
+    fun giveUpNewNoteAfterAdds(noteId: String) {
+        val now = synchronized(lock) {
+            if (queue.any { it.noteId == noteId }) {
+                handedOver += noteId
+                false
+            } else {
+                true
+            }
+        }
+        if (now) repository.giveUpNewNote(noteId)
+    }
+
     private suspend fun runAdds() {
         while (true) {
             val next = synchronized(lock) { queue.firstOrNull() }
@@ -419,9 +440,13 @@ class FileAdds(
     }
 
     /** Takes [waiting] off the queue and its row away. */
-    private fun done(waiting: Waiting) = synchronized(lock) {
-        queue.remove(waiting)
-        rows.value = rows.value.filter { it.key != waiting.key }
+    private fun done(waiting: Waiting) {
+        val giveUp = synchronized(lock) {
+            queue.remove(waiting)
+            rows.value = rows.value.filter { it.key != waiting.key }
+            queue.none { it.noteId == waiting.noteId } && handedOver.remove(waiting.noteId)
+        }
+        if (giveUp) repository.giveUpNewNote(waiting.noteId)
     }
 
     /** Takes the other files of [waiting]'s batch off the queue, and returns how many files of the batch are not added, [waiting] too. */

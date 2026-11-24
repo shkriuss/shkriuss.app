@@ -301,9 +301,9 @@ class NoteViewModel(
         }
     }
 
-    /** A new note that the screen left without closing it, and that no add makes, is given up: it was never made. */
+    /** A new note that the screen left without closing it is given up once no add can make it any more: it was never made. */
     override fun onCleared() {
-        if (repository.isNewNote(noteId) && !adds.isAddingTo(noteId)) repository.giveUpNewNote(noteId)
+        if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
     }
 
     /** **Try again** in "This note is not saved". */
@@ -324,8 +324,11 @@ class NoteViewModel(
         closing = true
         val stillAdding = adds.isAddingTo(noteId)
         try {
-            if (!stillAdding) {
-                if (repository.findNote(noteId) == null) repository.giveUpNewNote(noteId) else repository.deleteIfEmpty(noteId)
+            when {
+                // The adds decide: their first file makes the note, or the last one that fails gives it up.
+                stillAdding -> if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
+                repository.findNote(noteId) == null -> repository.giveUpNewNote(noteId)
+                else -> repository.deleteIfEmpty(noteId)
             }
         } catch (_: SQLException) {
             // The empty note stays. It shows as "Empty note" in the list.

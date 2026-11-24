@@ -146,6 +146,27 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aNewNoteClosedWhileItsFilesWaitIsGivenUpWhenTheLastAddFailsAndKeptWhenOneMakesIt() {
+        val failing = repository.reserveNoteId()
+        val made = repository.reserveNoteId()
+        canStart.value = false
+        adds.add(failing, listOf(LongPick(25_000_001, "film.mp4")))
+        adds.add(made, listOf(TestPick()))
+
+        // Both notes' screens close while their files wait: the adds decide.
+        adds.giveUpNewNoteAfterAdds(failing)
+        adds.giveUpNewNoteAfterAdds(made)
+        assertTrue(repository.isNewNote(failing))
+        canStart.value = true
+        adds.adding.await { it.isEmpty() }
+
+        assertFalse("It no longer counts towards 5,000", repository.isNewNote(failing))
+        assertNull(runBlocking { repository.findNote(failing) })
+        assertNotNull("The note that its first file made is kept", runBlocking { repository.findNote(made) })
+        assertEquals(1, files(made).size)
+    }
+
+    @Test
     fun aNoteDeletedWhileTheFileIsCopiedGetsNoFileAndNoStream() {
         val id = phone.note()
         canStart.value = false
