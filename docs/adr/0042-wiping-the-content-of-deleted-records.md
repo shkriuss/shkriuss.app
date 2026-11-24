@@ -35,17 +35,20 @@
    gives the record a new change number. A wipe is not an edit: it must
    not change which edit wins in a restore, or later in sync.
 3. Each table that is wiped has a **wiped form**: the value of every
-   content column after a wipe. Its spec names it. A record that is not
-   deleted is never in that form. A restore refuses a record that is not
-   deleted and in the wiped form, and a deleted one that is partly wiped.
+   content column after a wipe. Its spec names it, and says whether a
+   record that is not deleted can hold the same values, such as an empty
+   note. A restore refuses a deleted record that is partly wiped, and a
+   record that is not deleted follows the table's usual limits.
 4. A wiped record is never brought back with `restore`. **Undo** is for
    the time before the wipe.
 5. A file's wrapped key is content, so a wipe clears it. The app removes
    the file's stream after the wipe commits. Without the key, any copy of
    the stream that the flash storage keeps can never be opened.
-6. An app that wipes opens its database with SQLite's `secure_delete` on,
-   and after a wipe checkpoints the write-ahead file and cuts it to zero.
-   So the cleared bytes are written over in both files.
+6. An app that wipes opens its database with SQLite's `secure_delete` on.
+   After a wipe, and at every start whether or not anything was wiped,
+   it checkpoints the write-ahead file and cuts it to zero. So the
+   cleared bytes are written over in both files, also after a stop
+   between the wipe and the checkpoint.
 7. Each app decides whether and when it wipes. Notes is the first: when
    the **Undo** of a delete ends, at every start, before a backup lists
    its records, and after a restore.

@@ -247,10 +247,14 @@ A deleted record keeps its content only until it is
 | `note` | `title` `""`, `body` `""`, `pinned` 0 |
 | `attachment` | `noteId` kept, `name` `""`, `mimeType` `""`, `size` 0, `wrappedKey` empty |
 
-A record that is not deleted is never in the wiped form. A deleted
-record keeps content within the limits above, or is exactly in the wiped
-form. The wipe keeps the four record fields, `updatedAt` too, and gives
-a new change number.
+1. The wiped form of a note is within the limits of `note`: an empty
+   note that is not deleted is a good record. The wiped form of a file
+   is not within the limits of `attachment`, so a file that is not
+   deleted is never in it.
+2. A deleted record keeps content within the limits above, or is exactly
+   in the wiped form. A deleted file that is partly wiped is refused.
+3. The wipe keeps the four record fields, `updatedAt` too, and gives a
+   new change number.
 
 ### On this phone only
 
@@ -291,10 +295,11 @@ phone's time zone and format.
 2. Notes takes the picked files one by one. Before each, it checks the
    counts: "A note holds at most 20 files. 3 files were not added." or
    "Notes keeps 1 GB of files. Remove some to add more."
-3. It reads the name and the type from the picker. An empty name becomes
-   "File". Line breaks and control characters become spaces, spaces at
-   both ends go, and it keeps its first 255 characters. A type outside
-   the limits becomes `application/octet-stream`.
+3. It reads the name and the type from the picker. In this order: line
+   breaks and control characters become spaces, the name keeps its first
+   255 characters, spaces at both ends go, and a name that is then empty
+   becomes "File". A type outside the limits becomes
+   `application/octet-stream`.
 4. It reserves the file's `id`, makes and wraps a new file key for that
    `id`, and encrypts the picked bytes into `<id>.part`, counting them.
    The count is the truth, not the size the picker reports. At 25,000,001
@@ -359,9 +364,12 @@ phone's time zone and format.
    before a backup lists its records, and after a restore. At start it
    also deletes every `.part` file. No stream is removed while a backup
    is written.
-4. Notes opens `notes.db` with SQLite's `secure_delete` on. After a wipe
-   it checkpoints the write-ahead file and cuts it to zero. So the
-   cleared bytes are written over in both files.
+4. Notes opens `notes.db` with SQLite's `secure_delete` on. After a wipe,
+   and at every start whether or not anything was wiped, it checkpoints
+   the write-ahead file and cuts it to zero. So the cleared bytes are
+   written over in both files, also after a stop between the wipe and
+   the checkpoint. A checkpoint that cannot finish, because a read is
+   open, is done at the next wipe or start.
 5. A backup made before the wipe still holds the text and the files. The
    flash storage may keep old blocks, under Android's file-based
    encryption. A wiped file's key is gone with its wrapped key, so such
@@ -374,20 +382,30 @@ phone's time zone and format.
    ([crypto-design.md](../../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key)).
 2. When Notes has its keys from a recovery key and a move is pending
    (`fileKeyMoveIsPending()`), it moves the keys: at every start, when it
-   comes back from a screen of `core/security`, and before it goes on
-   after the first-need dialog.
+   comes back from a screen of `core/security`, after a wipe, and before
+   it goes on after the first-need dialog.
 3. For each file whose wrapped key is not sealed by the current key,
    deleted ones that are not wiped too, it seals the key again
    (`FileCrypto.sealAgain`) through the `RecordWriter` function for
-   that, one record per transaction, with `updatedAt` as it was. A
-   wrapped key that opens with neither keyset is left as it is, and its
-   file shows its [state](#files-that-cannot-be-opened): it cannot hold
-   a key that works anywhere.
-4. Then Notes calls `finishFileKeyMove()`. A stop in the middle goes on
-   at the next start. Until then `core/crypto` refuses a backup ("not
-   ready", in Water's words) and the app lock ("file keys still
-   moving").
-5. Water's call that finishes a move at once is not in Notes. The code
+   that, one record per transaction, with `updatedAt` as it was.
+4. Only when every such key is sealed again does Notes call
+   `finishFileKeyMove()`. A stop in the middle goes on at the next
+   start. Until then `core/crypto` refuses a backup and the app lock
+   ("file keys still moving").
+5. A key that cannot be sealed again keeps the move pending. Notes never
+   ends it by itself:
+   - A damaged `file-key-old` counts as absent, so none of the keys it
+     sealed open. The security screen offers **Give up the files**, with
+     its warning
+     ([crypto-design.md](../../security/crypto-design.md#a-damaged-keyset-file)).
+     After that, those files show "This file can no longer be opened".
+   - A damaged wrapped key, while both keysets open: its file shows
+     "This file is damaged". Once the user removes it and it is wiped,
+     its key is gone and the move goes on.
+   - The words for a refused backup: "Notes cannot move some files to
+     your recovery key yet. Remove the files marked damaged, or open
+     Recovery key in Settings."
+6. Water's call that finishes a move at once is not in Notes. The code
    says why next to `finishFileKeyMove()`.
 
 ## When things go wrong
@@ -411,7 +429,7 @@ record needs, and the next start removes it.
 | Typing | One transaction per save | What was typed since the last save is lost: about a second at most, because Notes saves when it leaves the screen. |
 | Add a file | The part; the rename; the record | Before the record, the next start removes the part or the stream. The file is not added. |
 | Delete a note, remove a file | One transaction | Done. The next start wipes them: **Undo** is gone with the snackbar. |
-| The wipe | One transaction; then the streams | The next start removes the streams. |
+| The wipe | One transaction; then the streams; then the checkpoint | The next start removes the streams and checkpoints the write-ahead file. |
 | **Undo**, **Pin** | One transaction | Nothing half done. |
 | The file key move | One transaction per file | The next start goes on. |
 | Save a copy | The document only | A copy cut short stays where you chose. Notes cannot tell; save it again. |
@@ -424,7 +442,7 @@ record needs, and the next start removes it.
 | Saving a note | Nothing changes in the database. The text stays on the screen, with a line above the title: "Could not save the note. Notes tries again." It tries again at the next change. Closing the note then asks "This note is not saved", with **Try again** and **Discard changes**. |
 | Adding a file | The part is deleted, and the file is not added: "Could not add ticket.jpg. The phone may be full." |
 | Delete, remove, **Undo**, **Pin** | Nothing changes. A snackbar: "Could not change your notes. Try again." |
-| The wipe, or removing a stream | Tried again at the next start. Nothing shows. |
+| The wipe, removing a stream, or the checkpoint | Tried again at the next start. Nothing shows. |
 | Reading a stream | The row's [state](#files-that-cannot-be-opened). |
 | Writing a copy | Notes tries to delete the document: "Could not save the copy." |
 | Reading the database for a screen | `ShkErrorState`: "Could not open your notes." |
@@ -538,8 +556,9 @@ Notes' `restore` takes the records in one transaction, through
 `RecordWriter.takeFromBackup`. It rolls back at: another type name; a
 length other than the one its fields give; a title, text or name that is
 not UTF-8 or breaks its limits; any value outside the limits of
-[the tables](#data), with [the wiped form](#the-wiped-form): a wiped
-record that is not deleted, or a deleted one that is partly wiped; a
+[the tables](#data), with [the wiped form](#the-wiped-form): a file in
+the wiped form that is not deleted, or a deleted file that is partly
+wiped; a
 record time outside its limits
 ([data.md](../../architecture/data.md#records-from-a-backup)); an ID that
 is there twice in one type; or a File entry whose ID is not an
@@ -681,16 +700,14 @@ Choices this page made without a decision by the owner on that point.
     this phone stay as rows with their state and **Remove**
     ([crypto-design.md](../../security/crypto-design.md#open-questions),
     question 13).
-11. A wrapped key that opens with no keyset does not stop the file key
-    move.
-12. **Undo** ends when its snackbar goes, and the wipe follows at once.
+11. **Undo** ends when its snackbar goes, and the wipe follows at once.
     A removed file counts no more towards 1 GB, also while its **Undo**
     is open.
-13. The wiped form keeps a file's `noteId`, a random ID and no content.
+12. The wiped form keeps a file's `noteId`, a random ID and no content.
     After a restore, a file that is not deleted, of a note that is, is
     marked deleted and wiped.
-14. A fixed binary content. The type names are the table names.
-15. The words of every screen, dialog and snackbar.
+13. A fixed binary content. The type names are the table names.
+14. The words of every screen, dialog and snackbar.
 
 ## Open
 
