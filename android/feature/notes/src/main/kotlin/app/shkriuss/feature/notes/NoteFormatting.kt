@@ -222,8 +222,9 @@ object NoteFormatting {
         return buildString(line.length) { line.forEachIndexed { index, char -> if (!skip[index]) append(char) } }
     }
 
-    /** The first line of [text], or "" for an empty text. */
-    fun firstLine(text: String): String = text.substringBefore('\n')
+    /** The first line of [text] that holds more than spaces once its marks are removed, without them, or "" when none does. */
+    fun firstLineWithText(text: String): String =
+        text.lineSequence().map { plainLine(it).trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
 
     /** Calls [action] with the start and the text of each line of [text], `\n` not included. An empty text has one empty line. */
     internal inline fun forEachLine(text: String, action: (lineStart: Int, line: String) -> Unit) {

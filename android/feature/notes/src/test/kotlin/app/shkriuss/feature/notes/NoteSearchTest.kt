@@ -100,6 +100,8 @@ class NoteSearchTest {
         assertEquals("Trip", NoteRow.title(note(title = "Trip", body = "# Kutaisi")))
         assertEquals("With no title, the first line without its marks", "Kutaisi", NoteRow.title(note(title = "", body = "# **Kutaisi**\nPassport")))
         assertEquals("With neither, the screen shows Empty note", "", NoteRow.title(note(title = "", body = "")))
+        assertEquals("Empty lines and lines with only a mark are passed over", "Passport", NoteRow.title(note(title = "", body = "\n  \n- [ ] \n# \n- [ ] Passport\nKeys")))
+        assertEquals("Only line marks and spaces: Empty note", "", NoteRow.title(note(title = "", body = "\n- [ ] \n# ")))
         assertEquals("Kutaisi Passport", NoteRow.preview(note(body = "# Kutaisi\n- [ ] Passport")))
     }
 }

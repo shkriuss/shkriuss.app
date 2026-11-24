@@ -349,7 +349,8 @@ sealed interface AddProblem {
  * a file"). A note's screen hands its picked files here and they wait,
  * in memory only, until they start: a file starts only while [canStart]
  * says that Notes is on the screen and the gate of the app lock is open,
- * because no new file key is made otherwise. An add that has started
+ * because no new file key is made otherwise. A file whose gate closes
+ * before its key is made waits again. An add that has started
  * goes on when its note closes, when Notes locks and when the screen
  * turns off: its key is made before the copy starts.
  *
@@ -431,12 +432,25 @@ class FileAdds(
                 continue
             }
             canStart.first { it }
+            var waits = false
             try {
-                addOne(next)
+                waits = !addOne(next)
             } finally {
-                done(next)
+                if (!waits) done(next)
             }
         }
+    }
+
+    /** How the add of one file ended. */
+    private sealed interface AddEnd {
+        /** The file is added. */
+        data object Added : AddEnd
+
+        /** The gate closed before the file's key was made: the file stays first in the queue and waits for it. */
+        data object Waits : AddEnd
+
+        /** The file is not added, for [problem]. */
+        class Failed(val problem: AddProblem) : AddEnd
     }
 
     /** Takes [waiting] off the queue and its row away. */
@@ -462,29 +476,40 @@ class FileAdds(
         rows.value = rows.value.map { if (it.key == waiting.key) change(it) else it }
     }
 
-    private suspend fun addOne(waiting: Waiting) {
+    /**
+     * Adds the file of [waiting], or tells why not. Returns false when the
+     * gate closed after the add began but before the file's key was made:
+     * the file then waits, first in the queue, for the gate to open again.
+     */
+    private suspend fun addOne(waiting: Waiting): Boolean {
         val noteId = waiting.noteId
         try {
             if (repository.findNote(noteId) == null && !repository.isNewNote(noteId)) {
                 dropBatch(waiting)
                 tell(AddProblem.NoteDeleted)
-                return
+                return true
             }
             if (repository.shownFileCount(noteId) >= NoteLimits.MOST_FILES_PER_NOTE) {
                 tell(AddProblem.NoteFull(dropBatch(waiting)))
-                return
+                return true
             }
             val startBytes = repository.shownBytes()
             if (startBytes >= NoteLimits.MOST_ALL_FILE_BYTES) {
                 dropBatch(waiting)
                 tell(AddProblem.AllFull)
-                return
+                return true
             }
             val name = FileText.name(readOrNull { waiting.picked.name() })
             val type = FileText.type(readOrNull { waiting.picked.type() })
             val total = readOrNull { waiting.picked.reportedSize() }
             show(waiting) { it.copy(name = name, total = total) }
-            fileKeys.withLock { copyAndWrite(waiting, name, type, startBytes) }?.let(tell)
+            // The provider's answers and the turn for the keys take time, so the gate is looked at again just before the key.
+            val end = fileKeys.withLock { if (canStart.first()) copyAndWrite(waiting, name, type, startBytes) else AddEnd.Waits }
+            when (end) {
+                AddEnd.Added -> Unit
+                AddEnd.Waits -> return false
+                is AddEnd.Failed -> tell(end.problem)
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -492,27 +517,30 @@ class FileAdds(
             // not added, its part and stream are gone, and the files after it still wait their turn.
             tell(AddProblem.CouldNotAdd(FileText.name(readOrNull { waiting.picked.name() })))
         }
+        return true
     }
 
-    /** The copy and the record, holding [fileKeys]. Returns the problem, or null when the file was added. */
-    private suspend fun copyAndWrite(waiting: Waiting, name: String, type: String, startBytes: Long): AddProblem? {
+    /** The copy and the record, holding [fileKeys]. */
+    private suspend fun copyAndWrite(waiting: Waiting, name: String, type: String, startBytes: Long): AddEnd {
         val fileId = repository.reserveFileId()
         try {
             val key = files.newFileKey()
             val wrapped = try {
                 files.wrap(fileId, key)
-            } catch (_: BlobException) {
-                return AddProblem.KeysNotUsable
+            } catch (keys: BlobException) {
+                // A lock takes the keys away and then closes the gate: a lock that came after the last look at it.
+                val locked = keys.answer == BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW && !canStart.first()
+                return if (locked) AddEnd.Waits else AddEnd.Failed(AddProblem.KeysNotUsable)
             } catch (_: IOException) {
                 // The first file key of an app with no recovery key is stored here: the phone may be full.
-                return AddProblem.CouldNotAdd(name)
+                return AddEnd.Failed(AddProblem.CouldNotAdd(name))
             }
             val input = try {
                 waiting.picked.open()
             } catch (_: IOException) {
-                return AddProblem.CouldNotRead(name)
+                return AddEnd.Failed(AddProblem.CouldNotRead(name))
             } catch (_: SecurityException) {
-                return AddProblem.CouldNotRead(name)
+                return AddEnd.Failed(AddProblem.CouldNotRead(name))
             }
             val copied = try {
                 encrypt(waiting, input, fileId, key, name, startBytes)
@@ -523,7 +551,7 @@ class FileAdds(
                     // Every byte was read already, or the copy failed for its own reason: a close that fails changes nothing.
                 }
             }
-            if (copied is Copied.Stopped) return copied.problem
+            if (copied is Copied.Stopped) return AddEnd.Failed(copied.problem)
             val size = (copied as Copied.Whole).size
             val added = try {
                 repository.addFile(waiting.noteId, fileId, name, type, size, wrapped)
@@ -533,9 +561,9 @@ class FileAdds(
             }
             if (added == FileAdded.NOTE_DELETED) {
                 repository.store.remove(fileId)
-                return AddProblem.NoteDeleted
+                return AddEnd.Failed(AddProblem.NoteDeleted)
             }
-            return null
+            return AddEnd.Added
         } finally {
             repository.releaseFileId(fileId)
         }

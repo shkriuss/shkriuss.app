@@ -5,12 +5,15 @@ import app.shkriuss.feature.notes.data.AttachmentEntity
 import java.io.File
 import java.io.InputStream
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import org.junit.After
@@ -232,6 +235,66 @@ class NoteFilesTest {
         assertEquals(listOf<AddProblem>(AddProblem.KeysNotUsable), problems)
         assertEquals(emptyList<AttachmentEntity>(), files(id))
         assertEquals(emptyList<File>(), phone.store.list())
+    }
+
+    @Test
+    fun aFileWhoseGateClosesBeforeItsKeyIsMadeWaitsForTheGateAndIsThenAdded() {
+        val id = phone.note()
+        // The gate closes while the add asks the provider for the name: after the add began, before the key.
+        val pick = object : PickedFile by TestPick() {
+            private var closed = false
+
+            override fun name(): String? {
+                if (!closed) canStart.value = false
+                closed = true
+                return "ticket.jpg"
+            }
+        }
+
+        adds.add(id, listOf(pick))
+        Thread.sleep(100)
+        assertEquals("It waits, with no message", emptyList<AddProblem>(), problems)
+        assertEquals(1, adds.adding.value.size)
+        assertEquals(emptyList<File>(), phone.store.list())
+        canStart.value = true
+        adds.adding.await { it.isEmpty() }
+
+        assertEquals(emptyList<AddProblem>(), problems)
+        assertEquals(listOf("ticket.jpg"), files(id).map { it.name })
+    }
+
+    @Test
+    fun aLockThatTakesTheKeysJustAfterTheLastLookAtTheGateLetsTheFileWait() {
+        val id = phone.note()
+        add(id, TestPick(name = "first.jpg"))
+        val gate = MutableStateFlow(true)
+        val looks = AtomicInteger()
+        // The second look at the gate is the one just before the key. The app locks right after it: the keys go, then the
+        // gate closes, as the app lock does. A look ends at its first value, so the lock comes before that value is given.
+        val seen = flow {
+            if (looks.incrementAndGet() == 2) {
+                val open = gate.value
+                crypto.appLock.lock()
+                keys.keystoreFails = true
+                gate.value = false
+                emit(open)
+            } else {
+                emitAll(gate)
+            }
+        }
+        val lockedAdds = FileAdds(repository, crypto.files, seen, fileKeys, { problems += it }, scope, Dispatchers.IO)
+
+        lockedAdds.add(id, listOf(TestPick()))
+        // The third look comes after the key failed; at the fourth the file waits for the gate again.
+        eventually { looks.get() >= 4 }
+        assertEquals("It waits, with no message", emptyList<AddProblem>(), problems)
+        assertEquals(1, lockedAdds.adding.value.size)
+        keys.keystoreFails = false
+        gate.value = true
+        lockedAdds.adding.await { it.isEmpty() }
+
+        assertEquals(emptyList<AddProblem>(), problems)
+        assertEquals(2, files(id).size)
     }
 
     @Test

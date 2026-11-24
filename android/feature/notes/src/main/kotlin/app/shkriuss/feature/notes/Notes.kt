@@ -81,8 +81,12 @@ data class Sections(val pinned: List<Note>, val others: List<Note>) {
  * removed and line breaks as spaces. The screen cuts it with "…".
  */
 object NoteRow {
-    /** The title the row shows, or "" for "Empty note". */
-    fun title(note: Note): String = note.title.ifEmpty { NoteFormatting.plainLine(NoteFormatting.firstLine(note.body)).trim() }
+    /**
+     * The title the row shows, or "" for "Empty note". With no title it is
+     * the first line of the text that holds more than a mark or spaces, so
+     * a text that starts with an empty line is not "Empty note".
+     */
+    fun title(note: Note): String = note.title.ifEmpty { NoteFormatting.firstLineWithText(note.body) }
 
     /** The text the row shows under the title: the whole text, marks removed and line breaks as spaces. The screen shows two lines of it. */
     fun preview(note: Note): String = NoteFormatting.plain(note.body).trim()
