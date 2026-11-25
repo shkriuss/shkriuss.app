@@ -22,6 +22,9 @@ import java.time.ZoneOffset
 import java.util.concurrent.Executor
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -37,6 +40,10 @@ internal val THE_TIME: Long = LocalDateTime.of(2026, 11, 24, 9, 30).toInstant(Zo
 /** A Notes database in memory, on the system SQLite driver, with `secure_delete` on. Close it at the end of the test. */
 internal fun memoryDatabase(): NotesDatabase = inMemoryTestDatabaseBuilder<NotesDatabase>(context).addCallback(SecureDelete).build()
 
+/** A database in memory that does its reads and writes on [work], so that a test can hold them ([HoldableWork]). */
+internal fun memoryDatabaseOn(work: CoroutineDispatcher): NotesDatabase =
+    inMemoryTestDatabaseBuilder<NotesDatabase>(context).addCallback(SecureDelete).setQueryCoroutineContext(work).build()
+
 /** The cryptography of a Notes app with software keys, its keyset files in [folder], with no recovery key yet. */
 internal fun cryptoIn(folder: File): SoftwareKeysApp = SoftwareKeysApp(folder, NotesServices.APP_NAME)
 
@@ -46,8 +53,7 @@ internal fun ShkCrypto.getRecoveryKey() {
 }
 
 /** What one test of the files needs: a database, a clock, the IDs, a folder of streams and the repository on them. */
-internal class Phone(folder: File) : AutoCloseable {
-    val database: NotesDatabase = memoryDatabase()
+internal class Phone(folder: File, val database: NotesDatabase = memoryDatabase()) : AutoCloseable {
     val clock = TestClock(THE_TIME)
     val ids = TestIdSource()
     val store = NoteFileStore(File(folder, "attachments"))
@@ -192,6 +198,40 @@ internal class Held {
             check(System.currentTimeMillis() < end) { "Waited ten seconds in vain" }
             queued.poll(5, TimeUnit.MILLISECONDS)?.run()
         }
+    }
+}
+
+/**
+ * Where a database does its work in a test ([memoryDatabaseOn]): on
+ * `Dispatchers.IO`, until the test holds it. What is given to it while it
+ * is held waits until the test lets go. So a test can act while a write
+ * waits: a coroutine that asks for the write is then sure to wait for it,
+ * which it is not when the write may be done before it has asked.
+ */
+internal class HoldableWork : CoroutineDispatcher() {
+    private val waiting = ArrayDeque<Pair<CoroutineContext, Runnable>>()
+    private var held = false
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        synchronized(waiting) {
+            if (held) {
+                waiting += context to block
+                return
+            }
+        }
+        Dispatchers.IO.dispatch(context, block)
+    }
+
+    /** From now on, the work that is given waits. */
+    fun hold() = synchronized(waiting) { held = true }
+
+    /** The work that waited runs, in its order, and work runs at once again. */
+    fun letGo() {
+        val ready = synchronized(waiting) {
+            held = false
+            waiting.toList().also { waiting.clear() }
+        }
+        ready.forEach { (context, block) -> Dispatchers.IO.dispatch(context, block) }
     }
 }
 

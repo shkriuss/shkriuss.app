@@ -724,7 +724,10 @@ second build must write the same mapping file, or the release stops. See
   and a save are the test's own, and so is the clock of the save times.
   A trigger that aborts every write to a table stands for a disk that
   refuses a write, and one that aborts only bringing a deleted row back
-  for a disk that refuses an Undo and would take its wipe. The limit of
+  for a disk that refuses an Undo and would take its wipe. A test that
+  acts while such a write waits gives its database `HoldableWork` to
+  work on, and holds it: a write that the test does not hold can be
+  done before the test has acted. The limit of
   1 GB is tried with records of files that have no streams.
   `NoteFilesTest` also checks that the length of a
   stream follows the rule of crypto-design.md at the edges of its
