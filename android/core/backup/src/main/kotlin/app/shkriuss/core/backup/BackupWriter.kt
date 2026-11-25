@@ -13,8 +13,11 @@ import kotlinx.coroutines.ensureActive
  *
  * What the format does not allow is a mistake of the calling code and
  * stops the backup at once.
+ *
+ * [progress] is told the bytes of the files written so far, out of the
+ * total the app gave with [fileBytes], after each piece of a file.
  */
-internal class BackupWriter(private val out: DataOutputStream) : BackupSink {
+internal class BackupWriter(private val out: DataOutputStream, private val progress: (BackupProgress) -> Unit = {}) : BackupSink {
     /** How many records were written. */
     var records = 0L
         private set
@@ -28,6 +31,12 @@ internal class BackupWriter(private val out: DataOutputStream) : BackupSink {
         private set
 
     private val counts = RecordCounts()
+
+    /** The total the app gave for its files, or null. */
+    private var fileTotal: Long? = null
+
+    /** The bytes of files written so far. */
+    private var fileDone = 0L
 
     /** For each type name, how many of the records written are not deleted. Never written into the backup. */
     val notDeleted: Map<String, Long> get() = counts.notDeleted()
@@ -57,6 +66,13 @@ internal class BackupWriter(private val out: DataOutputStream) : BackupSink {
         files++
     }
 
+    override fun fileBytes(total: Long) {
+        require(total >= 0) { "The bytes of the files are 0 or more" }
+        check(files == 0L && fileTotal == null) { "The bytes of the files are given once, before the first file" }
+        fileTotal = total
+        progress(BackupProgress(0, total))
+    }
+
     override fun filesLeftOut(count: Long) {
         require(count >= 0) { "The number of files left out is 0 or more" }
         filesLeftOut += count
@@ -79,6 +95,8 @@ internal class BackupWriter(private val out: DataOutputStream) : BackupSink {
             check(read >= 0) { "A file is shorter than the length given for it" }
             out.write(buffer, 0, read)
             left -= read
+            fileDone += read
+            progress(BackupProgress(fileDone, fileTotal))
         }
         check(content.read() < 0) { "A file is longer than the length given for it" }
     }

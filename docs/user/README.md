@@ -20,6 +20,11 @@ One guide per app:
   Settings, ticks and Undo, the notifications, backup and restore, the
   five permissions, and the known problems of 1.0.0. On the hub
   website at `/tasks/`.
+- [Notes](notes.md): write notes with simple formatting, attach files,
+  encrypted on your phone, and find them again with search. The list,
+  search, a note, its formatting and files, Settings, backup and
+  restore, the two permissions, and the known problems. Not on the hub
+  website until its first release.
 
 Pages:
 

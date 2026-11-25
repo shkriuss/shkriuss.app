@@ -11,6 +11,8 @@ import app.shkriuss.core.design.ShkScreen
 import app.shkriuss.core.design.ShkSectionHeader
 import app.shkriuss.core.design.ShkSnackbarHostState
 import app.shkriuss.core.design.ShkTopBar
+import app.shkriuss.core.security.RecoveryKeyFirstNeedState
+import app.shkriuss.feature.notes.BackupViewModel
 import app.shkriuss.feature.notes.FilesLine
 import app.shkriuss.feature.notes.NoteLimits
 import app.shkriuss.feature.notes.R
@@ -18,23 +20,31 @@ import app.shkriuss.feature.notes.SettingsViewModel
 
 /**
  * Settings (docs/apps/notes/spec.md, "Settings"): one column of items
- * under section headers. **Files** comes first, with one line that is not
- * a button, "12 files, 120 MB of 1 GB" or "No files"; when the files
- * cannot be counted, `ShkErrorState` "Could not open your notes." in its
- * place, so the rest of Settings stays within reach. About shows
- * [versionName], the version name of the installed app, such as `1.0.0`.
- * Backup, Security and Licences come with backup, restore, the recovery
- * key and the app lock.
+ * under section headers, as in Tasks. **Files** comes first, with one line
+ * that is not a button, "12 files, 120 MB of 1 GB" or "No files"; when the
+ * files cannot be counted, `ShkErrorState` "Could not open your notes." in
+ * its place, so the rest of Settings stays within reach. Then Backup and
+ * Security ([BackupAndSecuritySections]), whose rows start [firstNeed],
+ * and About, with [versionName], the version name of the installed app,
+ * such as `1.0.0`, and Licences, which [onLicences] opens.
  */
 @Composable
-internal fun SettingsContent(model: SettingsViewModel, versionName: String, snackbar: ShkSnackbarHostState) {
+internal fun SettingsContent(
+    model: SettingsViewModel,
+    backup: BackupViewModel,
+    firstNeed: RecoveryKeyFirstNeedState,
+    versionName: String,
+    snackbar: ShkSnackbarHostState,
+    onLicences: () -> Unit,
+) {
     val files by model.files.collectAsState()
+    val keys by backup.state.collectAsState()
     val format = rememberNotesFormat()
     ShkScreen(topBar = { ShkTopBar(title = stringResource(R.string.notes_settings)) }, scrollable = true, snackbarHostState = snackbar) {
         ShkSectionHeader(stringResource(R.string.notes_section_files))
         when (val line = files) {
             FilesLine.Loading -> Unit
-            // In the section only: About, and later Security with the recovery key, stay within reach.
+            // In the section only: Security with the recovery key, and About, stay within reach.
             FilesLine.Failed -> ShkErrorState(title = stringResource(R.string.notes_could_not_open))
             is FilesLine.Counted -> {
                 val totals = line.totals
@@ -51,7 +61,10 @@ internal fun SettingsContent(model: SettingsViewModel, versionName: String, snac
                 ShkListItem(headline = words)
             }
         }
+        BackupAndSecuritySections(keys, firstNeed)
+
         ShkSectionHeader(stringResource(R.string.notes_section_about))
         ShkListItem(headline = stringResource(R.string.notes_version), supportingText = versionName)
+        ShkListItem(headline = stringResource(R.string.notes_licences), onClick = onLicences)
     }
 }

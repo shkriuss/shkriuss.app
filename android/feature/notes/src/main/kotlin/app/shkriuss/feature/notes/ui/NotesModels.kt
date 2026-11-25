@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import app.shkriuss.feature.notes.BackupViewModel
 import app.shkriuss.feature.notes.NoteImages
 import app.shkriuss.feature.notes.NoteViewModel
 import app.shkriuss.feature.notes.NotesListViewModel
@@ -61,6 +62,7 @@ class NotesModels(owner: ViewModelStoreOwner, services: NotesServices) {
                 )
             }
             initializer { SettingsViewModel(services.repository) }
+            initializer { BackupViewModel(services.backups) }
         },
     )
 
@@ -73,6 +75,9 @@ class NotesModels(owner: ViewModelStoreOwner, services: NotesServices) {
     /** Settings: the section Files. */
     val settings: SettingsViewModel = provider[SettingsViewModel::class.java]
 
+    /** Backup and restore, and the rows "Recovery key" and "App lock" of Settings. */
+    val backup: BackupViewModel = provider[BackupViewModel::class.java]
+
     /** The one snackbar of Notes. */
     val snackbars: NotesSnackbars = services.snackbars
 
@@ -84,12 +89,14 @@ class NotesModels(owner: ViewModelStoreOwner, services: NotesServices) {
 
     /**
      * The clock is read again, so a last change shows in the phone's zone
-     * and day now, and the open note reads the states of its files again:
-     * on the way back from a screen of `core/security` the keys may have
-     * changed. The activity calls it each time it comes to the front.
+     * and day now. On the way back from a screen of `core/security` the
+     * keys may have changed: Settings reads them again, which lets the move
+     * of the file keys go on, and the open note reads the states of its
+     * files again. The activity calls it each time it comes to the front.
      */
     fun check() {
         now.check()
+        backup.refresh()
         open.open.value?.model?.checkFilesAgain()
     }
 

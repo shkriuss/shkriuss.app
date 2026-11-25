@@ -38,7 +38,7 @@ class AppLockViewModelsTest {
         return softwareApp(folder) to folder
     }
 
-    private fun watcherOf(app: SoftwareKeysApp, onTextHidden: () -> Unit = {}) =
+    private fun watcherOf(app: SoftwareKeysApp, onTextHidden: (() -> Unit)? = {}) =
         AppLockWatcher(context, app.crypto, onTextHidden, elapsed = { 0L }, background = atOnce, main = atOnce)
 
     private fun withKeys(app: SoftwareKeysApp): RecoveryKey =
@@ -233,6 +233,22 @@ class AppLockViewModelsTest {
         assertEquals(AppLockState.OFF, (model.state.value as AppLockSettingsScreen).state)
         assertEquals(AppLockState.OFF, app.crypto.appLock.state())
         assertNull(watcher.notice)
+    }
+
+    @Test
+    fun anAppThatShowsNoNotificationsIsOfferedNoChoiceAboutTheirText() {
+        val (app, _) = newApp()
+        withTheAppLockOn(app)
+        val withNotifications = appLockModel(app)
+        val withoutNotifications = appLockModel(app, watcherOf(app, onTextHidden = null))
+
+        for (model in listOf(withNotifications, withoutNotifications)) {
+            model.onAsk()
+            model.onPromptResult((model.state.value as AppLockAsking).prompt!!, PromptOutcome.SUCCEEDED)
+        }
+
+        assertTrue((withNotifications.state.value as AppLockSettingsScreen).showsNotifications)
+        assertFalse((withoutNotifications.state.value as AppLockSettingsScreen).showsNotifications)
     }
 
     // Turning the app lock on.

@@ -3,10 +3,9 @@
 What each app stores on the phone, where, whether it is in a backup, and
 what leaves the phone and how.
 
-- Status: covers Catalog, Water, Reminders, Tasks and the code of
-  Notes that is built. It is written
-  from the code, not from other pages. The file names and keys below are the ones in the
-  code.
+- Status: covers Catalog, Water, Reminders, Tasks and Notes. It is
+  written from the code, not from other pages. The file names and keys
+  below are the ones in the code.
 - Each later app adds its section before its first release.
 - The same, in plain words for users: [privacy.md](../user/privacy.md).
   The permissions behind it: [permissions.md](permissions.md).
@@ -427,22 +426,26 @@ hold no user data.
 
 ## Notes (`app.shkriuss.notes`)
 
-Notes is being built. It stores notes and their files, as below. Its
-screens write all of it: notes are typed in, and files are added
-through Android's file picker. When it starts, it opens its database and
-sweeps it. It has no backup yet, shows no notification and cannot set up
-the recovery key.
+On Notes' screens you write, change and delete notes, and add and
+remove files through Android's file picker. It stores them as below,
+and makes and restores backups. It shows no notification. When it
+starts, it sweeps: it wipes what is still deleted and removes the
+streams that no file needs.
 
 ### On the phone
 
-Everything is in Notes' private storage.
+Everything is in Notes' private storage, except the keys that the
+Android Keystore holds.
 
 | What | Where | What it holds | In a backup |
 |---|---|---|---|
-| The database `notes.db` | Notes' database folder | Two record tables ([spec.md](../apps/notes/spec.md#data)). `note`, one row per note: its title, its text with its marks, whether it is pinned, and how many times a file of it was added, removed or brought back. `attachment`, one row per file: the random ID of its note, the file's name and type as the picker gave them, its size, and its file key, wrapped by the `file-key` keyset. Each row also has its random ID, its times and its deletion marker. The table `change_counter` holds one number. **Text: the titles and texts of notes, and the names of files.** | `note` and `attachment`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
-| The streams of the files, `attachments/` | Notes' no-backup folder | One file per attached file, named by the random ID of its record: the file's bytes, **encrypted** with its own random key ([crypto-design.md](crypto-design.md#file-keys)). While a file is added, `<id>.part`, deleted at every start. | Yes, the streams of the files that are not deleted, once the backup screens are built |
-| Key files, `shk-keys/` | Notes' no-backup folder | Before the recovery key: `file-key`, one random key that exists only on this phone, made at the first file, wrapped by a hardware key. With the recovery key: `record`, `backup` and `file-key`, and `file-key-old` until every file key is sealed again ([spec.md](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)). | No |
-| Hardware keys | The Android Keystore, in StrongBox where the phone has it | The key that wraps `file-key`, which cannot be read out ([crypto-design.md](crypto-design.md#hardware-keys)). | No |
+| The database `notes.db` | Notes' database folder | Two record tables ([spec.md](../apps/notes/spec.md#data)). `note`, one row per note: its title, its text with its marks, whether it is pinned, and how many times a file of it was added, removed or brought back. `attachment`, one row per file: the random ID of its note, the file's name and type as the picker gave them, its size, and its file key, wrapped by the `file-key` keyset. Each row also has its random ID, its times and its deletion marker. The table `change_counter` holds one number. **Text: the titles and texts of notes, and the names of files.** | `note` and `attachment`: yes, deleted rows too, in their wiped form. The change numbers and `change_counter`: no |
+| The streams of the files, `attachments/` | Notes' no-backup folder | One file per attached file, named by the random ID of its record: the file's bytes, **encrypted** with its own random key ([crypto-design.md](crypto-design.md#file-keys)). While a file is added, `<id>.part`, deleted at every start. | Yes, byte for byte, still encrypted: the streams of the files that are not deleted, are on the phone and have the right length |
+| The preferences file `app.shkriuss.core.security` | Notes' preferences folder | Two settings of the app lock: `lock-after` (when it locks) and `block-screenshots` ([ADR 0032](../adr/0032-app-lock-settings-in-android-preferences.md)). Notes offers no choice about the text of notifications, so it never writes `notification-text`. Whether the app lock is on is not a setting in this file. It is which hardware key wraps the `file-key` keyset. | No |
+| Key files, `shk-keys/` | Notes' no-backup folder | Before the recovery key: `file-key`, one random key that exists only on this phone, made at the first file. With the recovery key: `record`, `backup` and `file-key`, each wrapped by a hardware key, and `file-key-old` until every file key is sealed again ([spec.md](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)). `recovery`, the recovery key, only if the phone keeps it, wrapped by a key that needs the system prompt for every use ([crypto-design.md](crypto-design.md#where-keys-are-stored)). | No |
+| Set-aside key files, `shk-keys-set-aside/` | Notes' no-backup folder | A copy of a keyset file that could not be read, kept before the file is written again. Still wrapped. | No |
+| Hardware keys | The Android Keystore, in StrongBox where the phone has it | Up to four keys per app, which cannot be read out: the Background key, the Unlocked key, the Lock key (while the app lock is on) and the Recovery guard (while the phone keeps the recovery key) ([crypto-design.md](crypto-design.md#hardware-keys)). | No |
+| The restore staging folder, `shk-restore/` | Notes' no-backup folder | Only while a restore runs: the records of the backup, **not encrypted**, titles, texts and file names too, and the streams of its files, still encrypted with their own keys, so that nothing changes until the whole file is checked. A stream the restore takes moves from here into `attachments/`. The rest is deleted when the restore ends, well or badly, and again at every start of Notes. It is an ordinary delete ([backup-format.md](../architecture/backup-format.md#staging)). | Not applicable |
 
 - **Deleted notes are wiped.** A deleted note keeps its text and its
   files only while its **Undo** is open. Then its title and text, the
@@ -451,7 +454,9 @@ Everything is in Notes' private storage.
   same way. What is left is the deletion marker: the random IDs, the
   times, and for a file the random ID of its note
   ([spec.md](../apps/notes/spec.md#the-wiped-form)). A stop before the
-  wipe is mended at the next start.
+  wipe is mended at the next start. Before a backup, Notes wipes every
+  deleted record that is not wiped yet, and makes no backup if it
+  cannot, so a backup never holds deleted content.
 - `notes.db` is opened with SQLite's `secure_delete` on, so the bytes a
   write clears are written over. Android's SQLite keeps the write-ahead
   files `notes.db-wal` and `notes.db-shm` next to the database. They can
@@ -461,33 +466,77 @@ Everything is in Notes' private storage.
 - What a wipe cannot reach: a backup made before it, and old blocks that
   the flash storage keeps, of the streams, of `notes.db` and of its
   write-ahead file, under Android's file-based encryption.
-- No preferences file of `core/security`: the settings of the app lock
-  cannot be changed in Notes yet.
 - Nothing Notes decrypts is written anywhere but into a copy the user
   saves: an image is decoded in memory only, at the size it shows at,
   and goes when its row or the image view goes, when the note closes
   and when Notes locks. A search is not stored.
 
+Android also keeps some things for Notes, outside Notes' folders:
+
+- A picture of Notes' screen in the recent apps, which can show titles,
+  texts and images. While the app lock is on, or "Hide in recent apps
+  and block screenshots" is on, the picture is blank.
+- The saved state of Notes' screen while it waits in the background:
+  the place that is open, the random IDs of the open note and of the
+  file whose image shows or whose copy is being saved, a part of
+  Licences, and how far each place is scrolled. Never a title, a text,
+  a name or a search: what is typed lives only while Notes runs, and a
+  note is saved when Notes leaves the screen.
+
+The keyboard app sees what is typed into a title or a text, as in any
+app. Notes asks it not to learn them
+(`IME_FLAG_NO_PERSONALIZED_LEARNING`). A keyboard can ignore the request
+([threat-model.md](threat-model.md#out-of-scope), point 3).
+
 ### What leaves the phone, and how
 
-Only the copies you save. Notes has no network permission and shows no
-notification. Android backup and device transfer are off. It writes no
-file outside its storage but a copy you save, puts nothing on the
-clipboard itself and writes no log. The title, the text and the search
-field offer the usual copy and paste, so text you copy goes to the
-clipboard. The two parts of the handover of `core/security` are in its
-manifest, as in every data app: its status provider says only that
-Notes keeps no recovery key, and its handover screen says the same to a
-suite app that asks, and gives nothing
-([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+1. **A backup file**, only when you make one, to the place you pick in
+   Android's file picker. That place can be a USB stick or a cloud
+   storage app. Notes suggests the name `notes-<date>.shkbackup`, for
+   example `notes-2026-11-24.shkbackup`.
+   - In the clear, at its start: that it is a backup of the suite, its
+     format version, the app name `notes`, and the short name (key ID)
+     of the recovery key it needs
+     ([backup-format.md](../architecture/backup-format.md)).
+   - Encrypted with the backup key of the recovery key: when it was
+     made, Notes' data version, every record of `note` and `attachment`,
+     deleted ones too in their wiped form, with their titles, texts,
+     file names, types, sizes and wrapped file keys, and their counts.
+     Then the stream of each file that is not deleted and is whole on
+     the phone, byte for byte as stored, still encrypted with its own
+     key.
+   - Not in it: the keysets, the recovery key, the preferences file,
+     change numbers, and the streams of files that are not on the phone
+     or are damaged.
+   - Its size shows roughly how many notes and files it holds, and how
+     large they are: 1 GB of files makes a backup of about 1 GB. The
+     date is in the suggested name.
+2. **A restore** reads one file that you pick. It writes nothing outside
+   Notes.
+3. **A copy of a file**, only when you tap **Save a copy**, decrypted,
+   byte for byte, to the place you pick in Android's file picker. The
+   copy holds all the picked file held, such as where a photo was taken
+   ([spec.md](../apps/notes/spec.md#showing-an-image-and-saving-a-copy)).
+4. **Keys to another app of the suite on the phone**, through the
+   handover between apps, as in Water: only when you allow it on
+   Notes' screen and answer the system prompt, only that app's own
+   keysets, made from the recovery key Notes keeps, and only to a data
+   app of the suite signed with exactly Notes' own current certificate
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Its status
+   provider says only whether Notes keeps the recovery key now, and its
+   short name. Notes takes its own keys from a keeper the same way.
 
-A file leaves Notes only through **Save a copy**, decrypted, byte for
-byte, to the place you pick in Android's file picker. The copy holds all
-the picked file held, such as where a photo was taken
-([spec.md](../apps/notes/spec.md#showing-an-image-and-saving-a-copy)).
+Notes has no network permission and shows no notification. Android
+backup and device transfer are off. It writes no file outside its
+storage but a backup or a copy you make, shares nothing else with other
+apps, puts nothing on the clipboard itself and writes no log. The title,
+the text and the search field offer the usual copy and paste, so text
+you copy goes to the clipboard.
 
 ### How to delete it
 
-In Android's Settings, open **Apps**, then **Notes**, **Storage**, and
-tap **Clear storage**. Everything above goes, the keys too.
-Uninstalling Notes does the same.
+- In Android's Settings, open **Apps**, then **Notes**, **Storage**,
+  and tap **Clear storage**. Everything above goes, the keys too.
+  Uninstalling Notes does the same.
+- Backup files and copies stay where you put them. Delete them there.
+- Without the recovery words, nobody can open those backups.

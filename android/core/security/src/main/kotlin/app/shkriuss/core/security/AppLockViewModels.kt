@@ -261,6 +261,7 @@ class AppLockViewModel internal constructor(
         lockAfter = watcher.lockAfter,
         blockScreenshots = watcher.blocksScreenshots,
         notificationText = watcher.showsNotificationText,
+        showsNotifications = watcher.showsNotifications,
     )
 
     private fun work(work: suspend () -> Unit) {

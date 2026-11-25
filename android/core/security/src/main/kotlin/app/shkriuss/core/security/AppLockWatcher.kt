@@ -73,14 +73,16 @@ enum class AppLockNotice {
  *
  * [onTextHidden] runs on the main thread when notifications must hide
  * their text from now on: the app passes `{ notify.hideShownText() }`,
- * or `{}` if it shows no notifications. It has no default, so that no app
- * can forget it. Everything else runs on the main thread, except the
- * reads of the keys, which run on [background].
+ * or null if it shows no notifications. Then the app lock screen leaves
+ * out the choice "Show the text in notifications", which would do
+ * nothing. It has no default, so that no app can forget it. Everything
+ * else runs on the main thread, except the reads of the keys, which run
+ * on [background].
  */
 class AppLockWatcher(
     private val app: Application,
     private val crypto: ShkCrypto,
-    private val onTextHidden: () -> Unit,
+    private val onTextHidden: (() -> Unit)?,
     private val elapsed: () -> Long = SystemClock::elapsedRealtime,
     private val background: Executor = Executors.newSingleThreadExecutor { Thread(it, "core-security") },
     private val main: Executor = app.mainExecutor,
@@ -225,7 +227,7 @@ class AppLockWatcher(
             dropFileKeys()
         }
         applyFlagsToAll()
-        if (!settings.notificationText) onTextHidden()
+        if (!settings.notificationText) onTextHidden?.invoke()
         refresh()
     }
 
@@ -263,8 +265,12 @@ class AppLockWatcher(
         get() = settings.notificationText
         set(value) {
             settings.notificationText = value
-            if (!value && known == AppLockState.ON) onTextHidden()
+            if (!value && known == AppLockState.ON) onTextHidden?.invoke()
         }
+
+    /** False for an app that shows no notifications: the app lock screen then offers no choice about their text. */
+    internal val showsNotifications: Boolean
+        get() = onTextHidden != null
 
     private class Read(val state: AppLockState, val isLocked: Boolean)
 

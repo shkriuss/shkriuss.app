@@ -3,6 +3,7 @@ package app.shkriuss.feature.notes
 import android.app.Activity
 import android.content.Context
 import android.database.SQLException
+import app.shkriuss.core.backup.Backups
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.ShkCrypto
@@ -24,14 +25,15 @@ import kotlinx.coroutines.sync.Mutex
 /**
  * Everything of Notes that lives as long as the app: its database, the
  * folder of streams, the repository on them, the adds of files, the reads
- * of files, the images, the one snackbar, the move of the file keys and
- * the clock of the screens. The app class
- * builds one, calls [start] when the app starts, and hands it out through
- * [NotesHost]. Nothing here is found by a lookup: the ViewModels get what
- * they need through their constructors.
+ * of files, the images, the one snackbar, the move of the file keys, the
+ * clock of the screens, and backup and restore. The app class builds one,
+ * calls [start] when the app starts, and hands it out through [NotesHost].
+ * Nothing here is found by a lookup: the ViewModels get what they need
+ * through their constructors.
  *
  * [crypto] is the app's one `ShkCrypto`, made with [APP_NAME]: its file
- * keys seal the key of every file. [gateOpen] is true while the gate of
+ * keys seal the key of every file, and its backup keys lock a backup.
+ * [gateOpen] is true while the gate of
  * the app lock is open; with [onScreen] it says when an add may start.
  * [work] runs the reads and writes off the main thread, and [zone] is the
  * phone's time zone for the screens. Tests pass their own.
@@ -95,22 +97,53 @@ class NotesServices(
     /** The phone's clock for the screens: a last change shows as a time today, else as a date. */
     val now: NotesNow = NotesNow(clock, scope, zone)
 
+    /** Backup and restore, and what Settings shows about the recovery key and the app lock. */
+    val backups: NotesBackups = NotesBackups(
+        Backups(
+            context.contentResolver,
+            crypto.backups,
+            APP_NAME,
+            // After a restore, the sweep of every start: files of deleted notes are marked deleted, and wiped.
+            NotesBackupContent(database, repository, clock, ids, afterRestore = ::sweep),
+            // In the no-backup files folder, next to the keys and the streams, and not in the cache folder, which
+            // Android may empty at any time. On the same file system as the streams, so a stream moves in by a rename
+            // (docs/architecture/backup-format.md, "Staging").
+            File(context.noBackupFilesDir, STAGING_FOLDER),
+            clock,
+            work,
+        ),
+        crypto,
+        repository,
+        snackbars,
+        keyMove,
+        clock,
+        zone,
+        work,
+    )
+
     /**
      * Call once in the app class's `onCreate`. Off the main thread, it
-     * sweeps (`NotesRepository.sweep`): files of deleted notes are marked
-     * deleted, deleted records are wiped, streams that no record needs and
-     * every part go, and the write-ahead file is checkpointed. Then it goes
-     * on with a pending move of the file keys. What fails is tried again
-     * at the next start.
+     * empties what a restore left behind when the app stopped in the middle
+     * of it (`NotesBackups.start`). It sweeps (`NotesRepository.sweep`):
+     * files of deleted notes are marked deleted, deleted records are wiped,
+     * streams that no record needs and every part go, and the write-ahead
+     * file is checkpointed. Then it goes on with a pending move of the file
+     * keys. What fails is tried again at the next start.
      */
     fun start() {
+        backups.start(scope)
         scope.launch {
-            try {
-                repository.sweep(snackbars)
-            } catch (_: SQLException) {
-                // Tried again at the next start (docs/apps/notes/spec.md, "A write fails").
-            }
+            sweep()
             keyMove.run()
+        }
+    }
+
+    /** The sweep of every start, also after a restore. What fails is tried again at the next start. */
+    private suspend fun sweep() {
+        try {
+            repository.sweep(snackbars)
+        } catch (_: SQLException) {
+            // Tried again at the next start (docs/apps/notes/spec.md, "A write fails").
         }
     }
 
@@ -133,6 +166,9 @@ class NotesServices(
 
         /** The folder of the streams, in the no-backup files folder. */
         const val ATTACHMENTS_FOLDER: String = "attachments"
+
+        /** The folder a restore puts a backup aside in, until the whole of it was checked. Only `Backups` uses it. */
+        private const val STAGING_FOLDER = "shk-restore"
     }
 }
 

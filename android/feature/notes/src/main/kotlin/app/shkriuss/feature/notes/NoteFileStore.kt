@@ -71,6 +71,17 @@ class NoteFileStore(
         }
     }
 
+    /**
+     * Moves a stream of a restore in as the stream of the file [id]: [move]
+     * renames it to the file it is given, which it replaces. Then the
+     * folder is flushed, so the rename survives a power loss.
+     */
+    fun moveIn(id: String, move: (File) -> Unit) {
+        folder.mkdirs()
+        move(stream(id))
+        flushFolder()
+    }
+
     /** Removes the stream of the file [id], if it is there. False if it is there and could not be removed: the next start tries again. */
     fun remove(id: String): Boolean {
         val stream = stream(id)

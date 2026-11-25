@@ -33,9 +33,10 @@ internal class BackupEngine(
      * Writes a backup. [open] is called only when a backup can be made,
      * and gives the place to write to, which is closed here. If this
      * throws, or the result is not [ExportResult.Written], what was
-     * written is not a backup and never passes a check.
+     * written is not a backup and never passes a check. [progress] is told
+     * the bytes of the files written so far ([BackupProgress]).
      */
-    suspend fun write(open: () -> OutputStream): ExportResult {
+    suspend fun write(progress: (BackupProgress) -> Unit = {}, open: () -> OutputStream): ExportResult {
         if (!crypto.mayMakeBackup()) return ExportResult.NotReady
         val header = try {
             BackupHeader.of(crypto.keyId(), appName.value)
@@ -53,7 +54,7 @@ internal class BackupEngine(
                 return ExportResult.NoKeysNow
             }
             val body = DataOutputStream(BufferedOutputStream(encrypting, BackupFormat.COPY_BUFFER))
-            val writer = BackupWriter(body)
+            val writer = BackupWriter(body, progress)
             val madeAt = clock.nowMillis()
             writer.manifest(content.dataVersion, madeAt)
             content.list(writer)

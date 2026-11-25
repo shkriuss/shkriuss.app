@@ -128,6 +128,53 @@ class ExportTest {
         assertStops<IllegalArgumentException>("a file length below 0") { it.file(id, -1, ByteArrayInputStream(bytes)) }
         assertStops<IllegalArgumentException>("files left out below 0") { it.filesLeftOut(-1) }
         assertStops<IllegalArgumentException>("data version 0", dataVersion = 0) { }
+        assertStops<IllegalArgumentException>("bytes of the files below 0") { it.fileBytes(-1) }
+        assertStops<IllegalStateException>("the bytes of the files after a file") { sink ->
+            sink.file(id, 10, ByteArrayInputStream(bytes))
+            sink.fileBytes(10)
+        }
+        assertStops<IllegalStateException>("the bytes of the files twice") { sink ->
+            sink.fileBytes(10)
+            sink.fileBytes(10)
+        }
+    }
+
+    @Test
+    fun theProgressOfWritingCountsTheBytesOfTheFilesOutOfTheTotalTheAppGave() {
+        val device = deviceWithKeys()
+        val sizes = listOf(0, 100, 3 * BackupFormat.COPY_BUFFER + 7)
+        val content = appThatLists { sink ->
+            sink.record(record(1))
+            sink.fileBytes(sizes.sum().toLong())
+            sizes.forEachIndexed { index, size -> sink.file(TestIdSource.idNumber(10L + index), size.toLong(), ByteArrayInputStream(pattern(size))) }
+        }
+        val engine = BackupEngine(device.keys.crypto.backups, WATER, content, BackupStaging(device.stagingFolder), device.clock)
+        val told = mutableListOf<BackupProgress>()
+
+        val result = runBlocking { engine.write(progress = { told += it }) { ByteArrayOutputStream() } }
+
+        assertTrue(result is ExportResult.Written)
+        val total = sizes.sum().toLong()
+        assertEquals("the total comes first, at 0", BackupProgress(0, total), told.first())
+        assertEquals("all of it at the end", BackupProgress(total, total), told.last())
+        assertTrue("it only goes forward", told.zipWithNext().all { (before, after) -> after.done >= before.done })
+        assertTrue("every one has the total", told.all { it.total == total })
+        assertEquals(1f, told.last().fraction)
+    }
+
+    @Test
+    fun withoutATotalTheProgressOfWritingHasNone() {
+        val device = deviceWithKeys()
+        val content = appThatLists { sink -> sink.file(TestIdSource.idNumber(1), 500, ByteArrayInputStream(pattern(500))) }
+        val engine = BackupEngine(device.keys.crypto.backups, WATER, content, BackupStaging(device.stagingFolder), device.clock)
+        val told = mutableListOf<BackupProgress>()
+
+        runBlocking { engine.write(progress = { told += it }) { ByteArrayOutputStream() } }
+
+        assertEquals(BackupProgress(500, null), told.last())
+        assertTrue("a circle, not a bar", told.all { it.fraction == null })
+        assertEquals("a total of 0 has no fraction either", null, BackupProgress(0, 0).fraction)
+        assertEquals("more than the total is all of it", 1f, BackupProgress(12, 10).fraction)
     }
 
     @Test

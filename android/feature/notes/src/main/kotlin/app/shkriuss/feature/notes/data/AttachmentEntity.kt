@@ -82,6 +82,10 @@ interface AttachmentDao : RecordDao<AttachmentEntity> {
     @Query("SELECT * FROM attachment WHERE " + RecordSql.CHANGED_SINCE)
     override suspend fun changedSince(afterChangeNumber: Long, limit: Int): List<AttachmentEntity>
 
+    /** Every file, deleted ones too, for a backup. */
+    @Query("SELECT * FROM attachment")
+    suspend fun all(): List<AttachmentEntity>
+
     /** The files that are not deleted, of every note. The list and its search read their names and counts. */
     @Query("SELECT * FROM attachment WHERE deletedAt IS NULL")
     fun observeShown(): Flow<List<AttachmentEntity>>

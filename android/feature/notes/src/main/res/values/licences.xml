@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The names of the third-party parts that ship in Notes, and of
+    their licences, for the Licences screen (docs/apps/water/spec.md,
+    "Licences", as docs/apps/notes/spec.md, "As in Water and Tasks",
+    says). They are names, so they are not translated. The notice
+    of each part and the full text of each licence are in res/raw, byte
+    for byte as their source has them
+    (docs/development/third-party.md). A library that the build removes
+    from the app, because nothing uses it, is not listed here; the page
+    names those too.
+-->
+<resources>
+    <string name="notes_part_androidx" translatable="false">AndroidX libraries</string>
+    <string name="notes_part_bip39" translatable="false">BIP-39 English word list</string>
+    <string name="notes_part_compose" translatable="false">Jetpack Compose and Material 3</string>
+    <string name="notes_part_kotlin" translatable="false">Kotlin standard library</string>
+    <string name="notes_part_coroutines" translatable="false">kotlinx.coroutines</string>
+    <string name="notes_part_protobuf" translatable="false">Protocol Buffers, inside Tink</string>
+    <string name="notes_part_tink" translatable="false">Tink for Java</string>
+
+    <string name="notes_licence_name_apache_2_0" translatable="false">Apache License 2.0</string>
+    <string name="notes_licence_name_bsd_3_clause" translatable="false">BSD 3-Clause License</string>
+    <string name="notes_licence_name_mit" translatable="false">MIT License</string>
+</resources>

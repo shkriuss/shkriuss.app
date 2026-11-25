@@ -24,8 +24,8 @@ import kotlinx.coroutines.flow.map
 class NotesApp : Application(), SecurityHost, NotesHost {
     override val crypto: ShkCrypto by lazy { ShkCrypto.create(this, NotesServices.APP_NAME).also { it.start() } }
 
-    // Notes shows no notifications, so there is none whose text the app lock must hide.
-    override val appLock: AppLockWatcher by lazy { AppLockWatcher(this, crypto, onTextHidden = {}) }
+    // Notes shows no notifications: there is no text the app lock must hide, and its screen offers no choice about it.
+    override val appLock: AppLockWatcher by lazy { AppLockWatcher(this, crypto, onTextHidden = null) }
 
     override val notes: NotesServices by lazy {
         NotesServices(

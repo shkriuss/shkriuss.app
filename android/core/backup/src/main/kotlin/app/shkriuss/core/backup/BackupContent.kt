@@ -55,6 +55,14 @@ interface BackupSink {
     suspend fun file(id: String, length: Long, content: InputStream)
 
     /**
+     * Says how many bytes the files that follow hold in all: the sum of
+     * the lengths the app will give to [file]. Then the progress of the
+     * backup has a total ([BackupProgress]). Call it once, before the first
+     * file. An app that does not call it gets a progress with no total.
+     */
+    fun fileBytes(total: Long) = Unit
+
+    /**
      * Says that [count] more files are not in this backup, because their
      * stored streams are not on this device. Their records are still
      * listed. The numbers of all calls are added up and given back with

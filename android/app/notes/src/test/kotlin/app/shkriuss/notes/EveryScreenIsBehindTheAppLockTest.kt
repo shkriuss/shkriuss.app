@@ -1,6 +1,7 @@
 package app.shkriuss.notes
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Looper
 import android.os.PowerManager
 import androidx.compose.ui.test.hasContentDescription
@@ -15,7 +16,9 @@ import app.shkriuss.core.testing.AppLockCheck
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.feature.notes.R
 import java.util.concurrent.CountDownLatch
+import org.junit.After
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,7 +39,14 @@ import app.shkriuss.core.design.R as DesignR
  *
  * Then, for each menu and dialog of Notes: it opens it with the app lock
  * on and the app open, turns the screen off so that the app locks, and
- * fails unless only the lock screen shows, in every window.
+ * fails unless only the lock screen shows, in every window. The dialogs
+ * of a backup and a restore are among them, and Licences with an open
+ * notice, which Settings shows in its own place.
+ *
+ * One dialog is not here: the one for the moment the recovery key is first
+ * needed. It can never show while the app lock is on, because the app lock
+ * needs the recovery key. core/security checks it, drawn inside a gate
+ * (`FirstNeedBehindTheAppLockTest`).
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = LockedNotesApp::class)
@@ -44,6 +54,18 @@ import app.shkriuss.core.design.R as DesignR
 class EveryScreenIsBehindTheAppLockTest {
     @get:Rule
     val compose = createEmptyComposeRule()
+
+    /** Holds a backup that is being written, so that its progress dialog stays. Let go at the end of the test. */
+    private val held = CountDownLatch(1)
+
+    @Before
+    fun aFilePicker() = pickerDocuments()
+
+    @After
+    fun letTheWorkEnd() {
+        held.countDown()
+        TestDocuments.onOpen = {}
+    }
 
     @Test
     fun everyScreenShowsTheLockScreenAndNothingOfItsOwn() {
@@ -122,6 +144,87 @@ class EveryScreenIsBehindTheAppLockTest {
         }
     }
 
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun theProgressDialogOfABackupGoesWhenTheAppLocks() {
+        // The storage does not answer, so "Writing the backup" stays on screen.
+        TestDocuments.onOpen = { held.await() }
+        openThenLock { scenario ->
+            pick(scenario, R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+            compose.waitForText(words(R.string.notes_backup_writing))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun theDialogBackupWrittenGoesWhenTheAppLocks() = openThenLock { scenario ->
+        pick(scenario, R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_written_title))
+    }
+
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun theQuestionBeforeARestoreGoesWhenTheAppLocks() {
+        seed { addNote("Trip", "Passport") }
+        val backup = writeABackup()
+        openThenLock { scenario ->
+            pick(scenario, R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+            compose.waitForText(words(R.string.notes_restore_question_title))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun theDialogBackupRestoredGoesWhenTheAppLocks() {
+        seed { addNote("Trip", "Passport") }
+        val backup = writeABackup()
+        openThenLock { scenario ->
+            pick(scenario, R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+            compose.tap(R.string.notes_restore)
+            compose.waitForText(words(R.string.notes_restored_title))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun theAnswerForAFileNotesDoesNotTakeGoesWhenTheAppLocks() {
+        TestDocuments.file("photo.jpg").writeText("not a backup")
+        openThenLock { scenario ->
+            pick(scenario, R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri("photo.jpg"))
+            compose.waitForText(words(R.string.notes_refused_not_a_backup_title))
+        }
+    }
+
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun licencesGoesWhenTheAppLocks() = openThenLock(inAWindowOfItsOwn = false) {
+        compose.tap(R.string.notes_settings)
+        compose.tap(R.string.notes_licences)
+        compose.waitForText(words(R.string.notes_licences_intro))
+    }
+
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun anOpenNoticeOfLicencesGoesWhenTheAppLocks() = openThenLock(inAWindowOfItsOwn = false) {
+        compose.tap(R.string.notes_settings)
+        compose.tap(R.string.notes_licences)
+        compose.tap("BIP-39 English word list")
+        compose.waitForText("Copyright (c) 2013-2016 Pavol Rusnak", substring = true)
+    }
+
+    /**
+     * Opens Settings, taps the row named [row], and picks [document] in the
+     * file picker that Notes opens with [action]. The app has its recovery
+     * key, so the picker comes without the first-need dialog.
+     */
+    private fun pick(scenario: ActivityScenario<NotesActivity>, row: Int, action: String, document: Uri) {
+        compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
+        compose.tap(row)
+        compose.waitForOpened(scenario) { it.action == action }
+        compose.theOpenedScreenCloses(scenario, document)
+    }
+
     private fun openTrip() {
         compose.tap(rowMatcher("Trip"))
         compose.waitFor(IS_EDITABLE and hasText("Trip"))
@@ -131,9 +234,11 @@ class EveryScreenIsBehindTheAppLockTest {
      * Starts Notes with the app open, waits until the list shows, does
      * [open], checks that something opened in a window of its own, turns
      * the screen off so that the app locks, and checks that only the lock
-     * screen shows.
+     * screen shows. [inAWindowOfItsOwn] is false for a screen that Notes
+     * shows in place of another, as Licences in place of Settings: it
+     * opens no window.
      */
-    private fun openThenLock(open: (ActivityScenario<NotesActivity>) -> Unit) {
+    private fun openThenLock(inAWindowOfItsOwn: Boolean = true, open: (ActivityScenario<NotesActivity>) -> Unit) {
         use24HourClock()
         ActivityScenario.launch(NotesActivity::class.java).use { scenario ->
             compose.waitFor(hasContentDescription(words(R.string.notes_new_note)) or hasText(words(R.string.notes_new_note)))
@@ -141,7 +246,7 @@ class EveryScreenIsBehindTheAppLockTest {
             open(scenario)
             compose.waitForIdle()
             val windows = compose.onAllNodes(isRoot()).fetchSemanticsNodes().size
-            assertTrue("A dialog or a menu opened in a window of its own", windows > windowsBefore)
+            if (inAWindowOfItsOwn) assertTrue("A dialog or a menu opened in a window of its own", windows > windowsBefore)
 
             val app = ApplicationProvider.getApplicationContext<AppLockOnNotesApp>()
             shadowOf(app.getSystemService(PowerManager::class.java)).turnScreenOn(false)

@@ -412,8 +412,10 @@ user guide says so honestly ([app-lock.md](../user/app-lock.md)).
 3. If the app uses `core/notify`, it passes
    `hidesText = appLock::hidesNotificationText` to `Notify`, and
    `onTextHidden = { notify.hideShownText() }` to the watcher. An app
-   without notifications passes `onTextHidden = {}`. Neither has a
-   default, so no app can forget them.
+   without notifications passes `onTextHidden = null`, and its app lock
+   screen then leaves out the switch "Show the text in notifications",
+   which would do nothing there. Neither has a default, so no app can
+   forget them.
 4. Its settings open `SecurityScreens.appLockIntent`, through
    `RecoveryKeyFirstNeed` with `RecoveryKeyNeed.APP_LOCK`
    ([The recovery key when first needed](#the-recovery-key-when-first-needed)).
@@ -654,8 +656,9 @@ guide says so.
    - why the app lock cannot be turned on: no screen lock, no recovery
      key, a setup that stopped, or file keys still moving;
    - turn on, and turn off (after a dialog);
-   - while on: "Lock the app" (a dialog of the five choices) and the
-     switch "Show the text in notifications";
+   - while on: "Lock the app" (a dialog of the five choices) and, in an
+     app that shows notifications, the switch "Show the text in
+     notifications";
    - always: "Hide in recent apps and block screenshots", which adds
      `FLAG_SECURE` to every window of the app, and a plain paragraph on
      what the app lock protects.

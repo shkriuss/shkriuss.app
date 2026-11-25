@@ -86,6 +86,16 @@ class NotesFormatTest {
     @Test
     fun countsAreInThePhonesNumberFormat() {
         assertEquals("5,000", format.number(5_000))
+        assertEquals("12,345", format.count(12_345L))
+    }
+
+    @Test
+    fun whenABackupWasMadeIsTheLongDateAndTheClock() {
+        val uk = NotesFormat(ApplicationProvider.getApplicationContext<Application>().resources, Locale.UK, is24Hour = true)
+        val us = NotesFormat(ApplicationProvider.getApplicationContext<Application>().resources, Locale.US, is24Hour = false)
+
+        assertEquals("24 November 2026, 14:05", uk.madeAt(LocalDateTime.of(2026, 11, 24, 14, 5)))
+        assertEquals("November 24, 2026, 2:05 PM", us.madeAt(LocalDateTime.of(2026, 11, 24, 14, 5)))
     }
 
     private fun at(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =

@@ -100,6 +100,29 @@ class BackupsTest {
     }
 
     @Test
+    fun aCheckAndARestoreTellHowMuchOfTheDocumentWasRead() = runBlocking {
+        app.add(record(1), record(2, type = "file"))
+        app.putFile(2, pattern(3 * BackupFormat.COPY_BUFFER))
+        val picked = document("progress.shkbackup")
+        val summary = ((backups.export(picked) as ExportResult.Written).let {
+            BackupSummary(1, it.madeAt, it.records, it.files, it.notDeleted)
+        })
+        val length = fileOf("progress.shkbackup").length()
+        val checking = mutableListOf<BackupProgress>()
+        val restoring = mutableListOf<BackupProgress>()
+
+        assertTrue(backups.check(picked) { checking += it } is CheckResult.Good)
+        assertEquals(RestoreResult.Restored(summary), backups.restore(picked, summary) { restoring += it })
+
+        for ((what, told) in listOf("check" to checking, "restore" to restoring)) {
+            assertEquals("$what: the total is the length of the document", setOf(length), told.map { it.total }.toSet())
+            assertEquals("$what: all of it was read", length, told.last().done)
+            assertTrue("$what: it only goes forward", told.zipWithNext().all { (before, after) -> after.done > before.done })
+            assertTrue("$what: it is told on the way, not only at the end", told.size > 2)
+        }
+    }
+
+    @Test
     fun writingOverALongerOldFileLeavesNothingOfIt() = runBlocking {
         val old = fileOf("old.shkbackup")
         old.writeBytes(pattern(50_000))
