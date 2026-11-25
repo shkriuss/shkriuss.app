@@ -26,6 +26,7 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = TestHostApp::class)
+@OptIn(SecurityScreenSamples::class)
 class AppLockContentTest {
     private val compose = createAndroidComposeRule<ComponentActivity>()
 
