@@ -8,11 +8,13 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.design.ShkSpacing
 import app.shkriuss.core.security.AppLockActivity
@@ -452,6 +454,12 @@ class NotesBackupScreensTest {
         compose.waitForText("Copyright 2017 Google Inc.", substring = true)
         compose.onNode(hasText("AndroidX libraries") and hasClickAction()).assertExists()
         compose.onNode(hasText("Apache License 2.0") and isHeading()).assertExists()
+
+        // Read to the end of one notice, then open another beside the list: it opens at its top.
+        compose.onNode(hasText("END OF TERMS AND CONDITIONS", substring = true)).performScrollTo()
+        compose.tap("Kotlin standard library")
+        compose.waitForText("Copyright 2010-2024 JetBrains", substring = true)
+        compose.onNode(hasText(words(R.string.notes_licence_notice)) and isHeading()).assertIsDisplayed()
     }
 
     private companion object {

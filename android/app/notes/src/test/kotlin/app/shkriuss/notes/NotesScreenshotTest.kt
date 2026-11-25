@@ -30,6 +30,10 @@ import app.shkriuss.feature.notes.OpenNoteViewModel
 import app.shkriuss.feature.notes.R
 import app.shkriuss.feature.notes.data.AttachmentEntity
 import app.shkriuss.feature.notes.data.NoteEntity
+import app.shkriuss.core.crypto.AppName
+import app.shkriuss.feature.notes.NotesServices
+import java.io.File
+import java.io.FileNotFoundException
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.concurrent.CountDownLatch
@@ -40,6 +44,7 @@ import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 import org.robolectric.ParameterizedRobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import app.shkriuss.core.design.R as DesignR
@@ -490,6 +495,157 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri("photo.jpg"))
         compose.waitForText(words(R.string.notes_refused_not_a_backup_title))
         captureWindows("RestoreNotABackup")
+    }
+
+    @Test
+    fun theDialogWhenABackupCannotBeWritten() {
+        pickerDocuments()
+        TestDocuments.onOpen = { mode -> if (mode == "wt") throw FileNotFoundException("the storage app refuses") }
+        openSettings()
+        pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_not_written_text))
+        captureWindows("BackupNotWritten")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsWrittenButCannotBeReadAgain() {
+        pickerDocuments()
+        TestDocuments.onOpen = { mode -> if (mode == "r") throw FileNotFoundException("the storage app refuses to read") }
+        openSettings()
+        pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_not_checked_title))
+        captureWindows("BackupNotChecked")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsWrittenButFailsItsCheck() {
+        pickerDocuments()
+        // The storage loses the end of the file between the write and the check.
+        TestDocuments.onOpen = { mode ->
+            if (mode == "r") {
+                val file = TestDocuments.file(BACKUP_NAME)
+                file.writeBytes(file.readBytes().dropLast(10).toByteArray())
+            }
+        }
+        openSettings()
+        pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_not_usable_title))
+        captureWindows("BackupNotUsable")
+    }
+
+    /** A note deleted before a stop, and a database that refuses to wipe it: no backup is made. */
+    @Test
+    fun theDialogWhenWhatWasDeletedCannotBeWipedFirst() {
+        pickerDocuments()
+        seedNotes()
+        val taxReturn = storedNotes().single { it.title == "Tax return" }.id
+        seed { deleteNote(taxReturn) }
+        refuseWrites()
+        openSettings(ready = "Shopping")
+        pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_not_wiped_text))
+        captureWindows("BackupNotWiped")
+    }
+
+    /** A file added before the recovery key, whose key is damaged: it cannot move to the recovery key, and no backup is made. */
+    @Test
+    @Config(application = NewNotesApp::class)
+    fun theDialogWhenAFileKeyCannotMoveYet() {
+        pickerDocuments()
+        val trip = seed { addNote("Trip", "Passport") }
+        start(ready = "Trip")
+        compose.addFiles(trip, BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES)))
+        damageTheKeyOf(storedFiles().single().id)
+        giveTheAppARecoveryKey()
+        compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
+        pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_files_moving_text))
+        captureWindows("BackupFilesMoving")
+    }
+
+    @Test
+    fun theAnswerForABackupOfANewerVersion() {
+        pickerDocuments()
+        val backup = writeABackupOf(OtherContent(dataVersion = 2))
+        openSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.notes_refused_newer_title))
+        captureWindows("RestoreNewerVersion")
+    }
+
+    @Test
+    fun theAnswerForABackupOfAnotherApp() {
+        pickerDocuments()
+        val tasks = AppName.of("tasks")
+        val backup = writeABackupOf(OtherContent(dataVersion = 1), crypto = keysOfOtherWords(tasks), appName = tasks)
+        openSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.notes_refused_other_app_title))
+        captureWindows("RestoreOtherApp")
+    }
+
+    /** The longest words of a restore: the short name of the key comes from fixed words, so it is the same in every run. */
+    @Test
+    fun theAnswerForABackupMadeWithOtherWords() {
+        pickerDocuments()
+        val backup = writeABackupOf(OtherContent(dataVersion = 1), crypto = keysOfOtherWords(NotesServices.APP_NAME))
+        openSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.notes_refused_other_key_title))
+        captureWindows("RestoreOtherKey")
+    }
+
+    @Test
+    fun theAnswerForAFileThatIsCutShort() {
+        pickerDocuments()
+        seedNotes()
+        val backup = writeABackup()
+        val file = TestDocuments.file(BACKUP_NAME)
+        file.writeBytes(file.readBytes().dropLast(1).toByteArray())
+        openSettings(ready = "Shopping")
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.notes_refused_damaged_title))
+        captureWindows("RestoreDamaged")
+    }
+
+    @Test
+    fun theAnswerForAFileThatCannotBeRead() {
+        pickerDocuments()
+        TestDocuments.onOpen = { throw FileNotFoundException("the storage app refuses") }
+        openSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_not_read_title))
+        captureWindows("RestoreNotRead")
+    }
+
+    @Test
+    fun theAnswerWhenTheBackupCannotBePutAside() {
+        pickerDocuments()
+        seedNotes()
+        val backup = writeABackup()
+        openSettings(ready = "Shopping")
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.notes_restore_question_title))
+        // The staging folder cannot be made: a file stands in its place.
+        File(RuntimeEnvironment.getApplication().noBackupFilesDir, "shk-restore").apply {
+            deleteRecursively()
+            writeText("in the way")
+        }
+        compose.tap(R.string.notes_restore)
+        compose.waitForText(words(R.string.notes_no_room_title))
+        captureWindows("RestoreNoRoom")
+    }
+
+    @Test
+    fun theAnswerForABackupWithSomethingNotesCannotRead() {
+        pickerDocuments()
+        val backup = writeABackupOf(OtherContent(dataVersion = 1, listOf(otherRecord("task"))))
+        openSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.tap(R.string.notes_restore)
+        compose.waitForText(words(R.string.notes_unreadable_title))
+        captureWindows("RestoreUnreadable")
     }
 
     @Test

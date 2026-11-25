@@ -684,7 +684,7 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 15 test classes with 218 tests: the limits of every
+- `feature/notes` has 15 test classes with 220 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
@@ -722,11 +722,13 @@ second build must write the same mapping file, or the release stops. See
     whole backup that comes back on another phone byte for byte, the
     files that are left out, the wipe before a backup, which streams
     move in after a restore, a wiped note that a later edit of another
-    copy brings back, and the progress of a backup and a restore.
+    copy brings back, the progress of a backup and a restore, and that
+    what a stopped restore left is deleted off the thread that starts
+    Notes.
   - `BackupViewModelTest`: the rows of Settings, going on after the
     recovery key with the move of the file keys done first, a backup and
-    what stops one before it is written, the question, a restore, and
-    the answers.
+    what stops one before it is written, the question, a restore, a
+    restore that the database refuses, and the answers.
   - `LicencesTest` is a copy of Tasks'.
 - `app/notes` has five test classes:
   - `EveryScreenIsBehindTheAppLockTest`, a copy of Water's. It also
@@ -739,8 +741,9 @@ second build must write the same mapping file, or the release stops. See
     the rows of Backup and Security and what each opens, the first-need
     dialog, a backup and a restore on the screen, the files a backup
     left out, the progress bar of a restore and the screen kept on,
-    and the Licences screen. A restore is held at its end by holding
-    the lock of the streams.
+    and the Licences screen, where a notice beside the list opens at its
+    top. A restore is held at its end by holding the lock of the
+    streams.
   - `NotesManifestTest` names everything Notes' merged manifest lets
     another app reach: two permissions and none that it defines, no
     receiver, Notes' screen and the eight of `core/security`, and as the

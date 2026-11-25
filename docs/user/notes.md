@@ -338,10 +338,10 @@ Other:
     phone.
 17. Never type your real recovery words into a preview build of a pull
     request. Use test words.
-18. Of the dialogs of a backup and a restore, these have screenshot
-    tests: "Writing the backup", "Restoring the backup", "Backup
-    written", the question, "Backup restored" and "Not a backup". The
-    words of the others were not checked at a large font size.
+18. Two dialogs have no screenshot test, because a test cannot reach
+    them: "No backup was made" when Notes cannot use its keys, and the
+    answer "No keys" of a restore. Their words were not checked at a
+    large font size.
 
 Not in version 1:
 

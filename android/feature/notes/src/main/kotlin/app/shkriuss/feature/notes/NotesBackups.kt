@@ -22,7 +22,10 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.floor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -171,12 +174,21 @@ class NotesBackups(
 ) {
     private val keysLock = Mutex()
 
+    /** The deletion of what a stopped restore left in the staging folder, once [start] began it. A restore waits for it. */
+    @Volatile
+    private var clearing: Job? = null
+
     /**
-     * Call once when the app starts. It is `Backups.start()`: it deletes
-     * what a restore left in the staging folder when the app stopped in the
-     * middle of it.
+     * Call once when the app starts. In [scope], off the main thread, it
+     * runs `Backups.start()`: it deletes what a restore left in the staging
+     * folder when the app stopped in the middle of it. That can be the
+     * streams of thousands of files, so the first screen does not wait for
+     * it. A restore waits until it is done, so it never deletes what a new
+     * restore puts aside.
      */
-    fun start() = backups.start()
+    fun start(scope: CoroutineScope) {
+        clearing = scope.launch(work) { backups.start() }
+    }
 
     /**
      * What Settings shows about the keys now, or null if they cannot be
@@ -296,10 +308,13 @@ class NotesBackups(
      * percent. The streams move in and the sweep runs inside the restore:
      * it is not cut when the screen goes away. If the document now holds
      * another backup, nothing changes, and the answer is the question
-     * again, with what the document holds now.
+     * again, with what the document holds now. If the database refuses
+     * the records, as on a full disk, the transaction rolls back and the
+     * answer is that the phone has not enough room.
      */
     suspend fun restore(picked: Uri, question: BackupStep.Question, show: (BackupStep) -> Unit): BackupStep =
         withContext(NonCancellable) {
+            clearing?.join()
             try {
                 when (val restored = backups.restore(picked, question.backup) { show(BackupStep.Restoring(percentOf(it))) }) {
                     is RestoreResult.Restored -> BackupStep.Restored
@@ -309,6 +324,9 @@ class NotesBackups(
             } catch (_: UnreadableBackupException) {
                 BackupStep.Unreadable
             } catch (_: BackupStagingException) {
+                BackupStep.NoRoom
+            } catch (_: SQLException) {
+                // The database refused the restore's writes, as on a full disk: its transaction rolled back.
                 BackupStep.NoRoom
             } catch (_: IOException) {
                 BackupStep.NotRead

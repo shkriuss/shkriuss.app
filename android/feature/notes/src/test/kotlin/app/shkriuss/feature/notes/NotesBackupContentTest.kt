@@ -9,6 +9,7 @@ import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.feature.notes.data.AttachmentEntity
 import app.shkriuss.feature.notes.data.NoteEntity
+import java.io.File
 import java.io.InputStream
 import java.io.RandomAccessFile
 import kotlinx.coroutines.runBlocking
@@ -370,6 +371,22 @@ class NotesBackupContentTest {
         assertEquals("then the check, up to 100", 100, writing.filterIsInstance<BackupStep.Checking>().last().percent)
         assertEquals(100, restoring.filterIsInstance<BackupStep.Checking>().last().percent)
         assertEquals(100, restoring.filterIsInstance<BackupStep.Restoring>().last().percent)
+    }
+
+    @Test
+    fun whatAStoppedRestoreLeftIsDeletedOffTheThreadThatStartsNotes() {
+        val folder = temporary.newFolder()
+        val leftover = File(folder, "no-backup/shk-restore/a-stopped-restore/file-0").apply {
+            parentFile?.mkdirs()
+            writeBytes(ByteArray(1_000))
+        }
+        val held = Held()
+        val phone = NotesPhone(folder, clock, held.dispatcher).also { phones += it }
+
+        phone.services.start()
+
+        assertTrue("start() returns before anything is deleted, as on the main thread", leftover.exists())
+        held.runUntil { !leftover.exists() }
     }
 
     /** A sink that takes everything and keeps nothing. */

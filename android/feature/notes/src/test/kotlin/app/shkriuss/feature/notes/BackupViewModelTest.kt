@@ -310,6 +310,22 @@ class BackupViewModelTest {
     }
 
     @Test
+    fun aRestoreThatTheDatabaseRefusesChangesNothingAndSaysThereIsNoRoom() {
+        val key = giveKeys()
+        val other = anotherPhone(key)
+        other.note("Trip", "Passport")
+        runBlocking { other.services.backups.write(document) {} }
+        // As on a full disk: every insert into the table of notes fails.
+        phone.database.refuseWritesTo("note")
+
+        look(document)
+        restore()
+
+        assertEquals(BackupStep.NoRoom, state.step)
+        assertEquals(emptyList<String>(), phone.notes().map { it.title })
+    }
+
+    @Test
     fun aBackupMadeWithOtherWordsNamesTheKeyItNeeds() {
         giveKeys()
         val other = anotherPhone()

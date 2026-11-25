@@ -35,4 +35,8 @@ dependencies {
     // for the Keystore (ADR 0029). Test fixtures are never part of an app.
     testImplementation(project(":core:testing"))
     testImplementation(testFixtures(project(":core:crypto")))
+    // Backups that Notes does not take, written as another app, other
+    // recovery words or a newer version would write them, for the
+    // screenshots of the answers. A module of this project, not a library.
+    testImplementation(project(":core:backup"))
 }

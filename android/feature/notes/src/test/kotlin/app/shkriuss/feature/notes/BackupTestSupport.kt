@@ -22,6 +22,7 @@ import app.shkriuss.feature.notes.data.NoteEntity
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.time.ZoneOffset
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -46,9 +47,14 @@ private class PhoneContext(base: Context, private val folder: File) : ContextWra
  * own folder for its streams and its staging, so two phones in one test
  * never share a file. Notes is on the screen and its gate is open, so
  * files are added at once. [ids] are random, so two phones never make
- * the same `id`. Close it at the end of the test.
+ * the same `id`. [work] runs its work off the test's thread. Close it at
+ * the end of the test.
  */
-internal class NotesPhone(folder: File, val clock: TestClock = TestClock(THE_TIME)) : AutoCloseable {
+internal class NotesPhone(
+    folder: File,
+    val clock: TestClock = TestClock(THE_TIME),
+    work: CoroutineContext = Dispatchers.IO,
+) : AutoCloseable {
     /** The folder of the phone's keyset files. */
     val keysFolder = File(folder, "shk-keys")
 
@@ -62,6 +68,7 @@ internal class NotesPhone(folder: File, val clock: TestClock = TestClock(THE_TIM
         IdSource.RandomUuid,
         keys.crypto,
         gateOpen = flowOf(true),
+        work = work,
         zone = { ZoneOffset.UTC },
     ).also { it.onScreen(true) }
     val repository get() = services.repository

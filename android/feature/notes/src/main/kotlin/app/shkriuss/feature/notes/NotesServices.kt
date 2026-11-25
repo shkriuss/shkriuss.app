@@ -122,17 +122,16 @@ class NotesServices(
     )
 
     /**
-     * Call once in the app class's `onCreate`. It calls `Backups.start()`,
-     * which empties what a restore left behind when the app stopped in the
-     * middle of it. Then, off the main thread, it sweeps
-     * (`NotesRepository.sweep`): files of deleted notes are marked deleted,
-     * deleted records are wiped, streams that no record needs and every
-     * part go, and the write-ahead file is checkpointed. Then it goes on
-     * with a pending move of the file keys. What fails is tried again at
-     * the next start.
+     * Call once in the app class's `onCreate`. Off the main thread, it
+     * empties what a restore left behind when the app stopped in the middle
+     * of it (`NotesBackups.start`). It sweeps (`NotesRepository.sweep`):
+     * files of deleted notes are marked deleted, deleted records are wiped,
+     * streams that no record needs and every part go, and the write-ahead
+     * file is checkpointed. Then it goes on with a pending move of the file
+     * keys. What fails is tried again at the next start.
      */
     fun start() {
-        backups.start()
+        backups.start(scope)
         scope.launch {
             sweep()
             keyMove.run()
