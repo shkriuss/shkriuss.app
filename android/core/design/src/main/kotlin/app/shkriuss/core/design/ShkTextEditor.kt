@@ -67,8 +67,10 @@ import androidx.compose.ui.unit.dp
  * the secondary colour ([ShkTextLook]). Showing never changes the text,
  * and a range that does not fit the text is left out. A tap on one of
  * [tapRanges], such as the box `[ ]` of a checklist item, calls [onTapRange]
- * with that range and does not move the cursor or open the keyboard. A
- * tap anywhere else places the cursor, as in every field.
+ * with that range and does not move the cursor or open the keyboard. Each
+ * range is a touch target at least 48 by 48 dp around its characters;
+ * where two overlap, a tap goes to the nearer range. A tap anywhere else
+ * places the cursor, as in every field.
  *
  * [action] is an optional action that TalkBack offers on the field, such
  * as "Tick" while the cursor is on a checklist item.
@@ -284,8 +286,9 @@ private fun EditorField(
  * sees it: the field neither moves its cursor nor takes the focus, and
  * [onTap] gets the range. Every other touch goes on to the field. A range
  * is hit inside the boxes of its characters, a little wider, and as tall
- * as its line. A press that moves past the touch slop is no tap: it goes
- * on, so that a screen that scrolls can scroll from it.
+ * as its line, grown to at least [least] each way around its middle, as
+ * every touch target is. A press that moves past the touch slop is no
+ * tap: it goes on, so that a screen that scrolls can scroll from it.
  */
 private fun Modifier.tapsOnRanges(
     layout: () -> TextLayoutResult?,
@@ -293,9 +296,10 @@ private fun Modifier.tapsOnRanges(
     onTap: (IntRange) -> Unit,
 ): Modifier = pointerInput(Unit) {
     val slop = TapSlop.toPx()
+    val least = ShkSpacing.MinTouchTarget.toPx()
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        val hit = layout()?.let { result -> rangeAt(result, ranges(), down.position, slop) } ?: return@awaitEachGesture
+        val hit = layout()?.let { result -> rangeAt(result, ranges(), down.position, slop, least) } ?: return@awaitEachGesture
         down.consume()
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -303,18 +307,24 @@ private fun Modifier.tapsOnRanges(
             if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) return@awaitEachGesture
             if (!change.pressed) {
                 change.consume()
-                if (rangeAt(layout() ?: return@awaitEachGesture, listOf(hit), change.position, slop) != null) onTap(hit)
+                if (rangeAt(layout() ?: return@awaitEachGesture, listOf(hit), change.position, slop, least) != null) onTap(hit)
                 return@awaitEachGesture
             }
         }
     }
 }
 
-/** The range of [ranges] whose characters, in [layout], are at [position], or null. */
-private fun rangeAt(layout: TextLayoutResult, ranges: List<IntRange>, position: Offset, slop: Float): IntRange? {
+/**
+ * The range of [ranges] whose touch target, in [layout], holds [position],
+ * or null: its characters, [slop] wider on each side, as tall as its line,
+ * and at least [least] each way. Where several hold it, the one whose
+ * middle is nearest, so that a tap between two checklist items goes to
+ * the box it is closer to.
+ */
+private fun rangeAt(layout: TextLayoutResult, ranges: List<IntRange>, position: Offset, slop: Float, least: Float): IntRange? {
     val length = layout.layoutInput.text.length
-    return ranges.firstOrNull { range ->
-        if (range.isEmpty() || range.first < 0 || range.last >= length) return@firstOrNull false
+    return ranges.mapNotNull { range ->
+        if (range.isEmpty() || range.first < 0 || range.last >= length) return@mapNotNull null
         val first = layout.getBoundingBox(range.first)
         val last = layout.getBoundingBox(range.last)
         val line = layout.getLineForOffset(range.first)
@@ -323,9 +333,16 @@ private fun rangeAt(layout: TextLayoutResult, ranges: List<IntRange>, position: 
             top = layout.getLineTop(line),
             right = maxOf(first.right, last.right) + slop,
             bottom = layout.getLineBottom(line),
-        )
-        area.contains(position)
-    }
+        ).atLeast(least)
+        if (area.contains(position)) range to (area.center - position).getDistanceSquared() else null
+    }.minByOrNull { it.second }?.first
+}
+
+/** This rectangle, grown evenly around its middle to at least [side] wide and tall. */
+private fun Rect.atLeast(side: Float): Rect {
+    val wider = maxOf(0f, side - width) / 2
+    val taller = maxOf(0f, side - height) / 2
+    return Rect(left - wider, top - taller, right + wider, bottom + taller)
 }
 
 /**

@@ -10,8 +10,11 @@ import androidx.room3.withWriteTransaction
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.notes.data.NoteEntity
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.OutputStream
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -670,6 +673,36 @@ class ViewModelsTest {
 
         assertEquals(NotesMessage.Copy(CopyResult.FAILED), snackbars.current.await { it is NotesMessage.Copy })
         assertTrue(target.deleted)
+    }
+
+    @Test
+    fun aSecondCopyWhileOneIsSavedIsRefusedAndItsDocumentDeleted() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        val release = CountDownLatch(1)
+        val written = ByteArrayOutputStream()
+        val first = object : CopyTarget {
+            override fun open(): OutputStream {
+                release.await()
+                return written
+            }
+
+            override fun delete(): Boolean = true
+        }
+        val second = TestTarget()
+
+        note.saveCopyOf(file.id, first)
+        assertEquals("The dialog shows at once, before the file is looked up", 0f, note.state.value.copying)
+        note.saveCopyOf(file.id, second)
+
+        assertEquals(NotesMessage.Copy(CopyResult.FAILED), snackbars.current.await { it is NotesMessage.Copy })
+        assertTrue("Its document is not left empty", second.deleted)
+        release.countDown()
+        snackbars.current.await { it == NotesMessage.Copy(CopyResult.SAVED) }
+        assertEquals(2_400, written.size())
     }
 
     @Test

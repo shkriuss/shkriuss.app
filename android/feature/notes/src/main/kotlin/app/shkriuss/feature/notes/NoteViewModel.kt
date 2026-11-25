@@ -437,11 +437,13 @@ class NoteViewModel(
     /**
      * **Save a copy** of the file [fileId] into [target], once the picker
      * answers, also after Android stopped Notes while the picker was open
-     * and before the files are read again. A file that is gone by then gets
-     * no copy: the empty document is deleted, and "Could not save the
-     * copy." shows.
+     * and before the files are read again. The dialog "Saving a copy"
+     * shows at once, before the file is looked up, so no second copy
+     * starts meanwhile. A file that is gone by then gets no copy: the
+     * empty document is deleted, and "Could not save the copy." shows.
      */
     fun saveCopyOf(fileId: String, target: CopyTarget) {
+        if (!startCopy(target)) return
         viewModelScope.launch(work) {
             val file = try {
                 repository.filesOf(noteId).first().firstOrNull { it.id == fileId }
@@ -449,27 +451,49 @@ class NoteViewModel(
                 null
             }
             if (file != null) {
-                saveCopy(file, target)
+                copy(file, target)
             } else {
-                val gone = target.delete()
-                snackbars.show(NotesMessage.Copy(if (gone) CopyResult.FAILED else CopyResult.FAILED_PART_LEFT))
+                shown.update { it.copy(copying = null) }
+                refuse(target)
             }
         }
     }
 
     /** **Save a copy** of [file] into [target], under the dialog "Saving a copy". One copy at a time. */
     fun saveCopy(file: NoteFile, target: CopyTarget) {
-        if (shown.value.copying != null) return
-        shown.update { it.copy(copying = 0f) }
-        viewModelScope.launch(work) {
-            val result = reader.saveCopy(file, target) { written ->
-                val fraction = if (file.size == 0L) 1f else written.toFloat() / file.size
-                shown.update { it.copy(copying = fraction.coerceIn(0f, 1f)) }
-            }
-            shown.update { it.copy(copying = null) }
-            if (result != CopyResult.BUSY) snackbars.show(NotesMessage.Copy(result))
-            if (result == CopyResult.DAMAGED || result == CopyResult.DAMAGED_PART_LEFT) checkFilesAgain()
+        if (!startCopy(target)) return
+        viewModelScope.launch(work) { copy(file, target) }
+    }
+
+    /**
+     * Shows "Saving a copy" for [target] and gives true. While another copy
+     * is saved, gives false and refuses [target], so that its document is
+     * not left empty: one copy at a time.
+     */
+    private fun startCopy(target: CopyTarget): Boolean {
+        var started = false
+        shown.update {
+            started = it.copying == null
+            if (started) it.copy(copying = 0f) else it
         }
+        if (!started) viewModelScope.launch(work) { refuse(target) }
+        return started
+    }
+
+    private suspend fun copy(file: NoteFile, target: CopyTarget) {
+        val result = reader.saveCopy(file, target) { written ->
+            val fraction = if (file.size == 0L) 1f else written.toFloat() / file.size
+            shown.update { it.copy(copying = fraction.coerceIn(0f, 1f)) }
+        }
+        shown.update { it.copy(copying = null) }
+        if (result == CopyResult.BUSY) refuse(target) else snackbars.show(NotesMessage.Copy(result))
+        if (result == CopyResult.DAMAGED || result == CopyResult.DAMAGED_PART_LEFT) checkFilesAgain()
+    }
+
+    /** No copy goes into [target]: its empty document is deleted, and "Could not save the copy." shows. */
+    private suspend fun refuse(target: CopyTarget) {
+        val gone = target.delete()
+        snackbars.show(NotesMessage.Copy(if (gone) CopyResult.FAILED else CopyResult.FAILED_PART_LEFT))
     }
 
     private companion object {

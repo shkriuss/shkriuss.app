@@ -160,6 +160,40 @@ class ShkTextEditorTest(private val fontScale: Float) {
     }
 
     @Test
+    fun aRangeToTapIsA48dpTouchTargetAndATapBetweenTwoGoesToTheNearer() {
+        val text = "- [ ] Passport\n- [ ] Tickets\nand the train"
+        val first = 2..4
+        val second = 17..19
+        val tapped = mutableListOf<IntRange>()
+        compose.setContent {
+            ShkTheme {
+                ShkTextEditor(
+                    text = text,
+                    selectionStart = 0,
+                    selectionEnd = 0,
+                    onChange = { _, _, _ -> },
+                    hint = HINT,
+                    tapRanges = listOf(first, second),
+                    onTapRange = { tapped += it },
+                )
+            }
+        }
+        val layout = layoutOf()
+        val x = layout.getBoundingBox(second.first + 1).center.x
+        val middleOfFirst = (layout.getLineTop(0) + layout.getLineBottom(0)) / 2
+        val middleOfSecond = (layout.getLineTop(1) + layout.getLineBottom(1)) / 2
+        // Just inside half of 48 dp below the middle of the second box: on the plain line under it at font 1.0.
+        val reach = with(compose.density) { (ShkSpacing.MinTouchTarget / 2).toPx() } - 2f
+
+        editor.performTouchInput { click(Offset(x, middleOfSecond + reach)) }
+        editor.performTouchInput { click(Offset(x, (middleOfFirst + middleOfSecond) / 2 + 2f)) }
+        editor.performTouchInput { click(Offset(x, (middleOfFirst + middleOfSecond) / 2 - 2f)) }
+
+        compose.runOnIdle { assertEquals(listOf(second, second, first), tapped) }
+        editor.assertIsNotFocused()
+    }
+
+    @Test
     fun aDragThatStartsOnARangeToTapScrollsTheScreenAndTapsNothing() {
         var tapped: IntRange? = null
         val scroll = ScrollState(0)
@@ -299,6 +333,13 @@ class ShkTextEditorTest(private val fontScale: Float) {
         val results = mutableListOf<TextLayoutResult>()
         compose.runOnIdle { editor.fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results) }
         return results.single().getBoundingBox(BOX.first + 1).center
+    }
+
+    /** How the editor lays out its text now. */
+    private fun layoutOf(): TextLayoutResult {
+        val results = mutableListOf<TextLayoutResult>()
+        compose.runOnIdle { editor.fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results) }
+        return results.single()
     }
 
     /** The connection the keyboard gets from the editor that has the focus. */
