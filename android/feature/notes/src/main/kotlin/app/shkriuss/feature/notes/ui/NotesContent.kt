@@ -81,8 +81,8 @@ internal fun NotesContent(models: NotesModels, snackbar: ShkSnackbarHostState, w
                     ShkEmptyState(title = stringResource(R.string.notes_choose_a_note), modifier = Modifier.weight(1f))
                 }
             } else {
-                // Each note opens at its top, with a state of its own.
-                key(note.model.noteId) { OpenNotePane(note, models, snackbar, onBack) }
+                // Each note opens at its top, with a state of its own, and its pickers' launchers.
+                key(note.paneKey) { OpenNotePane(note, models, snackbar, onBack) }
             }
         },
         windowWidth = windowWidth,

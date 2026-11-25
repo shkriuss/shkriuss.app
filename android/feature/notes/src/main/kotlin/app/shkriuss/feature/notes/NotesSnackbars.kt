@@ -35,6 +35,13 @@ sealed interface NotesMessage {
     data class Copy(val result: CopyResult) : NotesMessage
 }
 
+/**
+ * One showing of a snackbar: its [message], and its [number] among the
+ * showings, so that the same words shown again are a showing of their own,
+ * with their own time on the screen.
+ */
+data class Showing(val message: NotesMessage, val number: Long)
+
 /** The [Undo] of a snackbar that offers it, or null. */
 val NotesMessage.offeredUndo: Undo?
     get() = when (this) {
@@ -82,7 +89,12 @@ class NotesSnackbars(
     private val work: CoroutineContext,
 ) : UndoTurns {
     private val shown = MutableStateFlow<NotesMessage?>(null)
+    private val showings = MutableStateFlow<Showing?>(null)
     private val turns = Mutex()
+
+    /** Counts the showings, under [swapLock], with which [shown] and [showings] change together. */
+    private var count = 0L
+    private val swapLock = Any()
 
     /** The Undos that ended and whose wipe is not done yet. */
     private val ending = mutableListOf<Undo>()
@@ -93,6 +105,9 @@ class NotesSnackbars(
 
     /** The snackbar that shows now, or null. */
     val current: StateFlow<NotesMessage?> = shown.asStateFlow()
+
+    /** The showing of the snackbar that shows now, or null. The screen shows each showing once. */
+    val showing: StateFlow<Showing?> = showings.asStateFlow()
 
     /** The records of the Undo that is open now, and of those that ended and whose wipe is not done yet. */
     val openUndoIds: Set<String>
@@ -144,7 +159,7 @@ class NotesSnackbars(
     private fun replace(before: NotesMessage?, next: NotesMessage?): Boolean {
         val undo = before?.offeredUndo
         undo?.let(::startEnding)
-        val replaced = shown.compareAndSet(before, next)
+        val replaced = swap(before, next)
         if (undo != null) {
             if (replaced) ended(undo) else stopEnding(undo)
         }
@@ -165,7 +180,7 @@ class NotesSnackbars(
             val pressed = turns.withLock {
                 startEnding(undo)
                 // Another snackbar may have taken its place meanwhile: then that ended the Undo, and the press counts for nothing.
-                if (!shown.compareAndSet(message, null)) {
+                if (!swap(message, null)) {
                     stopEnding(undo)
                     return@withLock false
                 }
@@ -187,6 +202,13 @@ class NotesSnackbars(
             val message = shown.value
             if (message?.offeredUndo != null) replace(message, null)
         }
+    }
+
+    /** Shows [next] in place of [before], if [before] still shows, as a showing of its own. */
+    private fun swap(before: NotesMessage?, next: NotesMessage?): Boolean = synchronized(swapLock) {
+        if (!shown.compareAndSet(before, next)) return@synchronized false
+        showings.value = next?.let { Showing(it, ++count) }
+        true
     }
 
     private fun startEnding(undo: Undo) = synchronized(ending) { ending += undo }

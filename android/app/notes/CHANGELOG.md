@@ -29,10 +29,14 @@ Not released yet.
   formatting bar above the keyboard: heading, bold, italic, bulleted
   list, numbered list and checklist. A tap on the box of a checklist
   item ticks it; TalkBack offers "Tick" or "Open again". The menu has
-  **Pin** or **Unpin** and **Delete note**, with **Undo**. A save that
+  **Pin** or **Unpin**, which a new note offers once it has a title, a
+  text or a file, and **Delete note**, with **Undo**. A save that
   fails says so above the title, and closing then asks first.
 - Files: **Add a file** opens Android's file picker, several files at
-  once. Each file shows under the text, with a small picture for an
+  once. Notes takes from the picker, and writes a copy to, only a
+  document of another app, never a path to its own files. Each file
+  shows under the text, under the heading **Files**, with a small
+  picture for an
   image, its size, or why it cannot be opened, and **Save a copy** and
   **Remove**, with **Undo**. While a file is added, its row says so,
   with a progress bar. An image opens in the image view, which zooms

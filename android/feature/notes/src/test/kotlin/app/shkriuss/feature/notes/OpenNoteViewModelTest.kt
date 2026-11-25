@@ -71,6 +71,8 @@ class OpenNoteViewModelTest {
                         repository.giveUpNewNote(id)
                     },
                     saved = saved,
+                    reserveNew = { repository.reserveNewNote() },
+                    isStored = { id -> repository.findNote(id) != null },
                 )
             }
         },
@@ -157,6 +159,53 @@ class OpenNoteViewModelTest {
             }
             assertEquals("file", restored.open.value?.imageId)
             assertTrue("A note that opens again is not new", restored.open.value?.isNew == false)
+        } finally {
+            again.clear()
+        }
+    }
+
+    @Test
+    fun aNewNoteThatWasNotStoredWhenAndroidStoppedNotesGetsANewReservationInTheSamePane() {
+        val lost = runBlocking { checkNotNull(repository.reserveNewNote()) }
+        model.open(lost, isNew = true)
+        openModel(lost)
+        // Android stops Notes: the reservation goes with it, and the saved state stays.
+        repository.giveUpNewNote(lost)
+
+        val again = ViewModelStore()
+        try {
+            val restored = makeModel(again)
+            eventually {
+                idle()
+                restored.open.value != null
+            }
+            val open = checkNotNull(restored.open.value)
+            assertTrue("Another note takes its place", open.model.noteId != lost)
+            assertTrue(open.isNew)
+            assertTrue("It is reserved, so its first file makes it", repository.isNewNote(open.model.noteId))
+            assertEquals("In the same pane, with the launchers of its pickers", lost, open.paneKey)
+        } finally {
+            again.clear()
+        }
+    }
+
+    @Test
+    fun aNewNoteThatWasStoredOpensAgainAsItWas() {
+        val id = runBlocking { checkNotNull(repository.reserveNewNote()) }
+        model.open(id, isNew = true)
+        val first = openModel(id)
+        first.state.await { !it.loading }
+        first.onTitleChange("Trip")
+        first.state.await { it.stored }
+
+        val again = ViewModelStore()
+        try {
+            val restored = makeModel(again)
+            eventually {
+                idle()
+                restored.open.value?.model?.noteId == id
+            }
+            assertTrue(restored.open.value?.isNew == false)
         } finally {
             again.clear()
         }

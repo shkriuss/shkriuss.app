@@ -45,9 +45,10 @@ import app.shkriuss.core.design.R as DesignR
 
 /**
  * The files of a note, under its text (docs/apps/notes/spec.md, "A
- * note", point 4): the heading "Files", one row per shown file, oldest
- * first, and one row for each file that waits to be added or is being
- * added, "Adding ticket.jpg", with a progress bar when its size is known.
+ * note", point 4): the heading "Files", also with no file yet, one row per
+ * shown file, oldest first, and one row for each file that waits to be
+ * added or is being added, "Adding ticket.jpg", with a progress bar when
+ * its size is known.
  */
 @Composable
 internal fun FilesSection(state: NoteState, model: NoteViewModel, images: NoteImages, actions: FileActions, format: NotesFormat) {

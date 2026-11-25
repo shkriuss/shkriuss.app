@@ -1,5 +1,6 @@
 package app.shkriuss.feature.notes.ui
 
+import android.database.SQLException
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.createSavedStateHandle
@@ -32,6 +33,21 @@ class NotesModels(owner: ViewModelStoreOwner, services: NotesServices) {
                     make = { noteId -> NoteViewModel(repository, services.adds, services.reader, services.snackbars, noteId, services.scope) },
                     giveUp = repository::giveUpNewNote,
                     saved = createSavedStateHandle(),
+                    reserveNew = {
+                        try {
+                            repository.reserveNewNote()
+                        } catch (_: SQLException) {
+                            null
+                        }
+                    },
+                    isStored = { noteId ->
+                        try {
+                            repository.findNote(noteId) != null
+                        } catch (_: SQLException) {
+                            // The note opens as it was, and shows that Notes cannot open the notes.
+                            true
+                        }
+                    },
                 )
             }
             initializer { SettingsViewModel(services.repository) }

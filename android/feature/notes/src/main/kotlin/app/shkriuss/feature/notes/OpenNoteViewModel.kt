@@ -21,6 +21,12 @@ data class OpenNote(
     val isNew: Boolean,
     /** The `id` of the file whose image view shows in place of the note, or null for the note. */
     val imageId: String? = null,
+    /**
+     * What the pane of the note is known by, with its saved state and the
+     * launchers of its file pickers: the note's `id`, or the `id` of the
+     * new note whose place it took after Android stopped Notes.
+     */
+    val paneKey: String = model.noteId,
 )
 
 /**
@@ -42,12 +48,17 @@ data class OpenNote(
  *
  * The open note and its image view are kept in [saved], so that after
  * Android stopped Notes, as while a file picker was open, the note opens
- * again, with the launcher that waits for the picker's result.
+ * again, with the launcher that waits for the picker's result. A new note
+ * that was not stored yet lost its reservation with Notes: [reserveNew]
+ * reserves another one in its place, in the same pane, so a file picked
+ * for it is still added. [isStored] says whether a note is stored.
  */
 class OpenNoteViewModel(
     private val make: (noteId: String) -> NoteViewModel,
     private val giveUp: (noteId: String) -> Unit,
     private val saved: SavedStateHandle,
+    private val reserveNew: suspend () -> String?,
+    private val isStored: suspend (noteId: String) -> Boolean,
 ) : ViewModel() {
     private val shown = MutableStateFlow<OpenNote?>(null)
     private var store: ViewModelStore? = null
@@ -60,10 +71,19 @@ class OpenNoteViewModel(
 
     init {
         // Opened again after Android stopped Notes: a note that is gone by now closes at once.
-        val imageId = saved.get<String>(IMAGE_KEY)
-        saved.get<String>(NOTE_KEY)?.let { noteId ->
-            start(noteId, isNew = false)
-            imageId?.let(::openImage)
+        val noteId = saved.get<String>(NOTE_KEY)
+        if (noteId != null) {
+            val imageId = saved.get<String>(IMAGE_KEY)
+            val paneKey = saved.get<String>(PANE_KEY) ?: noteId
+            if (saved.get<Boolean>(NEW_KEY) == true) {
+                viewModelScope.launch {
+                    val fresh = if (isStored(noteId)) null else reserveNew()
+                    if (fresh != null) start(fresh, isNew = true, paneKey = paneKey) else start(noteId, isNew = false, paneKey = paneKey)
+                }
+            } else {
+                start(noteId, isNew = false, paneKey = paneKey)
+                imageId?.let(::openImage)
+            }
         }
     }
 
@@ -119,6 +139,8 @@ class OpenNoteViewModel(
         shown.value = note
         saved[NOTE_KEY] = note?.model?.noteId
         saved[IMAGE_KEY] = note?.imageId
+        saved[NEW_KEY] = note?.isNew
+        saved[PANE_KEY] = note?.paneKey
     }
 
     /** Notes leaves the screen or locks: what is typed in the open note is saved. */
@@ -126,11 +148,11 @@ class OpenNoteViewModel(
         shown.value?.model?.leftScreen()
     }
 
-    private fun start(noteId: String, isNew: Boolean) {
+    private fun start(noteId: String, isNew: Boolean, paneKey: String = noteId) {
         val notes = ViewModelStore()
         val model = ViewModelProvider(notes, viewModelFactory { initializer { make(noteId) } })[NoteViewModel::class.java]
         store = notes
-        show(OpenNote(model, isNew))
+        show(OpenNote(model, isNew, paneKey = paneKey))
         viewModelScope.launch {
             model.state.first { it.closed }
             closed(model)
@@ -163,8 +185,10 @@ class OpenNoteViewModel(
     }
 
     private companion object {
-        /** The keys of the open note and of the file of its image view in the saved state. */
+        /** The keys of the open note, of the file of its image view, of whether it is new and of its pane in the saved state. */
         const val NOTE_KEY = "openNote"
         const val IMAGE_KEY = "openImage"
+        const val NEW_KEY = "openNoteIsNew"
+        const val PANE_KEY = "openNotePane"
     }
 }

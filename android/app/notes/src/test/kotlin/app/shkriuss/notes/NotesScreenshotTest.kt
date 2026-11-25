@@ -1,6 +1,7 @@
 package app.shkriuss.notes
 
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
@@ -18,6 +19,7 @@ import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.testing.TestDocuments
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
+import app.shkriuss.feature.notes.NotesListViewModel
 import app.shkriuss.feature.notes.OpenNoteViewModel
 import app.shkriuss.feature.notes.R
 import app.shkriuss.feature.notes.data.NoteEntity
@@ -91,7 +93,7 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         val ideas = storedNotes().single { it.title.isEmpty() }.id
         start()
         compose.addFiles(ideas, BytesPick("tram-timetable.pdf", "application/pdf", ByteArray(PDF_BYTES)))
-        compose.onNode(IS_EDITABLE and hasText(words(R.string.notes_search))).performTextInput("ta")
+        search("ta")
         compose.waitFor(hasText(words(R.string.notes_file_match, "tram-timetable.pdf")), useUnmergedTree = true)
         compose.captureWholeScreen("NotesSearch", config, LIST)
     }
@@ -100,7 +102,7 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
     fun aSearchWithNoMatch() {
         seedNotes()
         start()
-        compose.onNode(IS_EDITABLE and hasText(words(R.string.notes_search))).performTextInput("rent")
+        search("rent")
         compose.waitForText(words(R.string.notes_no_match, "rent"))
         compose.captureWholeScreen("NotesNoMatch", config)
     }
@@ -189,7 +191,10 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         seedNotes()
         start()
         openNote("Shopping")
-        compose.editor("Shopping").performTextReplacement("Shopping " + "x".repeat(TOO_LONG_TITLE))
+        // As typing would, but with no field focused, so no blinking cursor can change the screenshot.
+        checkNotNull(scenario).onActivity {
+            ViewModelProvider(it)[OpenNoteViewModel::class.java].open.value?.model?.onTitleChange("Shopping " + "x".repeat(TOO_LONG_TITLE))
+        }
         compose.waitFor(hasError(compose.titleTooLong()))
         compose.captureWholeScreen("NoteTitleTooLong", config)
     }
@@ -247,7 +252,12 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         try {
             testApp.test.services.adds.add(trip, listOf(BytesPick("ticket.png", "image/png", ByteArray(ADDED_BYTES), hold)))
             compose.waitForText(words(R.string.notes_adding, "ticket.png"))
-            compose.waitFor(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo))
+            // The first half is copied, and the read waits there: the bar shows half way, every time.
+            compose.waitFor(
+                SemanticsMatcher("the bar half way") { node ->
+                    node.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo)?.current == HALF
+                },
+            )
             compose.captureWholeScreen("FileBeingAdded", config, NOTE)
         } finally {
             hold.countDown()
@@ -335,6 +345,16 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         compose.waitFor(hasText(ready) or rowMatcher(ready))
     }
 
+    /**
+     * Searches for [query] as typing in the field would, but with no field
+     * focused: the search waits 300 ms in real time, and a blinking cursor
+     * would show or not by chance.
+     */
+    private fun search(query: String) {
+        checkNotNull(scenario).onActivity { ViewModelProvider(it)[NotesListViewModel::class.java].search(query) }
+        compose.waitFor(IS_EDITABLE and hasText(query))
+    }
+
     /** Opens the note whose row starts with [title]. */
     private fun openNote(title: String) {
         compose.tap(rowMatcher(title))
@@ -388,6 +408,7 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
             get() = hasScrollAction() and hasAnyDescendant(IS_EDITABLE and hasText("Trip"))
 
         private const val PDF_BYTES = 2_400_000
+        private const val HALF = 0.5f
         private const val ADDED_BYTES = 6_000_000
         private const val TOO_LONG_TITLE = 200
         private const val IMAGE_WIDTH = 600

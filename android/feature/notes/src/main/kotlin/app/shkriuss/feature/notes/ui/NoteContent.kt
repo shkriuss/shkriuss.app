@@ -76,18 +76,19 @@ import app.shkriuss.feature.notes.TextEdit
 internal fun OpenNotePane(open: OpenNote, models: NotesModels, snackbar: ShkSnackbarHostState, onBack: (() -> Unit)?) {
     val model = open.model
     val state by model.state.collectAsState()
-    val resolver = LocalContext.current.contentResolver
+    val context = LocalContext.current
+    val resolver = context.contentResolver
     var picking by rememberSaveable { mutableStateOf(false) }
     val addFiles = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         picking = false
-        val picked = NoteDocuments.pickedOf(result.resultCode, result.data)
+        val picked = NoteDocuments.pickedOf(result.resultCode, result.data, context)
         if (picked.isNotEmpty()) model.addFiles(picked.map { PickedDocument(resolver, it) })
     }
     var copyOf by rememberSaveable { mutableStateOf<String?>(null) }
     val saveCopy = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val file = state.files.firstOrNull { it.file.id == copyOf }?.file
         copyOf = null
-        val document = NoteDocuments.chosenOf(result.resultCode, result.data)
+        val document = NoteDocuments.chosenOf(result.resultCode, result.data, context)
         if (file != null && document != null) model.saveCopy(file, ChosenDocument(resolver, document))
     }
     val actions = FileActions(
@@ -146,7 +147,8 @@ private fun NoteScreen(
 ) {
     val pin = stringResource(if (state.pinned) R.string.notes_unpin else R.string.notes_pin)
     val menu = listOf(
-        ShkMenuItem(text = pin, onClick = { model.setPinned(state.pinned) }),
+        // A new note that is not stored yet has nothing to pin: the press would be lost.
+        ShkMenuItem(text = pin, onClick = { model.setPinned(state.pinned) }, enabled = state.stored),
         ShkMenuItem(text = stringResource(R.string.notes_delete_note), onClick = model::delete, destructive = true),
     )
     val add = ShkTopBarAction(
@@ -209,9 +211,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.NoteFields(
                 .focusRequester(text)
                 .onFocusChanged { textFocused = it.isFocused },
         )
-        if (state.files.isNotEmpty() || state.adding.isNotEmpty()) {
-            FilesSection(state, model, models.images, actions, format)
-        }
+        FilesSection(state, model, models.images, actions, format)
     }
     if (textFocused) FormattingBar(state.body, model)
     LaunchedEffect(Unit) {

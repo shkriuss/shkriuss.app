@@ -289,6 +289,21 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aNewNoteCanBePinnedOnlyOnceItIsStored() {
+        val id = repository.reserveNoteId()
+        val note = open(id)
+        assertTrue("Pin is off while the new note is not stored", !note.state.await { !it.loading }.stored)
+
+        note.onTitleChange("Trip")
+        endPause.trySend(Unit)
+
+        note.state.await { it.stored }
+        note.setPinned(shownPinned = false)
+        note.state.await { it.pinned }
+        assertEquals(true, stored(id)?.pinned)
+    }
+
+    @Test
     fun aSaveThatFailsShowsTheLineAndClosingAsksFirst() {
         val id = phone.note("Trip", "Passport")
         val note = open(id)
@@ -421,6 +436,20 @@ class ViewModelsTest {
         eventually { stored(id)?.let(NoteRules::isWiped) == true }
         assertNotNull(stored(id)?.record?.deletedAt)
         assertEquals(NotesMessage.CouldNotChange, snackbars.current.value)
+    }
+
+    @Test
+    fun theSameWordsShownAgainAreAShowingOfTheirOwn() {
+        snackbars.show(NotesMessage.CouldNotChange)
+        val first = checkNotNull(snackbars.showing.value)
+
+        snackbars.show(NotesMessage.CouldNotChange)
+
+        val second = checkNotNull(snackbars.showing.value)
+        assertEquals(NotesMessage.CouldNotChange, second.message)
+        assertTrue("The second showing is not the first", second != first)
+        snackbars.gone(NotesMessage.CouldNotChange)
+        assertNull(snackbars.showing.value)
     }
 
     @Test

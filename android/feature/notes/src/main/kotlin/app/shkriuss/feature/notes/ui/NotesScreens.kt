@@ -89,12 +89,13 @@ private enum class NotesDestination(@param:StringRes val label: Int, @param:Draw
  */
 @Composable
 private fun NotesSnackbar(snackbars: NotesSnackbars, host: ShkSnackbarHostState) {
-    val message by snackbars.current.collectAsState()
+    // Each showing once, also the same words shown again.
+    val showing by snackbars.showing.collectAsState()
     val format = rememberNotesFormat()
-    val words = message?.let { notesMessageText(it, format) }
+    val words = showing?.let { notesMessageText(it.message, format) }
     val undo = stringResource(R.string.notes_undo)
-    LaunchedEffect(message) {
-        val shown = message ?: return@LaunchedEffect
+    LaunchedEffect(showing) {
+        val shown = showing?.message ?: return@LaunchedEffect
         val text = words ?: return@LaunchedEffect
         when (host.show(text, actionText = if (shown.offersUndo) undo else null)) {
             // The Undo of this snackbar, not of one that may have taken its place since the press.

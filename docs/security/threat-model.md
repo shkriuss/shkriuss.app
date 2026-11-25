@@ -1447,6 +1447,11 @@ Status: **Met for what is built.**
   - The word field takes only the letters a to z, one at a time.
   - A backup is taken only as a `content:` address from the system
     picker ([backup-format.md](../architecture/backup-format.md#the-system-file-picker)).
+  - Notes adds a file from, and writes a copy to, only a `content:`
+    address of another app's provider, as the system picker gives it
+    (`NoteDocuments.isSafe`). An app that poses as the picker cannot hand
+    Notes a `file:` path or a provider of Notes' own, so it cannot make
+    Notes read or overwrite its own database or keys.
   - The receivers ignore every action they do not expect.
   - No input is read as serialized Java objects.
 - MASWE-0029, deep links: there are none. MASWE-0034 and 0035: there is

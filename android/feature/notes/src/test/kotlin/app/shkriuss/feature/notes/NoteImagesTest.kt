@@ -154,11 +154,35 @@ class NoteImagesTest {
         val two = Uri.parse("content://documents/two")
         val several = Intent().apply { clipData = ClipData.newRawUri(null, one).also { it.addItem(ClipData.Item(two)) } }
 
-        assertEquals(listOf(one, two), NoteDocuments.pickedOf(Activity.RESULT_OK, several))
-        assertEquals(listOf(one), NoteDocuments.pickedOf(Activity.RESULT_OK, Intent().setData(one)))
-        assertEquals(emptyList<Uri>(), NoteDocuments.pickedOf(Activity.RESULT_CANCELED, Intent().setData(one)))
-        assertEquals(one, NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(one)))
-        assertNull(NoteDocuments.chosenOf(Activity.RESULT_CANCELED, null))
+        assertEquals(listOf(one, two), NoteDocuments.pickedOf(Activity.RESULT_OK, several, context))
+        assertEquals(listOf(one), NoteDocuments.pickedOf(Activity.RESULT_OK, Intent().setData(one), context))
+        assertEquals(emptyList<Uri>(), NoteDocuments.pickedOf(Activity.RESULT_CANCELED, Intent().setData(one), context))
+        assertEquals(one, NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(one), context))
+        assertNull(NoteDocuments.chosenOf(Activity.RESULT_CANCELED, null, context))
+    }
+
+    @Test
+    fun anAppPosingAsThePickerCannotHandNotesItsOwnFiles() {
+        val database = Uri.fromFile(context.getDatabasePath("notes.db"))
+        val ownProvider = Uri.parse("content://${context.packageName}.own/notes.db")
+        val ours = android.content.pm.ProviderInfo().apply {
+            authority = "${context.packageName}.own"
+            packageName = context.packageName
+            name = "Own"
+        }
+        org.robolectric.Shadows.shadowOf(context.packageManager).addOrUpdateProvider(ours)
+        val document = Uri.parse("content://documents/one")
+
+        val picked = Intent().apply {
+            clipData = ClipData.newRawUri(null, database).also {
+                it.addItem(ClipData.Item(ownProvider))
+                it.addItem(ClipData.Item(document))
+            }
+        }
+
+        assertEquals("Only the document of another app is taken", listOf(document), NoteDocuments.pickedOf(Activity.RESULT_OK, picked, context))
+        assertNull("A file path is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(database), context))
+        assertNull("Notes' own provider is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(ownProvider), context))
     }
 
     /** Adds [pick] to a new note, as Add a file does, and gives the file. */

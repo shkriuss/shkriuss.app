@@ -49,6 +49,8 @@ data class NoteState(
     val saveFailed: Boolean = false,
     /** True if the note is pinned: the menu offers **Unpin**. */
     val pinned: Boolean = false,
+    /** True once the note is stored. A new note is not until it has a title, a text or a file: until then **Pin** is turned off. */
+    val stored: Boolean = false,
     /** The shown files, oldest first. */
     val files: List<FileRowState> = emptyList(),
     /** The files that wait to be added to this note or are being added. */
@@ -141,7 +143,13 @@ class NoteViewModel(
         }
         wasStored = stored != null
         shown.update {
-            it.copy(loading = false, title = stored?.title.orEmpty(), body = TextEdit(stored?.body.orEmpty(), 0), pinned = stored?.pinned == true)
+            it.copy(
+                loading = false,
+                title = stored?.title.orEmpty(),
+                body = TextEdit(stored?.body.orEmpty(), 0),
+                pinned = stored?.pinned == true,
+                stored = stored != null,
+            )
         }
         // A restore, or later sync, can delete the note while it is open: it closes. Pin follows the stored note.
         repository.note(noteId).catch { error ->
@@ -150,7 +158,7 @@ class NoteViewModel(
         }.collect { note ->
             if (note != null) {
                 wasStored = true
-                shown.update { it.copy(pinned = note.pinned) }
+                shown.update { it.copy(pinned = note.pinned, stored = true) }
             } else if (wasStored && !closing) {
                 cancelTimer()
                 shown.update { it.copy(closed = true) }
