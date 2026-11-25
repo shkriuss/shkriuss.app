@@ -7,6 +7,10 @@ year. Its specification is
 
 ## Unreleased
 
+- A backup is written to, and read from, only a document of another app,
+  as the file picker gives it. An app that poses as the picker cannot
+  make Reminders write a backup over its own files, or read one of them.
+
 ## 1.0.1 (2026-11-23)
 
 Released as `reminders-v1.0.1`.

@@ -1445,8 +1445,12 @@ Status: **Met for what is built.**
     and changes nothing until the whole stream is checked
     ([backup-format.md](../architecture/backup-format.md#reading-and-checking)).
   - The word field takes only the letters a to z, one at a time.
-  - A backup is taken only as a `content:` address from the system
-    picker ([backup-format.md](../architecture/backup-format.md#the-system-file-picker)).
+  - A backup is written to and read from only a `content:` address of
+    another app's provider, as the system picker gives it, also not one
+    named with a user before it (`content://0@…`)
+    ([backup-format.md](../architecture/backup-format.md#the-system-file-picker)).
+    An app that poses as the picker cannot make an app write a backup
+    over its own files or read one of them as a backup.
   - The receivers ignore every action they do not expect.
   - No input is read as serialized Java objects.
 - MASWE-0029, deep links: there are none. MASWE-0034 and 0035: there is
