@@ -532,6 +532,54 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aStoredNoteClosedEmptyWhileItsAddRunsIsDeletedWhenTheAddFails() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        val release = CountDownLatch(1)
+        // A file whose provider answers slowly, then cannot be read.
+        val slow = object : PickedFile by TestPick("ticket.jpg", failOpen = true) {
+            override fun name(): String? {
+                release.await()
+                return "ticket.jpg"
+            }
+        }
+        note.onTitleChange("")
+        note.addFiles(listOf(slow))
+        note.close()
+        note.state.await { it.closed }
+        assertNull("Kept while its add runs", stored(id)?.record?.deletedAt)
+
+        release.countDown()
+
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+    }
+
+    @Test
+    fun aStoredNoteClosedWhileItsAddRunsIsKeptWhenTheAddGivesItAFile() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        val release = CountDownLatch(1)
+        val slow = object : PickedFile by TestPick("ticket.jpg") {
+            override fun name(): String? {
+                release.await()
+                return "ticket.jpg"
+            }
+        }
+        note.onTitleChange("")
+        note.addFiles(listOf(slow))
+        note.close()
+        note.state.await { it.closed }
+
+        release.countDown()
+
+        eventually { runBlocking { repository.filesOf(id).first() }.size == 1 }
+        eventually { adds.adding.value.isEmpty() }
+        assertNull("A note with a file stays", stored(id)?.record?.deletedAt)
+    }
+
+    @Test
     fun leavingTheScreenSavesWhatIsTyped() {
         val id = phone.note("Trip", "")
         val note = open(id)

@@ -134,6 +134,7 @@ class NoteViewModel(
 
     init {
         snackbars.forget(noteId)
+        adds.opened(noteId)
         viewModelScope.launch(work) { read() }
         viewModelScope.launch(work) { watchFiles() }
         viewModelScope.launch(work) {
@@ -368,8 +369,12 @@ class NoteViewModel(
         val stillAdding = adds.isAddingTo(noteId)
         try {
             when {
-                // The adds decide: their first file makes the note, or the last one that fails gives it up.
-                stillAdding -> if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
+                // The adds decide: their first file makes or keeps the note; once the last one ends, a new note no add made is
+                // given up, and a stored note that is empty then is deleted.
+                stillAdding -> {
+                    snackbars.closedKept(noteId)
+                    if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId) else adds.deleteIfEmptyAfterAdds(noteId)
+                }
                 repository.findNote(noteId) == null -> repository.giveUpNewNote(noteId)
                 else -> {
                     // A removed file whose Undo is open keeps an empty note: it is looked at again when that Undo ends.

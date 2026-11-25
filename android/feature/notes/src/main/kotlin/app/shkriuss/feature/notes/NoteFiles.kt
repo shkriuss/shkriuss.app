@@ -449,6 +449,39 @@ class FileAdds(
         if (now) repository.giveUpNewNote(noteId)
     }
 
+    /** Stored notes whose screen closed while files waited for them: looked at once their last add ends. */
+    private val lookAgain = mutableSetOf<String>()
+
+    /**
+     * The screen of the stored note [noteId] closed while files may still
+     * be added to it, so it could not be looked at for being empty. Once no
+     * file waits for it any more, it is deleted if it is empty then, as a
+     * note that closes empty is (spec, "Saving", point 3): every add for it
+     * failed. A note that an add gave a file is kept.
+     */
+    suspend fun deleteIfEmptyAfterAdds(noteId: String) {
+        val now = synchronized(lock) {
+            if (queue.any { it.noteId == noteId }) {
+                lookAgain += noteId
+                false
+            } else {
+                true
+            }
+        }
+        if (now) deleteIfEmpty(noteId)
+    }
+
+    /** The note [noteId] opened again: it is looked at when it closes, not when its adds end. */
+    fun opened(noteId: String) = synchronized(lock) { lookAgain -= noteId }
+
+    private suspend fun deleteIfEmpty(noteId: String) {
+        try {
+            repository.deleteIfEmpty(noteId)
+        } catch (_: SQLException) {
+            // The empty note stays, as when it closes. It shows as "Empty note" in the list.
+        }
+    }
+
     private suspend fun runAdds() {
         while (true) {
             val next = synchronized(lock) { queue.firstOrNull() }
@@ -458,11 +491,13 @@ class FileAdds(
             }
             canStart.first { it }
             var waits = false
+            var lookAt = false
             try {
                 waits = !addOne(next)
             } finally {
-                if (!waits) done(next)
+                if (!waits) lookAt = done(next)
             }
+            if (lookAt) deleteIfEmpty(next.noteId)
         }
     }
 
@@ -481,9 +516,12 @@ class FileAdds(
     /**
      * Takes [waiting] off the queue and its row away, and lets the next
      * file of its batch that waits outside the queue in, after the last of
-     * its batch, so the files keep the order they were picked in.
+     * its batch, so the files keep the order they were picked in. True when
+     * it was the last file for a stored note whose screen closed meanwhile,
+     * which is then looked at for being empty.
      */
-    private fun done(waiting: Waiting) {
+    private fun done(waiting: Waiting): Boolean {
+        var lookAt = false
         val giveUp = synchronized(lock) {
             queue.remove(waiting)
             val rest = rows.value.filter { it.key != waiting.key }
@@ -499,9 +537,12 @@ class FileAdds(
                 val lastRow = if (last < 0) -1 else rest.indexOfFirst { it.key == queue[last].key }
                 rest.toMutableList().apply { add(lastRow + 1, row) }
             }
-            queue.none { it.noteId == waiting.noteId } && handedOver.remove(waiting.noteId)
+            val noneLeft = queue.none { it.noteId == waiting.noteId }
+            lookAt = noneLeft && lookAgain.remove(waiting.noteId)
+            noneLeft && handedOver.remove(waiting.noteId)
         }
         if (giveUp) repository.giveUpNewNote(waiting.noteId)
+        return lookAt
     }
 
     /**
