@@ -29,7 +29,8 @@ Not released yet.
   the search.
 - A note: the title and the text, formatted as you type, with the
   formatting bar above the keyboard: heading, bold, italic, bulleted
-  list, numbered list and checklist. A tap on the box of a checklist
+  list, numbered list and checklist. Bold and italic on a selection
+  over several lines mark each line. A tap on the box of a checklist
   item ticks it; TalkBack offers "Tick" or "Open again". The menu has
   **Pin** or **Unpin**, which a new note offers once it has a title, a
   text or a file, and **Delete note**, with **Undo**. A save that

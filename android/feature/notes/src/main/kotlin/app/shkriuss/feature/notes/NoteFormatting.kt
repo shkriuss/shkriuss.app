@@ -151,12 +151,14 @@ object NoteFormatting {
      * **Bold** or **Italic**, with [marks] `**` or `*`: puts the marks around
      * the selection, or takes them away when they are exactly around it.
      * With no selection, both marks go in at the cursor, and the cursor
-     * between them. The selection keeps the same text.
+     * between them. The selection keeps the same text. A selection over
+     * several lines is marked on each line ([toggleInlineOnLines]).
      */
     fun toggleInline(edit: TextEdit, marks: String): TextEdit {
         val text = edit.text
         val start = minOf(edit.start, edit.end)
         val end = maxOf(edit.start, edit.end)
+        if (text.indexOf('\n', start) in start until end) return toggleInlineOnLines(text, start, end, marks)
         val size = marks.length
         val around = start >= size && end + size <= text.length &&
             text.regionMatches(start - size, marks, 0, size) && text.regionMatches(end, marks, 0, size)
@@ -168,6 +170,55 @@ object NoteFormatting {
             )
             else -> TextEdit(text.substring(0, start) + marks + text.substring(start, end) + marks + text.substring(end), start + size, end + size)
         }
+    }
+
+    /**
+     * **Bold** or **Italic** on a selection from [from] to [to] over several
+     * lines (spec, "Formatting", point 4; decided by the owner): a mark
+     * counts only inside one line, so the marks go around the selected text
+     * of each line, after its line mark and without the spaces at either
+     * end. A line with no such text gets none, and one marked already keeps
+     * its marks. When every such text is marked already, the marks are
+     * taken away. The selection then holds the texts, with their marks when
+     * they have them.
+     */
+    private fun toggleInlineOnLines(text: String, from: Int, to: Int, marks: String): TextEdit {
+        val size = marks.length
+        val parts = buildList {
+            forEachLine(text) { lineStart, line ->
+                val lineEnd = lineStart + line.length
+                if (lineEnd < from || lineStart > to) return@forEachLine
+                var first = maxOf(from - lineStart, lineMark(line)?.length ?: 0)
+                var last = minOf(to, lineEnd) - lineStart
+                while (first < last && line[first].isWhitespace()) first++
+                while (last > first && line[last - 1].isWhitespace()) last--
+                if (first >= last) return@forEachLine
+                // Marked already: each mark is at an end of the text, or just outside it.
+                val mark = inlineMarks(line).firstOrNull {
+                    it.markLength == size && (it.start == first || it.start == first - size) && (it.end == last || it.end == last + size)
+                }
+                add(InlinePart(lineStart + first, lineStart + last, mark?.let { InlineMark(lineStart + it.start, lineStart + it.end, size) }))
+            }
+        }
+        if (parts.isEmpty()) return TextEdit(text, from, to)
+        val remove = parts.all { it.marked != null }
+        val result = StringBuilder(text.length + parts.size * 2 * size)
+        var copied = 0
+        for (part in parts) {
+            val mark = part.marked
+            if (remove && mark != null) {
+                result.append(text, copied, mark.start).append(text, mark.start + size, mark.end - size)
+                copied = mark.end
+            } else if (mark == null) {
+                result.append(text, copied, part.start).append(marks).append(text, part.start, part.end).append(marks)
+                copied = part.end
+            }
+        }
+        result.append(text, copied, text.length)
+        // Every change lies between the first text and the end of the last one.
+        val start = parts.first().let { it.marked?.start ?: it.start }
+        val end = parts.last().let { it.marked?.end ?: it.end } + result.length - text.length
+        return TextEdit(result.toString(), start, end)
     }
 
     /**
@@ -341,3 +392,6 @@ object NoteFormatting {
 
 /** One bold or italic mark pair of a line, from [start] to [end], marks included. [markLength] is 2 for bold, 1 for italic. */
 internal data class InlineMark(val start: Int, val end: Int, val markLength: Int)
+
+/** The selected text of one line for Bold or Italic, from [start] to [end], and the marks it has already, or null. */
+private class InlinePart(val start: Int, val end: Int, val marked: InlineMark?)

@@ -209,7 +209,12 @@ these, and nothing else:
      open item is ticked; a done item is opened again.
    - **Bold**, **Italic**: put the marks around the selection, or take
      them away when they are exactly around it. With no selection, both
-     marks go in at the cursor, and the cursor between them.
+     marks go in at the cursor, and the cursor between them. A selection
+     over several lines is marked on each line: around the selected text
+     of the line, after its line mark and without the spaces at either
+     end. A line with no such text gets no marks, and a line marked
+     already keeps its marks. When every such line is marked, the marks
+     are taken away from all of them.
 5. Enter at the end of a bullet, a numbered item or a checklist item
    starts the next line with the same mark: the next number, an open
    box. Enter on an item with no text after its mark removes the mark.
@@ -747,7 +752,7 @@ late, and when the clock or the time zone changes
    note after this phone wiped it brings the note back, with its newer
    files only ([After a restore](#after-a-restore), point 4).
 
-For the screens, four more:
+For the screens, five more:
 
 6. From 840dp, the card of the open note is marked as selected in the
    list, as an open item of a list is ([Notes](#notes), point 4).
@@ -758,6 +763,9 @@ For the screens, four more:
    ([Notes](#notes), point 3).
 9. Dismissing "This note is not saved" keeps the note open with what is
    typed ([A write fails](#a-write-fails)).
+10. **Bold** and **Italic** on a selection over several lines mark each
+    line, so that every line shows the style
+    ([Formatting](#formatting), point 4).
 
 ## Assumptions
 

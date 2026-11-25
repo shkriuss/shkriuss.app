@@ -123,6 +123,29 @@ class NoteFormattingTest {
     }
 
     @Test
+    fun boldAndItalicOverSeveralLinesMarkEachLineAndComeAwayFromAll() {
+        val bold = NoteFormatting.toggleInline(TextEdit("Bread\nmilk", 0, 10), "**")
+        assertEquals(TextEdit("**Bread**\n**milk**", 0, 18), bold)
+        assertEquals("Every line marked: taken away", TextEdit("Bread\nmilk", 0, 10), NoteFormatting.toggleInline(bold, "**"))
+
+        val items = "- [ ] Passport \n\n- [ ] Tickets"
+        val italic = NoteFormatting.toggleInline(TextEdit(items, 0, items.length), "*")
+        assertEquals("After the line mark, without the spaces, and none on an empty line", "- [ ] *Passport* \n\n- [ ] *Tickets*", italic.text)
+        assertEquals(items, NoteFormatting.toggleInline(italic, "*").text)
+        assertEquals("Each mark counts", 2, NoteFormatting.looks(italic.text).count { it.look == Look.ITALIC })
+
+        val part = NoteFormatting.toggleInline(TextEdit("Bread and milk\nEggs for Friday", 10, 19), "**")
+        assertEquals("Only the selected text of each line", "Bread and **milk**\n**Eggs** for Friday", part.text)
+
+        val oneMarked = NoteFormatting.toggleInline(TextEdit("**One**\nTwo", 0, 11), "**")
+        assertEquals("A line marked already keeps its marks", TextEdit("**One**\n**Two**", 0, 15), oneMarked)
+        assertEquals("One\nTwo", NoteFormatting.toggleInline(oneMarked, "**").text)
+
+        assertEquals("Marks just outside the selected text count as marked", "One\nTwo", NoteFormatting.toggleInline(TextEdit("**One**\n**Two**", 2, 13), "**").text)
+        assertEquals("No text on the lines: nothing changes", TextEdit("\n  \n", 0, 4), NoteFormatting.toggleInline(TextEdit("\n  \n", 0, 4), "**"))
+    }
+
+    @Test
     fun enterAtTheEndOfAnItemStartsTheNextOne() {
         fun enter(text: String): TextEdit? {
             val before = TextEdit(text, text.length)
