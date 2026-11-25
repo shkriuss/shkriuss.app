@@ -36,7 +36,7 @@ Not released yet.
   text or a file, and **Delete note**, with **Undo**. A save that
   fails says so above the title, and closing then asks first.
 - Files: **Add a file** opens Android's file picker, several files at
-  once. Notes takes from the picker, and writes a copy to, only a
+  once, and tries at most 42 of one pick. Notes takes from the picker, and writes a copy to, only a
   document of another app, never a path to its own files. Each file
   shows under the text, under the heading **Files**, with a small
   picture for an

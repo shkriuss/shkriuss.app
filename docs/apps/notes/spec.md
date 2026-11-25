@@ -319,7 +319,10 @@ phone's time zone and format.
    picked, also across notes. Each add checks the counts when it starts:
    "A note holds at most 20 files. 3 files were not added." or "Notes
    keeps 1 GB of files. Remove some to add more." So two adds never pass
-   a count together.
+   a count together. At most 42 files of one pick are looked at and
+   tried, twice the 21 that wait at a time, one more than a note holds.
+   The files past them are told with the same words: "A note holds at
+   most 20 files. 30 files were not added."
 3. It reads the name and the type from the picker. In this order: line
    breaks and control characters become spaces, the name keeps its first
    255 characters, spaces at both ends go, and a name that is then empty
@@ -752,7 +755,7 @@ late, and when the clock or the time zone changes
    note after this phone wiped it brings the note back, with its newer
    files only ([After a restore](#after-a-restore), point 4).
 
-For the screens, five more:
+For the screens, six more:
 
 6. From 840dp, the card of the open note is marked as selected in the
    list, as an open item of a list is ([Notes](#notes), point 4).
@@ -766,6 +769,10 @@ For the screens, five more:
 10. **Bold** and **Italic** on a selection over several lines mark each
     line, so that every line shows the style
     ([Formatting](#formatting), point 4).
+11. **Add a file** tries at most 42 files of one pick, and tells the rest
+    as not added with the words of a full note, so a picker that gives
+    thousands of files that fail cannot hold up the adds
+    ([Adding a file](#adding-a-file), point 2).
 
 ## Assumptions
 

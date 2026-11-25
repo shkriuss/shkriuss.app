@@ -424,8 +424,8 @@ class NoteViewModel(
     }
 
     /** The picker gave [picked] for **Add a file**. They are added after every file picked before, when Notes may make their keys. */
-    fun addFiles(picked: List<PickedFile>) {
-        adds.add(noteId, picked)
+    fun addFiles(picked: List<PickedFile>, notTried: Int = 0) {
+        adds.add(noteId, picked, notTried)
     }
 
     /** **Remove** on [file]: "File removed", with **Undo**. Pressed twice, it removes once. */

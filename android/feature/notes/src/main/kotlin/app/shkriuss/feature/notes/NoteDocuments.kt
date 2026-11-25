@@ -33,24 +33,30 @@ object NoteDocuments {
         .putExtra(Intent.EXTRA_TITLE, name)
 
     /**
-     * The files the "open document" screen gave, in the order it gave them,
-     * that are [isSafe] for [context]: none if the user went back. Each
-     * provider is looked up once, by its name without a user before it, and
-     * at most [MOST_PROVIDERS] of them for one answer: a document of any
-     * further provider is not taken. So an answer with thousands of files
-     * takes a few look-ups, not thousands. A real picker's answer comes
-     * from one provider or a few.
+     * What the "open document" screen gave: none if the user went back.
+     * Only its first [NoteLimits.MOST_FILES_TRIED_PER_PICK] files are
+     * looked at, in the order it gave them, and those that are [isSafe]
+     * for [context] are taken, each provider looked up once, by its name
+     * without a user before it. So an answer with thousands of files takes
+     * a few look-ups, not thousands. The files past them are counted, to
+     * be told as not added (decided by the owner).
      */
-    fun pickedOf(resultCode: Int, data: Intent?, context: Context): List<Uri> {
-        if (resultCode != Activity.RESULT_OK || data == null) return emptyList()
+    fun pickedOf(resultCode: Int, data: Intent?, context: Context): Picked {
+        if (resultCode != Activity.RESULT_OK || data == null) return Picked(emptyList(), notLookedAt = 0)
         val clip = data.clipData
-        val given = if (clip != null) List(clip.itemCount) { clip.getItemAt(it).uri }.filterNotNull() else listOfNotNull(data.data)
+        val count = clip?.itemCount ?: if (data.data == null) 0 else 1
+        val looked = minOf(count, NoteLimits.MOST_FILES_TRIED_PER_PICK)
+        val given = if (clip != null) List(looked) { clip.getItemAt(it).uri }.filterNotNull() else listOfNotNull(data.data)
         val safe = HashMap<String, Boolean>()
-        return given.filter { uri ->
-            val provider = "${uri.scheme}://${uri.authority?.substringAfterLast('@')}"
-            safe[provider] ?: (safe.size < MOST_PROVIDERS && isSafe(uri, context)).also { safe[provider] = it }
-        }
+        val taken = given.filter { uri -> safe.getOrPut("${uri.scheme}://${uri.authority?.substringAfterLast('@')}") { isSafe(uri, context) } }
+        return Picked(taken, notLookedAt = count - looked)
     }
+
+    /**
+     * The answer of the "open document" screen: the [documents] taken, in
+     * their order, and how many files past them were [notLookedAt].
+     */
+    data class Picked(val documents: List<Uri>, val notLookedAt: Int)
 
     /** The document the "create document" screen made, if it [isSafe] for [context], or null, as when the user went back. */
     fun chosenOf(resultCode: Int, data: Intent?, context: Context): Uri? =
@@ -76,7 +82,4 @@ object NoteDocuments {
     }
 
     private const val ANY_TYPE = "*/*"
-
-    /** The most providers looked up for one answer of the picker: one for each file a note holds, and one more. */
-    private const val MOST_PROVIDERS = NoteLimits.MOST_FILES_PER_NOTE + 1
 }

@@ -82,7 +82,7 @@ internal fun OpenNotePane(open: OpenNote, models: NotesModels, snackbar: ShkSnac
     val addFiles = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         picking = false
         val picked = NoteDocuments.pickedOf(result.resultCode, result.data, context)
-        if (picked.isNotEmpty()) model.addFiles(picked.map { PickedDocument(resolver, it) })
+        model.addFiles(picked.documents.map { PickedDocument(resolver, it) }, notTried = picked.notLookedAt)
     }
     var copyOf by rememberSaveable { mutableStateOf<String?>(null) }
     val saveCopy = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->

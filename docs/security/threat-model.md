@@ -1453,10 +1453,10 @@ Status: **Met for what is built.**
     Notes a `file:` path or a provider of Notes' own, also not one named
     with a user before it (`content://0@…`), so it cannot make Notes read
     or overwrite its own database or keys. Nor can it stall Notes with an
-    answer of thousands of files: each provider is looked up once, by its
-    name without a user before it, and at most 21 providers for one
-    answer; and at most 21 files of one answer wait in the queue at a
-    time, one more than a note holds, the next coming in as each ends.
+    answer of thousands of files: only the first 42 are looked at and
+    tried, each provider looked up once, by its name without a user
+    before it, and at most 21 wait in the queue at a time, the next
+    coming in as each ends. The rest are told as not added.
   - The receivers ignore every action they do not expect.
   - No input is read as serialized Java objects.
 - MASWE-0029, deep links: there are none. MASWE-0034 and 0035: there is

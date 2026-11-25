@@ -181,9 +181,9 @@ class NoteImagesTest {
         val two = Uri.parse("content://documents/two")
         val several = Intent().apply { clipData = ClipData.newRawUri(null, one).also { it.addItem(ClipData.Item(two)) } }
 
-        assertEquals(listOf(one, two), NoteDocuments.pickedOf(Activity.RESULT_OK, several, context))
-        assertEquals(listOf(one), NoteDocuments.pickedOf(Activity.RESULT_OK, Intent().setData(one), context))
-        assertEquals(emptyList<Uri>(), NoteDocuments.pickedOf(Activity.RESULT_CANCELED, Intent().setData(one), context))
+        assertEquals(NoteDocuments.Picked(listOf(one, two), 0), NoteDocuments.pickedOf(Activity.RESULT_OK, several, context))
+        assertEquals(NoteDocuments.Picked(listOf(one), 0), NoteDocuments.pickedOf(Activity.RESULT_OK, Intent().setData(one), context))
+        assertEquals(NoteDocuments.Picked(emptyList(), 0), NoteDocuments.pickedOf(Activity.RESULT_CANCELED, Intent().setData(one), context))
         assertEquals(one, NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(one), context))
         assertNull(NoteDocuments.chosenOf(Activity.RESULT_CANCELED, null, context))
     }
@@ -216,7 +216,7 @@ class NoteImagesTest {
         assertEquals(
             "Only the documents of another app are taken",
             listOf(document, documentOfAProfile),
-            NoteDocuments.pickedOf(Activity.RESULT_OK, picked, context),
+            NoteDocuments.pickedOf(Activity.RESULT_OK, picked, context).documents,
         )
         assertNull("Notes' own provider named with a user is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(ownProviderOfAUser), context))
         assertNull("A file path is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(database), context))
@@ -232,13 +232,13 @@ class NoteImagesTest {
         val manyProviders = List(5_000) { Uri.parse("content://p$it/f") }
 
         assertEquals(
-            "One provider, with any user before it, is one look-up, and every file of it is taken",
-            5_000,
-            NoteDocuments.pickedOf(Activity.RESULT_OK, answer(oneProvider), context).size,
+            "Only the first 42 are looked at, one provider with any user before it, and the rest are counted",
+            NoteDocuments.Picked(oneProvider.take(42), 4_958),
+            NoteDocuments.pickedOf(Activity.RESULT_OK, answer(oneProvider), context),
         )
         assertEquals(
-            "At most 21 providers are looked up: one for each file a note holds, and one more",
-            List(21) { Uri.parse("content://p$it/f") },
+            "Every provider of the first 42 is looked up, so no document of them is left out",
+            NoteDocuments.Picked(manyProviders.take(42), 4_958),
             NoteDocuments.pickedOf(Activity.RESULT_OK, answer(manyProviders), context),
         )
     }

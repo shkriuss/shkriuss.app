@@ -211,6 +211,38 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aPickWhoseFilesAllFailTriesAtMost42AndTellsTheRestAsNotAdded() {
+        val id = phone.note()
+        val opened = AtomicInteger()
+        val failing = List(5_000) {
+            object : PickedFile by TestPick("f$it.jpg", bytes = ByteArray(10), failOpen = true) {
+                override fun open(): InputStream {
+                    opened.incrementAndGet()
+                    throw IOException("The provider stopped")
+                }
+            }
+        }
+
+        add(id, *failing.toTypedArray())
+
+        assertEquals("Twice the 21 that may wait at a time", 42, opened.get())
+        assertEquals(42, problems.count { it is AddProblem.CouldNotRead })
+        assertEquals(AddProblem.NoteFull(4_958), problems.last())
+        assertEquals(0, files(id).size)
+    }
+
+    @Test
+    fun aPickLongerThanWhatIsTriedCountsTheFilesPastItWithThoseNotLookedAt() {
+        val id = phone.note()
+
+        adds.add(id, List(50) { TestPick("f$it.jpg", bytes = ByteArray(10)) }, notTried = 7)
+        adds.adding.await { it.isEmpty() }
+
+        assertEquals(20, files(id).size)
+        assertEquals(listOf<AddProblem>(AddProblem.NoteFull(37)), problems)
+    }
+
+    @Test
     fun aFileOfALargeBatchThatFailsLetsTheNextOneIn() {
         val id = phone.note()
         val broken = Array(2) { TestPick("broken$it.jpg", bytes = ByteArray(10), failOpen = true) }

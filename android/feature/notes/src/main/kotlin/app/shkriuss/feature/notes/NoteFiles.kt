@@ -399,6 +399,9 @@ class FileAdds(
      * and on the screen, and a file that fails leaves room for the next.
      */
     private val later = HashMap<Long, ArrayDeque<PickedFile>>()
+
+    /** For each batch of a pick larger than the files tried of one, how many of its files are never tried. */
+    private val neverTried = HashMap<Long, Int>()
     private var nextKey = 1L
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private val rows = MutableStateFlow<List<AddingFile>>(emptyList())
@@ -410,17 +413,29 @@ class FileAdds(
         scope.launch(work) { runAdds() }
     }
 
-    /** Adds [picked] to the note [noteId], after every file picked before. A new note is made with its first file. */
-    fun add(noteId: String, picked: List<PickedFile>) {
-        if (picked.isEmpty()) return
+    /**
+     * Adds [picked] to the note [noteId], after every file picked before. A
+     * new note is made with its first file. At most
+     * [NoteLimits.MOST_FILES_TRIED_PER_PICK] of them are tried; those past
+     * them, and [notTried] more that the pick had, are told as not added
+     * (decided by the owner).
+     */
+    fun add(noteId: String, picked: List<PickedFile>, notTried: Int = 0) {
+        val tried = picked.take(NoteLimits.MOST_FILES_TRIED_PER_PICK)
+        val untried = picked.size - tried.size + notTried
+        if (tried.isEmpty()) {
+            if (untried > 0) tell(AddProblem.NoteFull(untried))
+            return
+        }
         // A note holds at most 20 files: one more than that waits in the queue at a time, enough to meet the count, and
         // the rest come in one by one as files end. So a picker that gives thousands of files costs no more than 21 rows.
-        val queued = picked.take(MOST_QUEUED)
+        val queued = tried.take(MOST_QUEUED)
         synchronized(lock) {
             val batch = nextKey
             val waiting = queued.map { file -> Waiting(nextKey++, batch, noteId, file) }
             queue.addAll(waiting)
-            if (picked.size > queued.size) later[batch] = ArrayDeque(picked.drop(queued.size))
+            if (tried.size > queued.size) later[batch] = ArrayDeque(tried.drop(queued.size))
+            if (untried > 0) neverTried[batch] = untried
             rows.value += waiting.map { AddingFile(it.key, noteId, name = null, done = 0, total = null) }
         }
         wake.trySend(Unit)
@@ -485,11 +500,14 @@ class FileAdds(
     /**
      * Takes [waiting] off the queue and its row away, and lets the next
      * file of its batch that waits outside the queue in, after the last of
-     * its batch, so the files keep the order they were picked in. True when
-     * it was the last file that waited for its note.
+     * its batch, so the files keep the order they were picked in. When it
+     * was the last of its batch and no file of it was refused for the
+     * count, the files of the pick that were never tried are told as not
+     * added. True when it was the last file that waited for its note.
      */
     private fun done(waiting: Waiting): Boolean {
         var noneLeft = false
+        var notTried = 0
         val giveUp = synchronized(lock) {
             queue.remove(waiting)
             val rest = rows.value.filter { it.key != waiting.key }
@@ -505,9 +523,11 @@ class FileAdds(
                 val lastRow = if (last < 0) -1 else rest.indexOfFirst { it.key == queue[last].key }
                 rest.toMutableList().apply { add(lastRow + 1, row) }
             }
+            if (queue.none { it.batch == waiting.batch }) notTried = neverTried.remove(waiting.batch) ?: 0
             noneLeft = queue.none { it.noteId == waiting.noteId }
             noneLeft && handedOver.remove(waiting.noteId)
         }
+        if (notTried > 0) tell(AddProblem.NoteFull(notTried))
         if (giveUp) repository.giveUpNewNote(waiting.noteId)
         return noneLeft
     }
@@ -522,7 +542,7 @@ class FileAdds(
         queue.removeAll(rest.toSet())
         val keys = rest.map { it.key }.toSet()
         rows.value = rows.value.filter { it.key !in keys }
-        rest.size + 1 + (later.remove(waiting.batch)?.size ?: 0)
+        rest.size + 1 + (later.remove(waiting.batch)?.size ?: 0) + (neverTried.remove(waiting.batch) ?: 0)
     }
 
     private fun show(waiting: Waiting, change: (AddingFile) -> AddingFile) = synchronized(lock) {
