@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon foreground: a page with a folded corner and two lines of text, inside the safe zone of an adaptive icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M40,32 L61,32 L72,43 L72,72 C72,74.2 70.2,76 68,76 L40,76 C37.8,76 36,74.2 36,72 L36,36 C36,33.8 37.8,32 40,32 Z M41,37 L41,71 L67,71 L67,47 L57,47 L57,37 Z M45,55 L63,55 L63,59 L45,59 Z M45,63 L58,63 L58,67 L45,67 Z" />
+</vector>

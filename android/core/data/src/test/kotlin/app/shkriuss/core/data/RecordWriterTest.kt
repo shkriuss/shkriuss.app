@@ -385,6 +385,166 @@ class RecordWriterTest {
         assertEquals(Long.MAX_VALUE, deleted?.record?.deletedAt)
     }
 
-    private suspend fun createNote(title: String): SampleNote =
-        notes.create { fields, number -> SampleNote(fields, number, title = title, pinned = false) }
+    @Test
+    fun wipeClearsTheContentOfADeletedRecordAndKeepsAllFourRecordFields() = runBlocking {
+        val note = createNote("Diary", pinned = true)
+        clock.advanceBy(1_000)
+        val deleted = checkNotNull(notes.markDeleted(note.record.id))
+        clock.advanceBy(60_000)
+
+        val wiped = notes.wipe(note.record.id) { it.copy(title = "", pinned = false) }
+
+        assertEquals("", wiped?.title)
+        assertEquals(false, wiped?.pinned)
+        assertEquals("No time moved, updatedAt neither", deleted.record, wiped?.record)
+        assertEquals(3L, wiped?.changeNumber)
+        assertEquals(wiped, database.notes().find(note.record.id))
+    }
+
+    @Test
+    fun wipeIgnoresChangesToRecordFieldsAndChangeNumber() = runBlocking {
+        val note = createNote("Diary")
+        val deleted = checkNotNull(notes.markDeleted(note.record.id))
+
+        val wiped = notes.wipe(note.record.id) { current ->
+            current.copy(record = current.record.copy(updatedAt = 1, deletedAt = null), changeNumber = 50, title = "")
+        }
+
+        assertEquals(deleted.record, wiped?.record)
+        assertEquals(3L, wiped?.changeNumber)
+    }
+
+    @Test
+    fun wipeWritesNothingForARecordThatIsMissingNotDeletedOrWipedAlready() = runBlocking {
+        val shown = createNote("Shown")
+        val gone = createNote("Gone")
+        checkNotNull(notes.markDeleted(gone.record.id))
+        val wiped = checkNotNull(notes.wipe(gone.record.id) { it.copy(title = "") })
+
+        assertNull(notes.wipe("missing") { it.copy(title = "") })
+        assertNull("A record that is not deleted keeps its content", notes.wipe(shown.record.id) { it.copy(title = "") })
+        assertNull("Wiped already", notes.wipe(gone.record.id) { it.copy(title = "") })
+
+        assertEquals(shown, database.notes().find(shown.record.id))
+        assertEquals(wiped, database.notes().find(gone.record.id))
+        assertEquals("The writes that did nothing took no change number", 5L, createNote("Next").changeNumber)
+    }
+
+    @Test
+    fun aWipeDoesNotChangeWhichEditWinsInARestore() = runBlocking {
+        val note = createNote("Diary")
+        clock.advanceBy(1_000)
+        val deleted = checkNotNull(notes.markDeleted(note.record.id))
+        checkNotNull(notes.wipe(note.record.id) { it.copy(title = "") })
+
+        assertEquals("The edit before the deletion is older", BackupTake.STORED_IS_NEWER, notes.takeFromBackup(note))
+        assertEquals("The deletion itself is the same edit", BackupTake.SAME, notes.takeFromBackup(deleted))
+        val later = note.copy(record = note.record.copy(updatedAt = deleted.record.updatedAt + 1), title = "Edited elsewhere")
+        assertEquals("A later edit made elsewhere wins", BackupTake.TAKEN, notes.takeFromBackup(later))
+        assertEquals("Edited elsewhere", database.notes().find(note.record.id)?.title)
+    }
+
+    @Test
+    fun sealFileKeyAgainKeepsAllFourRecordFieldsAlsoOfADeletedRecord() = runBlocking {
+        // The title stands in for the wrapped file key of a table that holds one.
+        val shown = createNote("old key")
+        val gone = createNote("old key")
+        val deleted = checkNotNull(notes.markDeleted(gone.record.id))
+        clock.advanceBy(60_000)
+
+        val sealedShown = notes.sealFileKeyAgain(shown.record.id) { it.copy(title = "new key") }
+        val sealedGone = notes.sealFileKeyAgain(gone.record.id) { it.copy(title = "new key") }
+
+        assertEquals("new key", sealedShown?.title)
+        assertEquals(shown.record, sealedShown?.record)
+        assertEquals(4L, sealedShown?.changeNumber)
+        assertEquals("new key", sealedGone?.title)
+        assertEquals("Still deleted, and no time moved", deleted.record, sealedGone?.record)
+        assertEquals(5L, sealedGone?.changeNumber)
+        assertEquals(sealedGone, database.notes().find(gone.record.id))
+    }
+
+    @Test
+    fun sealFileKeyAgainIgnoresChangesToRecordFieldsAndChangeNumber() = runBlocking {
+        val note = createNote("old key")
+
+        val sealed = notes.sealFileKeyAgain(note.record.id) { current ->
+            current.copy(record = current.record.copy(updatedAt = 7, deletedAt = 7), changeNumber = 50, title = "new key")
+        }
+
+        assertEquals(note.record, sealed?.record)
+        assertEquals(2L, sealed?.changeNumber)
+    }
+
+    @Test
+    fun sealFileKeyAgainWritesNothingWhenThereIsNothingToSeal() = runBlocking {
+        val note = createNote("key")
+
+        assertNull(notes.sealFileKeyAgain("missing") { it.copy(title = "new key") })
+        assertNull("Nothing to seal", notes.sealFileKeyAgain(note.record.id) { null })
+        assertNull("Nothing changed", notes.sealFileKeyAgain(note.record.id) { it.copy(title = "key") })
+
+        assertEquals(note, database.notes().find(note.record.id))
+        assertEquals("The writes that did nothing took no change number", 2L, createNote("Next").changeNumber)
+    }
+
+    @Test
+    fun aReservedIdIsTheNextOfTheIdSourceAndCreateStoresTheRecordUnderIt() = runBlocking {
+        val reserved = notes.reserveId()
+
+        assertEquals(TestIdSource.idNumber(1), reserved)
+        assertEquals(setOf(reserved), notes.reservedIds())
+        assertEquals("Another create takes the next ID", TestIdSource.idNumber(2), createNote("Other").record.id)
+
+        val note = notes.create(reserved) { fields, number -> SampleNote(fields, number, title = "File", pinned = false) }
+
+        val expected = RecordFields(id = reserved, createdAt = clock.nowMillis, updatedAt = clock.nowMillis, deletedAt = null)
+        assertEquals(expected, note.record)
+        assertEquals(2L, note.changeNumber)
+        assertEquals(note, database.notes().find(reserved))
+        assertEquals("It stays reserved until it is released", setOf(reserved), notes.reservedIds())
+        notes.release(reserved)
+        assertEquals(emptySet<String>(), notes.reservedIds())
+    }
+
+    @Test
+    fun createTakesOnlyAnIdThatThisWriterReservedAndThatIsNotStored() = runBlocking {
+        val note = createNote("Stored")
+        val released = notes.reserveId().also { notes.release(it) }
+        val ofTheOtherWriter = tags.reserveId()
+        val reserved = notes.reserveId()
+        notes.create(reserved) { fields, number -> SampleNote(fields, number, title = "File", pinned = false) }
+
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { createReserved("never reserved") } }
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { createReserved(note.record.id) } }
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { createReserved(released) } }
+        assertThrows(IllegalArgumentException::class.java) { runBlocking { createReserved(ofTheOtherWriter) } }
+        assertThrows("Stored already", IllegalStateException::class.java) { runBlocking { createReserved(reserved) } }
+
+        assertEquals(listOf("Stored", "File"), database.notes().all().map { it.title })
+        assertEquals("The refused creates took no change number", 3L, createNote("Next").changeNumber)
+    }
+
+    @Test
+    fun aCreateWithAReservedIdRollsBackWithItsTransactionAndTheIdStaysReserved() = runBlocking {
+        val reserved = notes.reserveId()
+
+        val failure = runCatching {
+            database.withWriteTransaction {
+                createReserved(reserved)
+                error("Stop the transaction")
+            }
+        }
+
+        assertTrue(failure.isFailure)
+        assertNull(database.notes().find(reserved))
+        assertEquals(setOf(reserved), notes.reservedIds())
+        assertEquals(reserved, createReserved(reserved).record.id)
+    }
+
+    private suspend fun createNote(title: String, pinned: Boolean = false): SampleNote =
+        notes.create { fields, number -> SampleNote(fields, number, title = title, pinned = pinned) }
+
+    private suspend fun createReserved(id: String): SampleNote =
+        notes.create(id) { fields, number -> SampleNote(fields, number, title = "File", pinned = false) }
 }

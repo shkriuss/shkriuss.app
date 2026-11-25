@@ -16,7 +16,12 @@ Decision record from this specification:
 - [0042](../../adr/0042-wiping-the-content-of-deleted-records.md): the
   wipe of a deleted record's content.
 
-Code, not built yet:
+Code:
 
-- `android/feature/notes`: the data and logic, and the screens.
-- `android/app/notes`: the app.
+- `android/feature/notes`: the data and logic. The screens are not
+  built yet. They go there too.
+- `android/app/notes`: the app. Until the screens come, it shows one
+  line in their place.
+- What changed: [CHANGELOG.md](../../../android/app/notes/CHANGELOG.md).
+- How the modules fit together:
+  [modules.md](../../architecture/modules.md).

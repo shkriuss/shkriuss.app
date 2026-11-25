@@ -609,8 +609,10 @@ When the app gets its recovery-key-derived keys:
    point 8). That function also covers deleted rows, because a deletion
    can be undone and the file must then open. It changes only the wrapped
    file key and the change number, and leaves `updatedAt` as it is. Each
-   app says which of its tables hold wrapped file keys. All of this is
-   built with the first app that stores files, as the owner agreed.
+   app says which of its tables hold wrapped file keys. The function is
+   `RecordWriter.sealFileKeyAgain`
+   ([data.md](../architecture/data.md#writes-that-are-not-edits)). Notes,
+   the first app that stores files, uses it for its table `attachment`.
 
 ### Where keys are stored
 
@@ -2140,7 +2142,7 @@ and [notifications.md](../architecture/notifications.md#while-the-app-lock-is-on
 | The emulator tests | In the emulator job of CI ([emulator-tests.md](../development/emulator-tests.md)). |
 | The system prompt | Android's own `BiometricPrompt`. No AndroidX Biometric in `core/crypto`. |
 | Where third-party material is listed | In [third-party.md](../development/third-party.md): the word list, Tink and its four libraries, and everything else that ships in an app. The MIT text is next to the word list. |
-| Sealing file keys again in the database | Its own `RecordWriter` function, built with the first app that stores files. |
+| Sealing file keys again in the database | Its own `RecordWriter` function, `sealFileKeyAgain`, built with Notes, the first app that stores files. |
 | How the code asks whether a hardware key exists, and how it lists keys | Two more direct calls: `KeyStore.getKey` for "exists" and `KeyStore.aliases` for the list. Tink's `hasKey` is not used. A list is never proof that a key is gone, a key is made only after its exact alias was asked for, and rule 8 deletes only keys the list shows. The emulator tests check it. |
 | A setup that stopped half way, then a different recovery key | Nothing is stored unless every derived keyset that is stored already fits the given recovery key. A user who cannot give the same words can start over (open question 11, below). |
 | The order of steps when the app lock is turned on | Move first: the new key and the other keysets first, then the Lock key and the prompt, then `file-key`, and the old key is deleted last. |

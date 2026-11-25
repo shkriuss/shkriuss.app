@@ -64,11 +64,16 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   with the committed schemas in `schemas/`, its rules, its ViewModels
   and its backup content, and its screens, in the package `ui`. See
   [apps/tasks/spec.md](../apps/tasks/spec.md).
+- `android/feature/notes/`: the data and logic of Notes: its database,
+  with the committed schemas in `schemas/`, the folder of the encrypted
+  streams of its files, its rules and its ViewModels. See
+  [apps/notes/spec.md](../apps/notes/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
 - `android/app/water/`: the Water app, `app.shkriuss.water`.
 - `android/app/reminders/`: the Reminders app, `app.shkriuss.reminders`.
 - `android/app/tasks/`: the Tasks app, `app.shkriuss.tasks`.
+- `android/app/notes/`: the Notes app, `app.shkriuss.notes`.
 
 How the modules depend on each other is in
 [architecture/modules.md](../architecture/modules.md).
@@ -669,6 +674,33 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
+- `feature/notes` has 7 test classes with 87 tests: the limits of every
+  column, the wiped form, and how a title, a text, a file name and a
+  type are kept (`NoteLimitsTest`), the marks of the text, the
+  formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
+  search, the order of the list and what a row shows
+  (`NoteSearchTest`), as plain code; the schema, `secure_delete` on the
+  connection that writes and the checkpoint that cuts the write-ahead
+  file to zero, on a database in a file (`NotesDatabaseTest`); the
+  repository, with Undo, the wipe and the sweep at start
+  (`NotesRepositoryTest`); the adds of files, reading them back, the
+  state of each row, **Save a copy** and the move of the file keys to
+  the recovery key, with software keys on the real code of
+  `core/crypto` (`NoteFilesTest`); and the ViewModels and the one
+  snackbar (`ViewModelsTest`). The work runs off the test's thread, and
+  each test waits for the state it expects. The pauses before a search
+  and a save are the test's own, and so is the clock of the save times.
+  A trigger that aborts every write to a table stands for a disk that
+  refuses a write. `NoteFilesTest` also checks that the length of a
+  stream follows the rule of crypto-design.md at the edges of its
+  segments.
+- `app/notes` has three test classes:
+  `EveryScreenIsBehindTheAppLockTest`, a copy of Water's;
+  `NotesManifestTest`, which names everything Notes' merged manifest
+  lets another app reach: two permissions and none that it defines, no
+  receiver, Notes' screen and the eight of `core/security`, and as the
+  only exported parts Notes' screen and the two parts of the handover;
+  and the screenshots of the line that stands in for the screens.
 
 ### Instrumented tests
 
@@ -686,8 +718,9 @@ Test helpers that the tests of other modules may use
 1. A module that applies `shkriuss.android.test-fixtures` has a folder
    `src/testFixtures/`. Today `core/crypto` and `core/notify` do.
    `core/backup`, `core/security`, `feature/water`, `app/water`,
-   `feature/reminders`, `app/reminders`, `feature/tasks` and `app/tasks`
-   use those of `core/crypto` in their tests, and `core/testing` compiles
+   `feature/reminders`, `app/reminders`, `feature/tasks`, `app/tasks`,
+   `feature/notes` and `app/notes` use those of `core/crypto` in their
+   tests, and `core/testing` compiles
    against them ([Shared test helpers](#shared-test-helpers)).
    `feature/water`, `app/water`, `feature/reminders`, `app/reminders`,
    `feature/tasks` and `app/tasks` use those of `core/notify` in their
@@ -785,7 +818,8 @@ Why the helper lives in `core/testing`:
 
 Every app has one test that calls the check: Water's
 `EveryScreenIsBehindTheAppLockTest`, which every later app copies, with
-its own locked app class. Reminders and Tasks have their copies.
+its own locked app class. Reminders, Tasks and Notes have their
+copies.
 
 `TestDocuments` stands for the documents of the system file picker in
 unit tests. It is a content provider that keeps each
@@ -1138,7 +1172,7 @@ does not. The owner asked for them.
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. In a compiled XML file, an element named `WebView` or after each WebView class fails, so does a `class` attribute with such a name, and an `android:name` with one. A layout without them passes. Every compiled XML file of an APK is found by its content, also under a short name, and one the reader cannot read fails. Each WebView class as a value in `resources.arsc` fails, and so does a `<fragment>` that names `android.webkit.WebViewFragment` through a string resource. Values without one pass. A resource table the reader cannot read fails. |
 | `DaoRulesSqlTest` | The DAO rules check reads comments and quoted text in one pass. A marked purge whose `OR` hides behind `--` or `/*` inside `'...'`, `"..."`, `` `...` `` or `[...]` fails, and so does one behind a quote inside a comment, or behind an escaped quote. A `DELETE` behind `'--'` in a read fails. A purge of deleted rows passes, with quoted names, comments and text. |
-| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water, of Reminders and of Tasks pass. `INTERNET` fails in all three, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
+| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water, of Reminders and of Tasks pass, and the two of Notes. `INTERNET` fails in all four, the three of `core/notify` fail in Notes, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 | `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The eight screens of `core/security` with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the eight screens alone needs both, and so does a new screen of the module: the rule matches every screen by the start of its name. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
 The tests catch a weaker check. They fail when `allowBackup` true is
@@ -1441,7 +1475,8 @@ and fails the build if:
    name, the same for every build type. The lists of Water, Reminders
    and Tasks hold the same five: the three permissions of `core/notify`, and
    the two of `core/security`, `USE_BIOMETRIC` and
-   `HIDE_OVERLAY_WINDOWS`. Every other app's list is empty.
+   `HIDE_OVERLAY_WINDOWS`. Notes' list holds the two of `core/security`
+   only. Every other app's list is empty.
    Only the owner changes it ([permissions.md](../security/permissions.md)).
    The report of a build that passes names the allowed permissions,
 3. its manifest still starts the emoji font loader (hard rule 3, see below),

@@ -34,6 +34,12 @@ class PermissionAllowListTest {
     /** Tasks' allow list: the same five as Water's (docs/apps/tasks/spec.md, "As in Water and Reminders", permissions). */
     private val tasks = water
 
+    /** Notes' allow list: the two of core/security only (docs/apps/notes/spec.md, "Permissions"). */
+    private val notes = listOf(
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.HIDE_OVERLAY_WINDOWS",
+    )
+
     /** A merged manifest with one element per entry of [tags]: the tag and its `android:name`. */
     private fun manifest(vararg tags: Pair<String, String>): Document {
         val body = tags.joinToString("\n") { (tag, name) -> """    <$tag android:name="$name" />""" }
@@ -59,9 +65,9 @@ class PermissionAllowListTest {
     }
 
     @Test
-    fun theCheckKnowsTheAllowListsOfWaterRemindersAndTasksAndNoOther() {
+    fun theCheckKnowsTheAllowListsOfWaterRemindersTasksAndNotesAndNoOther() {
         assertEquals(
-            mapOf("water" to water.toSet(), "reminders" to reminders.toSet(), "tasks" to tasks.toSet()),
+            mapOf("water" to water.toSet(), "reminders" to reminders.toSet(), "tasks" to tasks.toSet(), "notes" to notes.toSet()),
             CheckApkRulesTask.ALLOWED_PERMISSIONS,
         )
     }
@@ -92,6 +98,26 @@ class PermissionAllowListTest {
         "android.permission.INTERNET in the manifest (rule 4: not on the allow list of tasks)",
         CheckApkRulesTask.permissionProblems(requests(*(tasks + "android.permission.INTERNET").toTypedArray()), "tasks"),
     )
+
+    @Test
+    fun notesTwoPermissionsPass() {
+        assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(requests(*notes.toTypedArray()), "notes"))
+    }
+
+    @Test
+    fun thePermissionsOfRemindersAndTheNetworkFailInNotes() {
+        listOf(
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.USE_EXACT_ALARM",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "android.permission.INTERNET",
+        ).forEach { name ->
+            assertOneProblem(
+                "$name in the manifest (rule 4: not on the allow list of notes)",
+                CheckApkRulesTask.permissionProblems(requests(*(notes + name).toTypedArray()), "notes"),
+            )
+        }
+    }
 
     @Test
     fun aManifestWithNoPermissionPassesForEveryApp() {
@@ -126,7 +152,7 @@ class PermissionAllowListTest {
 
     @Test
     fun watersPermissionsAreNotAllowedInAnotherApp() {
-        val problems = CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "notes")
+        val problems = CheckApkRulesTask.permissionProblems(requests(*water.toTypedArray()), "budget")
         assertEquals(water.map { "<uses-permission> $it in the manifest (rule 4: no permissions)" }, problems)
     }
 

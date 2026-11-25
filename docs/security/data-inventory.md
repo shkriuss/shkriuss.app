@@ -3,7 +3,8 @@
 What each app stores on the phone, where, whether it is in a backup, and
 what leaves the phone and how.
 
-- Status: covers Catalog, Water, Reminders and Tasks. It is written
+- Status: covers Catalog, Water, Reminders, Tasks and the code of
+  Notes that is built. It is written
   from the code, not from other pages. The file names and keys below are the ones in the
   code.
 - Each later app adds its section before its first release.
@@ -28,7 +29,10 @@ what leaves the phone and how.
    Android's file picker, to or from the place the user picks.
 6. **Records are marked deleted, not removed.** Every record has `id`,
    `createdAt`, `updatedAt`, `deletedAt` and a local `changeNumber`
-   ([data.md](../architecture/data.md)).
+   ([data.md](../architecture/data.md)). A deleted record keeps its
+   content, except where an app wipes it
+   ([ADR 0042](../adr/0042-wiping-the-content-of-deleted-records.md)):
+   Notes does.
 
 ## Catalog (`app.shkriuss.catalog`)
 
@@ -420,3 +424,65 @@ hold no user data.
   Uninstalling Tasks does the same.
 - Backup files stay where you put them. Delete them there.
 - Without the recovery words, nobody can open those backups.
+
+## Notes (`app.shkriuss.notes`)
+
+Notes is being built. Its code stores notes and their files, as below.
+Its screens are not built yet: the app shows one line. When it starts,
+it opens its database and sweeps it, so an empty `notes.db` is made. It
+has no backup, shows no notification and cannot set up the recovery
+key.
+
+### On the phone
+
+Everything is in Notes' private storage.
+
+| What | Where | What it holds | In a backup |
+|---|---|---|---|
+| The database `notes.db` | Notes' database folder | Two record tables ([spec.md](../apps/notes/spec.md#data)). `note`, one row per note: its title, its text with its marks, whether it is pinned, and how many times a file of it was added, removed or brought back. `attachment`, one row per file: the random ID of its note, the file's name and type as the picker gave them, its size, and its file key, wrapped by the `file-key` keyset. Each row also has its random ID, its times and its deletion marker. The table `change_counter` holds one number. **Text: the titles and texts of notes, and the names of files.** | `note` and `attachment`: yes, deleted rows too, once the backup screens are built. The change numbers and `change_counter`: no |
+| The streams of the files, `attachments/` | Notes' no-backup folder | One file per attached file, named by the random ID of its record: the file's bytes, **encrypted** with its own random key ([crypto-design.md](crypto-design.md#file-keys)). While a file is added, `<id>.part`, deleted at every start. | Yes, the streams of the files that are not deleted, once the backup screens are built |
+| Key files, `shk-keys/` | Notes' no-backup folder | Before the recovery key: `file-key`, one random key that exists only on this phone, made at the first file, wrapped by a hardware key. With the recovery key: `record`, `backup` and `file-key`, and `file-key-old` until every file key is sealed again ([spec.md](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)). | No |
+| Hardware keys | The Android Keystore, in StrongBox where the phone has it | The key that wraps `file-key`, which cannot be read out ([crypto-design.md](crypto-design.md#hardware-keys)). | No |
+
+- **Deleted notes are wiped.** A deleted note keeps its text and its
+  files only while its **Undo** is open. Then its title and text, the
+  names, types and wrapped keys of its files are cleared in the
+  database, and their streams are removed. A removed file is wiped the
+  same way. What is left is the deletion marker: the random IDs, the
+  times, and for a file the random ID of its note
+  ([spec.md](../apps/notes/spec.md#the-wiped-form)). A stop before the
+  wipe is mended at the next start.
+- `notes.db` is opened with SQLite's `secure_delete` on, so the bytes a
+  write clears are written over. Android's SQLite keeps the write-ahead
+  files `notes.db-wal` and `notes.db-shm` next to the database. They can
+  hold rows, titles, texts and names too, until SQLite writes them into
+  `notes.db`. After a wipe, and at every start, Notes moves them into
+  `notes.db` and cuts the write-ahead file to zero.
+- What a wipe cannot reach: a backup made before it, and old blocks that
+  the flash storage keeps, of the streams, of `notes.db` and of its
+  write-ahead file, under Android's file-based encryption.
+- No preferences file of `core/security`: the settings of the app lock
+  cannot be changed in Notes yet.
+- Nothing Notes decrypts is written anywhere: an image is decoded in
+  memory only.
+
+### What leaves the phone, and how
+
+Nothing of the user's yet. Notes has no network permission and shows no
+notification. Android backup and device transfer are off. It writes no
+file outside its storage, puts nothing on the clipboard and writes no
+log. The two parts of the handover of `core/security` are in its
+manifest, as in every data app: its status provider says only that
+Notes keeps no recovery key, and its handover screen says the same to a
+suite app that asks, and gives nothing
+([ADR 0041](../adr/0041-the-handover-between-apps.md)).
+
+Once its screens are built, a file leaves Notes only through **Save a
+copy**, decrypted, to the place you pick in Android's file picker
+([spec.md](../apps/notes/spec.md#showing-an-image-and-saving-a-copy)).
+
+### How to delete it
+
+In Android's Settings, open **Apps**, then **Notes**, **Storage**, and
+tap **Clear storage**. Everything above goes, the keys too.
+Uninstalling Notes does the same.

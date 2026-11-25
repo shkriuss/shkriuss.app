@@ -659,6 +659,12 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 "android.permission.USE_BIOMETRIC",
                 "android.permission.HIDE_OVERLAY_WINDOWS",
             ),
+            // The two of core/security only: Notes shows no notifications and uses no alarm
+            // (docs/apps/notes/spec.md, "Permissions"). Owner's request.
+            "notes" to setOf(
+                "android.permission.USE_BIOMETRIC",
+                "android.permission.HIDE_OVERLAY_WINDOWS",
+            ),
         )
 
         /**
