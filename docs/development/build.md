@@ -406,8 +406,9 @@ second build must write the same mapping file, or the release stops. See
     through Android's content resolver, with documents that are files
     behind a small content provider of the test. It checks that a
     document is opened in the mode that cuts off old content, that a
-    failed backup is deleted, that only `content:` URIs are taken, and
-    the two intents of the system file picker.
+    failed backup is deleted, that only `content:` URIs are taken, that
+    the result of the picker is taken only as a document of another
+    app, and the two intents of the system file picker.
   - No test opens the picker itself. That is checked by hand with the
     first app, Water
     ([emulator-tests.md](emulator-tests.md#what-an-emulator-cannot-check)).

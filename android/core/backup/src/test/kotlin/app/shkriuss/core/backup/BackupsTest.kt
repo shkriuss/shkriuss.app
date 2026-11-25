@@ -269,10 +269,33 @@ class BackupsTest {
     fun theResultOfThePickerIsTheDocumentOrNothing() {
         val picked = document("picked.shkbackup")
 
-        assertEquals(picked, BackupDocuments.uriOf(Activity.RESULT_OK, Intent().setData(picked)))
-        assertNull("the user left the picker", BackupDocuments.uriOf(Activity.RESULT_CANCELED, Intent().setData(picked)))
-        assertNull(BackupDocuments.uriOf(Activity.RESULT_OK, null))
-        assertNull(BackupDocuments.uriOf(Activity.RESULT_OK, Intent()))
+        assertEquals(picked, BackupDocuments.uriOf(Activity.RESULT_OK, Intent().setData(picked), context))
+        assertNull("the user left the picker", BackupDocuments.uriOf(Activity.RESULT_CANCELED, Intent().setData(picked), context))
+        assertNull(BackupDocuments.uriOf(Activity.RESULT_OK, null, context))
+        assertNull(BackupDocuments.uriOf(Activity.RESULT_OK, Intent(), context))
+    }
+
+    @Test
+    fun anAppPosingAsThePickerCannotHandTheAppItsOwnFiles() {
+        val database = Uri.fromFile(context.getDatabasePath("water.db"))
+        val ownProvider = Uri.parse("content://${context.packageName}.own/water.db")
+        val ownProviderOfAUser = Uri.parse("content://0@${context.packageName}.own/water.db")
+        org.robolectric.Shadows.shadowOf(context.packageManager).addOrUpdateProvider(
+            android.content.pm.ProviderInfo().apply {
+                authority = "${context.packageName}.own"
+                packageName = context.packageName
+                name = "Own"
+            },
+        )
+        val document = document("picked.shkbackup")
+        // A document of another app in another profile, such as a work profile, named with its user.
+        val documentOfAProfile = Uri.parse("content://10@$AUTHORITY/picked.shkbackup")
+
+        for (own in listOf(database, ownProvider, ownProviderOfAUser)) {
+            assertNull("$own is never taken", BackupDocuments.uriOf(Activity.RESULT_OK, Intent().setData(own), context))
+        }
+        assertEquals(document, BackupDocuments.uriOf(Activity.RESULT_OK, Intent().setData(document), context))
+        assertEquals(documentOfAProfile, BackupDocuments.uriOf(Activity.RESULT_OK, Intent().setData(documentOfAProfile), context))
     }
 
     /**
