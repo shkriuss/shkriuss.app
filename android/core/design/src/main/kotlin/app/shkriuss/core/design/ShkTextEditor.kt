@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.text
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -50,8 +51,9 @@ import androidx.compose.ui.unit.dp
  * around it: the text sits on the screen as text does. For a short value
  * with a label, such as a name, use a [ShkTextField] instead.
  *
- * [hint] shows in the secondary text colour while the text is empty, and
- * TalkBack reads it with the field then. TalkBack reads the text as it is.
+ * [hint] shows in the secondary text colour while the text is empty.
+ * TalkBack reads it as the field's label, also once the field has text,
+ * and reads the text as it is.
  * [style] is the style of the text, [ShkTextStyle.Body] by default, or
  * [ShkTextStyle.Title] for a title. With [singleLine] it is one line tall
  * and scrolls sideways; otherwise it grows with the text, so put it in a
@@ -236,8 +238,10 @@ private fun EditorField(
             modifier = modifier
                 .fillMaxWidth()
                 .heightIn(min = ShkSpacing.MinTouchTarget)
-                // The hint and the error line are read with the field, as the label of a ShkTextField is.
+                // The hint is the field's label, read with it also once the hint no longer shows, as the label of a ShkTextField
+                // is. The error line is read with the field too.
                 .semantics(mergeDescendants = true) {
+                    text = AnnotatedString(hint)
                     if (errorText != null) error(errorText)
                     if (action != null) {
                         customActions = listOf(
@@ -260,7 +264,8 @@ private fun EditorField(
                 Column {
                     Box(Modifier.fillMaxWidth().heightIn(min = ShkSpacing.MinTouchTarget), propagateMinConstraints = false) {
                         if (value.text.isEmpty()) {
-                            ShkText(text = hint, style = style, color = colors.textSecondary)
+                            // Read as the field's label, so not again as text.
+                            ShkText(text = hint, style = style, color = colors.textSecondary, modifier = Modifier.clearAndSetSemantics {})
                         }
                         innerTextField()
                     }

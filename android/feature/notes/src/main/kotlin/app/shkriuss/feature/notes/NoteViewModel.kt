@@ -194,8 +194,13 @@ class NoteViewModel(
         checkAgain.update { it + 1 }
     }
 
-    /** The title field changed to [typed]. A change past 200 characters is refused, and the field keeps what it had. */
+    /**
+     * The title field changed to [typed]. A change past 200 characters is
+     * refused, and the field keeps what it had. So is a change once the
+     * note began to close: its last save has taken in what it shows.
+     */
     fun onTitleChange(typed: String) {
+        if (closing) return
         val kept = NoteText.title(typed)
         if (NoteText.length(kept) > NoteLimits.MOST_TITLE) {
             shown.update { it.copy(problem = FieldProblem.TITLE_TOO_LONG) }
@@ -246,6 +251,8 @@ class NoteViewModel(
     }
 
     private fun apply(edit: TextEdit) {
+        // The note began to close, and its last save has taken in what it shows: a later change would be lost.
+        if (closing) return
         if (NoteText.length(edit.text) > NoteLimits.MOST_BODY) {
             shown.update { it.copy(problem = FieldProblem.TEXT_TOO_LONG) }
             return
@@ -313,9 +320,16 @@ class NoteViewModel(
      */
     fun close() {
         if (closing || shown.value.closed) return
+        // From here no change is taken, so the save holds all that the note shows when it closes.
+        closing = true
         cancelTimer()
         viewModelScope.launch(work) {
-            if (saveAll()) finishClosing() else shown.update { it.copy(askUnsaved = true) }
+            if (saveAll()) {
+                finishClosing()
+            } else {
+                closing = false
+                shown.update { it.copy(askUnsaved = true) }
+            }
         }
     }
 
@@ -357,6 +371,7 @@ class NoteViewModel(
 
     /** **Discard changes** in "This note is not saved": the note closes with what was saved last. */
     fun discard() {
+        closing = true
         shown.update { it.copy(askUnsaved = false) }
         savedThrough = changes
         firstUnsaved = null

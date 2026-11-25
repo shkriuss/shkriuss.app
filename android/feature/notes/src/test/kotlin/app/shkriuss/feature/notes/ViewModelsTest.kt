@@ -279,6 +279,43 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aChangeAfterTheNoteBeganToCloseIsNotTakenSoNothingItShowsIsLost() {
+        val id = phone.note("Trip", "Passport")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.onTitleChange("Trip to Batumi")
+
+        note.close()
+        // On a tablet the note shows beside the list until it has closed, with the keyboard still open.
+        note.onTitleChange("Trip to Batumi and Kutaisi")
+        note.onBodyChange(TextEdit("Passport and tickets", 20))
+        note.bold()
+
+        note.state.await { it.closed }
+        assertEquals("Trip to Batumi", note.state.value.title)
+        assertEquals("Passport", note.state.value.body.text)
+        assertEquals("What it showed is what is stored", "Trip to Batumi", stored(id)?.title)
+        assertEquals("Passport", stored(id)?.body)
+    }
+
+    @Test
+    fun aNoteKeptOpenAfterItsSaveFailedTakesChangesAgain() {
+        val id = phone.note("Trip", "Passport")
+        val note = open(id)
+        note.state.await { !it.loading }
+        phone.database.refuseWritesTo("note")
+        note.onBodyChange(TextEdit("Passport and tickets", 20))
+        note.close()
+        note.state.await { it.askUnsaved }
+
+        note.keepEditing()
+        note.onTitleChange("Trip to Batumi")
+
+        assertEquals("Trip to Batumi", note.state.value.title)
+        assertFalse(note.state.value.closed)
+    }
+
+    @Test
     fun aNewNoteThatClosesWithNothingInItWritesNothing() {
         val id = repository.reserveNoteId()
         val note = open(id)

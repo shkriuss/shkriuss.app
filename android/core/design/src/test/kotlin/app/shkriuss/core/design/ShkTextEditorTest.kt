@@ -48,8 +48,8 @@ import org.robolectric.annotation.GraphicsMode
  * Checks [ShkTextEditor] (docs/apps/notes/spec.md, "Changes to shared
  * modules") at font scale 1.0 and 2.0:
  *
- * - it is at least 48 by 48 dp, and TalkBack reads its hint while it is
- *   empty, and its text as it is once it has text,
+ * - it is at least 48 by 48 dp, and TalkBack reads its hint as its label,
+ *   also once it has text, and its text as it is,
  * - the styles of its ranges change nothing of the text it holds,
  * - typing reaches the caller with the new selection, and the editor shows
  *   what the caller keeps,
@@ -72,6 +72,9 @@ class ShkTextEditorTest(private val fontScale: Float) {
 
     private val editor get() = compose.onNode(IS_TEXT_FIELD)
 
+    /** The nodes that hold the hint, before TalkBack merges them into the field. */
+    private fun hintsRead(): Int = compose.onAllNodes(hasText(HINT), useUnmergedTree = true).fetchSemanticsNodes().size
+
     @Test
     fun takesA48dpTouchTargetAndReadsItsHintWhileEmpty() {
         compose.setContent { ShkTheme { ShkTextEditor(text = "", selectionStart = 0, selectionEnd = 0, onChange = { _, _, _ -> }, hint = HINT) } }
@@ -80,18 +83,19 @@ class ShkTextEditorTest(private val fontScale: Float) {
         val config = editor.fetchSemanticsNode().config
         assertEquals(listOf(HINT), config.getOrNull(SemanticsProperties.Text)?.map { it.text })
         assertEquals("", config[SemanticsProperties.EditableText].text)
+        assertEquals("The hint that shows is read once, as the label", 1, hintsRead())
     }
 
     @Test
-    fun withTextTalkBackReadsTheTextAsItIsAndNotTheHint() {
+    fun withTextTalkBackReadsTheTextAsItIsAndTheHintStillAsItsLabel() {
         compose.setContent {
             ShkTheme { ShkTextEditor(text = TEXT, selectionStart = 0, selectionEnd = 0, onChange = { _, _, _ -> }, hint = HINT, looks = LOOKS) }
         }
 
         val config = editor.fetchSemanticsNode().config
         assertEquals("The styles change nothing of the text", TEXT, config[SemanticsProperties.EditableText].text)
-        assertNull(config.getOrNull(SemanticsProperties.Text))
-        compose.onAllNodes(hasText(HINT), useUnmergedTree = true).fetchSemanticsNodes().let { assertTrue("no hint: $it", it.isEmpty()) }
+        assertEquals("The hint no longer shows, and stays the label", listOf(HINT), config.getOrNull(SemanticsProperties.Text)?.map { it.text })
+        assertEquals(1, hintsRead())
     }
 
     @Test
