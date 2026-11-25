@@ -64,6 +64,17 @@ class NoteImagesTest {
     }
 
     @Test
+    fun anImageFitsAPaneThatIsNotSquareAndIsNoLargerThanItShowsThere() {
+        val file = add(TestPick(name = "ticket.png", type = "image/png", bytes = png(400, 200)))
+
+        val tall = checkNotNull(runBlocking { images.decode(file, 100, 300) })
+        val wide = checkNotNull(runBlocking { images.decode(file, 300, 60) })
+
+        assertEquals("A portrait pane: as wide as the pane", 100 to 50, tall.width to tall.height)
+        assertEquals("A landscape pane: as high as the pane", 120 to 60, wide.width to wide.height)
+    }
+
+    @Test
     fun theSmallImageOfARowIsTheSquareInTheMiddleOfTheImageScaledToCoverIt() {
         val file = add(TestPick(name = "ticket.png", type = "image/png", bytes = png(400, 200, middle = 200)))
 

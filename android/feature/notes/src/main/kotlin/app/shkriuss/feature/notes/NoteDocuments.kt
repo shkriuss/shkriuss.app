@@ -34,13 +34,16 @@ object NoteDocuments {
 
     /**
      * The files the "open document" screen gave, in the order it gave them,
-     * that are [isSafe] for [context]: none if the user went back.
+     * that are [isSafe] for [context]: none if the user went back. The
+     * provider of each is looked up once, so that an answer with thousands
+     * of files from one provider takes one look-up, not thousands.
      */
     fun pickedOf(resultCode: Int, data: Intent?, context: Context): List<Uri> {
         if (resultCode != Activity.RESULT_OK || data == null) return emptyList()
         val clip = data.clipData
         val given = if (clip != null) List(clip.itemCount) { clip.getItemAt(it).uri }.filterNotNull() else listOfNotNull(data.data)
-        return given.filter { isSafe(it, context) }
+        val safe = HashMap<String, Boolean>()
+        return given.filter { uri -> safe.getOrPut("${uri.scheme}://${uri.authority}") { isSafe(uri, context) } }
     }
 
     /** The document the "create document" screen made, if it [isSafe] for [context], or null, as when the user went back. */

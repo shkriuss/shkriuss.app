@@ -30,22 +30,22 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
     private val decoding = Mutex()
 
     /**
-     * The image of [file], scaled down to fit a square of [side] pixels
-     * when it is larger, as the image view shows it; with [cover], scaled
-     * down to cover that square and cut to the square in its middle, as
-     * the small image of a row shows it, so a very long image keeps no
-     * more than that square. Null when it cannot be shown: its type is not
-     * an image, its stream cannot be read or is damaged, or `ImageDecoder`
-     * refuses it, or it is too large to hold. A read that meets damage
-     * marks the file damaged ([FileReader.open]). One image is decoded at
-     * a time.
+     * The image of [file], scaled down to fit a place of [width] by
+     * [height] pixels when it is larger, as the image view shows it in its
+     * pane; with [cover], scaled down to cover that place and cut to the
+     * middle of it, as the small image of a row shows it in its square, so
+     * a very long image keeps no more than the place. Null when it cannot
+     * be shown: its type is not an image, its stream cannot be read or is
+     * damaged, or `ImageDecoder` refuses it, or it is too large to hold. A
+     * read that meets damage marks the file damaged ([FileReader.open]).
+     * One image is decoded at a time.
      */
-    suspend fun decode(file: NoteFile, side: Int, cover: Boolean = false): Bitmap? = withContext(work) {
-        if (!file.maybeImage || side <= 0 || file.size > NoteLimits.MOST_FILE_BYTES) return@withContext null
-        decoding.withLock { decodeNow(file, side, cover) }
+    suspend fun decode(file: NoteFile, width: Int, height: Int = width, cover: Boolean = false): Bitmap? = withContext(work) {
+        if (!file.maybeImage || width <= 0 || height <= 0 || file.size > NoteLimits.MOST_FILE_BYTES) return@withContext null
+        decoding.withLock { decodeNow(file, width, height, cover) }
     }
 
-    private suspend fun decodeNow(file: NoteFile, side: Int, cover: Boolean): Bitmap? {
+    private suspend fun decodeNow(file: NoteFile, placeWidth: Int, placeHeight: Int, cover: Boolean): Bitmap? {
         val bytes = try {
             reader.open(file).use { input -> readExactly(input, file.size.toInt()) } ?: return null
         } catch (_: IOException) {
@@ -65,11 +65,13 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
                 val width = info.size.width
                 val height = info.size.height
                 // Exactly the size it shows at: never larger, and never smaller, which would blur it.
-                val scale = side.toFloat() / if (cover) min(width, height) else max(width, height)
+                val across = placeWidth.toFloat() / width
+                val down = placeHeight.toFloat() / height
+                val scale = if (cover) max(across, down) else min(across, down)
                 val shownWidth = if (scale < 1f) (width * scale).roundToInt().coerceAtLeast(1) else width
                 val shownHeight = if (scale < 1f) (height * scale).roundToInt().coerceAtLeast(1) else height
                 if (scale < 1f) decoder.setTargetSize(shownWidth, shownHeight)
-                if (cover) decoder.crop = middleSquare(shownWidth, shownHeight)
+                if (cover) decoder.crop = middleOf(shownWidth, shownHeight, placeWidth, placeHeight)
             }
         } catch (_: IOException) {
             null
@@ -82,12 +84,17 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
         }
     }
 
-    /** The largest square in the middle of an image of [width] by [height] pixels: what a row's small image shows of it. */
-    private fun middleSquare(width: Int, height: Int): Rect {
-        val square = min(width, height)
-        val left = (width - square) / 2
-        val top = (height - square) / 2
-        return Rect(left, top, left + square, top + square)
+    /**
+     * The largest part in the middle of an image of [width] by [height]
+     * pixels that has the shape of a place of [placeWidth] by
+     * [placeHeight]: what a place that the image covers shows of it.
+     */
+    private fun middleOf(width: Int, height: Int, placeWidth: Int, placeHeight: Int): Rect {
+        val partWidth = min(width, (height.toLong() * placeWidth / placeHeight).toInt()).coerceAtLeast(1)
+        val partHeight = min(height, (width.toLong() * placeHeight / placeWidth).toInt()).coerceAtLeast(1)
+        val left = (width - partWidth) / 2
+        val top = (height - partHeight) / 2
+        return Rect(left, top, left + partWidth, top + partHeight)
     }
 
     /** The [size] bytes of [input], in one array of that size, or null when it holds fewer or more: such a file is damaged. */

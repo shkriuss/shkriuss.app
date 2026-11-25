@@ -390,6 +390,9 @@ class FileAdds(
 
     private val lock = Any()
     private val queue = ArrayDeque<Waiting>()
+
+    /** For each batch larger than a note holds, how many of its files never entered the queue. */
+    private val leftOut = HashMap<Long, Int>()
     private var nextKey = 1L
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private val rows = MutableStateFlow<List<AddingFile>>(emptyList())
@@ -404,13 +407,15 @@ class FileAdds(
     /** Adds [picked] to the note [noteId], after every file picked before. A new note is made with its first file. */
     fun add(noteId: String, picked: List<PickedFile>) {
         if (picked.isEmpty()) return
+        // A note holds at most 20 files, so one more is enough to meet the count. The rest never wait, and are counted
+        // with the files that are not added, so a picker that gives thousands of files costs no more than 21.
+        val queued = picked.take(NoteLimits.MOST_FILES_PER_NOTE + 1)
         synchronized(lock) {
             val batch = nextKey
-            picked.forEach { file ->
-                val key = nextKey++
-                queue.addLast(Waiting(key, batch, noteId, file))
-                rows.value += AddingFile(key, noteId, name = null, done = 0, total = null)
-            }
+            val waiting = queued.map { file -> Waiting(nextKey++, batch, noteId, file) }
+            queue.addAll(waiting)
+            if (picked.size > queued.size) leftOut[batch] = picked.size - queued.size
+            rows.value += waiting.map { AddingFile(it.key, noteId, name = null, done = 0, total = null) }
         }
         wake.trySend(Unit)
     }
@@ -468,23 +473,35 @@ class FileAdds(
         class Failed(val problem: AddProblem) : AddEnd
     }
 
-    /** Takes [waiting] off the queue and its row away. */
+    /**
+     * Takes [waiting] off the queue and its row away. When it was the last
+     * of a batch that was larger than a note holds, and no file of the
+     * batch was refused for the count, the files that never entered the
+     * queue are told as not added.
+     */
     private fun done(waiting: Waiting) {
+        var notAdded = 0
         val giveUp = synchronized(lock) {
             queue.remove(waiting)
             rows.value = rows.value.filter { it.key != waiting.key }
+            if (queue.none { it.batch == waiting.batch }) notAdded = leftOut.remove(waiting.batch) ?: 0
             queue.none { it.noteId == waiting.noteId } && handedOver.remove(waiting.noteId)
         }
+        if (notAdded > 0) tell(AddProblem.NoteFull(notAdded))
         if (giveUp) repository.giveUpNewNote(waiting.noteId)
     }
 
-    /** Takes the other files of [waiting]'s batch off the queue, and returns how many files of the batch are not added, [waiting] too. */
+    /**
+     * Takes the other files of [waiting]'s batch off the queue, and returns
+     * how many files of the batch are not added: [waiting], the rest of
+     * the queue, and those that never entered it.
+     */
     private fun dropBatch(waiting: Waiting): Int = synchronized(lock) {
         val rest = queue.filter { it !== waiting && it.batch == waiting.batch }
         queue.removeAll(rest.toSet())
         val keys = rest.map { it.key }.toSet()
         rows.value = rows.value.filter { it.key !in keys }
-        rest.size + 1
+        rest.size + 1 + (leftOut.remove(waiting.batch) ?: 0)
     }
 
     private fun show(waiting: Waiting, change: (AddingFile) -> AddingFile) = synchronized(lock) {

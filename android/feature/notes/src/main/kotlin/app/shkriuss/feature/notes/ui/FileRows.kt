@@ -80,7 +80,7 @@ private fun FileRow(row: FileRowState, images: NoteImages, actions: FileActions,
     val thumbnail by produceState<ImageBitmap?>(null, file.id, row.state, side) {
         value = null
         if (row.state != FileState.READY || !file.maybeImage) return@produceState
-        val decoded = images.decode(file, side, cover = true)
+        val decoded = images.decode(file, side, side, cover = true)
         // A read that met damage marks the file damaged: its row says so.
         if (decoded == null) onDamage()
         value = decoded?.asImageBitmap()

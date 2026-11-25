@@ -64,9 +64,11 @@ internal fun ImageContent(file: NoteFile, images: NoteImages, actions: FileActio
     ) {
         // Zoomed, the image is drawn larger than its place: it stays in the pane, under the top bar and beside the list.
         BoxWithConstraints(Modifier.weight(1f).clipToBounds()) {
-            val side = with(LocalDensity.current) { maxOf(maxWidth, maxHeight).roundToPx() }
-            val decoded by produceState<Decoded>(Decoded.Loading, file.id, side) {
-                value = images.decode(file, side)?.let { Decoded.Shown(it.asImageBitmap()) } ?: Decoded.Failed
+            // Fitted in the pane as it is, so a pane that is not square holds no more than the image shows.
+            val width = with(LocalDensity.current) { maxWidth.roundToPx() }
+            val height = with(LocalDensity.current) { maxHeight.roundToPx() }
+            val decoded by produceState<Decoded>(Decoded.Loading, file.id, width, height) {
+                value = images.decode(file, width, height)?.let { Decoded.Shown(it.asImageBitmap()) } ?: Decoded.Failed
             }
             when (val image = decoded) {
                 Decoded.Loading -> ShkLoadingState(text = stringResource(R.string.notes_opening_image))

@@ -1452,7 +1452,10 @@ Status: **Met for what is built.**
     (`NoteDocuments.isSafe`). An app that poses as the picker cannot hand
     Notes a `file:` path or a provider of Notes' own, also not one named
     with a user before it (`content://0@…`), so it cannot make Notes read
-    or overwrite its own database or keys.
+    or overwrite its own database or keys. Nor can it stall Notes with an
+    answer of thousands of files: each provider is looked up once, and
+    at most 21 files of one answer wait to be added, one more than a note
+    holds; the rest are counted as not added.
   - The receivers ignore every action they do not expect.
   - No input is read as serialized Java objects.
 - MASWE-0029, deep links: there are none. MASWE-0034 and 0035: there is

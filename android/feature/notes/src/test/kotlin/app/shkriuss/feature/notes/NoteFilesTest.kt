@@ -197,6 +197,31 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aPickerThatGivesThousandsOfFilesQueuesOneMoreThanANoteHoldsAndCountsTheRest() {
+        val id = phone.note()
+        canStart.value = false
+
+        adds.add(id, List(5_000) { TestPick("f$it.jpg", bytes = ByteArray(10)) })
+
+        assertEquals("One more than a note holds waits, not 5,000", 21, adds.adding.value.size)
+        canStart.value = true
+        adds.adding.await { it.isEmpty() }
+        assertEquals(20, files(id).size)
+        assertEquals(listOf<AddProblem>(AddProblem.NoteFull(4_980)), problems)
+    }
+
+    @Test
+    fun theFilesLeftOutOfALargeBatchAreToldAlsoWhenNoneWasRefusedForTheCount() {
+        val id = phone.note()
+        val broken = TestPick("broken.jpg", bytes = ByteArray(10), failOpen = true)
+
+        add(id, broken, *Array(22) { TestPick("f$it.jpg", bytes = ByteArray(10)) })
+
+        assertEquals("One could not be read, so 20 of the 21 in the queue are added", 20, files(id).size)
+        assertEquals(listOf<AddProblem>(AddProblem.CouldNotRead("broken.jpg"), AddProblem.NoteFull(2)), problems)
+    }
+
+    @Test
     fun aFileLargerThan25MbIsNotAddedAndItsPartIsDeleted() {
         val id = phone.note()
 

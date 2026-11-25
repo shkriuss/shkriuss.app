@@ -675,7 +675,7 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 12 test classes with 165 tests: the limits of every
+- `feature/notes` has 12 test classes with 168 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
