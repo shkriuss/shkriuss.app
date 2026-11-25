@@ -46,7 +46,9 @@ class ShkListItemImageTest(private val fontScale: Float) {
         val red = ImageBitmap(IMAGE_PX, IMAGE_PX).also { image ->
             Canvas(image).drawRect(0f, 0f, IMAGE_PX.toFloat(), IMAGE_PX.toFloat(), Paint().apply { color = Color.Red })
         }
+        var side = 0.dp
         compose.setContent {
+            side = shkListItemImageSide()
             ShkTheme { ShkListItem(headline = NAME, supportingText = SIZE, image = BitmapPainter(red), onClick = {}) }
         }
 
@@ -63,6 +65,7 @@ class ShkListItemImageTest(private val fontScale: Float) {
         val imageAndGap = with(compose.density) { (textLeft - rowLeft).toDp() } - 8.dp
         assertTrue("The image and the gap after it take $imageAndGap", imageAndGap >= 52.dp)
         if (fontScale > 1f) assertTrue("The image grows with the text: $imageAndGap", imageAndGap > 52.dp + 1.dp)
+        assertEquals("shkListItemImageSide() is the side the image shows at", side.value, (imageAndGap - 12.dp).value, 0.5f)
     }
 
     companion object {

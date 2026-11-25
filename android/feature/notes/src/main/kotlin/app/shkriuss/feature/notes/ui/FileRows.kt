@@ -26,7 +26,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.dp
 import app.shkriuss.core.design.ShkIconButton
 import app.shkriuss.core.design.ShkListItem
 import app.shkriuss.core.design.ShkMenu
@@ -34,6 +33,7 @@ import app.shkriuss.core.design.ShkMenuItem
 import app.shkriuss.core.design.ShkProgressBar
 import app.shkriuss.core.design.ShkSectionHeader
 import app.shkriuss.core.design.ShkSpacing
+import app.shkriuss.core.design.shkListItemImageSide
 import app.shkriuss.feature.notes.AddingFile
 import app.shkriuss.feature.notes.FileRowState
 import app.shkriuss.feature.notes.FileState
@@ -74,7 +74,9 @@ internal fun FilesSection(state: NoteState, model: NoteViewModel, images: NoteIm
 @Composable
 private fun FileRow(row: FileRowState, images: NoteImages, actions: FileActions, format: NotesFormat, onDamage: () -> Unit) {
     val file = row.file
-    val side = with(LocalDensity.current) { THUMBNAIL_SIDE.roundToPx() }
+    // The size it shows at, which grows with the font size, so it is never stretched.
+    val shownSide = shkListItemImageSide()
+    val side = with(LocalDensity.current) { shownSide.roundToPx() }
     val thumbnail by produceState<ImageBitmap?>(null, file.id, row.state, side) {
         value = null
         if (row.state != FileState.READY || !file.maybeImage) return@produceState
@@ -153,6 +155,3 @@ private fun AddingRow(adding: AddingFile, format: NotesFormat) {
         }
     }
 }
-
-/** The side of the small image of a file, as the list item draws it at font scale 1.0. */
-private val THUMBNAIL_SIDE = 40.dp

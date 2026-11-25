@@ -45,7 +45,8 @@ Not released yet.
   from 1× to 5×. **Save a copy** writes the file where you choose, under
   "Saving a copy" with a progress bar.
 - Settings: **Files**, how many files Notes keeps and how much of 1 GB
-  they take, and **About**, with the version. Backup, the recovery key
+  they take, or "Could not open your notes." when they cannot be
+  counted, and **About**, with the version. Backup, the recovery key
   and the app lock come next.
 - Everything Notes stores is in place: notes, with their title, text
   and pin, and the records of their files, in one database on the

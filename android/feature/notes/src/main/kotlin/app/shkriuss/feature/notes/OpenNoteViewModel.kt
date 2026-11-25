@@ -78,6 +78,11 @@ class OpenNoteViewModel(
             if (saved.get<Boolean>(NEW_KEY) == true) {
                 viewModelScope.launch {
                     val fresh = if (isStored(noteId)) null else reserveNew()
+                    if (shown.value != null) {
+                        // A note was tapped meanwhile: the last tap wins, and the new note reserved for nothing is given up.
+                        fresh?.let(giveUp)
+                        return@launch
+                    }
                     if (fresh != null) {
                         start(fresh, isNew = true, paneKey = paneKey)
                     } else {

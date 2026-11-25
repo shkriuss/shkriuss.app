@@ -11,6 +11,7 @@ import androidx.room3.useWriterConnection
 import app.shkriuss.feature.notes.data.NoteEntity
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -60,7 +61,10 @@ class OpenNoteViewModelTest {
 
     private val model: OpenNoteViewModel by lazy { makeModel(store) }
 
-    private fun makeModel(owner: ViewModelStore): OpenNoteViewModel = ViewModelProvider(
+    private fun makeModel(
+        owner: ViewModelStore,
+        isStored: suspend (String) -> Boolean = { id -> repository.findNote(id) != null },
+    ): OpenNoteViewModel = ViewModelProvider(
         owner,
         viewModelFactory {
             initializer {
@@ -72,7 +76,7 @@ class OpenNoteViewModelTest {
                     },
                     saved = saved,
                     reserveNew = { repository.reserveNewNote() },
-                    isStored = { id -> repository.findNote(id) != null },
+                    isStored = isStored,
                 )
             }
         },
@@ -184,6 +188,37 @@ class OpenNoteViewModelTest {
             assertTrue(open.isNew)
             assertTrue("It is reserved, so its first file makes it", repository.isNewNote(open.model.noteId))
             assertEquals("In the same pane, with the launchers of its pickers", lost, open.paneKey)
+        } finally {
+            again.clear()
+        }
+    }
+
+    @Test
+    fun aNoteTappedWhileANewNoteIsRestoredStaysOpen() {
+        val lost = runBlocking { checkNotNull(repository.reserveNewNote()) }
+        model.open(lost, isNew = true)
+        openModel(lost)
+        repository.giveUpNewNote(lost)
+        val trip = phone.note("Trip", "Passport")
+        val answer = CompletableDeferred<Unit>()
+
+        val again = ViewModelStore()
+        try {
+            val restored = makeModel(again) { id ->
+                answer.await()
+                repository.findNote(id) != null
+            }
+            idle()
+            assertNull("Still finding out whether the new note is stored", restored.open.value)
+            restored.open(trip)
+            answer.complete(Unit)
+
+            eventually {
+                idle()
+                givenUp.isNotEmpty()
+            }
+            assertEquals("The last tap wins", trip, restored.open.value?.model?.noteId)
+            assertTrue("The note reserved in vain is given up", givenUp.single() != lost)
         } finally {
             again.clear()
         }

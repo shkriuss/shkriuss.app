@@ -14,6 +14,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -61,7 +62,8 @@ internal fun ImageContent(file: NoteFile, images: NoteImages, actions: FileActio
         topBar = { ShkTopBar(title = file.name, onBack = onBack, menuItems = menu) },
         snackbarHostState = snackbar,
     ) {
-        BoxWithConstraints(Modifier.weight(1f)) {
+        // Zoomed, the image is drawn larger than its place: it stays in the pane, under the top bar and beside the list.
+        BoxWithConstraints(Modifier.weight(1f).clipToBounds()) {
             val side = with(LocalDensity.current) { maxOf(maxWidth, maxHeight).roundToPx() }
             val decoded by produceState<Decoded>(Decoded.Loading, file.id, side) {
                 value = images.decode(file, side)?.let { Decoded.Shown(it.asImageBitmap()) } ?: Decoded.Failed

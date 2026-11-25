@@ -2,6 +2,9 @@ package app.shkriuss.notes
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
@@ -22,6 +25,7 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import app.shkriuss.feature.notes.NotesListViewModel
 import app.shkriuss.feature.notes.OpenNoteViewModel
 import app.shkriuss.feature.notes.R
+import app.shkriuss.feature.notes.data.AttachmentEntity
 import app.shkriuss.feature.notes.data.NoteEntity
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -290,14 +294,29 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
 
     @Test
     fun theImageView() {
+        openTheImageView()
+        compose.captureWholeScreen("ImageView", config)
+    }
+
+    /** The image view after a double tap, at 2.5×: the image stays in its pane, under the top bar. */
+    @Test
+    fun theImageViewZoomedIn() {
+        openTheImageView().performTouchInput { doubleClick() }
+        compose.waitForIdle()
+        compose.captureWholeScreen("ImageViewZoomed", config)
+    }
+
+    /** Opens the image view of an image added to Trip, and gives the image. */
+    private fun openTheImageView(): SemanticsNodeInteraction {
         val trip = seedNotes()
         start()
         compose.addFiles(trip, BytesPick("ticket.png", "image/png", pngBytes(IMAGE_WIDTH, IMAGE_HEIGHT)))
         openNote("Trip")
         compose.waitFor(hasContentDescription("ticket.png, image", substring = true))
         compose.tap(rowMatcher("ticket.png"))
-        compose.waitFor(hasContentDescription("ticket.png") and !hasContentDescription(",", substring = true))
-        compose.captureWholeScreen("ImageView", config)
+        val image = hasContentDescription("ticket.png") and !hasContentDescription(",", substring = true)
+        compose.waitFor(image)
+        return compose.onNode(image)
     }
 
     /**
@@ -327,6 +346,17 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         compose.tap(R.string.notes_settings)
         compose.waitForText(words(R.string.notes_no_files))
         compose.captureWholeScreen("SettingsNoFiles", config)
+    }
+
+    /** Settings when the files cannot be counted: the error state in the section Files, and About under it. */
+    @Test
+    fun settingsWhenTheFilesCannotBeCounted() {
+        runBlocking { testApp.test.database.useWriterConnection { it.executeSQL("DROP TABLE ${AttachmentEntity.TABLE}") } }
+        start(ready = words(R.string.notes_could_not_open))
+        compose.tap(R.string.notes_settings)
+        compose.waitForText(words(R.string.notes_version))
+        compose.waitForText(words(R.string.notes_could_not_open))
+        compose.captureWholeScreen("SettingsCouldNotCount", config)
     }
 
     @Test

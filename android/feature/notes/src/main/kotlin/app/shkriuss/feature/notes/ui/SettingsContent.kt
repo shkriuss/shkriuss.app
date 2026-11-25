@@ -5,6 +5,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import app.shkriuss.core.design.ShkErrorState
 import app.shkriuss.core.design.ShkListItem
 import app.shkriuss.core.design.ShkScreen
 import app.shkriuss.core.design.ShkSectionHeader
@@ -18,7 +19,9 @@ import app.shkriuss.feature.notes.SettingsViewModel
 /**
  * Settings (docs/apps/notes/spec.md, "Settings"): one column of items
  * under section headers. **Files** comes first, with one line that is not
- * a button, "12 files, 120 MB of 1 GB" or "No files". About shows
+ * a button, "12 files, 120 MB of 1 GB" or "No files"; when the files
+ * cannot be counted, `ShkErrorState` "Could not open your notes." in its
+ * place, so the rest of Settings stays within reach. About shows
  * [versionName], the version name of the installed app, such as `1.0.0`.
  * Backup, Security and Licences come with backup, restore, the recovery
  * key and the app lock.
@@ -31,7 +34,8 @@ internal fun SettingsContent(model: SettingsViewModel, versionName: String, snac
         ShkSectionHeader(stringResource(R.string.notes_section_files))
         when (val line = files) {
             FilesLine.Loading -> Unit
-            FilesLine.Failed -> ShkListItem(headline = stringResource(R.string.notes_could_not_open))
+            // In the section only: About, and later Security with the recovery key, stay within reach.
+            FilesLine.Failed -> ShkErrorState(title = stringResource(R.string.notes_could_not_open))
             is FilesLine.Counted -> {
                 val totals = line.totals
                 val words = if (totals.count == 0) {

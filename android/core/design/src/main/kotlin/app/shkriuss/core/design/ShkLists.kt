@@ -148,7 +148,7 @@ fun ShkListItem(
                 painter = image,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(iconSizeNextToText(ListItemImageSize))
+                    .size(shkListItemImageSide())
                     .clip(ShkShapes.Field),
                 contentScale = ContentScale.Crop,
                 alpha = alpha,
@@ -324,6 +324,15 @@ private val SelectedBarWidth = ShkSpacing.ExtraSmall
 
 /** The size of the image at the start of a list item, as Material 3's image of a list item. */
 private val ListItemImageSize = 40.dp
+
+/**
+ * The side of the square in which [ShkListItem] shows its `image`: 40 dp,
+ * grown with the font size as an icon next to text is. A caller that
+ * decodes the image, such as a photo, decodes it at this size, so it is
+ * neither stretched nor larger than it shows.
+ */
+@Composable
+fun shkListItemImageSide(): Dp = iconSizeNextToText(ListItemImageSize)
 
 /** The size Material 3 draws the icon at the start of a list item. */
 private val ListItemIconSize = 24.dp
