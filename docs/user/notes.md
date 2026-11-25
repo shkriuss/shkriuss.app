@@ -321,8 +321,10 @@ Limits of backups:
     background, no backup was made, and Notes shows nothing about it.
     Make it again, with Notes on the screen.
 14. A file that is damaged but has the right length stays damaged after
-    a restore of a good copy of it, when both are the same edit.
-    Remove it and restore again.
+    a restore of a good copy of it: a restore brings no stored copy for
+    a file whose stored copy has the right length. Remove it, and add it
+    again from the original. Removing it and restoring again does not
+    bring it back, because the removal is the newer edit.
 
 Limits of deleting:
 

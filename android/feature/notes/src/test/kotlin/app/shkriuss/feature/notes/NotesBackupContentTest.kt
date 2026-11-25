@@ -261,6 +261,7 @@ class NotesBackupContentTest {
             "a file entry with no file record" to HandMadeContent(listOf(trip), listOf(TICKET to stream)),
             "a file entry that is there twice" to HandMadeContent(listOf(trip, ticket), listOf(TICKET to stream, TICKET to stream)),
             "a file entry of another length" to HandMadeContent(listOf(trip, ticket), listOf(TICKET to stream + 0)),
+            // With its note, so that only the wiped file can be what is refused.
             "a file entry of a wiped file" to HandMadeContent(
                 listOf(trip, BackupRecord("attachment", fieldsOf(TICKET, deletedAt = THE_TIME), wipedFileContent(TRIP))),
                 listOf(TICKET to ByteArray(StreamLength.of(0).toInt())),

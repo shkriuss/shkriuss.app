@@ -456,7 +456,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has 22 test classes with 209 tests
+- `core/security` has 23 test classes with 211 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -500,6 +500,9 @@ second build must write the same mapping file, or the release stops. See
   - `SecurityContentTest` draws the security screen with no key, with a
     setup that stopped and with a key, and checks that only the first
     says how to enter a key that another app of the suite has.
+  - `AppLockContentTest` draws the app lock screen with the app lock on,
+    and checks that an app without notifications gets no choice about
+    their text.
   - `AppLockGateTest` and `AppLockActivitiesTest` wait for the state
     they read
     ([Tests that wait for a background thread](#tests-that-wait-for-a-background-thread)).
