@@ -196,7 +196,9 @@ private fun NoteCard(row: NoteRowState, selected: Boolean, clock: NotesClock, fo
         }
         fileName != null -> {
             under = stringResource(R.string.notes_file_match, fileName)
-            underBold = emptyList()
+            // The matches in the name, where the name stands in the words "File: ticket.jpg".
+            val at = under.lastIndexOf(fileName)
+            underBold = if (at < 0) emptyList() else row.match.inFileName.map { it.first + at..it.last + at }
         }
         else -> {
             under = row.preview

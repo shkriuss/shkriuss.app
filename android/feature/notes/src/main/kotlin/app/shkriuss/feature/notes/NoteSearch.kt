@@ -19,7 +19,7 @@ object NoteSearch {
         val line = matchingLine(note.body, wanted)
         val file = if (inTitle.isEmpty() && line == null) fileNames.firstOrNull { rangesIn(it, wanted).isNotEmpty() } else null
         if (inTitle.isEmpty() && line == null && file == null) return null
-        return SearchMatch(inTitle, line, file)
+        return SearchMatch(inTitle, line, file, file?.let { rangesIn(it, wanted) }.orEmpty())
     }
 
     /** Every place where [wanted], lower-cased, stands in [text], each as a range of [text]. They do not overlap. */
@@ -106,4 +106,6 @@ data class SearchMatch(
     val line: MatchedLine?,
     /** The name of the first file that matches, when neither the title nor the text does. */
     val fileName: String?,
+    /** The matches in [fileName]. */
+    val inFileName: List<IntRange> = emptyList(),
 )

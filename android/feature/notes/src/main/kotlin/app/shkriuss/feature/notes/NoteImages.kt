@@ -9,6 +9,8 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -28,18 +30,20 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
 
     /**
      * The image of [file], scaled down to fit a square of [side] pixels
-     * when it is larger, or null when it cannot be shown: its type is not
+     * when it is larger, as the image view shows it; with [cover], scaled
+     * down to cover that square, as the small image of a row, cut to a
+     * square, shows it. Null when it cannot be shown: its type is not
      * an image, its stream cannot be read or is damaged, or `ImageDecoder`
      * refuses it, or it is too large to hold. A read that meets damage
      * marks the file damaged ([FileReader.open]). One image is decoded at
      * a time.
      */
-    suspend fun decode(file: NoteFile, side: Int): Bitmap? = withContext(work) {
+    suspend fun decode(file: NoteFile, side: Int, cover: Boolean = false): Bitmap? = withContext(work) {
         if (!file.maybeImage || side <= 0 || file.size > NoteLimits.MOST_FILE_BYTES) return@withContext null
-        decoding.withLock { decodeNow(file, side) }
+        decoding.withLock { decodeNow(file, side, cover) }
     }
 
-    private suspend fun decodeNow(file: NoteFile, side: Int): Bitmap? {
+    private suspend fun decodeNow(file: NoteFile, side: Int, cover: Boolean): Bitmap? {
         val bytes = try {
             reader.open(file).use { input -> readExactly(input, file.size.toInt()) } ?: return null
         } catch (_: IOException) {
@@ -56,8 +60,11 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { decoder, info, _ ->
                 // In memory the screens draw from, and never larger than it shows.
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                val largest = max(info.size.width, info.size.height)
-                if (largest > side) decoder.setTargetSampleSize(largest / side)
+                val width = info.size.width
+                val height = info.size.height
+                // Exactly the size it shows at: never larger, and never smaller, which would blur it.
+                val scale = side.toFloat() / if (cover) min(width, height) else max(width, height)
+                if (scale < 1f) decoder.setTargetSize((width * scale).roundToInt().coerceAtLeast(1), (height * scale).roundToInt().coerceAtLeast(1))
             }
         } catch (_: IOException) {
             null

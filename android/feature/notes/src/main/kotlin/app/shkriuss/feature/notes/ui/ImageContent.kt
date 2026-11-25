@@ -98,6 +98,7 @@ private fun ZoomableImage(bitmap: ImageBitmap, name: String) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var space by remember { mutableStateOf(IntSize.Zero) }
+    val image = IntSize(bitmap.width, bitmap.height)
     val centre = { Offset(space.width / 2f, space.height / 2f) }
     val zoomTo = { next: Float, around: Offset ->
         val clamped = next.coerceIn(MIN_ZOOM, MAX_ZOOM)
@@ -105,7 +106,7 @@ private fun ZoomableImage(bitmap: ImageBitmap, name: String) {
         val ratio = clamped / scale
         val moved = offset * ratio + (around - centre()) * (1f - ratio)
         scale = clamped
-        offset = limited(moved, clamped, space)
+        offset = limited(moved, clamped, space, image)
     }
     val zoomIn = stringResource(R.string.notes_zoom_in)
     val zoomOut = stringResource(R.string.notes_zoom_out)
@@ -119,7 +120,7 @@ private fun ZoomableImage(bitmap: ImageBitmap, name: String) {
             .pointerInput(Unit) {
                 detectTransformGestures { centroid, pan, zoom, _ ->
                     zoomTo(scale * zoom, centroid)
-                    offset = limited(offset + pan, scale, space)
+                    offset = limited(offset + pan, scale, space, image)
                 }
             }
             .pointerInput(Unit) {
@@ -146,10 +147,17 @@ private fun ZoomableImage(bitmap: ImageBitmap, name: String) {
     )
 }
 
-/** [offset] kept so that an image zoomed by [scale] in a space of [space] never shows past its edges. */
-private fun limited(offset: Offset, scale: Float, space: IntSize): Offset {
-    val reachX = space.width * (scale - 1f) / 2f
-    val reachY = space.height * (scale - 1f) / 2f
+/**
+ * [offset] kept so that an image of [image] pixels, fitted into a space of
+ * [space] and zoomed by [scale], never moves past its edges: it moves only
+ * as far as it is larger than the space, each way, and not at all where it
+ * is smaller.
+ */
+internal fun limited(offset: Offset, scale: Float, space: IntSize, image: IntSize): Offset {
+    if (image.width <= 0 || image.height <= 0) return Offset.Zero
+    val fit = minOf(space.width.toFloat() / image.width, space.height.toFloat() / image.height)
+    val reachX = ((image.width * fit * scale - space.width) / 2f).coerceAtLeast(0f)
+    val reachY = ((image.height * fit * scale - space.height) / 2f).coerceAtLeast(0f)
     return Offset(offset.x.coerceIn(-reachX, reachX), offset.y.coerceIn(-reachY, reachY))
 }
 

@@ -40,6 +40,7 @@ class NoteSearchTest {
         val match = NoteSearch.match(note(title = "Trip"), listOf("passport.pdf", "ticket.jpg"), "TICKET")
 
         assertEquals("ticket.jpg", match?.fileName)
+        assertEquals("The match in the name is in bold", listOf(0..5), match?.inFileName)
         assertNull(match?.line)
         assertNull("A title that matches shows the row as in the list", NoteSearch.match(note(title = "ticket"), listOf("ticket.jpg"), "ticket")?.fileName)
     }

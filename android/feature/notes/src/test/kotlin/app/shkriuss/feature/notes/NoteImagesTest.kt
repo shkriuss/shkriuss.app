@@ -59,8 +59,28 @@ class NoteImagesTest {
 
         val shown = checkNotNull(runBlocking { images.decode(file, 100) })
 
-        assertTrue("${shown.width} x ${shown.height}", shown.width in 100..199 && shown.height in 50..99)
-        assertEquals(1f, shown.width.toFloat() / shown.height / 2f, 0.05f)
+        assertEquals(100, shown.width)
+        assertEquals(50, shown.height)
+    }
+
+    @Test
+    fun theSmallImageOfARowCoversItsSquare() {
+        val file = add(TestPick(name = "ticket.png", type = "image/png", bytes = png(400, 200)))
+
+        val shown = checkNotNull(runBlocking { images.decode(file, 100, cover = true) })
+
+        assertEquals(200, shown.width)
+        assertEquals(100, shown.height)
+    }
+
+    @Test
+    fun anImageLessThanTwiceItsPlaceIsScaledDownToFitIt() {
+        val file = add(TestPick(name = "ticket.png", type = "image/png", bytes = png(190, 100)))
+
+        val shown = checkNotNull(runBlocking { images.decode(file, 100) })
+
+        assertEquals(100, shown.width)
+        assertEquals(53, shown.height)
     }
 
     @Test
