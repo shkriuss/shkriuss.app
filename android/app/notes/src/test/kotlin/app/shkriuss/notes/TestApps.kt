@@ -4,6 +4,7 @@ import android.app.Application
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.security.AppGate
 import app.shkriuss.core.security.SecurityHost
+import app.shkriuss.core.testing.AppLockOnForTests
 import app.shkriuss.core.testing.LockedAppForTests
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
@@ -25,7 +26,8 @@ val THE_TIME: LocalDateTime = LocalDateTime.of(2026, 11, 24, 9, 30)
 
 /**
  * What Notes' screens get from the app class, on a database in memory,
- * with a clock the test controls, and the keys of the app class [app].
+ * with a clock the test controls in UTC, and the keys of the app class
+ * [app].
  */
 class TestNotes(
     app: Application,
@@ -37,7 +39,7 @@ class TestNotes(
 
     /** What the app class hands to the screens. */
     val services: NotesServices =
-        NotesServices(app, database, clock, ids, host.crypto, gateOpen = host.appLock.gate.map { it == AppGate.OPEN })
+        NotesServices(app, database, clock, ids, host.crypto, gateOpen = host.appLock.gate.map { it == AppGate.OPEN }, zone = { ZoneOffset.UTC })
 }
 
 /** The app class of every test of the screens. */
@@ -54,6 +56,11 @@ interface NotesTestApp : NotesHost {
  * lock: locked from the start, with what `NotesApp` hands to the screens.
  */
 class LockedNotesApp : LockedAppForTests(NOTES), NotesTestApp {
+    override val test: TestNotes by lazy { TestNotes(this) }
+}
+
+/** Notes' app class with the app lock on and the app open, for the check that every dialog and menu goes when the app locks. */
+class AppLockOnNotesApp : AppLockOnForTests(NOTES), NotesTestApp {
     override val test: TestNotes by lazy { TestNotes(this) }
 }
 

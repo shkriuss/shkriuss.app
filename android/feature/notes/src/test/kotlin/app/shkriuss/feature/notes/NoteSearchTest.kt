@@ -40,8 +40,27 @@ class NoteSearchTest {
         val match = NoteSearch.match(note(title = "Trip"), listOf("passport.pdf", "ticket.jpg"), "TICKET")
 
         assertEquals("ticket.jpg", match?.fileName)
+        assertEquals("The match in the name is in bold", listOf(0..5), match?.inFileName)
         assertNull(match?.line)
         assertNull("A title that matches shows the row as in the list", NoteSearch.match(note(title = "ticket"), listOf("ticket.jpg"), "ticket")?.fileName)
+    }
+
+    @Test
+    fun aMatchFarIntoALongLineShowsFromTheNextWordALittleBeforeIt() {
+        val line = "Bread, milk and eggs for the week, and something for dinner on Friday when the guests come"
+        val match = checkNotNull(NoteSearch.match(note(body = line), emptyList(), "guests")?.line)
+
+        val shown = NoteSearch.shownLine(match)
+
+        assertEquals("…when the guests come", shown.line)
+        assertEquals("guests", shown.line.substring(shown.ranges.single()))
+    }
+
+    @Test
+    fun aMatchNearTheStartShowsTheLineAsItIs() {
+        val match = checkNotNull(NoteSearch.match(note(body = "Bread, milk and eggs"), emptyList(), "milk")?.line)
+
+        assertEquals(match, NoteSearch.shownLine(match))
     }
 
     @Test

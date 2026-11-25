@@ -17,6 +17,13 @@ object NoteLimits {
     /** **Add a file** adds no file to a note that holds this many. A restore can bring more. */
     const val MOST_FILES_PER_NOTE: Int = 20
 
+    /**
+     * **Add a file** looks at and tries at most this many files of one
+     * pick, twice the 21 that may wait at a time (decided by the owner).
+     * The rest are told as not added.
+     */
+    const val MOST_FILES_TRIED_PER_PICK: Int = 2 * (MOST_FILES_PER_NOTE + 1)
+
     /** The largest file, in bytes: 25 MB. */
     const val MOST_FILE_BYTES: Long = 25_000_000L
 

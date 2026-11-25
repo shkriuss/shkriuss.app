@@ -197,6 +197,89 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aPickerThatGivesThousandsOfFilesQueuesOneMoreThanANoteHoldsAndCountsTheRest() {
+        val id = phone.note()
+        canStart.value = false
+
+        adds.add(id, List(5_000) { TestPick("f$it.jpg", bytes = ByteArray(10)) })
+
+        assertEquals("One more than a note holds waits, not 5,000", 21, adds.adding.value.size)
+        canStart.value = true
+        adds.adding.await { it.isEmpty() }
+        assertEquals(20, files(id).size)
+        assertEquals(listOf<AddProblem>(AddProblem.NoteFull(4_980)), problems)
+    }
+
+    @Test
+    fun aPickWhoseFilesAllFailTriesAtMost42AndTellsTheRestAsNotAdded() {
+        val id = phone.note()
+        val opened = AtomicInteger()
+        val failing = List(5_000) {
+            object : PickedFile by TestPick("f$it.jpg", bytes = ByteArray(10), failOpen = true) {
+                override fun open(): InputStream {
+                    opened.incrementAndGet()
+                    throw IOException("The provider stopped")
+                }
+            }
+        }
+
+        add(id, *failing.toTypedArray())
+        // The files never tried are told once the last file of the batch has ended, just after its row goes.
+        eventually { problems.lastOrNull() is AddProblem.NoteFull }
+
+        assertEquals("Twice the 21 that may wait at a time", 42, opened.get())
+        assertEquals(42, problems.count { it is AddProblem.CouldNotRead })
+        assertEquals(AddProblem.NoteFull(4_958), problems.last())
+        assertEquals(0, files(id).size)
+    }
+
+    @Test
+    fun aPickLongerThanWhatIsTriedCountsTheFilesPastItWithThoseNotLookedAt() {
+        val id = phone.note()
+
+        adds.add(id, List(50) { TestPick("f$it.jpg", bytes = ByteArray(10)) }, notTried = 7)
+        adds.adding.await { it.isEmpty() }
+
+        assertEquals(20, files(id).size)
+        assertEquals(listOf<AddProblem>(AddProblem.NoteFull(37)), problems)
+    }
+
+    @Test
+    fun aFileOfALargeBatchThatFailsLetsTheNextOneIn() {
+        val id = phone.note()
+        val broken = Array(2) { TestPick("broken$it.jpg", bytes = ByteArray(10), failOpen = true) }
+
+        add(id, *broken, *Array(20) { TestPick("f$it.jpg", bytes = ByteArray(10)) })
+
+        assertEquals("Two could not be read, and the 20 after them fill the note", 20, files(id).size)
+        assertEquals(listOf<AddProblem>(AddProblem.CouldNotRead("broken0.jpg"), AddProblem.CouldNotRead("broken1.jpg")), problems)
+    }
+
+    @Test
+    fun theFilesOfALargeBatchKeepTheirOrderBeforeTheFilesPickedAfterThem() {
+        val trip = phone.note("Trip")
+        val home = phone.note("Home")
+        val opened = CopyOnWriteArrayList<String>()
+        fun logged(pick: TestPick, name: String) = object : PickedFile by pick {
+            override fun open(): java.io.InputStream {
+                opened += name
+                return pick.open()
+            }
+        }
+        val batch = List(2) { logged(TestPick("b$it.jpg", bytes = ByteArray(10), failOpen = true), "b$it") } +
+            List(20) { logged(TestPick("f$it.jpg", bytes = ByteArray(10)), "f$it") }
+        canStart.value = false
+
+        adds.add(trip, batch)
+        adds.add(home, listOf(logged(TestPick("home.jpg", bytes = ByteArray(10)), "home")))
+        canStart.value = true
+        adds.adding.await { it.isEmpty() }
+
+        assertEquals(listOf("b0", "b1") + List(20) { "f$it" } + "home", opened.toList())
+        assertEquals(20, files(trip).size)
+    }
+
+    @Test
     fun aFileLargerThan25MbIsNotAddedAndItsPartIsDeleted() {
         val id = phone.note()
 

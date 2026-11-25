@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
@@ -280,6 +281,15 @@ class ComponentPagesTest {
             assertEquals(text(state), row.config[SemanticsProperties.StateDescription])
             assertEquals(listOf(text(action)), row.config[SemanticsActions.CustomActions].map { it.label })
         }
+    }
+
+    @Test
+    fun theSelectedCardIsReadAsSelected() {
+        open(CatalogPage.Cards)
+        // One sample is selected. The other cards say nothing about it.
+        val selected = SemanticsMatcher.expectValue(SemanticsProperties.Selected, true)
+        compose.onAllNodes(selected and hasClickAction()).assertCountEquals(1)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)).assertCountEquals(1)
     }
 
     @Test

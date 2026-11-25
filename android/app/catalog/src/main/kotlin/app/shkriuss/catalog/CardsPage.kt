@@ -16,7 +16,7 @@ import app.shkriuss.core.design.ShkTheme
 
 /**
  * The card that cannot be tapped, alone and with a button, and the card
- * that can be tapped, with short and long text. The pressed state shows
+ * that can be tapped, with short and long text, and selected. The pressed state shows
  * when the owner touches a card that can be tapped. Nothing here does
  * anything when tapped.
  */
@@ -44,6 +44,10 @@ fun CardsPage(modifier: Modifier = Modifier) {
                 },
                 ComponentState(R.string.state_long_text) {
                     ShkCard(onClick = {}) { NoteText(R.string.sample_long_card_title, R.string.sample_long_card_text) }
+                },
+                // As the note open beside the list in two panes.
+                ComponentState(R.string.state_selected_open) {
+                    ShkCard(onClick = {}, selected = true) { NoteText(R.string.sample_card_title, R.string.sample_card_text) }
                 },
             ),
         )

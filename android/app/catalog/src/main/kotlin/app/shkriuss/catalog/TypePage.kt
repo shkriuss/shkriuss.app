@@ -18,7 +18,8 @@ import app.shkriuss.core.design.ShkTheme
 /**
  * The six text styles, each shown in itself, with its size, line height,
  * weight and use. The sizes are read from the tokens, so the page cannot
- * drift from them.
+ * drift from them. Then the two parts of text: cut at two lines, and a
+ * range in bold.
  */
 @Composable
 fun TypePage(modifier: Modifier = Modifier) {
@@ -30,8 +31,23 @@ fun TypePage(modifier: Modifier = Modifier) {
             TypeSample(sample)
             Spacer(Modifier.height(ShkSpacing.Large))
         }
+        ComponentHeading(stringResource(R.string.type_parts_title), stringResource(R.string.type_parts_use))
+        ComponentStates(
+            listOf(
+                ComponentState(R.string.state_cut_at_two_lines) {
+                    ShkText(text = stringResource(R.string.sample_preview), color = ShkTheme.colors.textSecondary, maxLines = 2)
+                },
+                // "Pass" in bold, as a search for it shows it.
+                ComponentState(R.string.state_bold_range) {
+                    ShkText(text = stringResource(R.string.sample_match), bold = listOf(BOLD_SAMPLE))
+                },
+            ),
+        )
     }
 }
+
+/** The range of the sample of bold text: "Pass" in "- [ ] Passport". */
+private val BOLD_SAMPLE = 6..9
 
 /** One style, with the string resources that name it and say what it is for. */
 private class TypeSampleInfo(

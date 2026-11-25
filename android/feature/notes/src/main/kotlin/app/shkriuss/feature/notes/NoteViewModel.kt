@@ -10,11 +10,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -49,8 +53,12 @@ data class NoteState(
     val saveFailed: Boolean = false,
     /** True if the note is pinned: the menu offers **Unpin**. */
     val pinned: Boolean = false,
+    /** True once the note is stored. A new note is not until it has a title, a text or a file: until then **Pin** is turned off. */
+    val stored: Boolean = false,
     /** The shown files, oldest first. */
     val files: List<FileRowState> = emptyList(),
+    /** True once the files were read: before, an image view that is not among [files] may only not be read yet. */
+    val filesLoaded: Boolean = false,
     /** The files that wait to be added to this note or are being added. */
     val adding: List<AddingFile> = emptyList(),
     /** True while **Save a copy** writes: the dialog "Saving a copy". The fraction, or null before it starts. */
@@ -74,7 +82,10 @@ data class NoteState(
  * the reads and writes. [lasting] is a scope that outlives the screen,
  * the one of `NotesServices`: the save when Notes leaves the screen, and
  * the one when the screen goes, run there, so that the end of this
- * ViewModel never cuts them off.
+ * ViewModel never cuts them off. [gateOpen] is true while the gate of the
+ * app lock is open: the states of the files are read only then, and read
+ * again each time it opens, because the file keys cannot be used while
+ * Notes is locked.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NoteViewModel(
@@ -87,6 +98,7 @@ class NoteViewModel(
     private val lasting: CoroutineScope,
     private val work: CoroutineContext = Dispatchers.IO,
     private val wait: suspend (Long) -> Unit = { delay(it) },
+    private val gateOpen: Flow<Boolean> = flowOf(true),
     private val elapsed: () -> Long = SystemClock::elapsedRealtime,
 ) : ViewModel() {
     private val shown = MutableStateFlow(NoteState())
@@ -130,7 +142,8 @@ class NoteViewModel(
 
     private suspend fun read() {
         val stored = try {
-            repository.findNote(noteId)
+            // Not while the note, closed, is looked at again for being empty, and no such look after.
+            snackbars.opening(noteId) { repository.findNote(noteId) }
         } catch (_: SQLException) {
             shown.update { it.copy(loading = false, failed = true) }
             return
@@ -141,7 +154,13 @@ class NoteViewModel(
         }
         wasStored = stored != null
         shown.update {
-            it.copy(loading = false, title = stored?.title.orEmpty(), body = TextEdit(stored?.body.orEmpty(), 0), pinned = stored?.pinned == true)
+            it.copy(
+                loading = false,
+                title = stored?.title.orEmpty(),
+                body = TextEdit(stored?.body.orEmpty(), 0),
+                pinned = stored?.pinned == true,
+                stored = stored != null,
+            )
         }
         // A restore, or later sync, can delete the note while it is open: it closes. Pin follows the stored note.
         repository.note(noteId).catch { error ->
@@ -150,7 +169,7 @@ class NoteViewModel(
         }.collect { note ->
             if (note != null) {
                 wasStored = true
-                shown.update { it.copy(pinned = note.pinned) }
+                shown.update { it.copy(pinned = note.pinned, stored = true) }
             } else if (wasStored && !closing) {
                 cancelTimer()
                 shown.update { it.copy(closed = true) }
@@ -159,13 +178,15 @@ class NoteViewModel(
     }
 
     private suspend fun watchFiles() {
-        combine(repository.filesOf(noteId), checkAgain) { files, _ -> files }
+        // Each time the gate opens again, the states are read again: read while locked, every file would seem unusable.
+        combine(repository.filesOf(noteId), checkAgain, gateOpen) { files, _, open -> files.takeIf { open } }
+            .filterNotNull()
             .mapLatest { files -> files.map { FileRowState(it, reader.stateOf(it)) } }
             .catch { error ->
                 // The files cannot be read: the note shows "Could not open your notes." rather than no files.
                 if (error is SQLException) shown.update { it.copy(failed = true) } else throw error
             }
-            .collect { rows -> shown.update { it.copy(files = rows) } }
+            .collect { rows -> shown.update { it.copy(files = rows, filesLoaded = true) } }
     }
 
     /** Reads the state of each file again, as when Notes comes back from a screen of `core/security`. */
@@ -173,8 +194,13 @@ class NoteViewModel(
         checkAgain.update { it + 1 }
     }
 
-    /** The title field changed to [typed]. A change past 200 characters is refused, and the field keeps what it had. */
+    /**
+     * The title field changed to [typed]. A change past 200 characters is
+     * refused, and the field keeps what it had. So is a change once the
+     * note began to close: its last save has taken in what it shows.
+     */
     fun onTitleChange(typed: String) {
+        if (closing) return
         val kept = NoteText.title(typed)
         if (NoteText.length(kept) > NoteLimits.MOST_TITLE) {
             shown.update { it.copy(problem = FieldProblem.TITLE_TOO_LONG) }
@@ -225,6 +251,8 @@ class NoteViewModel(
     }
 
     private fun apply(edit: TextEdit) {
+        // The note began to close, and its last save has taken in what it shows: a later change would be lost.
+        if (closing) return
         if (NoteText.length(edit.text) > NoteLimits.MOST_BODY) {
             shown.update { it.copy(problem = FieldProblem.TEXT_TOO_LONG) }
             return
@@ -292,9 +320,16 @@ class NoteViewModel(
      */
     fun close() {
         if (closing || shown.value.closed) return
+        // From here no change is taken, so the save holds all that the note shows when it closes.
+        closing = true
         cancelTimer()
         viewModelScope.launch(work) {
-            if (saveAll()) finishClosing() else shown.update { it.copy(askUnsaved = true) }
+            if (saveAll()) {
+                finishClosing()
+            } else {
+                closing = false
+                shown.update { it.copy(askUnsaved = true) }
+            }
         }
     }
 
@@ -325,8 +360,18 @@ class NoteViewModel(
         close()
     }
 
+    /**
+     * The question "This note is not saved" was dismissed, by Back or a tap
+     * beside it: the note stays open with what is typed, and Notes tries to
+     * save again at the next change.
+     */
+    fun keepEditing() {
+        shown.update { it.copy(askUnsaved = false) }
+    }
+
     /** **Discard changes** in "This note is not saved": the note closes with what was saved last. */
     fun discard() {
+        closing = true
         shown.update { it.copy(askUnsaved = false) }
         savedThrough = changes
         firstUnsaved = null
@@ -335,13 +380,17 @@ class NoteViewModel(
 
     private suspend fun finishClosing() {
         closing = true
+        // Written down before anything is looked at, so that an Undo or an add that ends meanwhile looks at the note again:
+        // a removed file whose Undo is open keeps an empty note, and so do files still being added to it.
+        snackbars.closedKept(noteId)
         val stillAdding = adds.isAddingTo(noteId)
         try {
             when {
-                // The adds decide: their first file makes the note, or the last one that fails gives it up.
+                // The adds decide: their first file makes or keeps the note; once the last one ends, a new note no add made is
+                // given up, and a stored note that is empty then is deleted.
                 stillAdding -> if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
                 repository.findNote(noteId) == null -> repository.giveUpNewNote(noteId)
-                else -> repository.deleteIfEmpty(noteId)
+                else -> if (repository.deleteIfEmpty(noteId)) snackbars.forget(noteId)
             }
         } catch (_: SQLException) {
             // The empty note stays. It shows as "Empty note" in the list.
@@ -390,8 +439,8 @@ class NoteViewModel(
     }
 
     /** The picker gave [picked] for **Add a file**. They are added after every file picked before, when Notes may make their keys. */
-    fun addFiles(picked: List<PickedFile>) {
-        adds.add(noteId, picked)
+    fun addFiles(picked: List<PickedFile>, notTried: Int = 0) {
+        adds.add(noteId, picked, notTried)
     }
 
     /** **Remove** on [file]: "File removed", with **Undo**. Pressed twice, it removes once. */
@@ -405,19 +454,66 @@ class NoteViewModel(
         }
     }
 
+    /**
+     * **Save a copy** of the file [fileId] into [target], once the picker
+     * answers, also after Android stopped Notes while the picker was open
+     * and before the files are read again. The dialog "Saving a copy"
+     * shows at once, before the file is looked up, so no second copy
+     * starts meanwhile. A file that is gone by then gets no copy: the
+     * empty document is deleted, and "Could not save the copy." shows.
+     */
+    fun saveCopyOf(fileId: String, target: CopyTarget) {
+        if (!startCopy(target)) return
+        viewModelScope.launch(work) {
+            val file = try {
+                repository.filesOf(noteId).first().firstOrNull { it.id == fileId }
+            } catch (_: SQLException) {
+                null
+            }
+            if (file != null) {
+                copy(file, target)
+            } else {
+                shown.update { it.copy(copying = null) }
+                refuse(target)
+            }
+        }
+    }
+
     /** **Save a copy** of [file] into [target], under the dialog "Saving a copy". One copy at a time. */
     fun saveCopy(file: NoteFile, target: CopyTarget) {
-        if (shown.value.copying != null) return
-        shown.update { it.copy(copying = 0f) }
-        viewModelScope.launch(work) {
-            val result = reader.saveCopy(file, target) { written ->
-                val fraction = if (file.size == 0L) 1f else written.toFloat() / file.size
-                shown.update { it.copy(copying = fraction.coerceIn(0f, 1f)) }
-            }
-            shown.update { it.copy(copying = null) }
-            if (result != CopyResult.BUSY) snackbars.show(NotesMessage.Copy(result))
-            if (result == CopyResult.DAMAGED || result == CopyResult.DAMAGED_PART_LEFT) checkFilesAgain()
+        if (!startCopy(target)) return
+        viewModelScope.launch(work) { copy(file, target) }
+    }
+
+    /**
+     * Shows "Saving a copy" for [target] and gives true. While another copy
+     * is saved, gives false and refuses [target], so that its document is
+     * not left empty: one copy at a time.
+     */
+    private fun startCopy(target: CopyTarget): Boolean {
+        var started = false
+        shown.update {
+            started = it.copying == null
+            if (started) it.copy(copying = 0f) else it
         }
+        if (!started) viewModelScope.launch(work) { refuse(target) }
+        return started
+    }
+
+    private suspend fun copy(file: NoteFile, target: CopyTarget) {
+        val result = reader.saveCopy(file, target) { written ->
+            val fraction = if (file.size == 0L) 1f else written.toFloat() / file.size
+            shown.update { it.copy(copying = fraction.coerceIn(0f, 1f)) }
+        }
+        shown.update { it.copy(copying = null) }
+        if (result == CopyResult.BUSY) refuse(target) else snackbars.show(NotesMessage.Copy(result))
+        if (result == CopyResult.DAMAGED || result == CopyResult.DAMAGED_PART_LEFT) checkFilesAgain()
+    }
+
+    /** No copy goes into [target]: its empty document is deleted, and "Could not save the copy." shows. */
+    private suspend fun refuse(target: CopyTarget) {
+        val gone = target.delete()
+        snackbars.show(NotesMessage.Copy(if (gone) CopyResult.FAILED else CopyResult.FAILED_PART_LEFT))
     }
 
     private companion object {

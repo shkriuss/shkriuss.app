@@ -1,5 +1,6 @@
 plugins {
     id("shkriuss.android.library")
+    id("shkriuss.android.compose")
     id("shkriuss.android.unit-test")
     id("shkriuss.android.room")
 }
@@ -20,6 +21,13 @@ dependencies {
     // core/crypto (CLAUDE.md).
     implementation(project(":core:crypto"))
     implementation(libs.lifecycle.viewmodel)
+    // The screens: the Shk* components, and BackHandler and the launchers
+    // of the system file picker from Activity Compose, which the app has
+    // already. No navigation library: Notes has two destinations, one open
+    // note and its image view, as Tasks has three destinations and one open
+    // list (ADR 0003, point 2).
+    implementation(project(":core:design"))
+    implementation(libs.activity.compose)
 
     testImplementation(project(":core:testing"))
     // Real keys for the files, where no Android Keystore exists (ADR 0029).

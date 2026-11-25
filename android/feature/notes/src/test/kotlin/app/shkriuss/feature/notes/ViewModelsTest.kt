@@ -10,11 +10,16 @@ import androidx.room3.withWriteTransaction
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.notes.data.NoteEntity
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.OutputStream
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,8 +58,12 @@ class ViewModelsTest {
     private val problems = CopyOnWriteArrayList<AddProblem>()
     private val keyMoves = CopyOnWriteArrayList<Unit>()
 
-    private val snackbars by lazy { NotesSnackbars(repository, { keyMoves += Unit }, scope, Dispatchers.IO) }
-    private val adds by lazy { FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), { problems += it }, scope, Dispatchers.IO) }
+    private val snackbars: NotesSnackbars by lazy {
+        NotesSnackbars(repository, { keyMoves += Unit }, scope, Dispatchers.IO, isAdding = { adds.isAddingTo(it) })
+    }
+    private val adds: FileAdds by lazy {
+        FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), { problems += it }, scope, Dispatchers.IO, afterLastAdd = { snackbars.lookAgain(it) })
+    }
     private val reader by lazy { FileReader(repository, crypto.files, { false }, Dispatchers.IO) }
 
     /** The pauses asked for, and the way to end the one that waits. */
@@ -80,6 +89,13 @@ class ViewModelsTest {
     private fun open(id: String) = NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait) { elapsed }
 
     private fun stored(id: String): NoteEntity? = runBlocking { phone.database.notes().find(id) }
+
+    /** A stored note with no title, text or file, as one that closed empty while it was kept. */
+    private fun emptyNote(): String {
+        val id = phone.note("Trip", "")
+        assertEquals(Saved.WRITTEN, runBlocking { repository.save(id, "", "") })
+        return id
+    }
 
     private fun NotesListViewModel.shown(condition: (NotesListState.Shown) -> Boolean = { true }): NotesListState.Shown =
         state.await { it is NotesListState.Shown && condition(it) } as NotesListState.Shown
@@ -263,6 +279,43 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aChangeAfterTheNoteBeganToCloseIsNotTakenSoNothingItShowsIsLost() {
+        val id = phone.note("Trip", "Passport")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.onTitleChange("Trip to Batumi")
+
+        note.close()
+        // On a tablet the note shows beside the list until it has closed, with the keyboard still open.
+        note.onTitleChange("Trip to Batumi and Kutaisi")
+        note.onBodyChange(TextEdit("Passport and tickets", 20))
+        note.bold()
+
+        note.state.await { it.closed }
+        assertEquals("Trip to Batumi", note.state.value.title)
+        assertEquals("Passport", note.state.value.body.text)
+        assertEquals("What it showed is what is stored", "Trip to Batumi", stored(id)?.title)
+        assertEquals("Passport", stored(id)?.body)
+    }
+
+    @Test
+    fun aNoteKeptOpenAfterItsSaveFailedTakesChangesAgain() {
+        val id = phone.note("Trip", "Passport")
+        val note = open(id)
+        note.state.await { !it.loading }
+        phone.database.refuseWritesTo("note")
+        note.onBodyChange(TextEdit("Passport and tickets", 20))
+        note.close()
+        note.state.await { it.askUnsaved }
+
+        note.keepEditing()
+        note.onTitleChange("Trip to Batumi")
+
+        assertEquals("Trip to Batumi", note.state.value.title)
+        assertFalse(note.state.value.closed)
+    }
+
+    @Test
     fun aNewNoteThatClosesWithNothingInItWritesNothing() {
         val id = repository.reserveNoteId()
         val note = open(id)
@@ -286,6 +339,21 @@ class ViewModelsTest {
 
         note.state.await { it.closed }
         assertEquals("Spaces at both ends go when it is saved", "Trip", stored(id)?.title)
+    }
+
+    @Test
+    fun aNewNoteCanBePinnedOnlyOnceItIsStored() {
+        val id = repository.reserveNoteId()
+        val note = open(id)
+        assertTrue("Pin is off while the new note is not stored", !note.state.await { !it.loading }.stored)
+
+        note.onTitleChange("Trip")
+        endPause.trySend(Unit)
+
+        note.state.await { it.stored }
+        note.setPinned(shownPinned = false)
+        note.state.await { it.pinned }
+        assertEquals(true, stored(id)?.pinned)
     }
 
     @Test
@@ -424,6 +492,37 @@ class ViewModelsTest {
     }
 
     @Test
+    fun theSameWordsShownAgainAreAShowingOfTheirOwn() {
+        snackbars.show(NotesMessage.CouldNotChange)
+        val first = checkNotNull(snackbars.showing.value)
+
+        snackbars.show(NotesMessage.CouldNotChange)
+
+        val second = checkNotNull(snackbars.showing.value)
+        assertEquals(NotesMessage.CouldNotChange, second.message)
+        assertTrue("The second showing is not the first", second != first)
+        snackbars.gone(NotesMessage.CouldNotChange)
+        assertNull(snackbars.showing.value)
+    }
+
+    @Test
+    fun anUndoActsOnlyOnTheSnackbarWhoseButtonWasPressed() {
+        val trip = phone.note("Trip", "Secret")
+        val shopping = phone.note("Shopping", "Bread")
+        val pressed = NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(trip) }))
+        snackbars.show(pressed)
+        // Another Undo snackbar takes its place between the press and its arrival.
+        val later = NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(shopping) }))
+        snackbars.show(later)
+
+        snackbars.undo(pressed)
+
+        eventually { stored(trip)?.let(NoteRules::isWiped) == true }
+        assertNotNull("The later deletion is not undone", stored(shopping)?.record?.deletedAt)
+        assertEquals(later, snackbars.current.value)
+    }
+
+    @Test
     fun removingAFileThenClosingTheEmptyNoteKeepsTheNoteSoThatUndoBringsTheFileBack() {
         val id = phone.note("Photo", "")
         val note = open(id)
@@ -441,6 +540,153 @@ class ViewModelsTest {
         eventually { runBlocking { repository.filesOf(id).first() }.size == 1 }
         assertNull(stored(id)?.record?.deletedAt)
         assertEquals("", stored(id)?.title)
+    }
+
+    @Test
+    fun anEmptyNoteKeptForTheUndoOfItsFileIsDeletedWhenThatUndoEnds() {
+        val id = phone.note("Photo", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        note.onTitleChange("")
+        note.removeFile(file)
+        val removed = checkNotNull(snackbars.current.await { it is NotesMessage.FileRemoved })
+        note.close()
+        note.state.await { it.closed }
+        assertNull("Kept while Undo may bring the file back", stored(id)?.record?.deletedAt)
+
+        snackbars.gone(removed)
+
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+    }
+
+    @Test
+    fun aNoteOpenedAgainBeforeTheUndoOfItsFileEndsIsNotDeletedUnderIt() {
+        val id = phone.note("Photo", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        note.onTitleChange("")
+        note.removeFile(file)
+        val removed = checkNotNull(snackbars.current.await { it is NotesMessage.FileRemoved })
+        note.close()
+        note.state.await { it.closed }
+        open(id).state.await { !it.loading }
+
+        snackbars.gone(removed)
+
+        eventually { snackbars.openUndoIds.isEmpty() }
+        assertNull("The open note stays", stored(id)?.record?.deletedAt)
+    }
+
+    @Test
+    fun aStoredNoteClosedEmptyWhileItsAddRunsIsDeletedWhenTheAddFails() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        val release = CountDownLatch(1)
+        // A file whose provider answers slowly, then cannot be read.
+        val slow = object : PickedFile by TestPick("ticket.jpg", failOpen = true) {
+            override fun name(): String? {
+                release.await()
+                return "ticket.jpg"
+            }
+        }
+        note.onTitleChange("")
+        note.addFiles(listOf(slow))
+        note.close()
+        note.state.await { it.closed }
+        assertNull("Kept while its add runs", stored(id)?.record?.deletedAt)
+
+        release.countDown()
+
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+    }
+
+    @Test
+    fun aStoredNoteClosedWhileItsAddRunsIsKeptWhenTheAddGivesItAFile() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        val release = CountDownLatch(1)
+        val slow = object : PickedFile by TestPick("ticket.jpg") {
+            override fun name(): String? {
+                release.await()
+                return "ticket.jpg"
+            }
+        }
+        note.onTitleChange("")
+        note.addFiles(listOf(slow))
+        note.close()
+        note.state.await { it.closed }
+
+        release.countDown()
+
+        eventually { runBlocking { repository.filesOf(id).first() }.size == 1 }
+        eventually { adds.adding.value.isEmpty() }
+        assertNull("A note with a file stays", stored(id)?.record?.deletedAt)
+    }
+
+    @Test
+    fun aNoteThatOpensWhileItIsLookedAtAgainIsNotDeletedUnderIt() {
+        val id = emptyNote()
+        snackbars.closedKept(id)
+        val reading = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val opening = scope.async { snackbars.opening(id) { reading.complete(Unit); release.await() } }
+        runBlocking { reading.await() }
+
+        val look = scope.async { snackbars.lookAgain(id) }
+        release.complete(Unit)
+
+        runBlocking {
+            opening.await()
+            look.await()
+        }
+        assertNull("The note opened first, so the look leaves it", stored(id)?.record?.deletedAt)
+    }
+
+    @Test
+    fun aNoteThatIsLookedAtAgainBeforeItOpensIsGoneWhenItIsRead() {
+        val id = emptyNote()
+        snackbars.closedKept(id)
+
+        runBlocking { snackbars.lookAgain(id) }
+
+        assertTrue(runBlocking { snackbars.opening(id) { stored(id)?.record?.deletedAt != null } })
+    }
+
+    @Test
+    fun aRemovedFilesUndoThatEndsWhileAnotherFileIsAddedLeavesTheNote() {
+        val id = phone.note("Photo", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        note.onTitleChange("")
+        note.removeFile(file)
+        val removed = checkNotNull(snackbars.current.await { it is NotesMessage.FileRemoved })
+        val release = CountDownLatch(1)
+        val slow = object : PickedFile by TestPick("map.jpg") {
+            override fun name(): String? {
+                release.await()
+                return "map.jpg"
+            }
+        }
+        note.addFiles(listOf(slow))
+        note.close()
+        note.state.await { it.closed }
+
+        snackbars.gone(removed)
+        eventually { snackbars.openUndoIds.isEmpty() }
+        assertNull("Files are still being added to it", stored(id)?.record?.deletedAt)
+        release.countDown()
+
+        eventually { runBlocking { repository.filesOf(id).first() }.size == 1 }
+        eventually { adds.adding.value.isEmpty() }
+        assertNull(stored(id)?.record?.deletedAt)
     }
 
     @Test
@@ -578,6 +824,82 @@ class ViewModelsTest {
         note.removeFile(row.file)
         assertTrue(snackbars.current.await { it is NotesMessage.FileRemoved } is NotesMessage.FileRemoved)
         note.state.await { it.files.isEmpty() }
+    }
+
+    @Test
+    fun theStatesOfTheFilesAreReadOnlyWhileTheGateIsOpenAndAgainEachTimeItOpens() {
+        val id = phone.note("Trip", "")
+        val adding = open(id)
+        adding.state.await { !it.loading }
+        adding.addFiles(listOf(TestPick()))
+        adding.state.await { it.files.size == 1 }
+        val gate = MutableStateFlow(false)
+
+        val note = NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait, gate) { elapsed }
+
+        note.state.await { !it.loading }
+        assertFalse("Locked, the states are not read", note.state.value.filesLoaded)
+        gate.value = true
+        assertEquals(FileState.READY, note.state.await { it.filesLoaded }.files.single().state)
+    }
+
+    @Test
+    fun saveACopyByTheFilesIdFindsTheFileAlsoBeforeTheRowsAreRead() {
+        val id = phone.note("Trip", "")
+        val adding = open(id)
+        adding.state.await { !it.loading }
+        adding.addFiles(listOf(TestPick()))
+        val file = adding.state.await { it.files.size == 1 }.files.single().file
+        val note = NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait, MutableStateFlow(false)) { elapsed }
+        val target = TestTarget()
+
+        note.saveCopyOf(file.id, target)
+
+        assertEquals(NotesMessage.Copy(CopyResult.SAVED), snackbars.current.await { it is NotesMessage.Copy })
+        assertEquals(2_400, target.written.size())
+    }
+
+    @Test
+    fun saveACopyOfAFileThatIsGoneDeletesTheEmptyDocument() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        val target = TestTarget()
+
+        note.saveCopyOf("7c9e6679-7425-40de-944b-e07fc1f90ae7", target)
+
+        assertEquals(NotesMessage.Copy(CopyResult.FAILED), snackbars.current.await { it is NotesMessage.Copy })
+        assertTrue(target.deleted)
+    }
+
+    @Test
+    fun aSecondCopyWhileOneIsSavedIsRefusedAndItsDocumentDeleted() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        val release = CountDownLatch(1)
+        val written = ByteArrayOutputStream()
+        val first = object : CopyTarget {
+            override fun open(): OutputStream {
+                release.await()
+                return written
+            }
+
+            override fun delete(): Boolean = true
+        }
+        val second = TestTarget()
+
+        note.saveCopyOf(file.id, first)
+        assertEquals("The dialog shows at once, before the file is looked up", 0f, note.state.value.copying)
+        note.saveCopyOf(file.id, second)
+
+        assertEquals(NotesMessage.Copy(CopyResult.FAILED), snackbars.current.await { it is NotesMessage.Copy })
+        assertTrue("Its document is not left empty", second.deleted)
+        release.countDown()
+        snackbars.current.await { it == NotesMessage.Copy(CopyResult.SAVED) }
+        assertEquals(2_400, written.size())
     }
 
     @Test

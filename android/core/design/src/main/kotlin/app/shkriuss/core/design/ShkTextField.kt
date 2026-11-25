@@ -101,7 +101,7 @@ fun ShkTextField(
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun NoLearningKeyboard(content: @Composable () -> Unit) {
+internal fun NoLearningKeyboard(content: @Composable () -> Unit) {
     InterceptPlatformTextInput(
         interceptor = { request, nextHandler ->
             val withoutLearning = object : PlatformTextInputMethodRequest {

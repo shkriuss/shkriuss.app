@@ -1,5 +1,6 @@
 package app.shkriuss.core.design
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -24,6 +26,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -80,6 +83,12 @@ import androidx.compose.ui.unit.offset
  * [ShkCheckbox] does, and dims with the row. Without [onCheckedChange],
  * the row has no box and is as it always was.
  *
+ * [image] is optional: a small picture at the start, in place of [icon],
+ * such as an image the row's file holds. It is drawn as it is, not
+ * tinted, cut to a 40dp square with round corners, and grows with the font
+ * size as an icon does. It is decorative too: TalkBack reads nothing for
+ * it, so say in the text what the row is.
+ *
  * Its content starts and ends at the edges of the space it is given, so
  * its text lines up with the page title and the other text on the screen.
  * Only its touch target, its pressed state and its selected mark, a
@@ -103,6 +112,7 @@ fun ShkListItem(
     onCheckedChange: ((Boolean) -> Unit)? = null,
     checkedDescription: String? = null,
     checkActionLabel: String? = null,
+    image: Painter? = null,
 ) {
     val colors = ShkTheme.colors
     val alpha = if (enabled) 1f else DisabledContentAlpha
@@ -133,7 +143,17 @@ fun ShkListItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onCheckedChange != null) TickBox(checked, onCheckedChange, enabled)
-        if (icon != null) {
+        if (image != null) {
+            Image(
+                painter = image,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(shkListItemImageSide())
+                    .clip(ShkShapes.Field),
+                contentScale = ContentScale.Crop,
+                alpha = alpha,
+            )
+        } else if (icon != null) {
             Icon(
                 painter = icon,
                 contentDescription = null,
@@ -279,28 +299,40 @@ fun ShkSectionHeader(text: String, modifier: Modifier = Modifier) {
 private fun Modifier.selectedMark(fill: Color, bar: Color): Modifier = drawBehind { drawSelectedMark(fill, bar) }
 
 /**
- * The mark of a selected list item, over the whole highlight, which
- * reaches [RowReach] past the row's edges: a [fill] of the area, and a
- * [bar] along its start edge. The bar is [SelectedBarWidth] wide, inside
- * the reach, so the text does not move. It keeps clear of the rounded
- * corners by their radius at the top and the bottom. It is on the right in
- * right-to-left languages.
+ * The mark of a selected list item or card, over the whole highlight,
+ * which for a list item reaches [RowReach] past the row's edges: a [fill]
+ * of the area, and a [bar] along its start edge. The bar is
+ * [SelectedBarWidth] wide, inside the reach, so the text does not move. It
+ * keeps clear of the rounded corners by [inset], their radius, at the top
+ * and the bottom. It is on the right in right-to-left languages.
  */
-internal fun DrawScope.drawSelectedMark(fill: Color, bar: Color) {
+internal fun DrawScope.drawSelectedMark(fill: Color, bar: Color, inset: Dp = ShkShapes.FieldCorner) {
     drawRect(fill)
     val width = SelectedBarWidth.toPx()
-    val inset = ShkShapes.FieldCorner.toPx()
+    val clear = inset.toPx()
     val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - width
     drawRoundRect(
         color = bar,
-        topLeft = Offset(x, inset),
-        size = Size(width, (size.height - 2 * inset).coerceAtLeast(0f)),
+        topLeft = Offset(x, clear),
+        size = Size(width, (size.height - 2 * clear).coerceAtLeast(0f)),
         cornerRadius = CornerRadius(width / 2),
     )
 }
 
 /** The width of the bar of a selected list item. Half the reach, so 4dp are left before the text. */
 private val SelectedBarWidth = ShkSpacing.ExtraSmall
+
+/** The size of the image at the start of a list item, as Material 3's image of a list item. */
+private val ListItemImageSize = 40.dp
+
+/**
+ * The side of the square in which [ShkListItem] shows its `image`: 40 dp,
+ * grown with the font size as an icon next to text is. A caller that
+ * decodes the image, such as a photo, decodes it at this size, so it is
+ * neither stretched nor larger than it shows.
+ */
+@Composable
+fun shkListItemImageSide(): Dp = iconSizeNextToText(ListItemImageSize)
 
 /** The size Material 3 draws the icon at the start of a list item. */
 private val ListItemIconSize = 24.dp

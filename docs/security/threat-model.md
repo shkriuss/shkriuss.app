@@ -1451,6 +1451,16 @@ Status: **Met for what is built.**
     ([backup-format.md](../architecture/backup-format.md#the-system-file-picker)).
     An app that poses as the picker cannot make an app write a backup
     over its own files or read one of them as a backup.
+  - Notes adds a file from, and writes a copy to, only a `content:`
+    address of another app's provider, as the system picker gives it
+    (`NoteDocuments.isSafe`). An app that poses as the picker cannot hand
+    Notes a `file:` path or a provider of Notes' own, also not one named
+    with a user before it (`content://0@…`), so it cannot make Notes read
+    or overwrite its own database or keys. Nor can it stall Notes with an
+    answer of thousands of files: only the first 42 are looked at and
+    tried, each provider looked up once, by its name without a user
+    before it, and at most 21 wait in the queue at a time, the next
+    coming in as each ends. The rest are told as not added.
   - The receivers ignore every action they do not expect.
   - No input is read as serialized Java objects.
 - MASWE-0029, deep links: there are none. MASWE-0034 and 0035: there is

@@ -35,6 +35,13 @@ sealed interface NotesMessage {
     data class Copy(val result: CopyResult) : NotesMessage
 }
 
+/**
+ * One showing of a snackbar: its [message], and its [number] among the
+ * showings, so that the same words shown again are a showing of their own,
+ * with their own time on the screen.
+ */
+data class Showing(val message: NotesMessage, val number: Long)
+
 /** The [Undo] of a snackbar that offers it, or null. */
 val NotesMessage.offeredUndo: Undo?
     get() = when (this) {
@@ -80,12 +87,24 @@ class NotesSnackbars(
     private val afterUndo: suspend () -> Unit,
     private val scope: CoroutineScope,
     private val work: CoroutineContext,
+    private val isAdding: (noteId: String) -> Boolean = { false },
 ) : UndoTurns {
     private val shown = MutableStateFlow<NotesMessage?>(null)
+    private val showings = MutableStateFlow<Showing?>(null)
     private val turns = Mutex()
+
+    /** Counts the showings, under [swapLock], with which [shown] and [showings] change together. */
+    private var count = 0L
+    private val swapLock = Any()
 
     /** The Undos that ended and whose wipe is not done yet. */
     private val ending = mutableListOf<Undo>()
+
+    /** Notes that closed and may have been kept only for a removed file or an add still to come ([closedKept]). */
+    private val kept = mutableSetOf<String>()
+
+    /** Held while a closed note is looked at again, and while a note opens: one never runs inside the other. */
+    private val looks = Mutex()
 
     /** Counts the times Notes left the screen or the destination changed ([endUndo]), under [leaveLock]. */
     private var leaves = 0L
@@ -93,6 +112,9 @@ class NotesSnackbars(
 
     /** The snackbar that shows now, or null. */
     val current: StateFlow<NotesMessage?> = shown.asStateFlow()
+
+    /** The showing of the snackbar that shows now, or null. The screen shows each showing once. */
+    val showing: StateFlow<Showing?> = showings.asStateFlow()
 
     /** The records of the Undo that is open now, and of those that ended and whose wipe is not done yet. */
     val openUndoIds: Set<String>
@@ -144,7 +166,7 @@ class NotesSnackbars(
     private fun replace(before: NotesMessage?, next: NotesMessage?): Boolean {
         val undo = before?.offeredUndo
         undo?.let(::startEnding)
-        val replaced = shown.compareAndSet(before, next)
+        val replaced = swap(before, next)
         if (undo != null) {
             if (replaced) ended(undo) else stopEnding(undo)
         }
@@ -152,18 +174,20 @@ class NotesSnackbars(
     }
 
     /**
-     * **Undo** in the snackbar that shows now. It counts once: a second
-     * press finds no snackbar. The records come back, then those of the
-     * action that changed meanwhile and are still deleted are wiped.
+     * **Undo** in the snackbar [pressed], by default the one that shows
+     * now. It counts once: a second press finds no snackbar. It counts for
+     * nothing if another snackbar took the place of [pressed] before the
+     * press arrived. The records come back, then those of the action that
+     * changed meanwhile and are still deleted are wiped.
      */
-    fun undo() {
-        val message = shown.value ?: return
+    fun undo(pressed: NotesMessage? = null) {
+        val message = pressed ?: shown.value ?: return
         val undo = message.offeredUndo ?: return
         scope.launch(work) {
             val pressed = turns.withLock {
                 startEnding(undo)
                 // Another snackbar may have taken its place meanwhile: then that ended the Undo, and the press counts for nothing.
-                if (!shown.compareAndSet(message, null)) {
+                if (!swap(message, null)) {
                     stopEnding(undo)
                     return@withLock false
                 }
@@ -178,6 +202,49 @@ class NotesSnackbars(
         }
     }
 
+    /**
+     * The note [noteId] closes and is about to be looked at: an empty
+     * note is deleted when it closes, but a removed file whose Undo may
+     * still bring it back counts as a file and keeps the note, and while
+     * files are being added to it, it is not looked at. So once the Undo
+     * of a file removed from it or its last add ends, the note is looked
+     * at again ([lookAgain]), and deleted if it is empty then (spec,
+     * "Saving", point 3). Called before the look, so an Undo or an add
+     * that ends meanwhile finds it.
+     */
+    fun closedKept(noteId: String) = synchronized(kept) { kept += noteId }
+
+    /** The note [noteId] was deleted as it closed: nothing is left to look at. */
+    fun forget(noteId: String) = synchronized(kept) { kept -= noteId }
+
+    /**
+     * The note [noteId] opens: [read] reads it, after a look at it that
+     * runs now, and it is not looked at again until it closes. So a note
+     * is never deleted while it opens or is open.
+     */
+    suspend fun <T> opening(noteId: String, read: suspend () -> T): T = looks.withLock {
+        synchronized(kept) { kept -= noteId }
+        read()
+    }
+
+    /**
+     * Looks again at the closed note [noteId], once the Undo of a file
+     * removed from it or its last add ended: it is deleted if it is empty,
+     * unless it opened again meanwhile or files are still being added to
+     * it. A note still kept, for example by another removed file whose
+     * Undo is open, is looked at again when that ends.
+     */
+    suspend fun lookAgain(noteId: String) = looks.withLock {
+        if (synchronized(kept) { noteId !in kept } || isAdding(noteId)) return@withLock
+        val deleted = try {
+            repository.deleteIfEmpty(noteId)
+        } catch (_: SQLException) {
+            // The empty note stays, as when it closes. It shows as "Empty note" in the list.
+            false
+        }
+        if (deleted) forget(noteId)
+    }
+
     /** Notes leaves the screen, or the destination changes: a snackbar with Undo goes, and its Undo ends. */
     fun endUndo() {
         synchronized(leaveLock) {
@@ -185,6 +252,13 @@ class NotesSnackbars(
             val message = shown.value
             if (message?.offeredUndo != null) replace(message, null)
         }
+    }
+
+    /** Shows [next] in place of [before], if [before] still shows, as a showing of its own. */
+    private fun swap(before: NotesMessage?, next: NotesMessage?): Boolean = synchronized(swapLock) {
+        if (!shown.compareAndSet(before, next)) return@synchronized false
+        showings.value = next?.let { Showing(it, ++count) }
+        true
     }
 
     private fun startEnding(undo: Undo) = synchronized(ending) { ending += undo }
@@ -208,6 +282,7 @@ class NotesSnackbars(
         } finally {
             stopEnding(undo)
         }
+        if (undo.action == Undo.Action.FILE_REMOVED) lookAgain(undo.note.id)
         afterUndo()
     }
 }

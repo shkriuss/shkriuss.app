@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Checklist, on the formatting bar: a ticked box beside a line, and an open box beside another. Drawn for the suite on the 24 dp grid; not taken from an icon
+    set. The colour is replaced by the icon colour of its button.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4,4H9V9H4ZM5.5,6.5L6.5,7.5L8,5.5M12,6.5H20M4,15H9V20H4ZM12,17.5H20"
+        android:strokeWidth="2"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
