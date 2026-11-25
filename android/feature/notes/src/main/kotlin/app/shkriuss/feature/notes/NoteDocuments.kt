@@ -49,11 +49,14 @@ object NoteDocuments {
 
     /**
      * True if [uri] is a document of another app's content provider: a
-     * `content:` URI whose provider is not one of [context]'s own app.
+     * `content:` URI whose provider is not one of [context]'s own app. A
+     * user before the provider, as in `content://0@provider/…`, which
+     * Android reads as the same provider of that user, is left out before
+     * the provider is looked up, so it cannot hide one of Notes' own.
      */
     fun isSafe(uri: Uri, context: Context): Boolean {
         if (uri.scheme != ContentResolver.SCHEME_CONTENT) return false
-        val authority = uri.authority ?: return false
+        val authority = uri.authority?.substringAfterLast('@')?.takeIf { it.isNotEmpty() } ?: return false
         val provider = try {
             context.packageManager.resolveContentProvider(authority, 0)
         } catch (_: RuntimeException) {

@@ -187,16 +187,27 @@ class NoteImagesTest {
             name = "Own"
         }
         org.robolectric.Shadows.shadowOf(context.packageManager).addOrUpdateProvider(ours)
+        // The same provider of Notes, named with a user before it, as Android also reads it.
+        val ownProviderOfAUser = Uri.parse("content://0@${context.packageName}.own/notes.db")
         val document = Uri.parse("content://documents/one")
+        // A document of another app in another profile, such as a work profile, named with its user.
+        val documentOfAProfile = Uri.parse("content://10@documents/two")
 
         val picked = Intent().apply {
             clipData = ClipData.newRawUri(null, database).also {
                 it.addItem(ClipData.Item(ownProvider))
+                it.addItem(ClipData.Item(ownProviderOfAUser))
                 it.addItem(ClipData.Item(document))
+                it.addItem(ClipData.Item(documentOfAProfile))
             }
         }
 
-        assertEquals("Only the document of another app is taken", listOf(document), NoteDocuments.pickedOf(Activity.RESULT_OK, picked, context))
+        assertEquals(
+            "Only the documents of another app are taken",
+            listOf(document, documentOfAProfile),
+            NoteDocuments.pickedOf(Activity.RESULT_OK, picked, context),
+        )
+        assertNull("Notes' own provider named with a user is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(ownProviderOfAUser), context))
         assertNull("A file path is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(database), context))
         assertNull("Notes' own provider is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(ownProvider), context))
     }
