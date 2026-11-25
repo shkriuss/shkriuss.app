@@ -400,7 +400,12 @@ phone's time zone and format.
    in one transaction, and after it removes their streams. One snackbar
    does not end it: the one that says a pressed **Undo** could not be
    written ([A write fails](#a-write-fails)). It carries the same
-   **Undo**, which ends when that snackbar goes.
+   **Undo**, which ends when that snackbar goes. A message about a file
+   that is being added, such as "The note was deleted. The file was not
+   added.", never takes the place of a snackbar with **Undo**, and does
+   not show while a pressed **Undo** is written. It waits, and shows
+   when the **Undo** is over and no snackbar shows. If several wait,
+   only the last shows.
 3. At every start, before a backup lists its records, and after a
    restore, Notes, in this order: marks deleted each file that is not
    deleted and whose note is; wipes every deleted record that is not
@@ -758,7 +763,7 @@ late, and when the clock or the time zone changes
    note after this phone wiped it brings the note back, with its newer
    files only ([After a restore](#after-a-restore), point 4).
 
-For the screens, eight more:
+For the screens, nine more:
 
 6. From 840dp, the card of the open note is marked as selected in the
    list, as an open item of a list is ([Notes](#notes), point 4).
@@ -784,6 +789,12 @@ For the screens, eight more:
     that says "Could not change your notes. Try again.". Nothing is
     wiped until that snackbar goes, so a note is not lost because the
     phone was full at that moment ([A write fails](#a-write-fails)).
+14. A message about a file that is being added waits while a snackbar
+    with **Undo** shows, and shows after it. So a file that fails never
+    ends an **Undo**, and a note deleted while files were still being
+    added to it can be brought back
+    ([Removing a file, and the wipe](#removing-a-file-and-the-wipe),
+    point 2).
 
 ## Assumptions
 

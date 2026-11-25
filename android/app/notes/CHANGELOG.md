@@ -16,6 +16,9 @@ Not released yet. How to use it:
   good until that message goes.
 - With no pinned note, the list has no headings, and its first note
   keeps a gap from the search field.
+- A message about a file that is still being added, such as "The note
+  was deleted. The file was not added.", waits while a message with
+  **Undo** shows, and shows after it. So it never ends an **Undo**.
 
 - Settings has the sections Files, Backup, Security and About, as in
   Tasks. About shows the version and **Licences**, which lists

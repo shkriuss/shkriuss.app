@@ -28,6 +28,7 @@ import app.shkriuss.feature.notes.R
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -208,6 +209,29 @@ class NotesScreensTest(private val config: ScreenshotConfig) {
 
         compose.tap(R.string.notes_undo)
         compose.waitUntil(WAIT) { storedNotes().singleOrNull()?.body == "Passport" }
+    }
+
+    @Test
+    fun aFileThatFindsItsNoteDeletedDoesNotEndTheUndoAndSaysSoAfterIt() {
+        val trip = seed { addNote("Trip", "Passport") }
+        start()
+        openNote("Trip")
+        compose.tap(DesignR.string.shk_more_options)
+        compose.tap(R.string.notes_delete_note)
+        compose.waitForText(words(R.string.notes_note_deleted))
+
+        // A file that was picked for the note comes to its turn now: its add finds the note deleted, and says so.
+        val adds = testApp.test.services.adds
+        adds.add(trip, listOf(BytesPick("plan.pdf", "application/pdf", ByteArray(FILE_BYTES))))
+        compose.waitUntil(WAIT) { !adds.isAddingTo(trip) }
+        compose.waitForIdle()
+
+        compose.onNode(hasText(words(R.string.notes_note_deleted))).assertExists()
+        assertFalse("Nothing is wiped", NoteRules.isWiped(everyNote().single { it.record.id == trip }))
+        compose.tap(R.string.notes_undo)
+        compose.waitUntil(WAIT) { storedNotes().size == 1 }
+        compose.waitForText(words(R.string.notes_note_gone))
+        assertTrue("The file was not added", storedFiles().isEmpty())
     }
 
     @Test

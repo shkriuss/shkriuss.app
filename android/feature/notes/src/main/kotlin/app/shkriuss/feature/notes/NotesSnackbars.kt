@@ -85,6 +85,11 @@ interface UndoTurns {
  * open in the snackbar that says so ([NotesMessage.UndoFailed]), and
  * nothing is wiped until that one goes.
  *
+ * A message that comes by itself and not from a press, why a picked file
+ * was not added, never takes the place of a snackbar with Undo: it waits,
+ * and shows when that Undo is over ([tell]). So a file that fails never
+ * ends an Undo.
+ *
  * The write that makes an Undo and its snackbar take one turn ([offer]),
  * and so does a press of Undo and its write. The move of the file keys
  * seals each record in a turn of its own and leaves alone the records of
@@ -108,6 +113,19 @@ class NotesSnackbars(
     /** Counts the showings, under [swapLock], with which [shown] and [showings] change together. */
     private var count = 0L
     private val swapLock = Any()
+
+    /**
+     * The message about an add that waits for the Undo to be over
+     * ([tell]), under [swapLock]. Only the last one waits, as only the
+     * last would show.
+     */
+    private var waiting: NotesMessage? = null
+
+    /**
+     * True while the write of a pressed Undo runs, under [swapLock]: its
+     * snackbar is gone then, and its Undo is not over.
+     */
+    private var undoing = false
 
     /** The Undos that ended and whose wipe is not done yet. */
     private val ending = mutableListOf<Undo>()
@@ -158,16 +176,41 @@ class NotesSnackbars(
         action(openUndoIds)
     }
 
-    /** Shows [message] in place of the snackbar that shows now, whose Undo then ends. */
+    /** Shows [message], which follows a press, in place of the snackbar that shows now, whose Undo then ends. */
     fun show(message: NotesMessage) {
         do {
             val before = shown.value
         } while (!replace(before, message))
     }
 
-    /** The snackbar [message] went by itself: its time ran out, or it was swiped away. Its Undo ends. */
+    /**
+     * Shows [message], which comes by itself and not from a press: why a
+     * picked file was not added. It never takes the place of a snackbar
+     * with Undo, nor shows while a pressed Undo is written, so a file
+     * that fails never ends an Undo: it waits, and shows when that Undo
+     * is over. With no Undo open it shows at once, in place of the
+     * snackbar that shows now, and no older message waits any more.
+     */
+    fun tell(message: NotesMessage) {
+        synchronized(swapLock) {
+            val before = shown.value
+            if (before?.offeredUndo != null || undoing) {
+                waiting = message
+            } else {
+                waiting = null
+                // The snackbar changes only under this lock, so the swap finds the one that was just read.
+                swap(before, message)
+            }
+        }
+    }
+
+    /**
+     * The snackbar [message] went by itself: its time ran out, or it was
+     * swiped away. Its Undo ends. A message that waited shows.
+     */
     fun gone(message: NotesMessage) {
         replace(message, null)
+        showWaiting()
     }
 
     /**
@@ -199,6 +242,9 @@ class NotesSnackbars(
      * the destination changed, while the refused write ran, that snackbar
      * would show after the leave: the Undo ends at once instead, as at
      * every leave, and the snackbar says only that nothing changed.
+     *
+     * While the write runs, a message about an add waits ([tell]). It
+     * shows once the write is over, unless a snackbar shows then.
      */
     fun undo(pressed: NotesMessage? = null) {
         val message = pressed ?: shown.value ?: return
@@ -208,7 +254,7 @@ class NotesSnackbars(
                 startEnding(undo)
                 // Another snackbar may have taken its place meanwhile: then that ended the Undo, and the press counts for nothing.
                 // The snackbar goes and the leaves are read as one step, so a leave is before the press or after it.
-                val leavesBefore = synchronized(leaveLock) { if (swap(message, null)) leaves else null }
+                val leavesBefore = synchronized(leaveLock) { if (press(message)) leaves else null }
                 if (leavesBefore == null) {
                     stopEnding(undo)
                     return@withLock false
@@ -229,9 +275,36 @@ class NotesSnackbars(
                             true
                         }
                     }
+                } finally {
+                    pressWritten()
                 }
             }
             if (ended) end(undo)
+        }
+    }
+
+    /**
+     * Takes the pressed snackbar [message] off, if it still shows. From
+     * then until [pressWritten], no message about an add shows.
+     */
+    private fun press(message: NotesMessage): Boolean = synchronized(swapLock) {
+        swap(message, null).also { undoing = it }
+    }
+
+    /** The write of the pressed Undo is over, refused or not: a message that waited shows, unless a snackbar shows now. */
+    private fun pressWritten() {
+        synchronized(swapLock) { undoing = false }
+        showWaiting()
+    }
+
+    /** Shows the message that waited ([tell]), once no snackbar shows and no pressed Undo is being written. */
+    private fun showWaiting() {
+        synchronized(swapLock) {
+            val message = waiting ?: return
+            if (shown.value == null && !undoing) {
+                waiting = null
+                swap(null, message)
+            }
         }
     }
 
@@ -278,13 +351,17 @@ class NotesSnackbars(
         if (deleted) forget(noteId)
     }
 
-    /** Notes leaves the screen, or the destination changes: a snackbar with Undo goes, and its Undo ends. */
+    /**
+     * Notes leaves the screen, or the destination changes: a snackbar with
+     * Undo goes, and its Undo ends. A message that waited shows.
+     */
     fun endUndo() {
         synchronized(leaveLock) {
             leaves++
             val message = shown.value
             if (message?.offeredUndo != null) replace(message, null)
         }
+        showWaiting()
     }
 
     /** Shows [next] in place of [before], if [before] still shows, as a showing of its own. */

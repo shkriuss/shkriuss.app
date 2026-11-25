@@ -695,7 +695,7 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 15 test classes with 235 tests: the limits of every
+- `feature/notes` has 15 test classes with 242 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
@@ -710,7 +710,8 @@ second build must write the same mapping file, or the release stops. See
   code of `core/crypto` (`NoteFilesTest`); the images decoded from their
   streams, scaled down, and the intents of the file picker
   (`NoteImagesTest`); the ViewModels and the one snackbar
-  (`ViewModelsTest`), with an Undo that the database refuses, and which
+  (`ViewModelsTest`), with an Undo that the database refuses and a
+  message about an add that waits for an Undo to be over, and which
   note is open, also after Android
   stopped Notes (`OpenNoteViewModelTest`);
   the clock of the screens (`NotesNowTest`); how far the image view
@@ -769,7 +770,8 @@ second build must write the same mapping file, or the release stops. See
     a phone and on a tablet: a new note, saving and a refused save,
     search, Pin, Delete note and Undo, also after the phone is turned,
     the end of an Undo when the destination changes and when Notes
-    leaves the screen, the headings of the sections, the formatting bar
+    leaves the screen, a message about a file that waits for an Undo,
+    the headings of the sections, the formatting bar
     and the
     action on a checklist item, the rows of files and their actions,
     also of a file that cannot be opened, the

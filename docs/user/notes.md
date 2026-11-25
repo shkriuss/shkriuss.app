@@ -143,6 +143,10 @@ full, Notes says "Could not change your notes. Try again." and keeps
 **Undo** in that message. Tap it again. Nothing is deleted for good
 until that message goes.
 
+A message about a file that is still being added, such as "The note was
+deleted. The file was not added.", never ends an **Undo**. It waits,
+and shows after the message with **Undo** has gone.
+
 ## Settings
 
 **Files**: how many files Notes keeps and how much of 1 GB they take,
@@ -289,9 +293,12 @@ Not known yet:
 1. How TalkBack reads the marks in the text, such as "- [ ]".
 2. Whether the keyboard, which is asked not to learn what you type,
    makes long texts too hard to type.
-3. How fast the list and search are with many long notes. A search
-   reads every title, text and file name, and the list reads every text
-   again after each save. Nobody has measured it at 5,000 long notes.
+3. How many long notes Notes can hold. The list keeps the text of
+   every note in memory, a search reads every title, text and file
+   name, and the list reads every text again after each save. With very
+   many very long notes Notes gets slow, and it can run out of memory
+   and close each time it opens. Nobody has measured where that starts.
+   It is below the limits of 5,000 notes with 100,000 characters each.
 4. Whether TalkBack goes back to the item that opened a dialog or a
    menu, when it closes. Notes does nothing of its own for it.
 
@@ -336,20 +343,15 @@ Limits of deleting:
 
 15. What a deletion clears can stay in blocks the phone's storage
     keeps, under Android's encryption, out of reach of apps.
-16. Notes shows one message at a time. A message about a file that was
-    still being added, such as "The note was deleted. The file was not
-    added.", can take the place of "Note deleted" within a second, and
-    its **Undo** ends with it. Wait until a file is added before you
-    delete its note.
 
 Other:
 
-17. When the phone's storage is completely full, a save or an added
+16. When the phone's storage is completely full, a save or an added
     file can fail. What was saved before stays. Free some room on the
     phone.
-18. Never type your real recovery words into a preview build of a pull
+17. Never type your real recovery words into a preview build of a pull
     request. Use test words.
-19. Two dialogs have no screenshot test, because a test cannot reach
+18. Two dialogs have no screenshot test, because a test cannot reach
     them: "No backup was made" when Notes cannot use its keys, and the
     answer "No keys" of a restore. Their words were not checked at a
     large font size.
