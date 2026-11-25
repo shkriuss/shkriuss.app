@@ -2,6 +2,7 @@ package app.shkriuss.feature.notes.ui
 
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import app.shkriuss.feature.notes.NoteImages
@@ -30,6 +31,7 @@ class NotesModels(owner: ViewModelStoreOwner, services: NotesServices) {
                 OpenNoteViewModel(
                     make = { noteId -> NoteViewModel(repository, services.adds, services.reader, services.snackbars, noteId, services.scope) },
                     giveUp = repository::giveUpNewNote,
+                    saved = createSavedStateHandle(),
                 )
             }
             initializer { SettingsViewModel(services.repository) }

@@ -1,6 +1,7 @@
 package app.shkriuss.feature.notes
 
 import android.os.Looper
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
@@ -54,22 +55,26 @@ class OpenNoteViewModelTest {
     private val reader by lazy { FileReader(repository, crypto.files, { false }, Dispatchers.IO) }
     private val store = ViewModelStore()
 
-    private val model: OpenNoteViewModel by lazy {
-        ViewModelProvider(
-            store,
-            viewModelFactory {
-                initializer {
-                    OpenNoteViewModel(
-                        make = { id -> NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait = {}) },
-                        giveUp = { id ->
-                            givenUp += id
-                            repository.giveUpNewNote(id)
-                        },
-                    )
-                }
-            },
-        )[OpenNoteViewModel::class.java]
-    }
+    /** The saved state of the screen, which Android keeps when it stops Notes. */
+    private val saved = SavedStateHandle()
+
+    private val model: OpenNoteViewModel by lazy { makeModel(store) }
+
+    private fun makeModel(owner: ViewModelStore): OpenNoteViewModel = ViewModelProvider(
+        owner,
+        viewModelFactory {
+            initializer {
+                OpenNoteViewModel(
+                    make = { id -> NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait = {}) },
+                    giveUp = { id ->
+                        givenUp += id
+                        repository.giveUpNewNote(id)
+                    },
+                    saved = saved,
+                )
+            }
+        },
+    )[OpenNoteViewModel::class.java]
 
     @After
     fun close() {
@@ -133,6 +138,55 @@ class OpenNoteViewModelTest {
         assertEquals(trip, model.open.value?.model?.noteId)
         assertEquals(listOf(waiting), givenUp)
         assertEquals("Trip to Batumi", first.state.value.title)
+    }
+
+    @Test
+    fun afterAndroidStoppedNotesTheNoteAndItsImageViewOpenAgain() {
+        val trip = phone.note("Trip", "Passport")
+        model.open(trip)
+        openModel(trip)
+        model.openImage("file")
+
+        // Android stopped Notes: the ViewModels are gone, and the saved state comes back.
+        val again = ViewModelStore()
+        try {
+            val restored = makeModel(again)
+            eventually {
+                idle()
+                restored.open.value?.model?.noteId == trip
+            }
+            assertEquals("file", restored.open.value?.imageId)
+            assertTrue("A note that opens again is not new", restored.open.value?.isNew == false)
+        } finally {
+            again.clear()
+        }
+    }
+
+    @Test
+    fun aTapOnTheOpenNoteWhileItClosesForAnotherOneOpensItAgainAfter() {
+        val trip = phone.note("Trip", "Passport")
+        val shopping = phone.note("Shopping", "Bread")
+        model.open(trip)
+        val first = openModel(trip)
+        first.state.await { !it.loading }
+        runBlocking {
+            phone.database.useWriterConnection {
+                it.executeSQL("CREATE TRIGGER refuse BEFORE UPDATE ON ${NoteEntity.TABLE} BEGIN SELECT RAISE(ABORT, 'refused'); END")
+            }
+        }
+        first.onTitleChange("Trip to Batumi")
+        first.state.await { it.saveFailed }
+        model.open(shopping)
+        first.state.await { it.askUnsaved }
+
+        model.open(trip)
+        first.discard()
+
+        eventually {
+            idle()
+            model.open.value?.model.let { it != null && it !== first }
+        }
+        assertEquals("The last tap wins", trip, model.open.value?.model?.noteId)
     }
 
     @Test

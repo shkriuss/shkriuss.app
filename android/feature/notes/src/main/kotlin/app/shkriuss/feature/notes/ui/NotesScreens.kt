@@ -97,7 +97,8 @@ private fun NotesSnackbar(snackbars: NotesSnackbars, host: ShkSnackbarHostState)
         val shown = message ?: return@LaunchedEffect
         val text = words ?: return@LaunchedEffect
         when (host.show(text, actionText = if (shown.offersUndo) undo else null)) {
-            ShkSnackbarResult.ActionPerformed -> snackbars.undo()
+            // The Undo of this snackbar, not of one that may have taken its place since the press.
+            ShkSnackbarResult.ActionPerformed -> snackbars.undo(shown)
             ShkSnackbarResult.Dismissed -> snackbars.gone(shown)
         }
     }

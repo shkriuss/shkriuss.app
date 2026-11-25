@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -104,6 +105,8 @@ fun ShkTextEditor(
     // selection, so a word being typed is not cut off at each key.
     var last by remember { mutableStateOf(TextFieldValue(text, given)) }
     val shown = if (last.text == text && last.selection == given) last else TextFieldValue(text, given)
+    // Once the caller changed the text, the composing region of before is gone: it never comes back with an older text.
+    SideEffect { if (last !== shown) last = shown }
     val field = @Composable {
         EditorField(
             value = shown,
@@ -281,7 +284,8 @@ private fun EditorField(
  * sees it: the field neither moves its cursor nor takes the focus, and
  * [onTap] gets the range. Every other touch goes on to the field. A range
  * is hit inside the boxes of its characters, a little wider, and as tall
- * as its line.
+ * as its line. A press that moves past the touch slop is no tap: it goes
+ * on, so that a screen that scrolls can scroll from it.
  */
 private fun Modifier.tapsOnRanges(
     layout: () -> TextLayoutResult?,
@@ -295,9 +299,10 @@ private fun Modifier.tapsOnRanges(
         down.consume()
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
-            event.changes.forEach { it.consume() }
             val change = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) return@awaitEachGesture
             if (!change.pressed) {
+                change.consume()
                 if (rangeAt(layout() ?: return@awaitEachGesture, listOf(hit), change.position, slop) != null) onTap(hit)
                 return@awaitEachGesture
             }

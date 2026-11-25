@@ -295,8 +295,8 @@ second build must write the same mapping file, or the release stops. See
   `ShkTextFieldTest`, `ShkSliderTest`, `ShkProgressBarTest`,
   `ShkSelectionControlSizeTest`, `ShkRadioGroupTest`,
   `ShkContentComponentsTest`, `ShkRowEdgeTest`,
-  `ShkListItemTickBoxTest`, `ShkListItemImageTest` and
-  `ShkTextEditorTest`.
+  `ShkListItemTickBoxTest`, `ShkListItemImageTest`,
+  `ShkTextEditorTest` and `ShkTextPartsTest`.
   They check the contrast of every colour pair, how Material 3 is set
   up, and every `Shk*` component at font scale 1.0 and 2.0: its touch
   target, what TalkBack hears and announces, that long text wraps inside
@@ -675,7 +675,7 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 11 test classes with 106 tests: the limits of every
+- `feature/notes` has 11 test classes with 144 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
@@ -690,7 +690,8 @@ second build must write the same mapping file, or the release stops. See
   `core/crypto` (`NoteFilesTest`); the images decoded from their
   streams, scaled down, and the intents of the file picker
   (`NoteImagesTest`); the ViewModels and the one snackbar
-  (`ViewModelsTest`), and which note is open (`OpenNoteViewModelTest`);
+  (`ViewModelsTest`), and which note is open, also after Android
+  stopped Notes (`OpenNoteViewModelTest`);
   the clock of the screens (`NotesNowTest`); and how the screens write
   times, dates, sizes and percents, and what TalkBack reads for them
   (`NotesFormatTest`). The work runs off the test's thread, and
@@ -711,7 +712,8 @@ second build must write the same mapping file, or the release stops. See
     only exported parts Notes' screen and the two parts of the handover.
   - `NotesScreensTest`: what the screens do and what TalkBack hears, on
     a phone and on a tablet: a new note, saving and a refused save,
-    search, Pin, Delete note and Undo, the formatting bar and the
+    search, Pin, Delete note and Undo, also after the phone is turned,
+    the formatting bar and the
     action on a checklist item, the rows of files and their actions, the
     image view, Add a file and Save a copy through the test's file
     picker, two panes, and Settings. It also checks that the keyboard is

@@ -12,7 +12,9 @@ Not released yet.
 - The screens: Notes, with search and one note open, the image view,
   and Settings, in a navigation bar on a phone and a rail on a tablet.
   On a phone a note opens in place of the list, with Back; from 840 dp
-  it opens beside the list, or "Choose a note." shows there.
+  it opens beside the list, with its card marked, or "Choose a note."
+  shows there. Turning the phone keeps the open note and the **Undo** of
+  a snackbar.
 - The list: pinned notes first, under **Pinned** and **Other notes**,
   newest first. Each row shows the title, or the first line of the text,
   two lines of the text without its marks, and the last change with the

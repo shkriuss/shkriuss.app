@@ -335,7 +335,7 @@ icon rule asks, and the rail grows with its labels.
 | `ShkRadioButton` | One choice out of a few that are all shown, such as the unit "Millilitres" or "Ounces". Put them in a `ShkRadioGroup`. | More than about six options, or options that change. Use a list. |
 | `ShkSlider` | A value in a range where the exact number matters less than where it sits, such as a daily goal. | A value that must be exact. Use a text field. |
 | `ShkProgressBar` | How far something has got, such as how much of a daily goal is drunk. | Picking a value: use a slider. A wait whose end is not known: use a loading state. |
-| `ShkCard` | One item set apart from the things around it, such as a note in a list of notes. Give it `onClick` when tapping it opens the item. | Rows of things that look alike. Use list items. |
+| `ShkCard` | One item set apart from the things around it, such as a note in a list of notes. Give it `onClick` when tapping it opens the item, and `selected` when it is the item open beside the list. | Rows of things that look alike. Use list items. |
 | `ShkListItem` | One row in a list of things that look alike, such as tasks, settings or files. Give it `onClick` when tapping it opens or changes something, `selected` when it is the item open beside the list, and `onCheckedChange` for a tick box at its start, such as the box of a task. | A setting that turns on and off. Use a switch. |
 | `ShkSectionHeader` | The heading of a group on a screen, such as "Today" above a list of tasks. | The title of a screen. Each screen has one title. |
 | `ShkDivider` | A line between groups, where space alone does not show where one ends. | Between every two list items. Most lists need no line. |
@@ -724,22 +724,26 @@ the Lists page of the Catalog.
 
 ### Parts for Notes' screens
 
-Notes' screens use a new component and four parts of others
+Notes' screens use a new component and five parts of others
 ([Notes' specification](../apps/notes/spec.md#changes-to-shared-modules)).
 Each part's default leaves every other use as it is. Each has a sample
 in the Catalog: the text editor on the Text fields page, the image on
-the Lists page, and the progress dialog with a bar on the Dialogs page.
+the Lists page, the selected card on the Cards page, the progress
+dialog with a bar on the Dialogs page, and the two parts of text on the
+Type page.
 
 | Component | Part | What it does |
 |---|---|---|
 | `ShkTextEditor` | New | A place to write long text with no box: the text sits on the screen in its style, `Body` or `Title`, at least 48 dp tall. Its hint shows in `textSecondary` while it is empty, and TalkBack reads it then; after that, TalkBack reads the text as it is. `looks` style ranges of the text, `ShkTextLook`: `Quiet` in `textSecondary`, `Heading` in the size and weight of `Subtitle`, `Bold`, `Italic`, `StruckThrough`. Showing never changes the text, and a range that does not fit is left out. A tap on one of `tapRanges`, such as the box `[ ]` of a checklist item, calls `onTapRange` and neither moves the cursor nor opens the keyboard. `action` is one action TalkBack offers on it, such as "Tick". `errorText` shows under it in `error` and is announced once, as the field's error. `keyboardLearns = false` asks the keyboard not to learn, as the text field does. It keeps the keyboard's composing region while the caller gives back the text and selection it reported, so a word being typed is not cut off. |
 | `ShkListItem` | `image` | A small picture at the start of the row, in place of `icon`, such as an image that a file of a note holds. It is drawn as it is, not tinted, cut to a 40 dp square with `Field` corners, and grows with the text as an icon does. It is decorative: TalkBack reads nothing for it. |
+| `ShkCard` | `selected` | With `onClick`, the card is marked as the one that is open, such as the note beside the list in two panes: filled with `surfaceHigh`, with a bar in the accent colour along its start edge, as a selected list item has, clear of the card's 16 dp corners. TalkBack reads "selected". Cards that are not selected say nothing about it. |
 | `ShkProgressDialog` | `fraction` | For work that says how far it has got, such as a copy of a file: the words, a `ShkProgressBar` and the percent under it, in the phone's number format, in place of the circle. TalkBack announces the words when the dialog opens, and reads the bar as the words and the percent. Null, the default, shows the circle. |
 | `ShkText` | `maxLines` and `bold` | `maxLines` stops the text at that many lines with "…", only for a preview of something that opens whole elsewhere, such as the first lines of a note in the list. `bold` draws ranges of the text bold, such as what matches a search. TalkBack reads the text as it is. |
 
-1. The spec names `ShkTextEditor`, the image and the fraction. It does
-   not name the two parts of `ShkText`: the list of notes needs them for
-   its rows, cut at two lines, and for the match of a search in bold.
+1. The selected card and the two parts of `ShkText` are the owner's
+   decisions for the screens of Notes: the open note is marked from
+   840 dp, and the rows of the list are cut at two lines and show the
+   match of a search in bold.
 
 ### Optional part for the user's own text
 
@@ -1224,7 +1228,9 @@ image and checks its pixels: the accent bar along the start edge, the
 fill after it and under the text, the fill above and below the bar where
 the corners round, and the bar on the right in right-to-left languages.
 Without the bar, the mark would be a change of colour only, and the test
-fails.
+fails. On a card, the bar keeps clear of the card's larger corners.
+`ShkContentComponentsTest` checks that a selected card is read as
+selected and stays a button, and that other cards say nothing about it.
 
 `ShkListItemTickBoxTest` checks the tick box of a list item at font
 scale 1.0 and 2.0. A real touch on the box ticks it and does not open
@@ -1247,6 +1253,12 @@ a range to tap calls the caller with that range, and neither focuses
 the editor nor moves its cursor; a touch beside the ranges focuses it.
 TalkBack offers the caller's action by its label, and announces the
 error once, as the error. Asked to, it tells the keyboard not to learn.
+
+`ShkTextPartsTest` checks the two parts of `ShkText` at font scale 1.0
+and 2.0: with `maxLines` a long text stops at that many lines and ends
+with "…", and without it the same text wraps on; `bold` draws its ranges
+bold, leaves out a range that does not fit, and TalkBack reads the text
+as it is.
 
 `ShkListItemImageTest` checks the small image of a list item at font
 scale 1.0 and 2.0: it comes before the text, is at least 40 dp, and
@@ -1360,7 +1372,8 @@ chips select and clear, the checkboxes and switches turn on and off, a
 radio button clears the others in its group, the text field takes typing
 and shows its error past 20 characters, the slider moves and says its
 new value, and the progress bar fills and empties and says its value in
-words. On Lists, exactly one list item, the selected sample, is
+words. On Cards, exactly one card, the selected sample, is read as
+selected. On Lists, exactly one list item, the selected sample, is
 read as selected, and the two rows with a tick box say "Not ticked" and
 "Ticked" and offer "Tick" and "Clear the tick". A tick box is checked as
 part of its row: its touch target is inside its row's and in no other.
@@ -1389,7 +1402,7 @@ Tokens:
    colour and the outline on each background with its contrast, then text
    on accent.
 2. **Type**: each style shown in itself, with its use, size, line height
-   and weight.
+   and weight; then a text cut at two lines, and a range in bold.
 3. **Shape**: each shape as a raised surface, with its use and radius.
 4. **Spacing**: each step as a bar of its width, the screen margins, and
    a 48 dp touch target.
@@ -1418,7 +1431,8 @@ Components:
 11. **Progress bars**: the progress bar empty, part of the way, full and
     past its end, then one to try, with **Add 10%** and **Reset**.
 12. **Cards**: the card that cannot be tapped, alone and with a button,
-    and the card that can be tapped, with short and long text.
+    and the card that can be tapped, with short and long text, and
+    selected.
 13. **Lists**: the list item with one line, with supporting text, with an
     icon, with trailing text, tappable, disabled, selected, with long
     text, with an icon at the end, with a tick box open and ticked, and

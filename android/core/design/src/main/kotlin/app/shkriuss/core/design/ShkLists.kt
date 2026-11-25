@@ -299,22 +299,22 @@ fun ShkSectionHeader(text: String, modifier: Modifier = Modifier) {
 private fun Modifier.selectedMark(fill: Color, bar: Color): Modifier = drawBehind { drawSelectedMark(fill, bar) }
 
 /**
- * The mark of a selected list item, over the whole highlight, which
- * reaches [RowReach] past the row's edges: a [fill] of the area, and a
- * [bar] along its start edge. The bar is [SelectedBarWidth] wide, inside
- * the reach, so the text does not move. It keeps clear of the rounded
- * corners by their radius at the top and the bottom. It is on the right in
- * right-to-left languages.
+ * The mark of a selected list item or card, over the whole highlight,
+ * which for a list item reaches [RowReach] past the row's edges: a [fill]
+ * of the area, and a [bar] along its start edge. The bar is
+ * [SelectedBarWidth] wide, inside the reach, so the text does not move. It
+ * keeps clear of the rounded corners by [inset], their radius, at the top
+ * and the bottom. It is on the right in right-to-left languages.
  */
-internal fun DrawScope.drawSelectedMark(fill: Color, bar: Color) {
+internal fun DrawScope.drawSelectedMark(fill: Color, bar: Color, inset: Dp = ShkShapes.FieldCorner) {
     drawRect(fill)
     val width = SelectedBarWidth.toPx()
-    val inset = ShkShapes.FieldCorner.toPx()
+    val clear = inset.toPx()
     val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - width
     drawRoundRect(
         color = bar,
-        topLeft = Offset(x, inset),
-        size = Size(width, (size.height - 2 * inset).coerceAtLeast(0f)),
+        topLeft = Offset(x, clear),
+        size = Size(width, (size.height - 2 * clear).coerceAtLeast(0f)),
         cornerRadius = CornerRadius(width / 2),
     )
 }

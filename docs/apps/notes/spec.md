@@ -82,12 +82,14 @@ no account and no network, and encrypts every file.
    notes**; without one, no heading.
 3. A row is a `ShkCard`: the title; up to two lines of the text, marks
    removed and line breaks as spaces, cut with "…"; then the last change
-   and the number of files: "14:05 · 2 files". A date shows as in Tasks,
-   "Mon 16 Nov", with its year when it is not this year. With no title,
-   the first line of the text is the title; with neither, "Empty note".
+   and the number of files: "14:05 · 2 files". With no file, only the
+   last change: "14:05". A date shows as in Tasks, "Mon 16 Nov", with
+   its year when it is not this year. With no title, the first line of
+   the text is the title; with neither, "Empty note".
 4. A tap opens the note: in place under 840dp, with Back. From 840dp,
    `ShkListDetailScaffold`: the list, 360dp wide, and the open note
-   beside it, or "Choose a note."
+   beside it, or "Choose a note.". The card of the open note is marked
+   as selected, and TalkBack reads "selected".
 5. With no note: `ShkEmptyState`, "No notes yet", "Tap New note to write
    one."
 6. A floating button, **New note**. At 5,000 shown notes it shows the
@@ -482,7 +484,7 @@ record needs, and the next start removes it.
 
 | What fails | What follows |
 |---|---|
-| Saving a note | Nothing changes in the database. The text stays on the screen, with a line above the title: "Could not save the note. Notes tries again." It tries again at the next change. Closing the note then asks "This note is not saved", with **Try again** and **Discard changes**. |
+| Saving a note | Nothing changes in the database. The text stays on the screen, with a line above the title: "Could not save the note. Notes tries again." It tries again at the next change. Closing the note then asks "This note is not saved", with **Try again** and **Discard changes**. Back, or a tap beside the question, keeps the note open with what is typed, and a note that was to open next does not open. |
 | Adding a file | The part, or the stream if it was already renamed, is deleted at once, and the file is not added: "Could not add ticket.jpg. The phone may be full." |
 | Delete, remove, **Undo**, **Pin** | Nothing changes. A snackbar: "Could not change your notes. Try again." |
 | The wipe, removing a stream, or the checkpoint | Tried again at the next start. Nothing shows, except before a backup: then the backup stops ([Writing](#writing), point 1). |
@@ -701,7 +703,7 @@ As in Water and Tasks, and:
 |---|---|
 | `core/data` | Three `RecordWriter` functions, with tests and [data.md](../../architecture/data.md): `wipe`, for a deleted record only, which keeps the record fields ([ADR 0042](../../adr/0042-wiping-the-content-of-deleted-records.md)); sealing a file key again, which changes only the wrapped key and keeps `updatedAt`, also for a deleted record ([crypto-design.md](../../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key), point 6); and an ID reserved from the writer's own `IdSource` before a create, for a record whose stream must be written first. A create takes only an ID that this writer reserved and that is not stored. |
 | `core/backup` | Progress: bytes done and the total, when known, while it writes, checks and restores. The file format does not change. |
-| `core/design` | `ShkTextEditor`: a text area with no frame for long text, with a hint, styles for ranges of its text given by the app, taps on a range, an accessibility action from the app, and `keyboardLearns`. `ShkProgressDialog` gets an optional fraction, shown as a `ShkProgressBar` and a percent. `ShkListItem` gets an optional small image at its start, not tinted. Each with a sample in Catalog, tests and screenshots; their defaults change nothing that exists. |
+| `core/design` | `ShkTextEditor`: a text area with no frame for long text, with a hint, styles for ranges of its text given by the app, taps on a range, an accessibility action from the app, and `keyboardLearns`. `ShkProgressDialog` gets an optional fraction, shown as a `ShkProgressBar` and a percent. `ShkListItem` gets an optional small image at its start, not tinted. `ShkCard` gets an optional `selected` state, as `ShkListItem` has. `ShkText` gets an optional `maxLines`, which ends the text with "…", for a preview, and optional `bold` ranges, for a match of a search. Each with a sample in Catalog, tests and screenshots; their defaults change nothing that exists. |
 | `core/security` | The app lock screen leaves out "Show the text in notifications" in an app that shows no notifications. |
 | The APK rules check | Notes' allow list of the two permissions. |
 
@@ -744,6 +746,18 @@ late, and when the clock or the time zone changes
    in every restore. A backup from another copy of Notes that edited the
    note after this phone wiped it brings the note back, with its newer
    files only ([After a restore](#after-a-restore), point 4).
+
+For the screens, four more:
+
+6. From 840dp, the card of the open note is marked as selected in the
+   list, as an open item of a list is ([Notes](#notes), point 4).
+7. `ShkText` may stop at a number of lines with "…" and draw ranges
+   bold, for the rows of the list and the match of a search
+   ([Changes to shared modules](#changes-to-shared-modules)).
+8. A row of a note with no file shows only the last change, "14:05"
+   ([Notes](#notes), point 3).
+9. Dismissing "This note is not saved" keeps the note open with what is
+   typed ([A write fails](#a-write-fails)).
 
 ## Assumptions
 

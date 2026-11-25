@@ -5,11 +5,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -24,6 +30,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.TextLayoutResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -152,6 +160,74 @@ class ShkTextEditorTest(private val fontScale: Float) {
     }
 
     @Test
+    fun aDragThatStartsOnARangeToTapScrollsTheScreenAndTapsNothing() {
+        var tapped: IntRange? = null
+        val scroll = ScrollState(0)
+        val long = TEXT + "\n" + List(LINES) { "Line $it" }.joinToString("\n")
+        compose.setContent {
+            ShkTheme {
+                Column(Modifier.height(SCREEN).verticalScroll(scroll)) {
+                    ShkTextEditor(
+                        text = long,
+                        selectionStart = 0,
+                        selectionEnd = 0,
+                        onChange = { _, _, _ -> },
+                        hint = HINT,
+                        tapRanges = listOf(BOX),
+                        onTapRange = { tapped = it },
+                    )
+                }
+            }
+        }
+        val box = boxCentre()
+
+        editor.performTouchInput { swipe(start = box, end = box - Offset(0f, height.toFloat())) }
+
+        compose.runOnIdle {
+            assertTrue("The screen scrolled", scroll.value > 0)
+            assertNull(tapped)
+        }
+    }
+
+    @Test
+    fun aWordBeingTypedKeepsItsComposingRegionOnlyWhileTheTextIsTheCallers() {
+        var text by mutableStateOf("")
+        var cursor by mutableIntStateOf(0)
+        compose.setContent {
+            ShkTheme {
+                ShkTextEditor(
+                    text = text,
+                    selectionStart = cursor,
+                    selectionEnd = cursor,
+                    onChange = { changed, start, _ ->
+                        text = changed
+                        cursor = start
+                    },
+                    hint = HINT,
+                )
+            }
+        }
+        editor.performClick()
+        compose.waitForIdle()
+        compose.runOnUiThread { checkNotNull(inputConnection()).setComposingText("Milk", 1) }
+        compose.runOnIdle { assertEquals("Milk", text) }
+
+        // The caller changes the text, as Bold does, and then back, as Bold pressed again does.
+        compose.runOnIdle {
+            text = "**Milk**"
+            cursor = 6
+        }
+        compose.runOnIdle {
+            text = "Milk"
+            cursor = 4
+        }
+        compose.waitForIdle()
+        compose.runOnUiThread { checkNotNull(inputConnection()).commitText(" bread", 1) }
+
+        compose.runOnIdle { assertEquals("The word typed before stays", "Milk bread", text) }
+    }
+
+    @Test
     fun aTouchBesideTheRangesFocusesTheEditor() {
         var tapped: IntRange? = null
         compose.setContent {
@@ -218,6 +294,17 @@ class ShkTextEditorTest(private val fontScale: Float) {
         assertEquals(0, keyboardRequest().imeOptions and EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING)
     }
 
+    /** The middle of the box `[ ]` in the editor. */
+    private fun boxCentre(): Offset {
+        val results = mutableListOf<TextLayoutResult>()
+        compose.runOnIdle { editor.fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results) }
+        return results.single().getBoundingBox(BOX.first + 1).center
+    }
+
+    /** The connection the keyboard gets from the editor that has the focus. */
+    private fun inputConnection(): android.view.inputmethod.InputConnection? =
+        textEditor(compose.activity.window.decorView)?.onCreateInputConnection(EditorInfo())
+
     /** What the editor tells the keyboard once it has the focus. */
     private fun keyboardRequest(): EditorInfo {
         editor.performClick()
@@ -244,6 +331,8 @@ class ShkTextEditorTest(private val fontScale: Float) {
         private val IS_TEXT_FIELD = SemanticsMatcher.keyIsDefined(SemanticsProperties.EditableText)
 
         private const val HINT = "Note"
+        private const val LINES = 40
+        private val SCREEN = 120.dp
         private const val TEXT = "- [ ] Passport and the tickets for the train"
         private const val TICK = "Tick"
         private const val ERROR = "A note has at most 100,000 characters."

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -51,8 +52,9 @@ import app.shkriuss.core.design.R as DesignR
 @Composable
 internal fun FilesSection(state: NoteState, model: NoteViewModel, images: NoteImages, actions: FileActions, format: NotesFormat) {
     ShkSectionHeader(stringResource(R.string.notes_files))
-    state.files.forEach { row -> FileRow(row, images, actions, format, onDamage = model::checkFilesAgain) }
-    state.adding.forEach { adding -> AddingRow(adding, format) }
+    // Keyed by the file, so that a row keeps its image and its menu when the rows before it change.
+    state.files.forEach { row -> key(row.file.id) { FileRow(row, images, actions, format, onDamage = model::checkFilesAgain) } }
+    state.adding.forEach { adding -> key(adding.key) { AddingRow(adding, format) } }
 }
 
 /**

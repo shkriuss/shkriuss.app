@@ -152,12 +152,14 @@ class NotesSnackbars(
     }
 
     /**
-     * **Undo** in the snackbar that shows now. It counts once: a second
-     * press finds no snackbar. The records come back, then those of the
-     * action that changed meanwhile and are still deleted are wiped.
+     * **Undo** in the snackbar [pressed], by default the one that shows
+     * now. It counts once: a second press finds no snackbar. It counts for
+     * nothing if another snackbar took the place of [pressed] before the
+     * press arrived. The records come back, then those of the action that
+     * changed meanwhile and are still deleted are wiped.
      */
-    fun undo() {
-        val message = shown.value ?: return
+    fun undo(pressed: NotesMessage? = null) {
+        val message = pressed ?: shown.value ?: return
         val undo = message.offeredUndo ?: return
         scope.launch(work) {
             val pressed = turns.withLock {

@@ -14,6 +14,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -77,6 +79,31 @@ class NoteImagesTest {
 
         assertNull(runBlocking { images.decode(pdf, 100) })
         assertNull(runBlocking { images.decode(broken, 100) })
+    }
+
+    @Test
+    fun imagesAreDecodedOneAtATime() {
+        val open = java.util.concurrent.atomic.AtomicInteger()
+        val most = java.util.concurrent.atomic.AtomicInteger()
+        val counting = NoteImages(
+            FileReader(phone.repository, crypto.files, { false }, Dispatchers.IO) { stream ->
+                most.accumulateAndGet(open.incrementAndGet(), ::maxOf)
+                Thread.sleep(50)
+                object : java.io.FilterInputStream(java.io.FileInputStream(stream)) {
+                    override fun close() {
+                        open.decrementAndGet()
+                        super.close()
+                    }
+                }
+            },
+            Dispatchers.IO,
+        )
+        val files = List(4) { add(TestPick(name = "photo$it.png", type = "image/png", bytes = png(40, 20))) }
+
+        val shown = runBlocking { files.map { file -> async(Dispatchers.IO) { counting.decode(file, 100) } }.awaitAll() }
+
+        assertTrue(shown.all { it != null })
+        assertEquals("One stream open at a time", 1, most.get())
     }
 
     @Test

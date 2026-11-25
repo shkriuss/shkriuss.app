@@ -5,6 +5,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
@@ -200,8 +201,11 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         start()
         openNote("Shopping")
         refuseWrites()
-        compose.editor("Shopping").performTextReplacement("Shopping list")
+        // The change comes as typing would, but with no field focused: the save fails a second later, in real time, so a
+        // blinking cursor would show or not by chance.
+        checkNotNull(scenario).onActivity { ViewModelProvider(it)[OpenNoteViewModel::class.java].open.value?.model?.onTitleChange("Shopping list") }
         compose.waitForText(words(R.string.notes_save_failed))
+        compose.onNode(IS_EDITABLE and hasText("Shopping list")).assertIsNotFocused()
         compose.captureWholeScreen("NoteSaveFailed", config)
     }
 

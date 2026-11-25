@@ -188,6 +188,21 @@ class NotesScreensTest(private val config: ScreenshotConfig) {
         compose.waitFor(rowMatcher("Trip"))
     }
 
+    @Test
+    fun turningThePhoneKeepsTheUndoOfADeletedNote() {
+        seed { addNote("Trip", "Passport") }
+        start()
+        openNote("Trip")
+        compose.tap(DesignR.string.shk_more_options)
+        compose.tap(R.string.notes_delete_note)
+        compose.waitForText(words(R.string.notes_note_deleted))
+
+        scenario.recreate()
+
+        compose.tap(R.string.notes_undo)
+        compose.waitUntil(WAIT) { storedNotes().singleOrNull()?.body == "Passport" }
+    }
+
     // Formatting.
 
     @Test

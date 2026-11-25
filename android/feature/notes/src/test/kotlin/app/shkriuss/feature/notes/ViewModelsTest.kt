@@ -424,6 +424,23 @@ class ViewModelsTest {
     }
 
     @Test
+    fun anUndoActsOnlyOnTheSnackbarWhoseButtonWasPressed() {
+        val trip = phone.note("Trip", "Secret")
+        val shopping = phone.note("Shopping", "Bread")
+        val pressed = NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(trip) }))
+        snackbars.show(pressed)
+        // Another Undo snackbar takes its place between the press and its arrival.
+        val later = NotesMessage.NoteDeleted(checkNotNull(runBlocking { repository.deleteNote(shopping) }))
+        snackbars.show(later)
+
+        snackbars.undo(pressed)
+
+        eventually { stored(trip)?.let(NoteRules::isWiped) == true }
+        assertNotNull("The later deletion is not undone", stored(shopping)?.record?.deletedAt)
+        assertEquals(later, snackbars.current.value)
+    }
+
+    @Test
     fun removingAFileThenClosingTheEmptyNoteKeepsTheNoteSoThatUndoBringsTheFileBack() {
         val id = phone.note("Photo", "")
         val note = open(id)

@@ -104,6 +104,12 @@
 
     <!-- Type page. -->
     <string name="type_intro">Six styles in the system font. Text grows with the font size setting.</string>
+    <string name="type_parts_title">Parts of text</string>
+    <string name="type_parts_use">A preview of something that opens whole elsewhere may stop at a number of lines, with “…”. Ranges can be bold, such as what matches a search. TalkBack reads the text as it is.</string>
+    <string name="state_cut_at_two_lines">Cut at two lines</string>
+    <string name="state_bold_range">With a range in bold</string>
+    <string name="sample_preview">Bread, milk and eggs for the week, and something for dinner on Friday, when the guests come over to see the new flat and stay late.</string>
+    <string name="sample_match">- [ ] Passport</string>
     <!-- For example "24 sp, line height 32 sp, regular". -->
     <string name="type_spec">%1$d\u00A0sp, line height %2$d\u00A0sp, %3$s</string>
     <string name="type_weight_regular">regular</string>

@@ -286,6 +286,15 @@ class ComponentPagesTest {
     }
 
     @Test
+    fun theSelectedCardIsReadAsSelected() {
+        open(CatalogPage.Cards)
+        // One sample is selected. The other cards say nothing about it.
+        val selected = SemanticsMatcher.expectValue(SemanticsProperties.Selected, true)
+        compose.onAllNodes(selected and hasClickAction()).assertCountEquals(1)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Selected)).assertCountEquals(1)
+    }
+
+    @Test
     fun theSelectedListItemIsReadAsSelected() {
         open(CatalogPage.Lists)
         // One sample is selected. The other list items say nothing about it.

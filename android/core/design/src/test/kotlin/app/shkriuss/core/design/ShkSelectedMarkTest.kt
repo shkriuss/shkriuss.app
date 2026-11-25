@@ -50,10 +50,20 @@ class ShkSelectedMarkTest {
         assertColour("the fill at the left edge", FILL, mark[1, MIDDLE])
     }
 
-    private fun draw(direction: LayoutDirection): PixelMap {
+    @Test
+    fun onACardTheBarKeepsClearOfItsLargerCorners() {
+        val mark = draw(LayoutDirection.Ltr, inset = ShkShapes.CardCorner)
+
+        // The card's corners are 16dp: the bar starts and ends 16dp in.
+        assertColour("the fill above the bar", FILL, mark[1, 14])
+        assertColour("the bar near its top", BAR, mark[1, 17])
+        assertColour("the fill below the bar", FILL, mark[1, HEIGHT - 15])
+    }
+
+    private fun draw(direction: LayoutDirection, inset: androidx.compose.ui.unit.Dp = ShkShapes.FieldCorner): PixelMap {
         val image = ImageBitmap(WIDTH, HEIGHT)
         CanvasDrawScope().draw(Density(1f), direction, Canvas(image), Size(WIDTH.toFloat(), HEIGHT.toFloat())) {
-            drawSelectedMark(fill = FILL, bar = BAR)
+            drawSelectedMark(fill = FILL, bar = BAR, inset = inset)
         }
         return image.toPixelMap()
     }

@@ -1,5 +1,6 @@
 package app.shkriuss.feature.notes
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
@@ -38,10 +39,15 @@ data class OpenNote(
  * closed, its store is cleared. [giveUp] gives up a new note that was
  * reserved for opening and never opened, so it no longer counts towards
  * 5,000.
+ *
+ * The open note and its image view are kept in [saved], so that after
+ * Android stopped Notes, as while a file picker was open, the note opens
+ * again, with the launcher that waits for the picker's result.
  */
 class OpenNoteViewModel(
     private val make: (noteId: String) -> NoteViewModel,
     private val giveUp: (noteId: String) -> Unit,
+    private val saved: SavedStateHandle,
 ) : ViewModel() {
     private val shown = MutableStateFlow<OpenNote?>(null)
     private var store: ViewModelStore? = null
@@ -52,6 +58,15 @@ class OpenNoteViewModel(
     /** The open note, or null. */
     val open: StateFlow<OpenNote?> = shown.asStateFlow()
 
+    init {
+        // Opened again after Android stopped Notes: a note that is gone by now closes at once.
+        val imageId = saved.get<String>(IMAGE_KEY)
+        saved.get<String>(NOTE_KEY)?.let { noteId ->
+            start(noteId, isNew = false)
+            imageId?.let(::openImage)
+        }
+    }
+
     /**
      * Opens the note [noteId], [isNew] for a note that **New note**
      * reserved. A note that is open already shows itself, not its image
@@ -61,7 +76,14 @@ class OpenNoteViewModel(
         val now = shown.value
         when {
             now == null -> start(noteId, isNew)
-            now.model.noteId == noteId -> shown.value = now.copy(imageId = null)
+            now.model.noteId == noteId -> {
+                // The open note is closing for another one: the last tap wins, and this note opens again after.
+                if (next != null) {
+                    dropNext()
+                    next = noteId to false
+                }
+                show(now.copy(imageId = null))
+            }
             else -> {
                 dropNext()
                 next = noteId to isNew
@@ -84,12 +106,19 @@ class OpenNoteViewModel(
 
     /** Opens the image view of the file [fileId] in place of the note. */
     fun openImage(fileId: String) {
-        shown.value?.let { shown.value = it.copy(imageId = fileId) }
+        shown.value?.let { show(it.copy(imageId = fileId)) }
     }
 
     /** Back on the image view, or its file was removed: the note shows again. */
     fun closeImage() {
-        shown.value?.let { shown.value = it.copy(imageId = null) }
+        shown.value?.let { show(it.copy(imageId = null)) }
+    }
+
+    /** Shows [note], or no note, and keeps which in [saved]. */
+    private fun show(note: OpenNote?) {
+        shown.value = note
+        saved[NOTE_KEY] = note?.model?.noteId
+        saved[IMAGE_KEY] = note?.imageId
     }
 
     /** Notes leaves the screen or locks: what is typed in the open note is saved. */
@@ -101,7 +130,7 @@ class OpenNoteViewModel(
         val notes = ViewModelStore()
         val model = ViewModelProvider(notes, viewModelFactory { initializer { make(noteId) } })[NoteViewModel::class.java]
         store = notes
-        shown.value = OpenNote(model, isNew)
+        show(OpenNote(model, isNew))
         viewModelScope.launch {
             model.state.first { it.closed }
             closed(model)
@@ -113,7 +142,7 @@ class OpenNoteViewModel(
         if (shown.value?.model !== model) return
         store?.clear()
         store = null
-        shown.value = null
+        show(null)
         next?.let { (noteId, isNew) ->
             next = null
             start(noteId, isNew)
@@ -131,5 +160,11 @@ class OpenNoteViewModel(
         dropNext()
         store?.clear()
         store = null
+    }
+
+    private companion object {
+        /** The keys of the open note and of the file of its image view in the saved state. */
+        const val NOTE_KEY = "openNote"
+        const val IMAGE_KEY = "openImage"
     }
 }

@@ -73,7 +73,7 @@ internal fun NotesContent(models: NotesModels, snackbar: ShkSnackbarHostState, w
     ShkListDetailScaffold(
         detailOpen = open != null,
         onCloseDetail = models.open::close,
-        list = { ListPane(models, snackbar.takeIf { !twoPanes }) },
+        list = { ListPane(models, openNoteId = open?.model?.noteId?.takeIf { twoPanes }, snackbar = snackbar.takeIf { !twoPanes }) },
         detail = { onBack ->
             val note = open
             if (note == null) {
@@ -92,9 +92,10 @@ internal fun NotesContent(models: NotesModels, snackbar: ShkSnackbarHostState, w
 /**
  * The list: the search field, the notes in their sections, and the
  * floating button **New note**. Back with text in the field clears it.
+ * From 840dp the note open beside it, [openNoteId], is marked.
  */
 @Composable
-private fun ListPane(models: NotesModels, snackbar: ShkSnackbarHostState?) {
+private fun ListPane(models: NotesModels, openNoteId: String?, snackbar: ShkSnackbarHostState?) {
     val list = models.list
     val state by list.state.collectAsState()
     val query by list.query.collectAsState()
@@ -144,8 +145,10 @@ private fun ListPane(models: NotesModels, snackbar: ShkSnackbarHostState?) {
                         verticalArrangement = Arrangement.spacedBy(ShkSpacing.Small),
                     ) {
                         val headings = shown.pinned.isNotEmpty()
-                        noteSection(if (headings) R.string.notes_pinned else null, PINNED_KEY, shown.pinned, clock, format, onOpen)
-                        noteSection(if (headings) R.string.notes_other_notes else null, OTHERS_KEY, shown.others, clock, format, onOpen)
+                        val pinned = if (headings) R.string.notes_pinned else null
+                        val others = if (headings) R.string.notes_other_notes else null
+                        noteSection(pinned, PINNED_KEY, shown.pinned, openNoteId, clock, format, onOpen)
+                        noteSection(others, OTHERS_KEY, shown.others, openNoteId, clock, format, onOpen)
                         item(key = ROOM_KEY) { Spacer(Modifier.height(room)) }
                     }
                 }
@@ -159,13 +162,14 @@ private fun LazyListScope.noteSection(
     heading: Int?,
     key: String,
     rows: List<NoteRowState>,
+    openNoteId: String?,
     clock: NotesClock,
     format: NotesFormat,
     onOpen: (NoteRowState) -> Unit,
 ) {
     if (rows.isEmpty()) return
     if (heading != null) item(key = key) { ShkSectionHeader(stringResource(heading)) }
-    items(rows, key = { it.note.id }) { row -> NoteCard(row, clock, format) { onOpen(row) } }
+    items(rows, key = { it.note.id }) { row -> NoteCard(row, selected = row.note.id == openNoteId, clock, format) { onOpen(row) } }
 }
 
 /**
@@ -173,10 +177,11 @@ private fun LazyListScope.noteSection(
  * title, up to two lines of the text, or the line or the file that
  * matches a search with the match in bold, and the last change with the
  * number of files. TalkBack reads it as one item: "Trip, pinned, changed
- * Monday 16 November, 2 files, Passport, Tickets".
+ * Monday 16 November, 2 files, Passport, Tickets". The card of the note
+ * open beside the list is [selected] (the owner's decision).
  */
 @Composable
-private fun NoteCard(row: NoteRowState, clock: NotesClock, format: NotesFormat, onOpen: () -> Unit) {
+private fun NoteCard(row: NoteRowState, selected: Boolean, clock: NotesClock, format: NotesFormat, onOpen: () -> Unit) {
     val colors = ShkTheme.colors
     val title = row.title.ifEmpty { stringResource(R.string.notes_empty_note) }
     val titleMatch = row.match?.inTitle.orEmpty().takeIf { row.note.title.isNotEmpty() }.orEmpty()
@@ -209,7 +214,7 @@ private fun NoteCard(row: NoteRowState, clock: NotesClock, format: NotesFormat, 
         files.takeIf { row.fileCount > 0 },
         under.takeIf { it.isNotEmpty() },
     ).reduce { said, next -> resources.getString(R.string.notes_spoken_parts, said, next) }
-    ShkCard(onClick = onOpen, modifier = Modifier.semantics { contentDescription = spoken }) {
+    ShkCard(onClick = onOpen, modifier = Modifier.semantics { contentDescription = spoken }, selected = selected) {
         ShkText(text = title, style = ShkTextStyle.Subtitle, bold = titleMatch)
         if (under.isNotEmpty()) {
             ShkText(text = under, color = colors.textSecondary, maxLines = PREVIEW_LINES, bold = underBold)

@@ -5,9 +5,12 @@ import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import app.shkriuss.core.crypto.BlobException
 import java.io.IOException
+import java.io.InputStream
 import java.nio.ByteBuffer
 import kotlin.coroutines.CoroutineContext
 import kotlin.math.max
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -20,25 +23,36 @@ import kotlinx.coroutines.withContext
  * is written anywhere.
  */
 class NoteImages(private val reader: FileReader, private val work: CoroutineContext) {
+    /** One image at a time, so that the rows of a note full of large photos never hold several of them in memory at once. */
+    private val decoding = Mutex()
+
     /**
      * The image of [file], scaled down to fit a square of [side] pixels
      * when it is larger, or null when it cannot be shown: its type is not
      * an image, its stream cannot be read or is damaged, or `ImageDecoder`
-     * refuses it. A read that meets damage marks the file damaged
-     * ([FileReader.open]).
+     * refuses it, or it is too large to hold. A read that meets damage
+     * marks the file damaged ([FileReader.open]). One image is decoded at
+     * a time.
      */
     suspend fun decode(file: NoteFile, side: Int): Bitmap? = withContext(work) {
-        if (!file.maybeImage || side <= 0) return@withContext null
+        if (!file.maybeImage || side <= 0 || file.size > NoteLimits.MOST_FILE_BYTES) return@withContext null
+        decoding.withLock { decodeNow(file, side) }
+    }
+
+    private suspend fun decodeNow(file: NoteFile, side: Int): Bitmap? {
         val bytes = try {
-            reader.open(file).use { it.readBytes() }
+            reader.open(file).use { input -> readExactly(input, file.size.toInt()) } ?: return null
         } catch (_: IOException) {
-            return@withContext null
+            return null
         } catch (_: BlobException) {
-            return@withContext null
+            return null
         } catch (_: SQLException) {
-            return@withContext null
+            return null
+        } catch (_: OutOfMemoryError) {
+            // A file too large to hold now: it is not shown.
+            return null
         }
-        try {
+        return try {
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(ByteBuffer.wrap(bytes))) { decoder, info, _ ->
                 // In memory the screens draw from, and never larger than it shows.
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
@@ -54,5 +68,17 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
             // An image too large to hold, even scaled down: it cannot be shown.
             null
         }
+    }
+
+    /** The [size] bytes of [input], in one array of that size, or null when it holds fewer or more: such a file is damaged. */
+    private fun readExactly(input: InputStream, size: Int): ByteArray? {
+        val bytes = ByteArray(size)
+        var read = 0
+        while (read < size) {
+            val count = input.read(bytes, read, size - read)
+            if (count < 0) return null
+            read += count
+        }
+        return if (input.read() < 0) bytes else null
     }
 }

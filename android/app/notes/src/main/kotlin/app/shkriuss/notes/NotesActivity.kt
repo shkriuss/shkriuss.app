@@ -18,7 +18,8 @@ import app.shkriuss.feature.notes.ui.NotesScreens
  *
  * It tells `NotesServices` when it is on the screen, because a picked file
  * starts to be added only then. When it leaves the screen, the open note
- * saves what is typed and the **Undo** of a snackbar ends.
+ * saves what is typed and the **Undo** of a snackbar ends. Turning the
+ * phone is not leaving the screen.
  */
 class NotesActivity : ComponentActivity() {
     private lateinit var models: NotesModels
@@ -44,7 +45,9 @@ class NotesActivity : ComponentActivity() {
 
     override fun onStop() {
         notesServices.onScreen(false)
-        models.leftScreen()
+        // Turning the phone, or another change of the window, stops the activity too, but Notes stays on the screen:
+        // the open note stays open, and the Undo of a snackbar stays.
+        if (!isChangingConfigurations) models.leftScreen()
         super.onStop()
     }
 }

@@ -11,8 +11,11 @@ import androidx.compose.material3.CardElevation
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
@@ -60,41 +63,56 @@ fun ShkCard(
  *
  * It has no disabled state. When the card cannot be opened, use the card
  * without `onClick`.
+ *
+ * With [selected], the card is marked as the one that is open, such as
+ * the note shown beside the list in two panes of a
+ * [ShkListDetailScaffold]. It is filled with the higher surface colour and
+ * has a bar in the accent colour along its start edge, as a selected
+ * [ShkListItem] has, so the mark does not rely on colour alone. TalkBack
+ * reads "selected". Cards that are not selected say nothing about it.
  */
 @Composable
 fun ShkCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val colors = ShkTheme.colors
     OutlinedCard(
         onClick = onClick,
         // Material 3 gives a card that can be tapped no role, so TalkBack
         // would not say what a tap does.
         modifier = modifier
             .fillMaxWidth()
-            .semantics { role = Role.Button },
+            .semantics {
+                role = Role.Button
+                if (selected) this.selected = true
+            },
         shape = ShkShapes.Card,
-        colors = cardColors(),
+        colors = if (selected) cardColors(container = colors.surfaceHigh) else cardColors(),
         elevation = noCardElevation(),
         border = cardBorder(),
     ) {
-        CardContent(content)
+        val mark = if (selected) {
+            Modifier.drawBehind { drawSelectedMark(fill = colors.surfaceHigh, bar = colors.accent, inset = ShkShapes.CardCorner) }
+        } else {
+            Modifier
+        }
+        CardContent(content, mark)
     }
 }
 
-/** The content of a card, [ShkSpacing.Large] in from its edges. */
+/** The content of a card, [ShkSpacing.Large] in from its edges, with [modifier] before the padding, such as the mark of a selected card. */
 @Composable
-private fun CardContent(content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(ShkSpacing.Large), content = content)
+private fun CardContent(content: @Composable ColumnScope.() -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth().padding(ShkSpacing.Large), content = content)
 }
 
-/** The surface colour, with the normal text colour on it. */
+/** The [container] colour, the surface colour by default, with the normal text colour on it. */
 @Composable
-private fun cardColors(): CardColors {
-    val colors = ShkTheme.colors
-    return CardDefaults.outlinedCardColors(containerColor = colors.surface, contentColor = colors.text)
-}
+private fun cardColors(container: Color = ShkTheme.colors.surface): CardColors =
+    CardDefaults.outlinedCardColors(containerColor = container, contentColor = ShkTheme.colors.text)
 
 /** The outline of every raised surface: 1dp in the outline colour. */
 @Composable
