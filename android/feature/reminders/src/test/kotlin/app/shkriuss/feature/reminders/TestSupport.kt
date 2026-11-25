@@ -84,6 +84,15 @@ internal fun RemindersDatabase.refuseWritesTo(table: String) = runBlocking {
     }
 }
 
+/**
+ * Makes every read of [table] fail from now on, as when the database
+ * cannot be read: the table is gone. Room throws an
+ * `android.database.SQLException`.
+ */
+internal fun RemindersDatabase.refuseReadsOf(table: String) = runBlocking {
+    useWriterConnection { connection -> connection.executeSQL("DROP TABLE $table") }
+}
+
 /** A book in a preferences file of its own, empty at the start. */
 internal fun emptyBook(name: String = ReminderBook.FILE): ReminderBook =
     ReminderBook(context.getSharedPreferences(name, Context.MODE_PRIVATE).also { check(it.edit().clear().commit()) })

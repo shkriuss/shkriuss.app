@@ -252,28 +252,31 @@ class RemindersRepository(
     }
 
     /**
-     * Runs after a restore, with the reminders it took, [taken]
-     * (docs/apps/reminders/spec.md, "Backup contents", point 3). The
-     * restore wrote them past this repository. Each one that is not
-     * deleted counts from the current minute of [now], the moment after
-     * the restore: its snooze ends, and its notification goes. One that
-     * came back deleted loses its entries, as a delete does. Then the
-     * notifications follow, also when the restore took none. Like every
-     * write here, it runs to its end once it has begun.
+     * Runs after a restore, with the reminders it took, [taken], as it
+     * wrote them (docs/apps/reminders/spec.md, "Backup contents", point
+     * 3). The restore wrote them past this repository. Each one that is
+     * not deleted counts from the current minute of [now], the moment
+     * after the restore: its snooze ends, and its notification goes. One
+     * that came back deleted loses its entries, as a delete does. Then the
+     * notifications follow, also when the restore took none. It reads
+     * nothing from the database, so a database that refuses a read just
+     * after the restore cannot stop it half way. Like every write here, it
+     * runs to its end once it has begun.
      */
-    suspend fun afterRestore(taken: List<String>, now: ClockReading = time.reading()) =
-        withContext(NonCancellable) { afterRestoreWhole(taken.distinct(), now) }
+    suspend fun afterRestore(taken: List<ReminderEntity>, now: ClockReading = time.reading()) =
+        withContext(NonCancellable) { afterRestoreWhole(taken.distinctBy { it.record.id }, now) }
 
-    private suspend fun afterRestoreWhole(taken: List<String>, now: ClockReading) {
+    private suspend fun afterRestoreWhole(taken: List<ReminderEntity>, now: ClockReading) {
+        val ids = taken.map { it.record.id }
         if (taken.isNotEmpty()) {
-            val live = reminders.live().mapTo(HashSet()) { it.record.id }
+            val live = taken.filterNot { it.record.isDeleted }.mapTo(HashSet()) { it.record.id }
             withContext(work) {
                 turns.withLock {
-                    book.update(taken) { id, _ -> if (id in live) ReminderEntry(mark = now.currentMinute) else ReminderEntry() }
+                    book.update(ids) { id, _ -> if (id in live) ReminderEntry(mark = now.currentMinute) else ReminderEntry() }
                 }
             }
         }
-        onChange(ReminderChange(ReminderChange.Kind.RESTORED, taken))
+        onChange(ReminderChange(ReminderChange.Kind.RESTORED, ids))
     }
 
     /** The reminders [ids] count from the current minute of [now]: that is their mark, with no snooze and nothing on screen. */

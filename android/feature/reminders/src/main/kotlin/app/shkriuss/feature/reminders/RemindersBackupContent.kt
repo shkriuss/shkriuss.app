@@ -1,6 +1,5 @@
 package app.shkriuss.feature.reminders
 
-import android.database.SQLException
 import androidx.room3.withReadTransaction
 import androidx.room3.withWriteTransaction
 import app.shkriuss.core.backup.BackupContent
@@ -31,16 +30,17 @@ import java.nio.charset.CodingErrorAction
  *
  * The phone-only entries are no part of it. After a restore, each
  * reminder it took counts from that moment (spec, "Backup contents",
- * point 3): once the transaction is written, [afterRestore] gets the
- * `id` of every reminder it took, and `RemindersRepository.afterRestore`
- * does the rest. A reminder the phone has with the same `updatedAt`, or a
- * later one, is not taken, so it stays as it is.
+ * point 3): once the transaction is written, [afterRestore] gets every
+ * reminder it took, as it wrote it, and `RemindersRepository.afterRestore`
+ * does the rest without a read of the database. A reminder the phone has
+ * with the same `updatedAt`, or a later one, is not taken, so it stays as
+ * it is.
  */
 class RemindersBackupContent(
     private val database: RemindersDatabase,
     clock: Clock,
     ids: IdSource,
-    private val afterRestore: suspend (taken: List<String>) -> Unit = {},
+    private val afterRestore: suspend (taken: List<ReminderEntity>) -> Unit = {},
 ) : BackupContent {
     // takeFromBackup keeps the record fields it is given; the clock and the ID source are never used for it.
     private val reminders = RecordWriter(database, database.reminders(), clock, ids)
@@ -58,25 +58,18 @@ class RemindersBackupContent(
     override suspend fun restore(from: CheckedBackup) {
         if (from.dataVersion != DATA_VERSION) throw UnreadableBackupException("data version ${from.dataVersion}")
         if (from.fileCount != 0L) throw UnreadableBackupException("the backup holds files")
-        val taken = mutableListOf<String>()
+        val taken = mutableListOf<ReminderEntity>()
         val seen = mutableSetOf<String>()
         database.withWriteTransaction {
             from.forEachRecord { record ->
                 // Reminders writes each reminder once. Of two with one ID only one would stay, though the question counted both.
                 if (!seen.add(record.fields.id)) throw UnreadableBackupException("a record ID is there twice")
                 val reminder = RemindersBackupCodec.decode(record)
-                if (reminders.takeFromBackup(reminder) == BackupTake.TAKEN) taken += reminder.record.id
+                if (reminders.takeFromBackup(reminder) == BackupTake.TAKEN) taken += reminder
             }
             from.forEachFile { throw UnreadableBackupException("the backup holds files") }
         }
-        // The records are written by now, so a read that the database refuses after them must not end in the answer
-        // that nothing changed. The phone-only entries then stay as they were, and the alarms are set again at the
-        // next start of Reminders.
-        try {
-            afterRestore(taken)
-        } catch (_: SQLException) {
-            // The restore stands.
-        }
+        afterRestore(taken)
     }
 
     /** Reminders' data version. */

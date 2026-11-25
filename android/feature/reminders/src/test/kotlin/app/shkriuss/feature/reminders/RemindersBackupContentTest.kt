@@ -1,6 +1,5 @@
 package app.shkriuss.feature.reminders
 
-import android.database.SQLException
 import android.net.Uri
 import app.shkriuss.core.backup.BackupRecord
 import app.shkriuss.core.backup.BackupSink
@@ -179,35 +178,27 @@ class RemindersBackupContentTest {
         val stored = backup.first { it.fields.id == changed.id }
         val newer = BackupRecord(stored.type, stored.fields.copy(updatedAt = stored.fields.updatedAt + 60_000), stored.content)
         val gone = RemindersBackupCodec.encode(row(title = "Gone", fields = fields(1, deletedAt = 5_000)))
-        val handed = mutableListOf<List<String>>()
+        val handed = mutableListOf<List<ReminderEntity>>()
 
         restore(RemindersBackupContent(database, clock, ids) { handed += it }, backup.map { if (it == stored) newer else it } + gone)
 
         // "Kept" has the same updatedAt as the backup, so it is not taken. A newer edit and a new record are, deleted or not.
         assertEquals("handed on once, after the transaction", 1, handed.size)
-        assertEquals(setOf(changed.id, gone.fields.id), handed.single().toSet())
-        assertTrue(kept.id !in handed.single())
+        val handedIds = handed.single().map { it.record.id }
+        assertEquals(setOf(changed.id, gone.fields.id), handedIds.toSet())
+        assertTrue(kept.id !in handedIds)
+        assertTrue("each as it was written, so a deleted one says so", handed.single().single { it.record.id == gone.fields.id }.record.deletedAt != null)
     }
 
     @Test
     fun aRestoreThatIsRefusedHandsOnNothing() {
-        val handed = mutableListOf<List<String>>()
+        val handed = mutableListOf<List<ReminderEntity>>()
         val refusing = RemindersBackupContent(database, clock, ids) { handed += it }
         val good = RemindersBackupCodec.encode(row())
 
         assertThrows(UnreadableBackupException::class.java) { restore(refusing, listOf(good, BackupRecord("task", fields(2), good.content))) }
 
-        assertEquals(emptyList<List<String>>(), handed)
-    }
-
-    @Test
-    fun aReadThatTheDatabaseRefusesAfterTheTransactionLeavesTheRestoreStanding() {
-        // As RemindersRepository.afterRestore when its read of the reminders fails: the records are written by then.
-        val failingAfter = RemindersBackupContent(database, clock, ids) { throw SQLException("refused") }
-
-        restore(failingAfter, listOf(RemindersBackupCodec.encode(row())))
-
-        assertEquals(listOf("Pills"), runBlocking { database.reminders().all() }.map { it.title })
+        assertEquals(emptyList<List<ReminderEntity>>(), handed)
     }
 
     @Test

@@ -594,9 +594,9 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersBackupContentTest` also writes a whole backup through
     `Backups` and restores it on a second app with the same recovery
     key, as Water's does. It checks that a restore hands on the
-    reminders it took, and only those, once its transaction is written,
-    and that a read the database refuses after that leaves the restore
-    standing.
+    reminders it took, as it wrote them, and only those, once its
+    transaction is written. `RemindersRepositoryTest` checks that what
+    follows then reads nothing from the database.
   - `BackupViewModelTest` is a copy of Water's, with a second phone
     (`AnotherPhone`) that makes the backups to restore. It also checks
     the example of the spec, a restore on Monday at 12:00, and that a
@@ -653,9 +653,9 @@ second build must write the same mapping file, or the release stops. See
     every limit and rule that a restore refuses, and writes a whole
     backup through `Backups` and restores it on a second app with the
     same recovery key, as Reminders' does. It checks that a restore
-    hands on the tasks it took, and only those, once its transaction is
-    written, and that a read the database refuses after that leaves the
-    restore standing.
+    hands on the tasks it took, as it wrote them, and only those, once
+    its transaction is written. `TasksRepositoryTest` checks that what
+    follows then reads nothing from the database.
   - `BackupViewModelTest` is a copy of Reminders', with a second phone
     (`AnotherPhone`) that makes the backups to restore. It also checks
     that a task the restore took counts from that moment, loses its
