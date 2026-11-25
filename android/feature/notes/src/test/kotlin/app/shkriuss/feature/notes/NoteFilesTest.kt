@@ -499,6 +499,19 @@ class NoteFilesTest {
     }
 
     @Test
+    fun aFileWithNoNameGetsTheWordTheAddsAreHanded() {
+        val id = phone.note()
+        // Another word than the app's, so that only the word handed in can be the one that is stored and told.
+        val named = FileAdds(repository, crypto.files, canStart, fileKeys, { problems += it }, { "Datei" }, scope, Dispatchers.IO)
+
+        named.add(id, listOf(TestPick(name = null), TestPick(name = "  ", failOpen = true)))
+        named.adding.await { it.isEmpty() }
+
+        assertEquals(listOf("Datei"), files(id).map { it.name })
+        assertEquals(listOf<AddProblem>(AddProblem.CouldNotRead("Datei")), problems)
+    }
+
+    @Test
     fun theStateOfARowSaysWhyAFileCannotBeOpened() = runBlocking {
         val id = phone.note()
         add(id, TestPick("missing.jpg"), TestPick("cut.jpg"), TestPick("key.jpg"))

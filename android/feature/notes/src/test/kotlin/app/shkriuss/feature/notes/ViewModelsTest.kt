@@ -569,6 +569,27 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aLeaveWhileARefusedUndoIsWrittenEndsTheUndoAsEveryLeaveDoes() {
+        val id = phone.note("Trip", "Secret")
+        val held = Held()
+        val heldSnackbars = NotesSnackbars(repository, {}, scope, held.dispatcher)
+        val undo = checkNotNull(runBlocking { repository.deleteNote(id) })
+        heldSnackbars.show(NotesMessage.NoteDeleted(undo))
+        refuseBringingBack(NoteEntity.TABLE)
+
+        heldSnackbars.undo()
+        // The press took its snackbar away, and its write has not come back yet.
+        held.runUntil { heldSnackbars.current.value == null }
+        // Notes leaves the screen meanwhile: no snackbar shows, so the leave finds no Undo to end.
+        heldSnackbars.endUndo()
+
+        held.runUntil { heldSnackbars.current.value != null }
+        assertEquals("No snackbar with Undo shows after the leave", NotesMessage.CouldNotChange, heldSnackbars.current.value)
+        held.runUntil { stored(id)?.let(NoteRules::isWiped) == true }
+        held.runUntil { heldSnackbars.openUndoIds.isEmpty() }
+    }
+
+    @Test
     fun aRemovedFilesUndoThatTheDatabaseRefusesKeepsTheFileAndItsStream() {
         val id = phone.note("Trip", "")
         adds.add(id, listOf(TestPick()))

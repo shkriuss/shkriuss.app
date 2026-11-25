@@ -195,16 +195,21 @@ class NotesSnackbars(
      * If the database refuses the write, nothing came back and nothing is
      * wiped: the Undo stays open in a snackbar that says so and keeps
      * **Undo** ([NotesMessage.UndoFailed]), so the press can be tried
-     * again. It ends when that snackbar goes.
+     * again. It ends when that snackbar goes. If Notes left the screen, or
+     * the destination changed, while the refused write ran, that snackbar
+     * would show after the leave: the Undo ends at once instead, as at
+     * every leave, and the snackbar says only that nothing changed.
      */
     fun undo(pressed: NotesMessage? = null) {
         val message = pressed ?: shown.value ?: return
         val undo = message.offeredUndo ?: return
         scope.launch(work) {
-            val written = turns.withLock {
+            val ended = turns.withLock {
                 startEnding(undo)
                 // Another snackbar may have taken its place meanwhile: then that ended the Undo, and the press counts for nothing.
-                if (!swap(message, null)) {
+                // The snackbar goes and the leaves are read as one step, so a leave is before the press or after it.
+                val leavesBefore = synchronized(leaveLock) { if (swap(message, null)) leaves else null }
+                if (leavesBefore == null) {
                     stopEnding(undo)
                     return@withLock false
                 }
@@ -212,14 +217,21 @@ class NotesSnackbars(
                     repository.undo(undo)
                     true
                 } catch (_: SQLException) {
-                    // Its records count as open in the new snackbar before they stop counting as ending, so the move of
-                    // the file keys never finds them as neither.
-                    show(NotesMessage.UndoFailed(undo))
-                    stopEnding(undo)
-                    false
+                    synchronized(leaveLock) {
+                        if (leaves == leavesBefore) {
+                            // Its records count as open in the new snackbar before they stop counting as ending, so the
+                            // move of the file keys never finds them as neither.
+                            show(NotesMessage.UndoFailed(undo))
+                            stopEnding(undo)
+                            false
+                        } else {
+                            show(NotesMessage.CouldNotChange)
+                            true
+                        }
+                    }
                 }
             }
-            if (written) end(undo)
+            if (ended) end(undo)
         }
     }
 
