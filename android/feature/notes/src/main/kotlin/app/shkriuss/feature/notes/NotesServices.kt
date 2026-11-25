@@ -69,7 +69,7 @@ class NotesServices(
         NotesRepository(database, clock, ids, NoteFileStore(File(context.noBackupFilesDir, ATTACHMENTS_FOLDER)), background = scope)
 
     /** The one snackbar of Notes. When its Undo ends, the move of the file keys goes on. */
-    val snackbars: NotesSnackbars = NotesSnackbars(repository, { keyMove.run() }, scope, work)
+    val snackbars: NotesSnackbars = NotesSnackbars(repository, { keyMove.run() }, scope, work, isAdding = { adds.isAddingTo(it) })
 
     /** The move of the file keys to the recovery key. */
     val keyMove: FileKeyMove = FileKeyMove(repository, crypto, fileKeys, snackbars, work)
@@ -83,6 +83,7 @@ class NotesServices(
         { problem -> snackbars.show(NotesMessage.NotAdded(problem)) },
         scope,
         work,
+        afterLastAdd = { noteId -> snackbars.lookAgain(noteId) },
     )
 
     /** The state of each file, the images and **Save a copy**. */

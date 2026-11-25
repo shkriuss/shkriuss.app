@@ -15,9 +15,11 @@ import java.io.File
 import java.io.OutputStream
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,8 +58,12 @@ class ViewModelsTest {
     private val problems = CopyOnWriteArrayList<AddProblem>()
     private val keyMoves = CopyOnWriteArrayList<Unit>()
 
-    private val snackbars by lazy { NotesSnackbars(repository, { keyMoves += Unit }, scope, Dispatchers.IO) }
-    private val adds by lazy { FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), { problems += it }, scope, Dispatchers.IO) }
+    private val snackbars: NotesSnackbars by lazy {
+        NotesSnackbars(repository, { keyMoves += Unit }, scope, Dispatchers.IO, isAdding = { adds.isAddingTo(it) })
+    }
+    private val adds: FileAdds by lazy {
+        FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), { problems += it }, scope, Dispatchers.IO, afterLastAdd = { snackbars.lookAgain(it) })
+    }
     private val reader by lazy { FileReader(repository, crypto.files, { false }, Dispatchers.IO) }
 
     /** The pauses asked for, and the way to end the one that waits. */
@@ -83,6 +89,13 @@ class ViewModelsTest {
     private fun open(id: String) = NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait) { elapsed }
 
     private fun stored(id: String): NoteEntity? = runBlocking { phone.database.notes().find(id) }
+
+    /** A stored note with no title, text or file, as one that closed empty while it was kept. */
+    private fun emptyNote(): String {
+        val id = phone.note("Trip", "")
+        assertEquals(Saved.WRITTEN, runBlocking { repository.save(id, "", "") })
+        return id
+    }
 
     private fun NotesListViewModel.shown(condition: (NotesListState.Shown) -> Boolean = { true }): NotesListState.Shown =
         state.await { it is NotesListState.Shown && condition(it) } as NotesListState.Shown
@@ -577,6 +590,66 @@ class ViewModelsTest {
         eventually { runBlocking { repository.filesOf(id).first() }.size == 1 }
         eventually { adds.adding.value.isEmpty() }
         assertNull("A note with a file stays", stored(id)?.record?.deletedAt)
+    }
+
+    @Test
+    fun aNoteThatOpensWhileItIsLookedAtAgainIsNotDeletedUnderIt() {
+        val id = emptyNote()
+        snackbars.closedKept(id)
+        val reading = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val opening = scope.async { snackbars.opening(id) { reading.complete(Unit); release.await() } }
+        runBlocking { reading.await() }
+
+        val look = scope.async { snackbars.lookAgain(id) }
+        release.complete(Unit)
+
+        runBlocking {
+            opening.await()
+            look.await()
+        }
+        assertNull("The note opened first, so the look leaves it", stored(id)?.record?.deletedAt)
+    }
+
+    @Test
+    fun aNoteThatIsLookedAtAgainBeforeItOpensIsGoneWhenItIsRead() {
+        val id = emptyNote()
+        snackbars.closedKept(id)
+
+        runBlocking { snackbars.lookAgain(id) }
+
+        assertTrue(runBlocking { snackbars.opening(id) { stored(id)?.record?.deletedAt != null } })
+    }
+
+    @Test
+    fun aRemovedFilesUndoThatEndsWhileAnotherFileIsAddedLeavesTheNote() {
+        val id = phone.note("Photo", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        note.onTitleChange("")
+        note.removeFile(file)
+        val removed = checkNotNull(snackbars.current.await { it is NotesMessage.FileRemoved })
+        val release = CountDownLatch(1)
+        val slow = object : PickedFile by TestPick("map.jpg") {
+            override fun name(): String? {
+                release.await()
+                return "map.jpg"
+            }
+        }
+        note.addFiles(listOf(slow))
+        note.close()
+        note.state.await { it.closed }
+
+        snackbars.gone(removed)
+        eventually { snackbars.openUndoIds.isEmpty() }
+        assertNull("Files are still being added to it", stored(id)?.record?.deletedAt)
+        release.countDown()
+
+        eventually { runBlocking { repository.filesOf(id).first() }.size == 1 }
+        eventually { adds.adding.value.isEmpty() }
+        assertNull(stored(id)?.record?.deletedAt)
     }
 
     @Test

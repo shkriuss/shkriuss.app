@@ -133,8 +133,6 @@ class NoteViewModel(
     private var closing = false
 
     init {
-        snackbars.forget(noteId)
-        adds.opened(noteId)
         viewModelScope.launch(work) { read() }
         viewModelScope.launch(work) { watchFiles() }
         viewModelScope.launch(work) {
@@ -144,7 +142,8 @@ class NoteViewModel(
 
     private suspend fun read() {
         val stored = try {
-            repository.findNote(noteId)
+            // Not while the note, closed, is looked at again for being empty, and no such look after.
+            snackbars.opening(noteId) { repository.findNote(noteId) }
         } catch (_: SQLException) {
             shown.update { it.copy(loading = false, failed = true) }
             return
@@ -366,21 +365,17 @@ class NoteViewModel(
 
     private suspend fun finishClosing() {
         closing = true
+        // Written down before anything is looked at, so that an Undo or an add that ends meanwhile looks at the note again:
+        // a removed file whose Undo is open keeps an empty note, and so do files still being added to it.
+        snackbars.closedKept(noteId)
         val stillAdding = adds.isAddingTo(noteId)
         try {
             when {
                 // The adds decide: their first file makes or keeps the note; once the last one ends, a new note no add made is
                 // given up, and a stored note that is empty then is deleted.
-                stillAdding -> {
-                    snackbars.closedKept(noteId)
-                    if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId) else adds.deleteIfEmptyAfterAdds(noteId)
-                }
+                stillAdding -> if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
                 repository.findNote(noteId) == null -> repository.giveUpNewNote(noteId)
-                else -> {
-                    // A removed file whose Undo is open keeps an empty note: it is looked at again when that Undo ends.
-                    snackbars.closedKept(noteId)
-                    if (repository.deleteIfEmpty(noteId)) snackbars.forget(noteId)
-                }
+                else -> if (repository.deleteIfEmpty(noteId)) snackbars.forget(noteId)
             }
         } catch (_: SQLException) {
             // The empty note stays. It shows as "Empty note" in the list.

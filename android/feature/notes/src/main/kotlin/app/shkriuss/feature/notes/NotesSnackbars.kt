@@ -87,6 +87,7 @@ class NotesSnackbars(
     private val afterUndo: suspend () -> Unit,
     private val scope: CoroutineScope,
     private val work: CoroutineContext,
+    private val isAdding: (noteId: String) -> Boolean = { false },
 ) : UndoTurns {
     private val shown = MutableStateFlow<NotesMessage?>(null)
     private val showings = MutableStateFlow<Showing?>(null)
@@ -99,8 +100,11 @@ class NotesSnackbars(
     /** The Undos that ended and whose wipe is not done yet. */
     private val ending = mutableListOf<Undo>()
 
-    /** Notes that closed and were kept, maybe only for a removed file whose Undo may still bring it back ([closedKept]). */
+    /** Notes that closed and may have been kept only for a removed file or an add still to come ([closedKept]). */
     private val kept = mutableSetOf<String>()
+
+    /** Held while a closed note is looked at again, and while a note opens: one never runs inside the other. */
+    private val looks = Mutex()
 
     /** Counts the times Notes left the screen or the destination changed ([endUndo]), under [leaveLock]. */
     private var leaves = 0L
@@ -201,15 +205,45 @@ class NotesSnackbars(
     /**
      * The note [noteId] closes and is about to be looked at: an empty
      * note is deleted when it closes, but a removed file whose Undo may
-     * still bring it back counts as a file and keeps the note. So once
-     * the Undo of a file removed from it ends, the note is looked at
-     * again, and deleted if it is empty then (spec, "Saving", point 3).
-     * Called before the look, so an Undo that ends meanwhile finds it.
+     * still bring it back counts as a file and keeps the note, and while
+     * files are being added to it, it is not looked at. So once the Undo
+     * of a file removed from it or its last add ends, the note is looked
+     * at again ([lookAgain]), and deleted if it is empty then (spec,
+     * "Saving", point 3). Called before the look, so an Undo or an add
+     * that ends meanwhile finds it.
      */
     fun closedKept(noteId: String) = synchronized(kept) { kept += noteId }
 
-    /** The note [noteId] opened again, or was deleted as it closed: nothing is looked at for it when an Undo ends. */
+    /** The note [noteId] was deleted as it closed: nothing is left to look at. */
     fun forget(noteId: String) = synchronized(kept) { kept -= noteId }
+
+    /**
+     * The note [noteId] opens: [read] reads it, after a look at it that
+     * runs now, and it is not looked at again until it closes. So a note
+     * is never deleted while it opens or is open.
+     */
+    suspend fun <T> opening(noteId: String, read: suspend () -> T): T = looks.withLock {
+        synchronized(kept) { kept -= noteId }
+        read()
+    }
+
+    /**
+     * Looks again at the closed note [noteId], once the Undo of a file
+     * removed from it or its last add ended: it is deleted if it is empty,
+     * unless it opened again meanwhile or files are still being added to
+     * it. A note still kept, for example by another removed file whose
+     * Undo is open, is looked at again when that ends.
+     */
+    suspend fun lookAgain(noteId: String) = looks.withLock {
+        if (synchronized(kept) { noteId !in kept } || isAdding(noteId)) return@withLock
+        val deleted = try {
+            repository.deleteIfEmpty(noteId)
+        } catch (_: SQLException) {
+            // The empty note stays, as when it closes. It shows as "Empty note" in the list.
+            false
+        }
+        if (deleted) forget(noteId)
+    }
 
     /** Notes leaves the screen, or the destination changes: a snackbar with Undo goes, and its Undo ends. */
     fun endUndo() {
@@ -248,14 +282,7 @@ class NotesSnackbars(
         } finally {
             stopEnding(undo)
         }
-        val note = undo.note.id
-        if (undo.action == Undo.Action.FILE_REMOVED && synchronized(kept) { kept.remove(note) }) {
-            try {
-                repository.deleteIfEmpty(note)
-            } catch (_: SQLException) {
-                // The empty note stays, as when it closes. It shows as "Empty note" in the list.
-            }
-        }
+        if (undo.action == Undo.Action.FILE_REMOVED) lookAgain(undo.note.id)
         afterUndo()
     }
 }
