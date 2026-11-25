@@ -1,5 +1,6 @@
 package app.shkriuss.feature.tasks
 
+import android.database.SQLException
 import androidx.room3.withReadTransaction
 import androidx.room3.withWriteTransaction
 import app.shkriuss.core.backup.BackupContent
@@ -79,7 +80,14 @@ class TasksBackupContent(
             }
             from.forEachFile { throw UnreadableBackupException("the backup holds files") }
         }
-        afterRestore(taken)
+        // The records are written by now, so a read that the database refuses after them must not end in the answer
+        // that nothing changed. The phone-only entries then stay as they were, and the alarms are set again at the
+        // next start of Tasks.
+        try {
+            afterRestore(taken)
+        } catch (_: SQLException) {
+            // The restore stands.
+        }
     }
 
     /** Tasks' data version. */

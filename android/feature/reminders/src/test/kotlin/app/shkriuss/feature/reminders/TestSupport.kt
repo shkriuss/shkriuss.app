@@ -1,6 +1,8 @@
 package app.shkriuss.feature.reminders
 
 import android.content.Context
+import androidx.room3.executeSQL
+import androidx.room3.useWriterConnection
 import androidx.test.platform.app.InstrumentationRegistry
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.inMemoryTestDatabaseBuilder
@@ -68,6 +70,19 @@ internal val context: Context get() = InstrumentationRegistry.getInstrumentation
 
 /** A Reminders database in memory, on the system SQLite driver. Close it at the end of the test. */
 internal fun memoryDatabase(): RemindersDatabase = inMemoryTestDatabaseBuilder<RemindersDatabase>(context).build()
+
+/**
+ * Makes every write to [table] that SQLite would do fail from now on, as
+ * when the disk is full: a trigger aborts each insert and update. Room
+ * throws an `android.database.SQLException`, and the transaction rolls
+ * back.
+ */
+internal fun RemindersDatabase.refuseWritesTo(table: String) = runBlocking {
+    useWriterConnection { connection ->
+        connection.executeSQL("CREATE TRIGGER refuse_insert_$table BEFORE INSERT ON $table BEGIN SELECT RAISE(ABORT, 'refused'); END")
+        connection.executeSQL("CREATE TRIGGER refuse_update_$table BEFORE UPDATE ON $table BEGIN SELECT RAISE(ABORT, 'refused'); END")
+    }
+}
 
 /** A book in a preferences file of its own, empty at the start. */
 internal fun emptyBook(name: String = ReminderBook.FILE): ReminderBook =

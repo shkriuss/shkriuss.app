@@ -1,5 +1,6 @@
 package app.shkriuss.feature.tasks
 
+import android.database.SQLException
 import android.net.Uri
 import app.shkriuss.core.backup.BackupRecord
 import app.shkriuss.core.backup.BackupSink
@@ -244,6 +245,17 @@ class TasksBackupContentTest {
         assertThrows(UnreadableBackupException::class.java) { restore(refusing, listOf(good, BackupRecord("reminder", fields(2), good.content))) }
 
         assertEquals(emptyList<List<String>>(), handed)
+    }
+
+    @Test
+    fun aReadThatTheDatabaseRefusesAfterTheTransactionLeavesTheRestoreStanding() {
+        // As TasksRepository.afterRestore when its read of the tasks fails: the records are written by then.
+        val failingAfter = TasksBackupContent(database, clock, ids) { throw SQLException("refused") }
+
+        restore(failingAfter, listOf(TasksBackupCodec.encode(listRow("Home")), TasksBackupCodec.encode(taskRow())))
+
+        assertEquals(listOf("Home"), runBlocking { database.lists().all() }.map { it.name })
+        assertEquals(listOf("Pills"), runBlocking { database.tasks().all() }.map { it.title })
     }
 
     @Test

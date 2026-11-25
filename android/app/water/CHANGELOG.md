@@ -10,6 +10,11 @@ get reminders during the hours you choose. Its specification is
 - A backup is written to, and read from, only a document of another app,
   as the file picker gives it. An app that poses as the picker cannot
   make Water write a backup over its own files, or read one of them.
+- A restore that the phone has no room to write no longer closes
+  Water. It says "Not enough room on the phone", and nothing in
+  Water changes.
+- **Licences** on a tablet: a notice opened beside the list starts at
+  its top, also after another notice was read to its end.
 
 ## 1.0.2 (2026-11-22)
 

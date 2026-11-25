@@ -1,5 +1,6 @@
 package app.shkriuss.feature.reminders
 
+import android.database.SQLException
 import android.net.Uri
 import app.shkriuss.core.backup.BackupRecord
 import app.shkriuss.core.backup.BackupSink
@@ -197,6 +198,16 @@ class RemindersBackupContentTest {
         assertThrows(UnreadableBackupException::class.java) { restore(refusing, listOf(good, BackupRecord("task", fields(2), good.content))) }
 
         assertEquals(emptyList<List<String>>(), handed)
+    }
+
+    @Test
+    fun aReadThatTheDatabaseRefusesAfterTheTransactionLeavesTheRestoreStanding() {
+        // As RemindersRepository.afterRestore when its read of the reminders fails: the records are written by then.
+        val failingAfter = RemindersBackupContent(database, clock, ids) { throw SQLException("refused") }
+
+        restore(failingAfter, listOf(RemindersBackupCodec.encode(row())))
+
+        assertEquals(listOf("Pills"), runBlocking { database.reminders().all() }.map { it.title })
     }
 
     @Test

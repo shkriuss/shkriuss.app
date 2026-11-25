@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,7 +54,8 @@ internal fun LicencesContent(onBack: () -> Unit, windowWidth: ShkWindowWidth = S
             if (open == null) {
                 ShkScreen { ShkEmptyState(title = stringResource(R.string.water_choose_a_part), modifier = Modifier.weight(1f)) }
             } else {
-                PartNotice(open, onCloseNotice)
+                // Each part opens at its top, also beside the list, where the pane stays while another part opens.
+                key(open.id) { PartNotice(open, onCloseNotice) }
             }
         },
         windowWidth = windowWidth,

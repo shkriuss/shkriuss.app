@@ -7,6 +7,7 @@ import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.security.RecoveryKeyNeed
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.core.testing.TestIdSource
+import app.shkriuss.feature.tasks.data.TaskEntity
 import java.io.File
 import java.io.FileNotFoundException
 import java.time.LocalDateTime
@@ -652,6 +653,23 @@ class BackupViewModelTest {
         val staging = File(setup.app.noBackupFilesDir, "shk-restore")
         staging.deleteRecursively()
         staging.writeText("in the way")
+
+        restore()
+
+        assertEquals(BackupStep.NoRoom, state.step)
+        assertEquals(emptyList<String>(), everything())
+    }
+
+    @Test
+    fun aRestoreThatTheDatabaseRefusesChangesNothingAndSaysThereIsNoRoom() {
+        giveKeys()
+        anotherPhone().apply {
+            add("Pills", pills)
+            writeBackup(document)
+        }
+        look(document)
+        // As on a full disk: every insert into the table of tasks fails.
+        setup.database.refuseWritesTo(TaskEntity.TABLE)
 
         restore()
 
