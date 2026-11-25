@@ -658,7 +658,11 @@ For sync, later:
    type is offered, because storage apps name the type of an unknown
    ending differently. The magic decides.
 4. Both screens give back a `content:` URI. The code refuses every other
-   kind of URI.
+   kind of URI, and a URI whose provider belongs to the app itself, also
+   with a user before the provider (`content://0@…`). The answer comes
+   from another app, and an app that poses as the picker could name one
+   of the app's own files that way. Such an answer is taken as leaving
+   the picker (`BackupDocuments.isFromAnotherApp`).
 5. The document is opened for writing in the mode that cuts off old
    content (`wt`). Without it, writing over a longer file could leave its
    old end in place.

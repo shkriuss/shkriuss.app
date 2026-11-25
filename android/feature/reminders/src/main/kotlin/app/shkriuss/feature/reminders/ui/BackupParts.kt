@@ -100,10 +100,10 @@ internal fun BackupFlow(model: BackupViewModel, firstNeed: RecoveryKeyFirstNeedS
     val screen by model.state.collectAsState()
     val context = LocalContext.current
     val newDocument = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        model.write(BackupDocuments.uriOf(result.resultCode, result.data))
+        model.write(BackupDocuments.uriOf(result.resultCode, result.data, context))
     }
     val document = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        model.look(BackupDocuments.uriOf(result.resultCode, result.data))
+        model.look(BackupDocuments.uriOf(result.resultCode, result.data, context))
     }
 
     // With the recovery key there, Reminders goes on with what the user started, without another tap.
