@@ -212,6 +212,29 @@ class OpenNoteViewModelTest {
     }
 
     @Test
+    fun aNewNoteThatWasStoredOpensAgainWithItsImageView() {
+        val id = runBlocking { checkNotNull(repository.reserveNewNote()) }
+        model.open(id, isNew = true)
+        val first = openModel(id)
+        first.state.await { !it.loading }
+        first.onTitleChange("Trip")
+        first.state.await { it.stored }
+        model.openImage("file")
+
+        val again = ViewModelStore()
+        try {
+            val restored = makeModel(again)
+            eventually {
+                idle()
+                restored.open.value?.model?.noteId == id
+            }
+            assertEquals("file", restored.open.value?.imageId)
+        } finally {
+            again.clear()
+        }
+    }
+
+    @Test
     fun aTapOnTheOpenNoteWhileItClosesForAnotherOneOpensItAgainAfter() {
         val trip = phone.note("Trip", "Passport")
         val shopping = phone.note("Shopping", "Bread")

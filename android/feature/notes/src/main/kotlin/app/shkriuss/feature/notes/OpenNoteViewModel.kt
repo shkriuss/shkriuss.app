@@ -78,7 +78,13 @@ class OpenNoteViewModel(
             if (saved.get<Boolean>(NEW_KEY) == true) {
                 viewModelScope.launch {
                     val fresh = if (isStored(noteId)) null else reserveNew()
-                    if (fresh != null) start(fresh, isNew = true, paneKey = paneKey) else start(noteId, isNew = false, paneKey = paneKey)
+                    if (fresh != null) {
+                        start(fresh, isNew = true, paneKey = paneKey)
+                    } else {
+                        // Stored since it was new: it opens again as it was, with its image view.
+                        start(noteId, isNew = false, paneKey = paneKey)
+                        imageId?.let(::openImage)
+                    }
                 }
             } else {
                 start(noteId, isNew = false, paneKey = paneKey)

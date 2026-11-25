@@ -64,13 +64,29 @@ class NoteImagesTest {
     }
 
     @Test
-    fun theSmallImageOfARowCoversItsSquare() {
-        val file = add(TestPick(name = "ticket.png", type = "image/png", bytes = png(400, 200)))
+    fun theSmallImageOfARowIsTheSquareInTheMiddleOfTheImageScaledToCoverIt() {
+        val file = add(TestPick(name = "ticket.png", type = "image/png", bytes = png(400, 200, middle = 200)))
 
         val shown = checkNotNull(runBlocking { images.decode(file, 100, cover = true) })
 
-        assertEquals(200, shown.width)
+        assertEquals(100, shown.width)
         assertEquals(100, shown.height)
+        // The middle of the image, not its red edges.
+        for ((x, y) in listOf(0 to 0, 99 to 0, 0 to 99, 99 to 99, 50 to 50)) {
+            assertEquals("Pixel $x, $y", android.graphics.Color.BLUE, shown.getPixel(x, y))
+        }
+    }
+
+    @Test
+    fun aVeryLongImageKeepsOnlyTheSquareARowShows() {
+        val tall = add(TestPick(name = "receipt.png", type = "image/png", bytes = png(200, 8_000)))
+        val thin = add(TestPick(name = "strip.png", type = "image/png", bytes = png(20, 2_000)))
+
+        val shown = checkNotNull(runBlocking { images.decode(tall, 100, cover = true) })
+        val small = checkNotNull(runBlocking { images.decode(thin, 100, cover = true) })
+
+        assertEquals(100 to 100, shown.width to shown.height)
+        assertEquals("Smaller than its place: not scaled, only cut", 20 to 20, small.width to small.height)
     }
 
     @Test
@@ -194,9 +210,17 @@ class NoteImagesTest {
         return runBlocking { phone.repository.filesOf(note).first().last() }
     }
 
-    private fun png(width: Int, height: Int): ByteArray {
+    /** A blue image of [width] by [height] pixels; with [middle], blue only in a band of that width in its middle, red at both sides. */
+    private fun png(width: Int, height: Int, middle: Int? = null): ByteArray {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        bitmap.eraseColor(android.graphics.Color.BLUE)
+        bitmap.eraseColor(if (middle == null) android.graphics.Color.BLUE else android.graphics.Color.RED)
+        if (middle != null) {
+            val left = (width - middle) / 2
+            android.graphics.Canvas(bitmap).drawRect(
+                left.toFloat(), 0f, (left + middle).toFloat(), height.toFloat(),
+                android.graphics.Paint().apply { color = android.graphics.Color.BLUE },
+            )
+        }
         return ByteArrayOutputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
             it.toByteArray()

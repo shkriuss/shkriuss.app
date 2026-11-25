@@ -3,6 +3,7 @@ package app.shkriuss.feature.notes
 import android.database.SQLException
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
+import android.graphics.Rect
 import app.shkriuss.core.crypto.BlobException
 import java.io.IOException
 import java.io.InputStream
@@ -31,8 +32,9 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
     /**
      * The image of [file], scaled down to fit a square of [side] pixels
      * when it is larger, as the image view shows it; with [cover], scaled
-     * down to cover that square, as the small image of a row, cut to a
-     * square, shows it. Null when it cannot be shown: its type is not
+     * down to cover that square and cut to the square in its middle, as
+     * the small image of a row shows it, so a very long image keeps no
+     * more than that square. Null when it cannot be shown: its type is not
      * an image, its stream cannot be read or is damaged, or `ImageDecoder`
      * refuses it, or it is too large to hold. A read that meets damage
      * marks the file damaged ([FileReader.open]). One image is decoded at
@@ -64,7 +66,10 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
                 val height = info.size.height
                 // Exactly the size it shows at: never larger, and never smaller, which would blur it.
                 val scale = side.toFloat() / if (cover) min(width, height) else max(width, height)
-                if (scale < 1f) decoder.setTargetSize((width * scale).roundToInt().coerceAtLeast(1), (height * scale).roundToInt().coerceAtLeast(1))
+                val shownWidth = if (scale < 1f) (width * scale).roundToInt().coerceAtLeast(1) else width
+                val shownHeight = if (scale < 1f) (height * scale).roundToInt().coerceAtLeast(1) else height
+                if (scale < 1f) decoder.setTargetSize(shownWidth, shownHeight)
+                if (cover) decoder.crop = middleSquare(shownWidth, shownHeight)
             }
         } catch (_: IOException) {
             null
@@ -75,6 +80,14 @@ class NoteImages(private val reader: FileReader, private val work: CoroutineCont
             // An image too large to hold, even scaled down: it cannot be shown.
             null
         }
+    }
+
+    /** The largest square in the middle of an image of [width] by [height] pixels: what a row's small image shows of it. */
+    private fun middleSquare(width: Int, height: Int): Rect {
+        val square = min(width, height)
+        val left = (width - square) / 2
+        val top = (height - square) / 2
+        return Rect(left, top, left + square, top + square)
     }
 
     /** The [size] bytes of [input], in one array of that size, or null when it holds fewer or more: such a file is damaged. */
