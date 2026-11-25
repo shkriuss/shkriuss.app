@@ -664,11 +664,11 @@ class BackupViewModelTest {
     fun aRestoreThatTheDatabaseRefusesChangesNothingAndSaysThereIsNoRoom() {
         giveKeys()
         anotherPhone().apply {
-            add("Pills", pills)
+            add("Pills", pills, listId = addList("Home").id)
             writeBackup(document)
         }
         look(document)
-        // As on a full disk: every insert into the table of tasks fails.
+        // As on a full disk: every write to the table of tasks fails. The list comes first, so its write rolls back.
         setup.database.refuseWritesTo(TaskEntity.TABLE)
 
         restore()

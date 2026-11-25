@@ -9,7 +9,6 @@ import app.shkriuss.core.security.RecoveryKeyNeed
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.feature.water.data.GoalEntity
-import app.shkriuss.feature.water.data.IntakeEntity
 import java.io.File
 import java.io.FileNotFoundException
 import java.time.LocalDateTime
@@ -535,10 +534,13 @@ class BackupViewModelTest {
     @Test
     fun aRestoreThatTheDatabaseRefusesChangesNothingAndSaysThereIsNoRoom() {
         giveKeys()
-        backupOfAnotherPhone(crypto, clock, document) { addDrink(THE_DAY, 7 * 60, 150) }
+        backupOfAnotherPhone(crypto, clock, document) {
+            addDrink(THE_DAY, 7 * 60, 150)
+            setGoal(THE_DAY, 2_500)
+        }
         look(document)
-        // As on a full disk: every insert into the table of drinks fails.
-        water.database.refuseWritesTo(IntakeEntity.TABLE)
+        // As on a full disk: every write to the table of goals fails. The drink comes first, so its write rolls back.
+        water.database.refuseWritesTo(GoalEntity.TABLE)
 
         restore()
 

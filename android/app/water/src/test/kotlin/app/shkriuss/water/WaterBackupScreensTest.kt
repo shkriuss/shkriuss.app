@@ -383,7 +383,7 @@ class WaterBackupScreensTest {
         compose.onNode(hasText("AndroidX libraries") and hasClickAction()).assertExists()
         compose.onNode(hasText("Apache License 2.0") and isHeading()).assertExists()
 
-        // Read to the end of one notice, then open another beside the list: it opens at its top.
+        // Scroll far down one notice, then open another beside the list: it opens at its top.
         compose.onNode(hasText("END OF TERMS AND CONDITIONS", substring = true)).performScrollTo()
         compose.tap("Kotlin standard library")
         compose.waitForText("Copyright 2010-2024 JetBrains", substring = true)
