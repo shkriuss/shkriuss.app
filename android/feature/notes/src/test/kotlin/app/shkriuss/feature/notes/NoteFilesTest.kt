@@ -224,6 +224,8 @@ class NoteFilesTest {
         }
 
         add(id, *failing.toTypedArray())
+        // The files never tried are told once the last file of the batch has ended, just after its row goes.
+        eventually { problems.lastOrNull() is AddProblem.NoteFull }
 
         assertEquals("Twice the 21 that may wait at a time", 42, opened.get())
         assertEquals(42, problems.count { it is AddProblem.CouldNotRead })
