@@ -125,6 +125,10 @@ fun DialogsPage(modifier: Modifier = Modifier) {
                 ComponentState(R.string.state_progress_dialog) {
                     ShkProgressDialogInPlace(text = stringResource(R.string.sample_writing_backup))
                 },
+                // The same, for work that says how far it has got.
+                ComponentState(R.string.state_progress_dialog_fraction) {
+                    ShkProgressDialogInPlace(text = stringResource(R.string.sample_saving_copy), fraction = SAMPLE_FRACTION)
+                },
             ),
             wideColumns = 2,
             // Each panel keeps its own height, as in its window.
@@ -174,3 +178,6 @@ private fun deleteAction() = ShkDialogAction(text = stringResource(R.string.samp
 /** A "Cancel" button that does nothing. */
 @Composable
 private fun cancelAction() = ShkDialogAction(text = stringResource(R.string.sample_cancel), onClick = {})
+
+/** How far the sample of a progress dialog with a bar has got: 40%. */
+private const val SAMPLE_FRACTION = 0.4f

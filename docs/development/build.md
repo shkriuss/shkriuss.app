@@ -294,8 +294,9 @@ second build must write the same mapping file, or the release stops. See
   `ShkThemeMaterialTest`, `ShkComponentsTest`, `ShkIconSizeTest`,
   `ShkTextFieldTest`, `ShkSliderTest`, `ShkProgressBarTest`,
   `ShkSelectionControlSizeTest`, `ShkRadioGroupTest`,
-  `ShkContentComponentsTest`, `ShkRowEdgeTest` and
-  `ShkListItemTickBoxTest`.
+  `ShkContentComponentsTest`, `ShkRowEdgeTest`,
+  `ShkListItemTickBoxTest`, `ShkListItemImageTest` and
+  `ShkTextEditorTest`.
   They check the contrast of every colour pair, how Material 3 is set
   up, and every `Shk*` component at font scale 1.0 and 2.0: its touch
   target, what TalkBack hears and announces, that long text wraps inside
@@ -674,7 +675,7 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 7 test classes with 87 tests: the limits of every
+- `feature/notes` has 11 test classes with 106 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
@@ -686,21 +687,37 @@ second build must write the same mapping file, or the release stops. See
   (`NotesRepositoryTest`); the adds of files, reading them back, the
   state of each row, **Save a copy** and the move of the file keys to
   the recovery key, with software keys on the real code of
-  `core/crypto` (`NoteFilesTest`); and the ViewModels and the one
-  snackbar (`ViewModelsTest`). The work runs off the test's thread, and
+  `core/crypto` (`NoteFilesTest`); the images decoded from their
+  streams, scaled down, and the intents of the file picker
+  (`NoteImagesTest`); the ViewModels and the one snackbar
+  (`ViewModelsTest`), and which note is open (`OpenNoteViewModelTest`);
+  the clock of the screens (`NotesNowTest`); and how the screens write
+  times, dates, sizes and percents, and what TalkBack reads for them
+  (`NotesFormatTest`). The work runs off the test's thread, and
   each test waits for the state it expects. The pauses before a search
   and a save are the test's own, and so is the clock of the save times.
   A trigger that aborts every write to a table stands for a disk that
   refuses a write. `NoteFilesTest` also checks that the length of a
   stream follows the rule of crypto-design.md at the edges of its
   segments.
-- `app/notes` has three test classes:
-  `EveryScreenIsBehindTheAppLockTest`, a copy of Water's;
-  `NotesManifestTest`, which names everything Notes' merged manifest
-  lets another app reach: two permissions and none that it defines, no
-  receiver, Notes' screen and the eight of `core/security`, and as the
-  only exported parts Notes' screen and the two parts of the handover;
-  and the screenshots of the line that stands in for the screens.
+- `app/notes` has four test classes:
+  - `EveryScreenIsBehindTheAppLockTest`, a copy of Water's. It also
+    locks the app over the menu of a note, the menu of a file, the menu
+    of the image view, the question "This note is not saved" and the
+    dialog "Saving a copy".
+  - `NotesManifestTest` names everything Notes' merged manifest lets
+    another app reach: two permissions and none that it defines, no
+    receiver, Notes' screen and the eight of `core/security`, and as the
+    only exported parts Notes' screen and the two parts of the handover.
+  - `NotesScreensTest`: what the screens do and what TalkBack hears, on
+    a phone and on a tablet: a new note, saving and a refused save,
+    search, Pin, Delete note and Undo, the formatting bar and the
+    action on a checklist item, the rows of files and their actions, the
+    image view, Add a file and Save a copy through the test's file
+    picker, two panes, and Settings. It also checks that the keyboard is
+    asked not to learn the title, the text and the search.
+  - `NotesScreenshotTest`: the screenshots of every screen, dialog and
+    menu, with files added through the real adds.
 
 ### Instrumented tests
 

@@ -6,10 +6,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
@@ -20,6 +23,13 @@ import androidx.compose.ui.unit.sp
  * The colour is the current content colour unless [color] is given. Use a
  * colour from [ShkTheme.colors] that is meant for text, so the contrast
  * stays checked.
+ *
+ * Text wraps, so nothing is cut off at large font sizes. Only a preview of
+ * something that opens whole elsewhere, such as the first lines of a note
+ * in a list of notes, may stop at [maxLines]: it then ends with "…".
+ * [bold] are optional ranges of the text drawn bold, such as what matches
+ * a search; ranges that do not fit the text are left out. TalkBack reads
+ * the text as it is.
  */
 @Composable
 fun ShkText(
@@ -27,13 +37,22 @@ fun ShkText(
     modifier: Modifier = Modifier,
     style: ShkTextStyle = ShkTextStyle.Body,
     color: Color = Color.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+    bold: List<IntRange> = emptyList(),
 ) {
-    Text(
-        text = text,
-        modifier = modifier,
-        color = if (color.isSpecified) color else LocalContentColor.current,
-        style = style.textStyle,
-    )
+    val shownColor = if (color.isSpecified) color else LocalContentColor.current
+    val overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis
+    if (bold.isEmpty()) {
+        Text(text = text, modifier = modifier, color = shownColor, style = style.textStyle, maxLines = maxLines, overflow = overflow)
+    } else {
+        val styled = buildAnnotatedString {
+            append(text)
+            bold.filter { it.first >= 0 && it.last < text.length && !it.isEmpty() }.forEach { range ->
+                addStyle(SpanStyle(fontWeight = FontWeight.Bold), range.first, range.last + 1)
+            }
+        }
+        Text(text = styled, modifier = modifier, color = shownColor, style = style.textStyle, maxLines = maxLines, overflow = overflow)
+    }
 }
 
 /**

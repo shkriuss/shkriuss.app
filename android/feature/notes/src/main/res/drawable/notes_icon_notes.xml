@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Notes, in the navigation: a page with a folded corner and two lines. Drawn for the suite on the 24 dp grid; not taken from an icon
+    set. The colour is replaced by the icon colour of its button.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M6,3H14L19,8V20A1,1 0,0 1,18 21H6A1,1 0,0 1,5 20V4A1,1 0,0 1,6 3ZM14,3V8H19M8,13H16M8,17H13"
+        android:strokeWidth="2"
+        android:strokeColor="#FF000000"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

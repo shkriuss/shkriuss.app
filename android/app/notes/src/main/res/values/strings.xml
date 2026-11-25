@@ -2,7 +2,4 @@
 <resources>
     <!-- The app's name under its icon. -->
     <string name="app_name">Notes</string>
-    <!-- The screen that stands in for Notes' screens until they are built: its title and its one line. -->
-    <string name="placeholder_title">Notes</string>
-    <string name="placeholder_line">Notes\' screens are not built yet.</string>
 </resources>

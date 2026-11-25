@@ -182,6 +182,9 @@
     <string name="state_without_steps">Without steps</string>
     <string name="state_with_steps">With steps</string>
     <string name="state_try_text_field">Try it: type in the field. More than 20 characters shows the error.</string>
+    <string name="state_editor_empty">Empty: the hint shows</string>
+    <string name="state_editor_styled">With styled ranges: the marks in the secondary colour, a heading, bold, and a done item struck through</string>
+    <string name="state_try_text_editor">Try it: type, or tap the box of an item to tick it. The cursor does not move.</string>
     <string name="state_try_checkbox">Try it: tap a row to check or clear it</string>
     <string name="state_try_switch">Try it: tap a row to turn it on or off</string>
     <string name="state_try_radio">Try it: tap a row to choose it</string>
@@ -226,6 +229,8 @@
     <string name="sample_move_it">Move it</string>
     <string name="sample_copy_it">Keep a copy</string>
     <string name="sample_writing_backup">Writing the backup</string>
+    <string name="state_progress_dialog_fraction">A progress dialog for work that says how far it has got: a bar and the percent in place of the circle.</string>
+    <string name="sample_saving_copy">Saving a copy</string>
     <string name="state_try_dialog">Try it: tap the button to open the dialog. Then tap Delete or Cancel, tap outside the dialog, or go back.</string>
     <string name="state_with_title">With a title</string>
     <string name="state_without_title">Without a title, with supporting text</string>
@@ -253,6 +258,9 @@
     <string name="state_with_trailing_icon">With an icon at the end</string>
     <string name="state_with_tick_box">With a tick box</string>
     <string name="state_with_tick_box_ticked">With a tick box, ticked</string>
+    <string name="state_with_image">With a small image, not tinted</string>
+    <string name="sample_file_name">ticket.jpg</string>
+    <string name="sample_file_size">2.4 MB</string>
     <string name="state_progress_empty">Empty</string>
     <string name="state_progress_part">Part of the way</string>
     <string name="state_progress_full">Full</string>
@@ -440,9 +448,14 @@
     <string name="chips_assist_use">Starts a small, optional action related to the content near it, such as adding a reminder to a task.</string>
 
     <!-- Text fields page. -->
-    <string name="text_fields_intro">Tap a field to focus it: its border and label turn the accent colour. Only the field under Try it takes typing.</string>
+    <string name="text_fields_intro">Tap a field to focus it: its border and label turn the accent colour. Only the field and the editor under Try it take typing.</string>
     <string name="text_field_title">Text field</string>
     <string name="text_field_use">Typing text, such as a name or an amount. The label sits above the field and TalkBack reads it with the field.</string>
+    <string name="text_editor_title">Text editor</string>
+    <string name="text_editor_use">Writing long text, such as the text of a note. It has no box: the text sits on the screen. The app can style ranges of it and take taps on some. TalkBack reads the hint while it is empty, then the text.</string>
+    <string name="sample_editor_hint">Note</string>
+    <string name="sample_editor_text"># Trip\n- [ ] Passport\n- [x] **Tickets**</string>
+    <string name="sample_editor_error">A note has at most 100,000 characters.</string>
 
     <!-- Selection controls page. -->
     <string name="selection_intro">The whole row is the touch target, text included. Only the rows under Try it change when tapped.</string>

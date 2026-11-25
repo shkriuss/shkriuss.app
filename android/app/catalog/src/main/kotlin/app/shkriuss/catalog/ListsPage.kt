@@ -2,7 +2,13 @@ package app.shkriuss.catalog
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import app.shkriuss.core.design.ShkDivider
@@ -12,7 +18,7 @@ import app.shkriuss.core.design.ShkSectionHeader
 import app.shkriuss.core.design.R as DesignR
 
 /**
- * The list item in every state, with a tick box too, the section header alone, long and above
+ * The list item in every state, with a tick box and a small image too, the section header alone, long and above
  * list items, and the divider between list items. The pressed state shows
  * when the owner touches a list item that can be tapped. Nothing here does
  * anything when tapped.
@@ -107,6 +113,15 @@ fun ListsPage(modifier: Modifier = Modifier) {
                         onCheckedChange = {},
                     )
                 },
+                // The image is drawn as it is, not tinted, as the image of a file in a note.
+                ComponentState(R.string.state_with_image) {
+                    ShkListItem(
+                        headline = stringResource(R.string.sample_file_name),
+                        supportingText = stringResource(R.string.sample_file_size),
+                        onClick = {},
+                        image = rememberSamplePhoto(),
+                    )
+                },
             ),
         )
 
@@ -151,3 +166,30 @@ private fun TasksWithDividers() {
         ShkListItem(headline = stringResource(R.string.sample_water_plants))
     }
 }
+
+/**
+ * A small picture drawn in code, as a photo of a file would be: a sky, a
+ * sun and a hill. Catalog has no image of its own to show, and needs no
+ * bitmap for it.
+ */
+@Composable
+private fun rememberSamplePhoto(): Painter = remember { SamplePhoto() }
+
+/** The sample picture: a sky, a sun and a hill, drawn at any size. */
+private class SamplePhoto : Painter() {
+    override val intrinsicSize: Size = Size(PHOTO_SIDE.toFloat(), PHOTO_SIDE.toFloat())
+
+    override fun DrawScope.onDraw() {
+        drawRect(Color(SKY))
+        drawCircle(Color(SUN), radius = size.minDimension / 6, center = Offset(size.width * 0.7f, size.height * 0.3f))
+        drawCircle(Color(HILL), radius = size.minDimension * 0.6f, center = Offset(size.width * 0.3f, size.height * 1.2f))
+    }
+}
+
+/** The side of the sample picture as drawn by itself, in pixels. The row draws it at its own size. */
+private const val PHOTO_SIDE = 96
+
+/** The colours of the sample picture: a sky, a sun and a hill. */
+private const val SKY = 0xFF7EC8E3
+private const val SUN = 0xFFFFD54F
+private const val HILL = 0xFF4CAF50

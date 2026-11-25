@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
@@ -72,8 +73,10 @@ class ComponentPagesTest {
             val components = compose.onAllNodes(IS_COMPONENT).fetchSemanticsNodes()
             assertTrue("${page.name} shows no components", components.size > 1)
             components.forEach { node ->
+                // A text editor has no label: TalkBack reads its hint while it is empty, then its text.
                 val label = node.config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() } +
-                    node.config.getOrElse(SemanticsProperties.Text) { emptyList() }.map { it.text }
+                    node.config.getOrElse(SemanticsProperties.Text) { emptyList() }.map { it.text } +
+                    listOfNotNull(node.config.getOrNull(SemanticsProperties.EditableText)?.text)
                 assertTrue("${page.name}: a component has no label for TalkBack", label.any { it.isNotBlank() })
                 // TalkBack calls a text field an edit box and a slider a
                 // slider from what they are; everything else needs a role.

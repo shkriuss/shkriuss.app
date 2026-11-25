@@ -10,6 +10,7 @@ import app.shkriuss.core.data.Clock
 import app.shkriuss.core.data.IdSource
 import app.shkriuss.feature.notes.data.NotesDatabase
 import java.io.File
+import java.time.ZoneId
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +24,8 @@ import kotlinx.coroutines.sync.Mutex
 /**
  * Everything of Notes that lives as long as the app: its database, the
  * folder of streams, the repository on them, the adds of files, the reads
- * of files, the one snackbar and the move of the file keys. The app class
+ * of files, the images, the one snackbar, the move of the file keys and
+ * the clock of the screens. The app class
  * builds one, calls [start] when the app starts, and hands it out through
  * [NotesHost]. Nothing here is found by a lookup: the ViewModels get what
  * they need through their constructors.
@@ -31,8 +33,8 @@ import kotlinx.coroutines.sync.Mutex
  * [crypto] is the app's one `ShkCrypto`, made with [APP_NAME]: its file
  * keys seal the key of every file. [gateOpen] is true while the gate of
  * the app lock is open; with [onScreen] it says when an add may start.
- * [work] runs the reads and writes off the main thread. Tests pass their
- * own.
+ * [work] runs the reads and writes off the main thread, and [zone] is the
+ * phone's time zone for the screens. Tests pass their own.
  */
 class NotesServices(
     context: Context,
@@ -43,8 +45,13 @@ class NotesServices(
     private val crypto: ShkCrypto,
     gateOpen: Flow<Boolean>,
     work: CoroutineContext = Dispatchers.IO,
+    zone: () -> ZoneId = ZoneId::systemDefault,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + work)
+    /**
+     * The scope of the work that outlives a screen, such as the save when
+     * Notes leaves the screen, which an open note's ViewModel runs here.
+     */
+    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + work)
 
     /** True while a screen of Notes is on the screen, from its start to its stop. */
     private val shown = MutableStateFlow(false)
@@ -79,6 +86,12 @@ class NotesServices(
 
     /** The state of each file, the images and **Save a copy**. */
     val reader: FileReader = FileReader(repository, crypto.files, ::aKeysetIsDamaged, work)
+
+    /** The images of files, decoded in memory for the screens. */
+    val images: NoteImages = NoteImages(reader, work)
+
+    /** The phone's clock for the screens: a last change shows as a time today, else as a date. */
+    val now: NotesNow = NotesNow(clock, scope, zone)
 
     /**
      * Call once in the app class's `onCreate`. Off the main thread, it

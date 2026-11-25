@@ -325,6 +325,15 @@ class NoteViewModel(
         close()
     }
 
+    /**
+     * The question "This note is not saved" was dismissed, by Back or a tap
+     * beside it: the note stays open with what is typed, and Notes tries to
+     * save again at the next change.
+     */
+    fun keepEditing() {
+        shown.update { it.copy(askUnsaved = false) }
+    }
+
     /** **Discard changes** in "This note is not saved": the note closes with what was saved last. */
     fun discard() {
         shown.update { it.copy(askUnsaved = false) }

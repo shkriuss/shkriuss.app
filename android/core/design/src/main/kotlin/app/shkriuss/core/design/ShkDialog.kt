@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
@@ -19,13 +20,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import java.text.NumberFormat
+import kotlin.math.floor
 
 /**
  * A dialog: a question the user answers before going on, such as "Delete
@@ -135,17 +142,24 @@ fun ShkDialogInPlace(
  * the [ShkLoadingState] of the dialog. The dialog itself has no title, so
  * the words are announced once.
  *
+ * With [fraction], from 0 to 1, the work says how far it has got, such as
+ * a copy of a file: the dialog shows [text], a [ShkProgressBar] and the
+ * percent under it, in the phone's number format, "40%", in place of the
+ * circle. TalkBack announces [text] when the dialog opens, and reads the
+ * bar as [text] and the percent. Pass null while the total is not known:
+ * the circle shows.
+ *
  * It looks like every dialog of the suite: the higher surface colour with
  * a 1dp outline and [ShkShapes.Sheet] corners, 280 to 560dp wide. The text
  * wraps, and scrolls when the dialog is taller than the window.
  */
 @Composable
-fun ShkProgressDialog(text: String, modifier: Modifier = Modifier) {
+fun ShkProgressDialog(text: String, modifier: Modifier = Modifier, fraction: Float? = null) {
     Dialog(
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false, usePlatformDefaultWidth = false),
     ) {
-        ProgressPanel(text = text, inWindow = true, modifier = modifier.padding(DialogWindowMargin))
+        ProgressPanel(text = text, fraction = fraction, inWindow = true, modifier = modifier.padding(DialogWindowMargin))
     }
 }
 
@@ -155,15 +169,15 @@ fun ShkProgressDialog(text: String, modifier: Modifier = Modifier) {
  */
 @ShkInPlace
 @Composable
-fun ShkProgressDialogInPlace(text: String, modifier: Modifier = Modifier) {
-    ProgressPanel(text = text, inWindow = false, modifier = modifier)
+fun ShkProgressDialogInPlace(text: String, modifier: Modifier = Modifier, fraction: Float? = null) {
+    ProgressPanel(text = text, fraction = fraction, inWindow = false, modifier = modifier)
 }
 
-/** The panel of a [ShkProgressDialog]: the circle and the words, and no button. */
+/** The panel of a [ShkProgressDialog]: the circle and the words, or the words, the bar and the percent, and no button. */
 @Composable
-private fun ProgressPanel(text: String, inWindow: Boolean, modifier: Modifier) {
+private fun ProgressPanel(text: String, fraction: Float?, inWindow: Boolean, modifier: Modifier) {
     DialogPanel(
-        // No pane title: the loading state inside announces the words, and they should be heard once.
+        // No pane title: the loading state inside, or the words, announce themselves, and they should be heard once.
         paneTitle = null,
         scrollable = inWindow,
         modifier = modifier.sizeIn(minWidth = DialogMinWidth, maxWidth = DialogMaxWidth),
@@ -171,7 +185,33 @@ private fun ProgressPanel(text: String, inWindow: Boolean, modifier: Modifier) {
         buttonsPadding = PaddingValues(0.dp),
         buttons = {},
     ) {
-        ShkLoadingState(text = text)
+        if (fraction == null) ShkLoadingState(text = text) else ProgressWithFraction(text, fraction)
+    }
+}
+
+/**
+ * The words, a bar at [fraction] and the percent under it. The words are
+ * announced once, when they appear; the bar is read with the words and the
+ * percent, and the percent under it is not read again.
+ */
+@Composable
+private fun ProgressWithFraction(text: String, fraction: Float) {
+    val percent = NumberFormat.getPercentInstance(LocalConfiguration.current.locales[0]).format(floor(shownValue(fraction) * 100) / 100)
+    Column(Modifier.fillMaxWidth().padding(vertical = DialogPadding)) {
+        ShkText(
+            text = text,
+            color = ShkTheme.colors.text,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        Spacer(Modifier.height(ShkSpacing.Large))
+        ShkProgressBar(value = fraction, label = text, valueText = percent)
+        Spacer(Modifier.height(ShkSpacing.Small))
+        ShkText(
+            text = percent,
+            style = ShkTextStyle.Caption,
+            color = ShkTheme.colors.textSecondary,
+            modifier = Modifier.clearAndSetSemantics {},
+        )
     }
 }
 

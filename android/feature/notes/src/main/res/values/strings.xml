@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The words of Notes' screens (docs/apps/notes/spec.md). -->
+<resources>
+    <!-- The two destinations, in the navigation, and the titles of their screens. -->
+    <string name="notes_notes">Notes</string>
+    <string name="notes_settings">Settings</string>
+
+    <!-- Notes: the list. -->
+    <string name="notes_search">Search notes</string>
+    <string name="notes_pinned">Pinned</string>
+    <string name="notes_other_notes">Other notes</string>
+    <!-- The title of a row whose note has no title and no text. -->
+    <string name="notes_empty_note">Empty note</string>
+    <!-- Under a row's text: its last change and its files, such as "14:05 · 2 files". -->
+    <string name="notes_row_meta">%1$s · %2$s</string>
+    <plurals name="notes_file_count">
+        <item quantity="one">%s file</item>
+        <item quantity="other">%s files</item>
+    </plurals>
+    <!-- Under a row's title, for a search that matches only the name of one of its files. -->
+    <string name="notes_file_match">File: %1$s</string>
+    <string name="notes_new_note">New note</string>
+    <string name="notes_no_notes">No notes yet</string>
+    <string name="notes_no_notes_body">Tap New note to write one.</string>
+    <!-- What the search field holds, between quotes. -->
+    <string name="notes_no_match">No notes match “%1$s”.</string>
+    <!-- Beside the list from 840dp, while no note is open. -->
+    <string name="notes_choose_a_note">Choose a note.</string>
+    <string name="notes_could_not_open">Could not open your notes.</string>
+
+    <!-- What TalkBack reads for a row: "Trip, pinned, changed Monday 16 November, 2 files, Passport, Tickets". -->
+    <string name="notes_spoken_parts">%1$s, %2$s</string>
+    <string name="notes_spoken_pinned">pinned</string>
+    <string name="notes_spoken_changed">changed %1$s</string>
+
+    <!-- A note. -->
+    <string name="notes_add_file">Add a file</string>
+    <string name="notes_pin">Pin</string>
+    <string name="notes_unpin">Unpin</string>
+    <string name="notes_delete_note">Delete note</string>
+    <string name="notes_title_hint">Title</string>
+    <string name="notes_text_hint">Note</string>
+    <plurals name="notes_title_too_long">
+        <item quantity="one">A title has at most %s character.</item>
+        <item quantity="other">A title has at most %s characters.</item>
+    </plurals>
+    <plurals name="notes_text_too_long">
+        <item quantity="one">A note has at most %s character.</item>
+        <item quantity="other">A note has at most %s characters.</item>
+    </plurals>
+    <string name="notes_save_failed">Could not save the note. Notes tries again.</string>
+    <string name="notes_not_saved">This note is not saved</string>
+    <string name="notes_try_again">Try again</string>
+    <string name="notes_discard">Discard changes</string>
+
+    <!-- The formatting bar, and what TalkBack reads for the state of each button on the line where the cursor is. -->
+    <string name="notes_heading">Heading</string>
+    <string name="notes_bold">Bold</string>
+    <string name="notes_italic">Italic</string>
+    <string name="notes_bullets">Bulleted list</string>
+    <string name="notes_numbers">Numbered list</string>
+    <string name="notes_checklist">Checklist</string>
+    <string name="notes_on">On</string>
+    <string name="notes_off">Off</string>
+    <!-- The action TalkBack offers on the text while the cursor is on a checklist item. -->
+    <string name="notes_tick">Tick</string>
+    <string name="notes_open_again">Open again</string>
+
+    <!-- The files of a note. -->
+    <string name="notes_files">Files</string>
+    <!-- The row of a file being added, such as "Adding ticket.jpg", or before its name is read. -->
+    <string name="notes_adding">Adding %1$s</string>
+    <string name="notes_adding_a_file">Adding a file</string>
+    <string name="notes_not_on_phone">Not on this phone</string>
+    <string name="notes_keys_not_usable">Notes cannot open its files now. Open Recovery key in Settings.</string>
+    <string name="notes_no_longer_opens">This file can no longer be opened</string>
+    <string name="notes_damaged">This file is damaged</string>
+    <string name="notes_save_copy">Save a copy</string>
+    <string name="notes_remove">Remove</string>
+    <!-- The action TalkBack offers on the row of an image. -->
+    <string name="notes_open">Open</string>
+    <!-- The button at the end of a file's row that opens its menu. -->
+    <string name="notes_more">More</string>
+    <!-- What TalkBack reads after the name of a file that is an image. -->
+    <string name="notes_spoken_image">image</string>
+    <string name="notes_saving_copy">Saving a copy</string>
+
+    <!-- Sizes, in steps of 1,000, as Android shows them, and as TalkBack reads them. -->
+    <string name="notes_size_b">%1$s B</string>
+    <string name="notes_size_kb">%1$s kB</string>
+    <string name="notes_size_mb">%1$s MB</string>
+    <string name="notes_size_gb">%1$s GB</string>
+    <plurals name="notes_size_b_spoken">
+        <item quantity="one">%s byte</item>
+        <item quantity="other">%s bytes</item>
+    </plurals>
+    <plurals name="notes_size_kb_spoken">
+        <item quantity="one">%s kilobyte</item>
+        <item quantity="other">%s kilobytes</item>
+    </plurals>
+    <plurals name="notes_size_mb_spoken">
+        <item quantity="one">%s megabyte</item>
+        <item quantity="other">%s megabytes</item>
+    </plurals>
+    <plurals name="notes_size_gb_spoken">
+        <item quantity="one">%s gigabyte</item>
+        <item quantity="other">%s gigabytes</item>
+    </plurals>
+
+    <!-- The image view. -->
+    <string name="notes_opening_image">Opening the image</string>
+    <string name="notes_cannot_show">Notes cannot show this image.</string>
+    <string name="notes_zoom_in">Zoom in</string>
+    <string name="notes_zoom_out">Zoom out</string>
+
+    <!-- Snackbars. -->
+    <string name="notes_undo">Undo</string>
+    <string name="notes_note_deleted">Note deleted</string>
+    <string name="notes_file_removed">File removed</string>
+    <plurals name="notes_notes_full">
+        <item quantity="one">Notes keeps %s note. Delete some to add more.</item>
+        <item quantity="other">Notes keeps %s notes. Delete some to add more.</item>
+    </plurals>
+    <string name="notes_could_not_change">Could not change your notes. Try again.</string>
+    <!-- Two sentences of one snackbar, such as "A note holds at most 20 files. 3 files were not added." -->
+    <string name="notes_two_sentences">%1$s %2$s</string>
+    <plurals name="notes_note_holds">
+        <item quantity="one">A note holds at most %s file.</item>
+        <item quantity="other">A note holds at most %s files.</item>
+    </plurals>
+    <plurals name="notes_not_added">
+        <item quantity="one">%s file was not added.</item>
+        <item quantity="other">%s files were not added.</item>
+    </plurals>
+    <!-- With the size, "1 GB". -->
+    <string name="notes_all_full">Notes keeps %1$s of files. Remove some to add more.</string>
+    <!-- With the file's name and the size, "25 MB". -->
+    <string name="notes_too_large">%1$s is larger than %2$s.</string>
+    <string name="notes_note_gone">The note was deleted. The file was not added.</string>
+    <string name="notes_could_not_add">Could not add %1$s. The phone may be full.</string>
+    <string name="notes_could_not_read">Could not read %1$s. Pick it again.</string>
+    <string name="notes_copy_saved">Copy saved</string>
+    <string name="notes_copy_damaged">This file is damaged. No copy was saved.</string>
+    <string name="notes_copy_damaged_part">This file is damaged. Part of it may be in the place you chose. Delete it there.</string>
+    <string name="notes_copy_failed">Could not save the copy.</string>
+    <string name="notes_copy_failed_part">Could not save the copy. Part of it may be in the place you chose. Delete it there.</string>
+
+    <!-- Settings. -->
+    <string name="notes_section_files">Files</string>
+    <!-- Such as "12 files, 120 MB of 1 GB". -->
+    <string name="notes_files_line">%1$s, %2$s of %3$s</string>
+    <string name="notes_no_files">No files</string>
+    <string name="notes_section_about">About</string>
+    <string name="notes_version">Version</string>
+</resources>

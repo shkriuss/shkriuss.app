@@ -43,7 +43,7 @@ optional parts that Water uses
 |---|---|
 | `ShkTheme.kt` | `ShkTheme`, the theme every screen is drawn in, and `ShkTheme.colors`. It also sets up Material 3 from the tokens. |
 | `ShkColors.kt` | `ShkColors`, the colour tokens, and their light and dark values. |
-| `ShkText.kt` | `ShkText` and `ShkTextStyle`, the six text styles. |
+| `ShkText.kt` | `ShkText` and `ShkTextStyle`, the six text styles. `ShkText` can stop at a number of lines with "…", and draw ranges bold. |
 | `ShkShapes.kt` | `ShkShapes`, the four shapes. |
 | `ShkSpacing.kt` | `ShkSpacing`, the spacing steps, screen margins and the touch target. |
 | `ShkContrast.kt` | `contrastRatio`, the WCAG contrast formula. |
@@ -55,14 +55,15 @@ optional parts that Water uses
 | `ShkButtons.kt` | `ShkFilledButton`, `ShkTonalButton`, `ShkTextButton` and `ShkIconButton`. |
 | `ShkFloatingActionButton.kt` | `ShkFloatingActionButton` and `ShkExtendedFloatingActionButton`. |
 | `ShkChips.kt` | `ShkFilterChip` and `ShkAssistChip`. |
-| `ShkTextField.kt` | `ShkTextField`, and `TextFieldInStyle`, the same field with typed text in another style, for the time picker. The second is internal to `core/design`. |
+| `ShkTextField.kt` | `ShkTextField`, and `TextFieldInStyle`, the same field with typed text in another style, for the time picker. The second is internal to `core/design`, and so is `NoLearningKeyboard`, which asks the keyboard not to learn. |
+| `ShkTextEditor.kt` | `ShkTextEditor`, a place to write long text with no box, `ShkTextLook` and `ShkTextRange`, the looks of ranges of its text, and `ShkEditorAction`, an action TalkBack offers on it. |
 | `ShkSelectionControls.kt` | `ShkCheckbox`, `ShkSwitch`, `ShkRadioButton` and `ShkRadioGroup`. |
 | `ShkSlider.kt` | `ShkSlider`. |
 | `ShkProgressBar.kt` | `ShkProgressBar`, and `drawProgressBar`, its drawing, internal to `core/design`. |
 | `ShkCard.kt` | `ShkCard`, with and without `onClick`. |
 | `ShkLists.kt` | `ShkListItem`, `ShkDivider` and `ShkSectionHeader`. |
 | `ShkContentStates.kt` | `ShkEmptyState`, `ShkLoadingState`, `ShkErrorState`, and `ShkStateAction`, the button of a state. |
-| `ShkDialog.kt` | `ShkDialog` and `ShkDialogAction`, a question in a window and one of its buttons, up to three. `ShkProgressDialog`, a dialog with a progress circle and no button. `DialogPanel` and `DialogButtons`, the panel and the buttons of every dialog, the pickers included, are internal to `core/design`. |
+| `ShkDialog.kt` | `ShkDialog` and `ShkDialogAction`, a question in a window and one of its buttons, up to three. `ShkProgressDialog`, a dialog with a progress circle, or a bar and the percent, and no button. `DialogPanel` and `DialogButtons`, the panel and the buttons of every dialog, the pickers included, are internal to `core/design`. |
 | `ShkBottomSheet.kt` | `ShkBottomSheet`. |
 | `ShkSnackbar.kt` | `ShkSnackbarHostState`, `rememberShkSnackbarHostState` and `ShkSnackbarResult`. `ShkScreen` shows the snackbars. |
 | `ShkMenu.kt` | `ShkMenu` and `ShkMenuItem`. |
@@ -328,6 +329,7 @@ icon rule asks, and the rail grows with its labels.
 | `ShkFilterChip` | Turning a filter on or off, such as "Done" above a list of tasks. Several sit in a group. | Actions. Use an assist chip or a button. |
 | `ShkAssistChip` | A small, optional action related to the content near it, such as "Add a reminder" under a task. | The main action. Use a button. |
 | `ShkTextField` | Typing text, such as a name, an amount or a short note. | Choosing from a few fixed options. Use radio buttons. |
+| `ShkTextEditor` | Writing long text, such as the text and the title of a note, with no box around it. The app can style ranges, take taps on some and offer one TalkBack action. | A value with a label, such as a name. Use a text field. |
 | `ShkCheckbox` | An option in a form that is saved later, such as "Remind me" in a new task. Several in a group can each be on. | A setting that takes effect at once. Use a switch. |
 | `ShkSwitch` | A setting that takes effect as soon as it changes, such as "Daily reminder" on a settings screen. | An option in a form that is saved later. Use a checkbox. |
 | `ShkRadioButton` | One choice out of a few that are all shown, such as the unit "Millilitres" or "Ounces". Put them in a `ShkRadioGroup`. | More than about six options, or options that change. Use a list. |
@@ -719,6 +721,25 @@ the Lists page of the Catalog.
 | Component | Part | What it does |
 |---|---|---|
 | `ShkListItem` | `checked`, `onCheckedChange`, `checkedDescription` and `checkActionLabel` | With `onCheckedChange`, a tick box at the start of the row, such as the box of a task, ticked while `checked` is true. The box is a touch target of its own, at least 48 dp, beside the row's tap: from the start of the row's touch target to where the text starts. Its box is drawn where the box of a `ShkCheckbox` is, grows with the text and dims with the row. TalkBack skips the box and still reads the row as one item: its text, then `checkedDescription`, such as "not done", and it offers the tick as an action named `checkActionLabel`, such as "Mark as done". Without them it says "Ticked" or "Not ticked", and "Tick" or "Clear the tick". |
+
+### Parts for Notes' screens
+
+Notes' screens use a new component and four parts of others
+([Notes' specification](../apps/notes/spec.md#changes-to-shared-modules)).
+Each part's default leaves every other use as it is. Each has a sample
+in the Catalog: the text editor on the Text fields page, the image on
+the Lists page, and the progress dialog with a bar on the Dialogs page.
+
+| Component | Part | What it does |
+|---|---|---|
+| `ShkTextEditor` | New | A place to write long text with no box: the text sits on the screen in its style, `Body` or `Title`, at least 48 dp tall. Its hint shows in `textSecondary` while it is empty, and TalkBack reads it then; after that, TalkBack reads the text as it is. `looks` style ranges of the text, `ShkTextLook`: `Quiet` in `textSecondary`, `Heading` in the size and weight of `Subtitle`, `Bold`, `Italic`, `StruckThrough`. Showing never changes the text, and a range that does not fit is left out. A tap on one of `tapRanges`, such as the box `[ ]` of a checklist item, calls `onTapRange` and neither moves the cursor nor opens the keyboard. `action` is one action TalkBack offers on it, such as "Tick". `errorText` shows under it in `error` and is announced once, as the field's error. `keyboardLearns = false` asks the keyboard not to learn, as the text field does. It keeps the keyboard's composing region while the caller gives back the text and selection it reported, so a word being typed is not cut off. |
+| `ShkListItem` | `image` | A small picture at the start of the row, in place of `icon`, such as an image that a file of a note holds. It is drawn as it is, not tinted, cut to a 40 dp square with `Field` corners, and grows with the text as an icon does. It is decorative: TalkBack reads nothing for it. |
+| `ShkProgressDialog` | `fraction` | For work that says how far it has got, such as a copy of a file: the words, a `ShkProgressBar` and the percent under it, in the phone's number format, in place of the circle. TalkBack announces the words when the dialog opens, and reads the bar as the words and the percent. Null, the default, shows the circle. |
+| `ShkText` | `maxLines` and `bold` | `maxLines` stops the text at that many lines with "…", only for a preview of something that opens whole elsewhere, such as the first lines of a note in the list. `bold` draws ranges of the text bold, such as what matches a search. TalkBack reads the text as it is. |
+
+1. The spec names `ShkTextEditor`, the image and the fraction. It does
+   not name the two parts of `ShkText`: the list of notes needs them for
+   its rows, cut at two lines, and for the match of a search in bold.
 
 ### Optional part for the user's own text
 
@@ -1117,7 +1138,9 @@ by side it sits between the way out and the confirm button, and one
 above the other it sits in the middle; three touch targets do not
 overlap. The progress dialog is one item for TalkBack, with its words,
 has no button, stays open after Back, and its long words wrap inside
-the dialog.
+the dialog. With a fraction, its bar is read with the words and the
+percent, the words are announced once, and the percent under the bar is
+not read again.
 
 The four optional parts for Water's screens
 ([Optional parts for Water's screens](#optional-parts-for-waters-screens))
@@ -1213,6 +1236,21 @@ or "Ticked", or the app's own words, after its text, and offers "Tick" or
 "Clear the tick", or the app's own words, as an action. A row turned off
 ignores a touch on its box and offers no action. A row without
 `onCheckedChange` has no box, no state and no action.
+
+`ShkTextEditorTest` checks the text editor
+([Parts for Notes' screens](#parts-for-notes-screens)) at font scale 1.0
+and 2.0. It is at least 48 by 48 dp. TalkBack reads its hint while it
+is empty, and then its text as it is, with the styles of its ranges
+changing nothing of it. Typing reaches the caller with the new
+selection, and the editor shows what the caller keeps. A real touch on
+a range to tap calls the caller with that range, and neither focuses
+the editor nor moves its cursor; a touch beside the ranges focuses it.
+TalkBack offers the caller's action by its label, and announces the
+error once, as the error. Asked to, it tells the keyboard not to learn.
+
+`ShkListItemImageTest` checks the small image of a list item at font
+scale 1.0 and 2.0: it comes before the text, is at least 40 dp, and
+grows with the text; TalkBack reads the row as one item, its text only.
 
 `ShkWindowWidthTest` checks that window widths split at 600 and 840 dp,
 and that `ShkWindowWidth.current` follows the window: compact on the
@@ -1325,7 +1363,9 @@ new value, and the progress bar fills and empties and says its value in
 words. On Lists, exactly one list item, the selected sample, is
 read as selected, and the two rows with a tick box say "Not ticked" and
 "Ticked" and offer "Tick" and "Clear the tick". A tick box is checked as
-part of its row: its touch target is inside its row's and in no other. On Navigation, a tap selects a destination and shows
+part of its row: its touch target is inside its row's and in no other.
+A text editor has no label: what TalkBack reads for it is its hint
+while it is empty, then its text. On Navigation, a tap selects a destination and shows
 its name as the title. On List and detail, a tap on a note opens it in
 place of the list, and the back gesture, then Back in its top bar, closes
 it and leaves the page open. On Dialogs, Bottom sheets, Snackbars,
@@ -1367,7 +1407,9 @@ Components:
    label.
 8. **Text fields**: the text field empty, with text, with help, in
    error, disabled, with several lines, and with a long label and long
-   help, then one to try.
+   help, then one to try, and one with a unit; then the text editor
+   empty, with styled ranges, in error, and one to try, whose boxes a
+   tap ticks.
 9. **Selection controls**: the checkbox, the switch and the radio button,
    each off, on, disabled, on and disabled, and with a long label, then a
    few of each to try.
@@ -1379,7 +1421,8 @@ Components:
     and the card that can be tapped, with short and long text.
 13. **Lists**: the list item with one line, with supporting text, with an
     icon, with trailing text, tappable, disabled, selected, with long
-    text and with an icon at the end; the
+    text, with an icon at the end, with a tick box open and ticked, and
+    with a small image; the
     section header with one line, with long text and above list items;
     the divider between list items.
 14. **Empty, loading and error**: the empty state with an icon and a
@@ -1404,7 +1447,8 @@ Components:
 18. **Dialogs**: the dialog with text and two buttons, with one button,
     with a choice, with its confirm button turned off and with long text,
     then one to try, one that stays open with an error under its
-    field, one with a third button, and a progress dialog.
+    field, one with a third button, a progress dialog, and a progress
+    dialog with a bar.
 19. **Bottom sheets**: the sheet with a title, without one and with long
     text, then one to try.
 20. **Snackbars**: the snackbar with a message only, with an action and

@@ -58,7 +58,9 @@ import org.robolectric.shadows.ShadowDialog
  * - A third button sits between the way out and the confirm button, side
  *   by side or one above the other, is read once and closes the dialog.
  * - [ShkProgressDialog] is one item that TalkBack reads with "in progress"
- *   and announces once, has no button, and stays open after Back.
+ *   and announces once, has no button, and stays open after Back. With a
+ *   fraction, its bar is read with the words and the percent, the words
+ *   are announced once, and the percent under the bar is not read again.
  *
  * The screen is the screenshot phone. Graphics run natively, so text is
  * measured with the real font.
@@ -338,6 +340,23 @@ class ShkDialogTest(private val fontScale: Float) {
         assertEquals("TalkBack announces the words when the dialog opens", LiveRegionMode.Polite, config[SemanticsProperties.LiveRegion])
         compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(1)
         // No title beside the words: a pane title would be announced as well, so the words would be heard twice.
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle)).assertCountEquals(0)
+        compose.onAllNodes(hasClickAction()).assertCountEquals(0)
+    }
+
+    @Test
+    fun aProgressDialogWithAFractionReadsItsBarWithTheWordsAndThePercent() {
+        show { ShkProgressDialog(text = WRITING, fraction = 0.404f) }
+
+        val bar = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).fetchSemanticsNode().config
+        assertEquals(listOf(WRITING), bar[SemanticsProperties.ContentDescription])
+        assertEquals("40%", bar[SemanticsProperties.StateDescription])
+        assertEquals(0.404f, bar[SemanticsProperties.ProgressBarRangeInfo].current, 0.0001f)
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.ProgressBarRangeInfo)).assertCountEquals(1)
+        val words = compose.onNode(hasText(WRITING)).fetchSemanticsNode().config
+        assertEquals("TalkBack announces the words when the dialog opens", LiveRegionMode.Polite, words[SemanticsProperties.LiveRegion])
+        // The percent is drawn under the bar, and read only with the bar.
+        compose.onAllNodes(hasText("40%"), useUnmergedTree = true).assertCountEquals(0)
         compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.PaneTitle)).assertCountEquals(0)
         compose.onAllNodes(hasClickAction()).assertCountEquals(0)
     }

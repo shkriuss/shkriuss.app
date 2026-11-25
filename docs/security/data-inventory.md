@@ -427,11 +427,11 @@ hold no user data.
 
 ## Notes (`app.shkriuss.notes`)
 
-Notes is being built. Its code stores notes and their files, as below.
-Its screens are not built yet: the app shows one line. When it starts,
-it opens its database and sweeps it, so an empty `notes.db` is made. It
-has no backup, shows no notification and cannot set up the recovery
-key.
+Notes is being built. It stores notes and their files, as below. Its
+screens write all of it: notes are typed in, and files are added
+through Android's file picker. When it starts, it opens its database and
+sweeps it. It has no backup yet, shows no notification and cannot set up
+the recovery key.
 
 ### On the phone
 
@@ -463,22 +463,27 @@ Everything is in Notes' private storage.
   write-ahead file, under Android's file-based encryption.
 - No preferences file of `core/security`: the settings of the app lock
   cannot be changed in Notes yet.
-- Nothing Notes decrypts is written anywhere: an image is decoded in
-  memory only.
+- Nothing Notes decrypts is written anywhere but into a copy the user
+  saves: an image is decoded in memory only, at the size it shows at,
+  and goes when its row or the image view goes, when the note closes
+  and when Notes locks. A search is not stored.
 
 ### What leaves the phone, and how
 
-Nothing of the user's yet. Notes has no network permission and shows no
+Only the copies you save. Notes has no network permission and shows no
 notification. Android backup and device transfer are off. It writes no
-file outside its storage, puts nothing on the clipboard and writes no
-log. The two parts of the handover of `core/security` are in its
+file outside its storage but a copy you save, puts nothing on the
+clipboard itself and writes no log. The title, the text and the search
+field offer the usual copy and paste, so text you copy goes to the
+clipboard. The two parts of the handover of `core/security` are in its
 manifest, as in every data app: its status provider says only that
 Notes keeps no recovery key, and its handover screen says the same to a
 suite app that asks, and gives nothing
 ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
 
-Once its screens are built, a file leaves Notes only through **Save a
-copy**, decrypted, to the place you pick in Android's file picker
+A file leaves Notes only through **Save a copy**, decrypted, byte for
+byte, to the place you pick in Android's file picker. The copy holds all
+the picked file held, such as where a photo was taken
 ([spec.md](../apps/notes/spec.md#showing-an-image-and-saving-a-copy)).
 
 ### How to delete it
