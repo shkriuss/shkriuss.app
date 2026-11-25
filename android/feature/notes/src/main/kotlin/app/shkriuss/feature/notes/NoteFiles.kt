@@ -66,7 +66,7 @@ class PickedDocument(private val resolver: ContentResolver, private val uri: Uri
             if (index >= 0 && cursor.moveToFirst()) read(cursor, index) else null
         }
     } catch (_: RuntimeException) {
-        // A provider that cannot answer gives no name: the file is called "File".
+        // A provider that cannot answer gives no name: the file gets the name of a file with none.
         null
     }
 }
@@ -375,7 +375,8 @@ sealed interface AddProblem {
  * the part and writes the record with its note in one transaction. An add
  * holds [fileKeys] from the key to the record, so the move of the file
  * keys never finishes while a key is wrapped before its record exists.
- * [tell] gets the words of each problem.
+ * [tell] gets the words of each problem. [unnamed] gives the name of a
+ * file whose picker gives none, "File", from the app's strings.
  */
 class FileAdds(
     private val repository: NotesRepository,
@@ -383,6 +384,7 @@ class FileAdds(
     private val canStart: Flow<Boolean>,
     private val fileKeys: Mutex,
     private val tell: (AddProblem) -> Unit,
+    private val unnamed: () -> String,
     scope: CoroutineScope,
     private val work: CoroutineContext,
     private val afterLastAdd: suspend (noteId: String) -> Unit = {},
@@ -572,7 +574,7 @@ class FileAdds(
                 tell(AddProblem.AllFull)
                 return true
             }
-            val name = FileText.name(readOrNull { waiting.picked.name() })
+            val name = FileText.name(readOrNull { waiting.picked.name() }, unnamed())
             val type = FileText.type(readOrNull { waiting.picked.type() })
             val total = readOrNull { waiting.picked.reportedSize() }
             show(waiting) { it.copy(name = name, total = total) }
@@ -588,7 +590,7 @@ class FileAdds(
         } catch (_: Exception) {
             // A database that refuses, a full disk while the first file key is stored, or anything else: the file is
             // not added, its part and stream are gone, and the files after it still wait their turn.
-            tell(AddProblem.CouldNotAdd(FileText.name(readOrNull { waiting.picked.name() })))
+            tell(AddProblem.CouldNotAdd(FileText.name(readOrNull { waiting.picked.name() }, unnamed())))
         }
         return true
     }
@@ -712,7 +714,7 @@ class FileAdds(
         return CopyEnd(count, null)
     }
 
-    /** [read], or null if the picker's provider fails: the name is then "File" and the type `application/octet-stream`. */
+    /** [read], or null if the picker's provider fails: the name is then [unnamed] and the type `application/octet-stream`. */
     private inline fun <T> readOrNull(read: () -> T?): T? = try {
         read()
     } catch (_: RuntimeException) {

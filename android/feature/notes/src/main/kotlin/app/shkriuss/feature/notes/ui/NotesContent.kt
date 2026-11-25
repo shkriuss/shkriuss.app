@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -63,8 +64,10 @@ import app.shkriuss.feature.notes.R
  */
 @Composable
 internal fun NotesContent(models: NotesModels, snackbar: ShkSnackbarHostState, windowWidth: ShkWindowWidth = ShkWindowWidth.current) {
-    val newNote by models.list.newNote.collectAsState()
+    val list = models.list.state.collectAsState()
     val open by models.open.open.collectAsState()
+    // Only the note to open is read here, so the two panes are not drawn again at each key of a search.
+    val newNote by remember { derivedStateOf { list.value.newNote } }
     LaunchedEffect(newNote) {
         val id = newNote ?: return@LaunchedEffect
         models.open.open(id, isNew = true)
@@ -98,8 +101,8 @@ internal fun NotesContent(models: NotesModels, snackbar: ShkSnackbarHostState, w
 @Composable
 private fun ListPane(models: NotesModels, openNoteId: String?, snackbar: ShkSnackbarHostState?) {
     val list = models.list
-    val state by list.state.collectAsState()
-    val query by list.query.collectAsState()
+    val screen by list.state.collectAsState()
+    val query = screen.typed
     val clock by models.now.reading.collectAsState()
     val format = rememberNotesFormat()
     BackHandler(enabled = query.isNotEmpty()) { list.clearSearch() }
@@ -124,7 +127,7 @@ private fun ListPane(models: NotesModels, openNoteId: String?, snackbar: ShkSnac
             // What is searched is the user's own text: the keyboard is asked not to learn it (spec, "Search", point 4).
             keyboardLearns = false,
         )
-        when (val shown = state) {
+        when (val shown = screen.list) {
             NotesListState.Loading -> Unit
             NotesListState.Failed -> ShkErrorState(title = stringResource(R.string.notes_could_not_open), modifier = Modifier.weight(1f))
             is NotesListState.Shown -> when {
@@ -141,11 +144,14 @@ private fun ListPane(models: NotesModels, openNoteId: String?, snackbar: ShkSnac
                 else -> {
                     val room = with(LocalDensity.current) { buttonHeight.toDp() } + ShkSpacing.Large
                     val onOpen = { row: NoteRowState -> models.open.open(row.note.id) }
+                    val headings = shown.pinned.isNotEmpty()
+                    // With no heading above it, the first row keeps the distance from the search field that the rows keep from
+                    // each other.
+                    if (!headings) Spacer(Modifier.height(ShkSpacing.Small))
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(ShkSpacing.Small),
                     ) {
-                        val headings = shown.pinned.isNotEmpty()
                         val pinned = if (headings) R.string.notes_pinned else null
                         val others = if (headings) R.string.notes_other_notes else null
                         noteSection(pinned, PINNED_KEY, shown.pinned, openNoteId, clock, format, onOpen)

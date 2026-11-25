@@ -134,18 +134,23 @@ class NotesBackupContentTest {
             "a text with a control character" to noteContent(body = "Pass\u0007port".toByteArray()),
             "a text with \\r" to noteContent(body = "Pass\rport".toByteArray()),
             "a text of 100,001 characters" to noteContent(body = "a".repeat(100_001).toByteArray()),
+            "a text that is not UTF-8" to noteContent(body = byteArrayOf(0xC3.toByte(), 0x28)),
         )
         val fileCases = mapOf(
             "one byte more" to file.content + 0,
+            "one byte less" to file.content.copyOf(file.content.size - 1),
             "a note ID that is not version 4" to file.content.copyOf().also { it[6] = 0x10 },
             "a size above 25 MB" to fileContent(size = 25_000_001),
             "a size below 0" to fileContent(size = -1),
             "a type in upper case" to fileContent(type = "IMAGE/JPEG".toByteArray()),
             "a type that is not ASCII" to fileContent(type = "image/jpé".toByteArray()),
             "a type of 128 bytes" to fileContent(type = ("image/" + "a".repeat(122)).toByteArray()),
+            "a type of 2 characters" to fileContent(type = "a/".toByteArray()),
             "no name" to fileContent(name = ByteArray(0)),
             "a name with a line break" to fileContent(name = "ticket\n.jpg".toByteArray()),
             "a name of 256 characters" to fileContent(name = "a".repeat(256).toByteArray()),
+            "a name with a space at its end" to fileContent(name = "ticket.jpg ".toByteArray()),
+            "a name that is not UTF-8" to fileContent(name = byteArrayOf(0xC3.toByte(), 0x28)),
             "a key that is not a wrapped file key" to fileContent(key = KEY.copyOf().also { it[4] = 2 }),
             "a key of 49 bytes" to fileContent(key = KEY.copyOf(49)),
             "a key of 1,025 bytes" to fileContent(key = KEY + ByteArray(1_025 - KEY.size)),
@@ -258,6 +263,8 @@ class NotesBackupContentTest {
             "a file ID that is there twice" to HandMadeContent(listOf(trip, ticket, ticket)),
             "a file whose note is not in the backup" to HandMadeContent(listOf(ticket)),
             "a record ID that is not version 4" to HandMadeContent(listOf(noteRecord("7c9e6679-7425-10de-944b-e07fc1f90ae7"))),
+            // A file's ID names its stream on the phone: only the form of a version 4 UUID is taken.
+            "a file ID that is not version 4" to HandMadeContent(listOf(trip, fileRecord("0f1e2d3c-4b5a-1978-8695-a4b3c2d1e0ff", TRIP, size = 2_400))),
             "another record type" to HandMadeContent(listOf(trip, BackupRecord("task", fieldsOf(TICKET), ByteArray(4)))),
             "a file entry with no file record" to HandMadeContent(listOf(trip), listOf(TICKET to stream)),
             "a file entry that is there twice" to HandMadeContent(listOf(trip, ticket), listOf(TICKET to stream, TICKET to stream)),
@@ -277,6 +284,25 @@ class NotesBackupContentTest {
             assertFalse("$why: no stream moves in", phone.store.has(TICKET))
         }
         assertEquals("Kept", phone.notes().single { it.record.id == kept }.title)
+    }
+
+    @Test
+    fun aRestoreBringsMoreFilesThanAnAddWouldLetANoteHold() {
+        val phone = phone().also { it.giveKeys() }
+        // 21 files of one note, each with its stream: a count stops only Add a file, never a restore.
+        val ids = List(NoteLimits.MOST_FILES_PER_NOTE + 1) { "0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0%02x".format(it) }
+        val stream = ByteArray(StreamLength.of(2_400).toInt())
+        writeBackup(
+            phone.keys,
+            HandMadeContent(listOf(noteRecord(TRIP)) + ids.map { fileRecord(it, TRIP, size = 2_400) }, ids.map { it to stream }),
+            clock,
+            document,
+        )
+
+        assertEquals(BackupStep.Restored, restore(phone))
+
+        assertEquals(NoteLimits.MOST_FILES_PER_NOTE + 1, phone.filesOf(TRIP).size)
+        assertTrue("Each stream moved in", ids.all { phone.store.isWhole(it, 2_400) })
     }
 
     @Test
@@ -387,6 +413,38 @@ class NotesBackupContentTest {
 
         assertTrue("start() returns before anything is deleted, as on the main thread", leftover.exists())
         held.runUntil { !leftover.exists() }
+    }
+
+    @Test
+    fun atEveryStartNotesWipesWhatAStopLeftRemovesStrayStreamsAndGoesOnWithTheMoveOfTheFileKeys() {
+        val phone = phone()
+        val trip = phone.note("Trip", "Passport")
+        val kept = phone.add(trip, picked("ticket.jpg", 2_400)).single()
+        val gone = phone.note("Gone", "Secret")
+        val ofGone = phone.add(gone, picked("map.pdf", 5_000)).single()
+        // Notes stops right after Delete note: the Undo is gone with the snackbar, and nothing is wiped yet.
+        runBlocking { checkNotNull(phone.repository.deleteNote(gone)) }
+        // And in the middle of an add: a part, and a stream with no record.
+        val part = phone.store.part("00000000-0000-4000-8000-0000000000fe").apply { writeBytes(ByteArray(3)) }
+        val stray = phone.store.stream("00000000-0000-4000-8000-0000000000ff").apply { writeBytes(ByteArray(3)) }
+        // The recovery key came before the stop: the keys of the files have not moved yet.
+        phone.giveKeys()
+        assertTrue(phone.keys.crypto.setup.fileKeyMoveIsPending())
+
+        phone.services.start()
+
+        eventually { phone.notes().single { it.record.id == gone }.let(NoteRules::isWiped) }
+        eventually { !phone.keys.crypto.setup.fileKeyMoveIsPending() }
+        val wiped = phone.files().single { it.record.id == ofGone.record.id }
+        assertTrue(wiped.record.isDeleted && NoteRules.isWiped(wiped))
+        assertFalse("The stream of a wiped file is removed", phone.store.has(ofGone.record.id))
+        assertFalse("Every part goes at start", part.exists())
+        assertFalse("And every stream no record needs", stray.exists())
+        val moved = phone.files().single { it.record.id == kept.record.id }
+        assertTrue("The key of the file that stays is sealed by the key of the recovery key", phone.keys.crypto.files.isSealedByCurrentKey(moved.wrappedKey))
+        assertEquals("Its record times are as they were", kept.record, moved.record)
+        assertEquals(FileState.READY, phone.stateOf(moved))
+        assertEquals("Passport", phone.notes().single { it.record.id == trip }.body)
     }
 
     /** A sink that takes everything and keeps nothing. */

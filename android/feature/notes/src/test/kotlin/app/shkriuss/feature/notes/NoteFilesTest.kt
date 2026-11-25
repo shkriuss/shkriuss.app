@@ -54,7 +54,7 @@ class NoteFilesTest {
     private val fileKeys = Mutex()
     private var openUndo: Set<String> = emptySet()
 
-    private val adds by lazy { FileAdds(repository, crypto.files, canStart, fileKeys, { problems += it }, scope, Dispatchers.IO) }
+    private val adds by lazy { FileAdds(repository, crypto.files, canStart, fileKeys, { problems += it }, { "File" }, scope, Dispatchers.IO) }
     private val reader by lazy { FileReader(repository, crypto.files, { crypto.status().let { it.needsRepair || it.filesCanBeGivenUp } }, Dispatchers.IO) }
     /** The open Undo as the move asks for it, record by record; [asked] counts the questions. */
     private var asked = 0
@@ -368,7 +368,7 @@ class NoteFilesTest {
                 emitAll(gate)
             }
         }
-        val lockedAdds = FileAdds(repository, crypto.files, seen, fileKeys, { problems += it }, scope, Dispatchers.IO)
+        val lockedAdds = FileAdds(repository, crypto.files, seen, fileKeys, { problems += it }, { "File" }, scope, Dispatchers.IO)
 
         lockedAdds.add(id, listOf(TestPick()))
         // The third look comes after the key failed; at the fourth the file waits for the gate again.
@@ -715,6 +715,106 @@ class NoteFilesTest {
 
         assertTrue(keyMove.run())
         assertEquals(FileState.READY, reader.stateOf(shown(id).single()))
+    }
+
+    @Test
+    fun atOneGigabyteOfFilesNoAddStartsAndTheRestOfThePickGoesWithIt() {
+        val full = phone.note("Films")
+        seedFiles(full, NoteLimits.MOST_ALL_FILE_BYTES)
+        val id = phone.note("Trip")
+        val opened = AtomicInteger()
+        val picks = List(2) {
+            object : PickedFile by TestPick("f$it.jpg", bytes = ByteArray(10)) {
+                override fun open(): InputStream = TestPick(bytes = ByteArray(10)).open().also { opened.incrementAndGet() }
+            }
+        }
+
+        add(id, *picks.toTypedArray())
+
+        assertEquals("Told once, for the whole pick", listOf<AddProblem>(AddProblem.AllFull), problems)
+        assertEquals("No file is read", 0, opened.get())
+        assertEquals(emptyList<AttachmentEntity>(), files(id))
+        assertEquals(emptyList<File>(), phone.store.list())
+    }
+
+    @Test
+    fun anAddThatWouldTakeAllFilesPastOneGigabyteStopsAndItsPartIsDeleted() {
+        val full = phone.note("Films")
+        seedFiles(full, NoteLimits.MOST_ALL_FILE_BYTES - 100)
+        val id = phone.note("Trip")
+
+        add(id, TestPick("large.jpg", bytes = ByteArray(101)))
+
+        assertEquals("The count of the bytes read takes all files past 1 GB", listOf<AddProblem>(AddProblem.AllFull), problems)
+        assertEquals(emptyList<AttachmentEntity>(), files(id))
+        assertEquals("Its part is deleted", emptyList<File>(), phone.store.list())
+
+        add(id, TestPick("fits.jpg", bytes = ByteArray(100)))
+
+        assertEquals("A file that takes them to 1 GB exactly is added", listOf("fits.jpg"), files(id).map { it.name })
+        assertEquals(NoteLimits.MOST_ALL_FILE_BYTES, runBlocking { repository.shownBytes() })
+    }
+
+    @Test
+    fun aRemovedFileCountsNoMoreTowardsOneGigabyte() {
+        val full = phone.note("Films")
+        seedFiles(full, NoteLimits.MOST_ALL_FILE_BYTES)
+        val id = phone.note("Trip")
+        runBlocking { checkNotNull(repository.removeFile(files(full).first().record.id)) }
+
+        add(id, TestPick())
+
+        assertEquals("Also while its Undo is open", emptyList<AddProblem>(), problems)
+        assertEquals(1, files(id).size)
+    }
+
+    @Test
+    fun aFileWhoseKeysCannotBeUsedNowSaysSoAndOneWhoseKeyWasGivenUpCanNoLongerBeOpened() = runBlocking {
+        val id = phone.note()
+        add(id, TestPick())
+        val file = shown(id).single()
+        // The app gets its recovery key: the key of the file stays sealed by the key of before, until it has moved.
+        crypto.getRecoveryKey()
+        assertEquals(FileState.READY, reader.stateOf(file))
+
+        // The Keystore fails for a moment, and the keys in memory are gone, as after a lock.
+        keys.keystoreFails = true
+        crypto.appLock.lock()
+        assertEquals("The keys cannot be used now", FileState.KEYS_NOT_USABLE, reader.stateOf(file))
+        keys.keystoreFails = false
+        assertEquals(FileState.READY, reader.stateOf(file))
+
+        // The keyset of before is damaged on the disk: it counts as absent, and the security screen offers to give the files up.
+        val old = File(folder, "shk-keys/file-key-old")
+        old.writeBytes(old.readBytes().also { it[it.size - 1] = (it[it.size - 1] + 1).toByte() })
+        crypto.appLock.lock()
+        assertTrue(crypto.status().filesCanBeGivenUp)
+        assertEquals("A keyset file is damaged: the recovery key screen is the way", FileState.KEYS_NOT_USABLE, reader.stateOf(file))
+        assertFalse("Notes never ends the move by itself", keyMove.run())
+
+        crypto.setup.giveUpDamagedFileKeys()
+
+        assertEquals("Its key was given up", FileState.NO_LONGER_OPENS, reader.stateOf(file))
+        assertEquals("Such a file counts in the limits until it is removed", file.size, repository.shownBytes())
+        repository.wipe(checkNotNull(repository.removeFile(file.id)))
+        assertEquals(0L, repository.shownBytes())
+    }
+
+    /**
+     * Writes the records of files that hold [bytes] together into the note
+     * [noteId], with no streams: what the limit of all files counts.
+     */
+    private fun seedFiles(noteId: String, bytes: Long) = runBlocking {
+        var left = bytes
+        var number = 0
+        while (left > 0) {
+            val size = minOf(left, NoteLimits.MOST_FILE_BYTES)
+            val fileId = repository.reserveFileId()
+            val key = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
+            assertEquals(FileAdded.ADDED, repository.addFile(noteId, fileId, "film${number++}.mp4", "video/mp4", size, key))
+            repository.releaseFileId(fileId)
+            left -= size
+        }
     }
 }
 

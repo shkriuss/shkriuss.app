@@ -44,7 +44,7 @@ class NoteImagesTest {
     private val phone by lazy { Phone(folder) }
     private val crypto by lazy { cryptoIn(File(folder, "shk-keys")).crypto }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val adds by lazy { FileAdds(phone.repository, crypto.files, MutableStateFlow(true), Mutex(), {}, scope, Dispatchers.IO) }
+    private val adds by lazy { FileAdds(phone.repository, crypto.files, MutableStateFlow(true), Mutex(), {}, { "File" }, scope, Dispatchers.IO) }
     private val images by lazy { NoteImages(FileReader(phone.repository, crypto.files, { false }, Dispatchers.IO), Dispatchers.IO) }
 
     @After

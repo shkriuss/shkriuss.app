@@ -25,8 +25,16 @@ sealed interface NotesMessage {
     /** "Notes keeps 5,000 notes. Delete some to add more." */
     data object NotesFull : NotesMessage
 
-    /** "Could not change your notes. Try again.": a delete, a remove, an Undo or a pin that the database refused. */
+    /** "Could not change your notes. Try again.": a delete, a remove or a pin that the database refused. */
     data object CouldNotChange : NotesMessage
+
+    /**
+     * "Could not change your notes. Try again.", with **Undo**: the
+     * database refused the write of a pressed Undo. Its Undo stays open in
+     * this snackbar, so it can be pressed again, and nothing is wiped
+     * until this snackbar goes (docs/apps/notes/spec.md, "A write fails").
+     */
+    data class UndoFailed(val undo: Undo) : NotesMessage
 
     /** Why a picked file was not added. */
     data class NotAdded(val problem: AddProblem) : NotesMessage
@@ -47,6 +55,7 @@ val NotesMessage.offeredUndo: Undo?
     get() = when (this) {
         is NotesMessage.NoteDeleted -> undo
         is NotesMessage.FileRemoved -> undo
+        is NotesMessage.UndoFailed -> undo
         else -> null
     }
 
@@ -72,6 +81,9 @@ interface UndoTurns {
  * the destination changes ([endUndo]). If Notes stops, the next start
  * wipes. Then Notes wipes the records of that action that are still
  * deleted, and goes on with the move of the file keys ([afterUndo]).
+ * A pressed Undo whose write the database refuses does not end: it stays
+ * open in the snackbar that says so ([NotesMessage.UndoFailed]), and
+ * nothing is wiped until that one goes.
  *
  * The write that makes an Undo and its snackbar take one turn ([offer]),
  * and so does a press of Undo and its write. The move of the file keys
@@ -179,12 +191,17 @@ class NotesSnackbars(
      * nothing if another snackbar took the place of [pressed] before the
      * press arrived. The records come back, then those of the action that
      * changed meanwhile and are still deleted are wiped.
+     *
+     * If the database refuses the write, nothing came back and nothing is
+     * wiped: the Undo stays open in a snackbar that says so and keeps
+     * **Undo** ([NotesMessage.UndoFailed]), so the press can be tried
+     * again. It ends when that snackbar goes.
      */
     fun undo(pressed: NotesMessage? = null) {
         val message = pressed ?: shown.value ?: return
         val undo = message.offeredUndo ?: return
         scope.launch(work) {
-            val pressed = turns.withLock {
+            val written = turns.withLock {
                 startEnding(undo)
                 // Another snackbar may have taken its place meanwhile: then that ended the Undo, and the press counts for nothing.
                 if (!swap(message, null)) {
@@ -193,12 +210,16 @@ class NotesSnackbars(
                 }
                 try {
                     repository.undo(undo)
+                    true
                 } catch (_: SQLException) {
-                    show(NotesMessage.CouldNotChange)
+                    // Its records count as open in the new snackbar before they stop counting as ending, so the move of
+                    // the file keys never finds them as neither.
+                    show(NotesMessage.UndoFailed(undo))
+                    stopEnding(undo)
+                    false
                 }
-                true
             }
-            if (pressed) end(undo)
+            if (written) end(undo)
         }
     }
 

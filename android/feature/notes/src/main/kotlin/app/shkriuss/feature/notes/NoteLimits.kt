@@ -39,9 +39,6 @@ object NoteLimits {
     /** The type of a file whose type from the picker is outside the limits. */
     const val UNKNOWN_TYPE: String = "application/octet-stream"
 
-    /** The name of a file whose name from the picker is empty once it is cleaned. */
-    const val UNNAMED: String = "File"
-
     /** The lengths a wrapped file key can have. */
     val WRAPPED_KEY_LENGTH: IntRange = 50..1_024
 
@@ -118,9 +115,10 @@ object FileText {
     /**
      * The name as stored, from the picker's: line breaks and control
      * characters become spaces, it keeps its first 255 code points, the
-     * spaces at both ends go, and a name that is then empty becomes "File".
+     * spaces at both ends go, and a name that is then empty becomes
+     * [unnamed], the word "File" of the app's strings.
      */
-    fun name(picked: String?): String {
+    fun name(picked: String?, unnamed: String): String {
         val spaced = buildString((picked ?: "").length) {
             (picked ?: "").forEach { char -> append(if (char.isControlOrBreak()) ' ' else char) }
         }
@@ -129,7 +127,7 @@ object FileText {
         } else {
             spaced
         }
-        return kept.trim().ifEmpty { NoteLimits.UNNAMED }
+        return kept.trim().ifEmpty { unnamed }
     }
 
     /** The type as stored: the picker's, or `application/octet-stream` when it is outside the limits. */

@@ -397,7 +397,10 @@ phone's time zone and format.
    snackbar goes: its time runs out, another snackbar takes its place,
    Notes leaves the screen, the destination changes, or Notes stops.
    Then Notes wipes the records of that action that are still deleted,
-   in one transaction, and after it removes their streams.
+   in one transaction, and after it removes their streams. One snackbar
+   does not end it: the one that says a pressed **Undo** could not be
+   written ([A write fails](#a-write-fails)). It carries the same
+   **Undo**, which ends when that snackbar goes.
 3. At every start, before a backup lists its records, and after a
    restore, Notes, in this order: marks deleted each file that is not
    deleted and whose note is; wipes every deleted record that is not
@@ -494,7 +497,7 @@ record needs, and the next start removes it.
 |---|---|
 | Saving a note | Nothing changes in the database. The text stays on the screen, with a line above the title: "Could not save the note. Notes tries again." It tries again at the next change. Closing the note then asks "This note is not saved", with **Try again** and **Discard changes**. Back, or a tap beside the question, keeps the note open with what is typed, and a note that was to open next does not open. |
 | Adding a file | The part, or the stream if it was already renamed, is deleted at once, and the file is not added: "Could not add ticket.jpg. The phone may be full." |
-| Delete, remove, **Undo**, **Pin** | Nothing changes. A snackbar: "Could not change your notes. Try again." |
+| Delete, remove, **Undo**, **Pin** | Nothing changes. A snackbar: "Could not change your notes. Try again." After an **Undo** that failed, that snackbar keeps **Undo**, for the same records: the press can be tried again, and nothing is wiped until the snackbar goes. |
 | The wipe, removing a stream, or the checkpoint | Tried again at the next start. Nothing shows, except before a backup: then the backup stops ([Writing](#writing), point 1). |
 | Reading a stream | The row's [state](#files-that-cannot-be-opened). |
 | Writing a copy | Notes tries to delete the document: "Could not save the copy." If it cannot: "Could not save the copy. Part of it may be in the place you chose. Delete it there." |
@@ -755,7 +758,7 @@ late, and when the clock or the time zone changes
    note after this phone wiped it brings the note back, with its newer
    files only ([After a restore](#after-a-restore), point 4).
 
-For the screens, seven more:
+For the screens, eight more:
 
 6. From 840dp, the card of the open note is marked as selected in the
    list, as an open item of a list is ([Notes](#notes), point 4).
@@ -777,6 +780,10 @@ For the screens, seven more:
     picker gives the file's size. A picker that gives no size is rare,
     and its row says "Adding ticket.jpg" alone ([A note](#a-note),
     point 4).
+13. An **Undo** whose write fails keeps its **Undo**, in the snackbar
+    that says "Could not change your notes. Try again.". Nothing is
+    wiped until that snackbar goes, so a note is not lost because the
+    phone was full at that moment ([A write fails](#a-write-fails)).
 
 ## Assumptions
 

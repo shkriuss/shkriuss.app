@@ -8,16 +8,21 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.test.isHeading
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.testing.TestDocuments
+import app.shkriuss.feature.notes.NoteRules
 import app.shkriuss.feature.notes.OpenNoteViewModel
 import app.shkriuss.feature.notes.R
 import org.junit.After
@@ -205,6 +210,58 @@ class NotesScreensTest(private val config: ScreenshotConfig) {
         compose.waitUntil(WAIT) { storedNotes().singleOrNull()?.body == "Passport" }
     }
 
+    @Test
+    fun goingToSettingsEndsTheUndoAndTheDeletedNoteIsWiped() {
+        val trip = seed { addNote("Trip", "Passport") }
+        start()
+        openNote("Trip")
+        compose.tap(DesignR.string.shk_more_options)
+        compose.tap(R.string.notes_delete_note)
+        compose.waitForText(words(R.string.notes_note_deleted))
+
+        compose.tap(R.string.notes_settings)
+
+        compose.waitForGone(hasText(words(R.string.notes_note_deleted)))
+        compose.waitUntil(WAIT) { NoteRules.isWiped(everyNote().single { it.record.id == trip }) }
+    }
+
+    @Test
+    fun leavingNotesEndsTheUndoAndTheDeletedNoteIsWiped() {
+        val trip = seed { addNote("Trip", "Passport") }
+        start()
+        openNote("Trip")
+        compose.tap(DesignR.string.shk_more_options)
+        compose.tap(R.string.notes_delete_note)
+        compose.waitForText(words(R.string.notes_note_deleted))
+
+        // Notes leaves the screen, as when another app comes to the front.
+        scenario.moveToState(Lifecycle.State.CREATED)
+
+        compose.waitUntil(WAIT) { NoteRules.isWiped(everyNote().single { it.record.id == trip }) }
+        scenario.moveToState(Lifecycle.State.RESUMED)
+        compose.waitForGone(hasText(words(R.string.notes_note_deleted)))
+        assertTrue(storedNotes().isEmpty())
+    }
+
+    @Test
+    fun theSectionsAreHeadingsAndARowReadsHowManyFilesItsNoteHas() {
+        val trip = seed {
+            addNote("Shopping", "Bread")
+            addNote("Trip", "Passport").also { check(setPinned(it, false)) }
+        }
+        start()
+        compose.addFiles(trip, BytesPick("plan.pdf", "application/pdf", ByteArray(FILE_BYTES)), BytesPick("map.pdf", "application/pdf", ByteArray(FILE_BYTES)))
+
+        compose.waitFor(hasContentDescription("2 files", substring = true))
+        val spoken = compose.row("Trip").fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single()
+        assertTrue(spoken, spoken.startsWith("Trip, pinned, changed ") && spoken.endsWith(", 2 files, Passport"))
+        listOf(R.string.notes_pinned, R.string.notes_other_notes).forEach { compose.onNode(hasText(words(it))).assert(isHeading()) }
+
+        openNote("Trip")
+        compose.waitFor(rowMatcher("plan.pdf"))
+        compose.onNode(hasText(words(R.string.notes_files))).assert(isHeading())
+    }
+
     // Formatting.
 
     @Test
@@ -267,6 +324,48 @@ class NotesScreensTest(private val config: ScreenshotConfig) {
 
         scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         compose.waitFor(rowMatcher("ticket.png"))
+    }
+
+    @Test
+    fun aFileThatCannotBeOpenedSaysWhyAndOffersOnlyRemove() {
+        val trip = seed { addNote("Trip", "Passport") }
+        start()
+        compose.addFiles(trip, BytesPick("map.png", "image/png", pngBytes()))
+        // Its stream goes, as after a restore whose file has not moved in yet.
+        testApp.test.services.repository.store.remove(storedFiles().single().id)
+        openNote("Trip")
+
+        val state = words(R.string.notes_not_on_phone)
+        compose.waitFor(rowMatcher("map.png, $state"))
+        val row = compose.row("map.png").fetchSemanticsNode()
+        assertEquals("Its state, in place of its size, and not as an image", listOf("map.png, $state"), row.config[SemanticsProperties.ContentDescription])
+        assertEquals(
+            "No Open and no Save a copy",
+            listOf(words(R.string.notes_remove)),
+            row.config[SemanticsActions.CustomActions].map { it.label },
+        )
+
+        // A tap opens its menu, which has Remove alone.
+        compose.tap(rowMatcher("map.png"))
+        compose.waitFor(hasText(words(R.string.notes_remove)) and hasClickAction())
+        compose.onNode(hasText(words(R.string.notes_save_copy))).assertDoesNotExist()
+        compose.tap(R.string.notes_remove)
+        compose.waitUntil(WAIT) { storedFiles().isEmpty() }
+        compose.waitForText(words(R.string.notes_file_removed))
+    }
+
+    @Test
+    fun theLineOfAFailedSaveIsAnnounced() {
+        seed { addNote("Shopping", "Bread") }
+        start()
+        openNote("Shopping")
+        refuseWrites()
+
+        compose.editor("Bread").performTextInput(" and milk")
+
+        val words = words(R.string.notes_save_failed)
+        compose.waitForText(words)
+        assertEquals(LiveRegionMode.Polite, compose.onNode(hasText(words)).fetchSemanticsNode().config[SemanticsProperties.LiveRegion])
     }
 
     @Test

@@ -9,14 +9,15 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.plus
 
 /** One row of the list (docs/apps/notes/spec.md, "Notes", point 3, and "Search", point 2). */
 data class NoteRowState(
@@ -55,10 +56,27 @@ sealed interface NotesListState {
 }
 
 /**
+ * The one state of the list's screen: what the search field holds, the
+ * new note to open, and the list.
+ */
+data class NotesListScreen(
+    /** What the search field holds now, as typed. The list follows it 300 ms later ([NotesListState.Shown.query]). */
+    val typed: String = "",
+    /** The `id` of the new note that **New note** made room for, for the screen to open, or null. The screen then calls [NotesListViewModel.newNoteOpened]. */
+    val newNote: String? = null,
+    /** The list, as the search filters it. */
+    val list: NotesListState = NotesListState.Loading,
+)
+
+/**
  * The list of Notes, its search and **New note** (docs/apps/notes/spec.md,
  * "Notes" and "Search"). What is typed filters the list 300 ms after the
  * last key; clearing the field shows every note at once. Nothing of a
  * search is stored. [wait] is the pause, which tests control.
+ *
+ * It has one state, [state]. What is typed is set in it at once, on the
+ * thread of the press, so the field never shows an older text; the list
+ * is read on [work] and set in it when it is ready.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NotesListViewModel(
@@ -67,39 +85,37 @@ class NotesListViewModel(
     private val work: CoroutineContext = Dispatchers.IO,
     private val wait: suspend (Long) -> Unit = { delay(it) },
 ) : ViewModel() {
-    private val typed = MutableStateFlow("")
-    private val opening = MutableStateFlow<String?>(null)
+    private val screen = MutableStateFlow(NotesListScreen())
 
-    /** True while a press of **New note** reserves. It and [opening] change together, under [pressLock]. */
+    /** True while a press of **New note** reserves. It and the note to open change together, under [pressLock]. */
     private var asking = false
     private val pressLock = Any()
 
-    /** What the field holds now, as typed. */
-    val query: StateFlow<String> = typed
+    /** What the screen shows: the field, the new note to open, and the list in its order and sections. */
+    val state: StateFlow<NotesListScreen> = screen.asStateFlow()
 
-    /** The `id` of the new note that **New note** made room for, for the screen to open. The screen calls [newNoteOpened]. */
-    val newNote: StateFlow<String?> = opening
-
-    private val searched: Flow<String> = typed.mapLatest { text ->
+    private val searched: Flow<String> = screen.map { it.typed }.distinctUntilChanged().mapLatest { text ->
         if (text.isNotEmpty()) wait(SEARCH_PAUSE_MILLIS)
         text
     }
 
-    /** The list, in its order and sections, as the search filters it. */
-    val state: StateFlow<NotesListState> =
-        combine(repository.notes(), repository.shownFiles(), searched) { notes, files, query -> shown(notes, files, query) as NotesListState }
-            .catch { error -> if (error is SQLException) emit(NotesListState.Failed) else throw error }
-            .stateIn(viewModelScope + work, SharingStarted.Eagerly, NotesListState.Loading)
+    init {
+        viewModelScope.launch(work) {
+            combine(repository.notes(), repository.shownFiles(), searched) { notes, files, query -> shown(notes, files, query) as NotesListState }
+                .catch { error -> if (error is SQLException) emit(NotesListState.Failed) else throw error }
+                .collect { list -> screen.update { it.copy(list = list) } }
+        }
+    }
 
     /** The field changed. */
     fun search(text: String) {
-        typed.value = text
+        screen.update { it.copy(typed = text) }
     }
 
     /** Back with text in the field clears it. True if it held text, so Back did that and nothing more. */
     fun clearSearch(): Boolean {
-        if (typed.value.isEmpty()) return false
-        typed.value = ""
+        if (screen.value.typed.isEmpty()) return false
+        screen.update { it.copy(typed = "") }
         return true
     }
 
@@ -112,7 +128,7 @@ class NotesListViewModel(
      */
     fun newNote() {
         synchronized(pressLock) {
-            if (opening.value != null || asking) return
+            if (screen.value.newNote != null || asking) return
             asking = true
         }
         viewModelScope.launch(work) {
@@ -126,20 +142,20 @@ class NotesListViewModel(
                 // The note to open and the end of the press show together, so a press just after it is not lost.
                 synchronized(pressLock) {
                     asking = false
-                    if (reserved != null) opening.value = reserved
+                    if (reserved != null) screen.update { it.copy(newNote = reserved) }
                 }
             }
         }
     }
 
-    /** The screen opened the new note of [newNote]: the note's ViewModel owns its reservation now. */
+    /** The screen opened the new note of [NotesListScreen.newNote]: the note's ViewModel owns its reservation now. */
     fun newNoteOpened() {
-        opening.value = null
+        screen.update { it.copy(newNote = null) }
     }
 
     /** A new note that was reserved and never opened is given up, so that it no longer counts towards 5,000. */
     override fun onCleared() {
-        opening.value?.let(repository::giveUpNewNote)
+        screen.value.newNote?.let(repository::giveUpNewNote)
     }
 
     private fun shown(notes: List<Note>, files: List<NoteFile>, query: String): NotesListState.Shown {

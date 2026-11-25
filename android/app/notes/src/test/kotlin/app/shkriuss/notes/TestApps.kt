@@ -18,6 +18,10 @@ import app.shkriuss.feature.notes.data.NotesDatabase
 import app.shkriuss.feature.notes.data.SecureDelete
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.flow.map
 
 /** The name of the app in keys, as `NotesApp` has it. */
@@ -39,9 +43,46 @@ class TestNotes(
 ) {
     private val host = app as SecurityHost
 
+    /** Where the services do their work: as in the app, until a test holds it. */
+    val work = HoldableWork()
+
     /** What the app class hands to the screens. */
     val services: NotesServices =
-        NotesServices(app, database, clock, ids, host.crypto, gateOpen = host.appLock.gate.map { it == AppGate.OPEN }, zone = { ZoneOffset.UTC })
+        NotesServices(app, database, clock, ids, host.crypto, gateOpen = host.appLock.gate.map { it == AppGate.OPEN }, work = work, zone = { ZoneOffset.UTC })
+}
+
+/**
+ * Where the app's services do their work in a test: on `Dispatchers.IO`,
+ * as in the app, until the test holds it. What is given to it while it is
+ * held waits until the test lets go. So a screenshot can show a screen
+ * whose work has not run yet, such as the image view while its image is
+ * decoded.
+ */
+class HoldableWork : CoroutineDispatcher() {
+    private val waiting = ArrayDeque<Pair<CoroutineContext, Runnable>>()
+    private var held = false
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) {
+        synchronized(waiting) {
+            if (held) {
+                waiting += context to block
+                return
+            }
+        }
+        Dispatchers.IO.dispatch(context, block)
+    }
+
+    /** From now on, the work that is given waits. */
+    fun hold() = synchronized(waiting) { held = true }
+
+    /** The work that waited runs, in its order, and work runs at once again. */
+    fun letGo() {
+        val ready = synchronized(waiting) {
+            held = false
+            waiting.toList().also { waiting.clear() }
+        }
+        ready.forEach { (context, block) -> Dispatchers.IO.dispatch(context, block) }
+    }
 }
 
 /** The app class of every test of the screens. */

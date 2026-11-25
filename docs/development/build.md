@@ -695,7 +695,7 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 15 test classes with 220 tests: the limits of every
+- `feature/notes` has 15 test classes with 233 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
@@ -705,12 +705,13 @@ second build must write the same mapping file, or the release stops. See
   file to zero, on a database in a file (`NotesDatabaseTest`); the
   repository, with Undo, the wipe and the sweep at start
   (`NotesRepositoryTest`); the adds of files, reading them back, the
-  state of each row, **Save a copy** and the move of the file keys to
-  the recovery key, with software keys on the real code of
-  `core/crypto` (`NoteFilesTest`); the images decoded from their
+  state of each row, **Save a copy**, the limit of 1 GB and the move of
+  the file keys to the recovery key, with software keys on the real
+  code of `core/crypto` (`NoteFilesTest`); the images decoded from their
   streams, scaled down, and the intents of the file picker
   (`NoteImagesTest`); the ViewModels and the one snackbar
-  (`ViewModelsTest`), and which note is open, also after Android
+  (`ViewModelsTest`), with an Undo that the database refuses, and which
+  note is open, also after Android
   stopped Notes (`OpenNoteViewModelTest`);
   the clock of the screens (`NotesNowTest`); how far the image view
   lets an image be dragged (`PanLimitsTest`); how the screens write
@@ -721,7 +722,10 @@ second build must write the same mapping file, or the release stops. See
   each test waits for the state it expects. The pauses before a search
   and a save are the test's own, and so is the clock of the save times.
   A trigger that aborts every write to a table stands for a disk that
-  refuses a write. `NoteFilesTest` also checks that the length of a
+  refuses a write, and one that aborts only bringing a deleted row back
+  for a disk that refuses an Undo and would take its wipe. The limit of
+  1 GB is tried with records of files that have no streams.
+  `NoteFilesTest` also checks that the length of a
   stream follows the rule of crypto-design.md at the edges of its
   segments.
   - The tests of backup and restore run on the real `NotesServices`
@@ -733,9 +737,11 @@ second build must write the same mapping file, or the release stops. See
     whole backup that comes back on another phone byte for byte, the
     files that are left out, the wipe before a backup, which streams
     move in after a restore, a wiped note that a later edit of another
-    copy brings back, the progress of a backup and a restore, and that
-    what a stopped restore left is deleted off the thread that starts
-    Notes.
+    copy brings back, more files of one note than an add allows, the
+    progress of a backup and a restore, that what a stopped restore
+    left is deleted off the thread that starts Notes, and what every
+    start does: the wipe of what a stop left, the streams and parts no
+    record needs, and the move of the file keys.
   - `BackupViewModelTest`: the rows of Settings, going on after the
     recovery key with the move of the file keys done first, a backup and
     what stops one before it is written, the question, a restore, a
@@ -762,13 +768,22 @@ second build must write the same mapping file, or the release stops. See
   - `NotesScreensTest`: what the screens do and what TalkBack hears, on
     a phone and on a tablet: a new note, saving and a refused save,
     search, Pin, Delete note and Undo, also after the phone is turned,
-    the formatting bar and the
-    action on a checklist item, the rows of files and their actions, the
+    the end of an Undo when the destination changes and when Notes
+    leaves the screen, the headings of the sections, the formatting bar
+    and the
+    action on a checklist item, the rows of files and their actions,
+    also of a file that cannot be opened, the
     image view, Add a file and Save a copy through the test's file
     picker, two panes, and Settings. It also checks that the keyboard is
-    asked not to learn the title, the text and the search.
-  - `NotesScreenshotTest`: the screenshots of every screen, dialog and
-    menu, with files added through the real adds.
+    asked not to learn the title, the text and the search, and that the
+    line of a failed save is announced.
+  - `NotesScreenshotTest`: the screenshots of every screen, dialog,
+    menu and snackbar, and of every state of a file's row, with files
+    added through the real adds. A snackbar that no screen of the test
+    can bring up is shown through the one snackbar of the app. The
+    services of the test's app do their work in `HoldableWork`, which a
+    test can hold: so the image view is captured while its image is
+    still decoded.
 
 ### Instrumented tests
 
@@ -895,7 +910,8 @@ document as a file in a folder of the test. A test sets it up with
 Robolectric, gets a `content:` URI for a name, and can make the next
 open fail, to try a storage app that refuses. The tests of
 `feature/water`, `app/water`, `feature/reminders`, `app/reminders`,
-`feature/tasks` and `app/tasks` write and read backups through it.
+`feature/tasks`, `app/tasks`, `feature/notes` and `app/notes` write and
+read backups through it.
 
 ### Tests that wait for a background thread
 

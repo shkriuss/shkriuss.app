@@ -398,4 +398,42 @@ class NotesRepositoryTest {
         assertEquals(10L, repository.totals().first().bytes)
         assertEquals(10L, repository.shownBytes())
     }
+
+    @Test
+    fun undoBringsBackWhatItsActionDeletedAlsoWhenACountThenPassesItsLimit() = runBlocking {
+        val id = phone.note("Trip")
+        val files = List(NoteLimits.MOST_FILES_PER_NOTE) { file(id, "f$it.jpg") }
+        val undo = checkNotNull(repository.removeFile(files.first()))
+        // A file added meanwhile fills the note again.
+        file(id, "later.jpg")
+        assertEquals(NoteLimits.MOST_FILES_PER_NOTE, repository.shownFileCount(id))
+
+        assertTrue(repository.undo(undo))
+
+        assertEquals("A count stops only Add a file", NoteLimits.MOST_FILES_PER_NOTE + 1, repository.shownFileCount(id))
+        assertNull(storedFile(files.first())?.record?.deletedAt)
+    }
+
+    @Test
+    fun undoAndPinAreOneTransactionEachSoARefusedWriteLeavesNothingHalfDone() = runBlocking {
+        val id = phone.note("Trip", "Passport")
+        val ticket = file(id)
+        val undo = checkNotNull(repository.deleteNote(id))
+        val deleted = stored(id) to storedFile(ticket)
+        // The note comes back first, then its file: the database refuses the file.
+        phone.database.refuseWritesTo("attachment")
+
+        assertThrows(SQLException::class.java) { runBlocking { repository.undo(undo) } }
+
+        assertEquals("The note did not come back alone", deleted, stored(id) to storedFile(ticket))
+        phone.database.acceptWritesTo("attachment")
+        assertTrue("The Undo still counts", repository.undo(undo))
+        assertNull(stored(id)?.record?.deletedAt)
+        assertNull(storedFile(ticket)?.record?.deletedAt)
+
+        phone.database.refuseWritesTo("note")
+        assertThrows(SQLException::class.java) { runBlocking { repository.setPinned(id, shownPinned = false) } }
+        phone.database.acceptWritesTo("note")
+        assertEquals(false, stored(id)?.pinned)
+    }
 }

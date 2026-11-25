@@ -68,6 +68,8 @@
 
     <!-- The files of a note. -->
     <string name="notes_files">Files</string>
+    <!-- The name Notes gives a picked file whose picker gives none. It is stored as the file's name. -->
+    <string name="notes_unnamed_file">File</string>
     <!-- The row of a file being added, such as "Adding ticket.jpg", or before its name is read. -->
     <string name="notes_adding">Adding %1$s</string>
     <string name="notes_adding_a_file">Adding a file</string>

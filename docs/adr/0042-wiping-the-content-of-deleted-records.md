@@ -92,4 +92,4 @@
 - Tasks and later apps may use the wipe. Each decides in its own spec.
 - [threat-model.md](../security/threat-model.md) and
   [data-inventory.md](../security/data-inventory.md) say what a wipe
-  removes once Notes is built.
+  removes in Notes.

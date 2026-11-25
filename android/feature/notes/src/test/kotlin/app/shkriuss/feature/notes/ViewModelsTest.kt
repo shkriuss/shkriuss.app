@@ -9,6 +9,7 @@ import androidx.room3.useWriterConnection
 import androidx.room3.withWriteTransaction
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.testing.TestIdSource
+import app.shkriuss.feature.notes.data.AttachmentEntity
 import app.shkriuss.feature.notes.data.NoteEntity
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -62,7 +63,7 @@ class ViewModelsTest {
         NotesSnackbars(repository, { keyMoves += Unit }, scope, Dispatchers.IO, isAdding = { adds.isAddingTo(it) })
     }
     private val adds: FileAdds by lazy {
-        FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), { problems += it }, scope, Dispatchers.IO, afterLastAdd = { snackbars.lookAgain(it) })
+        FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), { problems += it }, { "File" }, scope, Dispatchers.IO, afterLastAdd = { snackbars.lookAgain(it) })
     }
     private val reader by lazy { FileReader(repository, crypto.files, { false }, Dispatchers.IO) }
 
@@ -98,7 +99,10 @@ class ViewModelsTest {
     }
 
     private fun NotesListViewModel.shown(condition: (NotesListState.Shown) -> Boolean = { true }): NotesListState.Shown =
-        state.await { it is NotesListState.Shown && condition(it) } as NotesListState.Shown
+        state.await { screen -> (screen.list as? NotesListState.Shown)?.let(condition) == true }.list as NotesListState.Shown
+
+    /** The `id` of the new note that **New note** made room for, once it has. */
+    private fun NotesListViewModel.reserved(): String = checkNotNull(state.await { it.newNote != null }.newNote)
 
     @Test
     fun theListHasItsSectionsAndEachRowItsTitleTextAndFiles() {
@@ -139,7 +143,7 @@ class ViewModelsTest {
         val store = ViewModelStore()
         val list = ViewModelProvider.create(store, viewModelFactory { initializer { list() } })[NotesListViewModel::class]
         list.newNote()
-        val reserved = checkNotNull(list.newNote.await { it != null })
+        val reserved = list.reserved()
 
         store.clear()
 
@@ -172,16 +176,46 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aSearchKeepsTheOrderAndTheSectionsAndOnlyTheNamesOfShownFilesMatch() {
+        val trip = phone.note("Trip", "Buy a ticket")
+        phone.clock.advanceBy(1_000)
+        val home = phone.note("Home", "Keys")
+        phone.clock.advanceBy(1_000)
+        val work = phone.note("Work", "ticket for the train")
+        runBlocking { repository.setPinned(trip, shownPinned = false) }
+        adds.add(home, listOf(TestPick("ticket.jpg"), TestPick("plan.pdf")))
+        adds.adding.await { it.isEmpty() }
+        val list = list()
+        list.shown { it.pinned.size == 1 && it.others.size == 2 }
+
+        list.search("ticket")
+        endPause.trySend(Unit)
+
+        val found = list.shown { it.query == "ticket" }
+        assertEquals("The pinned note stays in its section", listOf(trip), found.pinned.map { it.note.id })
+        assertEquals("The others stay newest first: a file was added to Home last", listOf(home, work), found.others.map { it.note.id })
+        assertEquals("ticket.jpg", found.others.first().match?.fileName)
+        assertEquals("Each row still counts its files", 2, found.others.first().fileCount)
+
+        // The file is removed: its name matches no more, also while its Undo is open.
+        val ticket = runBlocking { phone.database.attachments().shownOf(home) }.single { it.name == "ticket.jpg" }.record.id
+        runBlocking { checkNotNull(repository.removeFile(ticket)) }
+
+        val after = list.shown { rows -> rows.query == "ticket" && rows.others.none { it.note.id == home } }
+        assertEquals(listOf(work), after.others.map { it.note.id })
+    }
+
+    @Test
     fun newNoteReservesANoteToOpenAndAtFiveThousandSaysThatNotesIsFull() {
         val list = list()
         list.newNote()
         list.newNote()
-        val first = list.newNote.await { it != null }
+        val first = list.reserved()
         list.newNoteOpened()
-        assertTrue(repository.isNewNote(checkNotNull(first)))
+        assertTrue(repository.isNewNote(first))
         assertEquals(TestIdSource.idNumber(1), first)
         list.newNote()
-        assertEquals("Pressed twice, the first press reserved one note", TestIdSource.idNumber(2), list.newNote.await { it != null })
+        assertEquals("Pressed twice, the first press reserved one note", TestIdSource.idNumber(2), list.reserved())
         list.newNoteOpened()
         assertEquals("A new note writes nothing", 0, runBlocking { repository.shownCount() })
 
@@ -194,7 +228,7 @@ class ViewModelsTest {
         list.newNote()
 
         assertEquals(NotesMessage.NotesFull, snackbars.current.await { it != null })
-        assertNull(list.newNote.value)
+        assertNull(list.state.value.newNote)
     }
 
     @Test
@@ -489,6 +523,103 @@ class ViewModelsTest {
         eventually { stored(id)?.let(NoteRules::isWiped) == true }
         assertNotNull(stored(id)?.record?.deletedAt)
         assertEquals(NotesMessage.CouldNotChange, snackbars.current.value)
+    }
+
+    @Test
+    fun anUndoThatTheDatabaseRefusesKeepsItsUndoAndWipesNothing() {
+        val id = phone.note("Trip", "Secret")
+        val undo = checkNotNull(runBlocking { repository.deleteNote(id) })
+        snackbars.show(NotesMessage.NoteDeleted(undo))
+        // The database refuses to bring the note back, and would take its wipe.
+        refuseBringingBack(NoteEntity.TABLE)
+
+        snackbars.undo()
+
+        assertEquals("It says so, and keeps Undo", NotesMessage.UndoFailed(undo), snackbars.current.await { it is NotesMessage.UndoFailed })
+        // A wipe would have run by now: it follows the end of an Undo at once.
+        Thread.sleep(200)
+        assertEquals("Nothing is wiped", "Secret", stored(id)?.body)
+        assertNotNull(stored(id)?.record?.deletedAt)
+        assertEquals("Its records still count as open", setOf(id), snackbars.openUndoIds)
+        assertEquals("The Undo has not ended", 0, keyMoves.size)
+
+        allowBringingBack(NoteEntity.TABLE)
+        snackbars.undo()
+
+        eventually { stored(id)?.record?.deletedAt == null }
+        assertEquals("Secret", stored(id)?.body)
+        eventually { keyMoves.size == 1 }
+        assertNull(snackbars.current.value)
+    }
+
+    @Test
+    fun aFailedUndoEndsWhenItsSnackbarGoesAndTheNoteIsThenWiped() {
+        val id = phone.note("Trip", "Secret")
+        val undo = checkNotNull(runBlocking { repository.deleteNote(id) })
+        snackbars.show(NotesMessage.NoteDeleted(undo))
+        refuseBringingBack(NoteEntity.TABLE)
+        snackbars.undo()
+        val failed = checkNotNull(snackbars.current.await { it is NotesMessage.UndoFailed })
+
+        snackbars.gone(failed)
+
+        assertNull(snackbars.current.value)
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+        eventually { keyMoves.size == 1 }
+    }
+
+    @Test
+    fun aRemovedFilesUndoThatTheDatabaseRefusesKeepsTheFileAndItsStream() {
+        val id = phone.note("Trip", "")
+        adds.add(id, listOf(TestPick()))
+        adds.adding.await { it.isEmpty() }
+        val file = runBlocking { phone.database.attachments().shownOf(id) }.single().record.id
+        val undo = checkNotNull(runBlocking { repository.removeFile(file) })
+        snackbars.show(NotesMessage.FileRemoved(undo))
+        refuseBringingBack(AttachmentEntity.TABLE)
+
+        snackbars.undo()
+
+        assertEquals(NotesMessage.UndoFailed(undo), snackbars.current.await { it is NotesMessage.UndoFailed })
+        Thread.sleep(200)
+        assertEquals("Its record is not wiped", "ticket.jpg", runBlocking { phone.database.attachments().find(file) }?.name)
+        assertTrue("Its stream stays", phone.store.has(file))
+
+        allowBringingBack(AttachmentEntity.TABLE)
+        snackbars.undo()
+
+        eventually { runBlocking { phone.database.attachments().shownOf(id) }.map { it.record.id } == listOf(file) }
+        assertTrue(phone.store.has(file))
+    }
+
+    @Test
+    fun aPinThatTheDatabaseRefusesSaysSoAndChangesNothing() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        phone.database.refuseWritesTo(NoteEntity.TABLE)
+
+        note.setPinned(shownPinned = false)
+
+        assertEquals(NotesMessage.CouldNotChange, snackbars.current.await { it != null })
+        phone.database.acceptWritesTo(NoteEntity.TABLE)
+        assertEquals(false, stored(id)?.pinned)
+        assertFalse(note.state.value.pinned)
+    }
+
+    /** The database refuses to bring a deleted row of [table] back, and takes every other write, a wipe too. */
+    private fun refuseBringingBack(table: String) = runBlocking {
+        phone.database.useWriterConnection { connection ->
+            connection.executeSQL(
+                "CREATE TRIGGER refuse_back_$table BEFORE UPDATE ON $table WHEN OLD.deletedAt IS NOT NULL AND NEW.deletedAt IS NULL " +
+                    "BEGIN SELECT RAISE(ABORT, 'refused'); END",
+            )
+        }
+    }
+
+    /** The database brings deleted rows of [table] back again. */
+    private fun allowBringingBack(table: String) = runBlocking {
+        phone.database.useWriterConnection { connection -> connection.executeSQL("DROP TRIGGER refuse_back_$table") }
     }
 
     @Test
