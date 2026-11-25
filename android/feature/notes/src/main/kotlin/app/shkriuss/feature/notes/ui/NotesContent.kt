@@ -43,6 +43,7 @@ import app.shkriuss.core.design.ShkTheme
 import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.core.design.ShkWindowWidth
 import app.shkriuss.feature.notes.NoteRowState
+import app.shkriuss.feature.notes.NoteSearch
 import app.shkriuss.feature.notes.NotesClock
 import app.shkriuss.feature.notes.NotesListState
 import app.shkriuss.feature.notes.R
@@ -191,8 +192,10 @@ private fun NoteCard(row: NoteRowState, selected: Boolean, clock: NotesClock, fo
     val underBold: List<IntRange>
     when {
         line != null -> {
-            under = line.line
-            underBold = line.ranges
+            // From a little before the match when it is far into the line, so it stays in the two lines a row shows.
+            val shown = NoteSearch.shownLine(line)
+            under = shown.line
+            underBold = shown.ranges
         }
         fileName != null -> {
             under = stringResource(R.string.notes_file_match, fileName)

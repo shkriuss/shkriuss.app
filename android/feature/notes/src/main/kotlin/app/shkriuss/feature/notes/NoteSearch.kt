@@ -22,6 +22,32 @@ object NoteSearch {
         return SearchMatch(inTitle, line, file, file?.let { rangesIn(it, wanted) }.orEmpty())
     }
 
+    /**
+     * [line] as a row shows it under the title, in two lines at most: as
+     * it is when its first match is near its start, or else from the
+     * start of a word a little before that match, with "…" before it, so the match stays in
+     * sight. The ranges of the matches move with the text.
+     */
+    fun shownLine(line: MatchedLine): MatchedLine {
+        val first = line.ranges.firstOrNull()?.first ?: return line
+        if (first <= NEAR_START) return line
+        var start = first - BEFORE_MATCH
+        // From the next word, if one starts before the match, and never in the middle of a character.
+        val space = line.line.indexOf(' ', start)
+        if (space in start until first) start = space + 1
+        if (Character.isLowSurrogate(line.line[start])) start++
+        val shift = ELLIPSIS.length - start
+        return MatchedLine(ELLIPSIS + line.line.substring(start), line.ranges.filter { it.first >= start }.map { it.first + shift..it.last + shift })
+    }
+
+    /** A match that starts this far into a line, or nearer, shows without cutting the line. */
+    private const val NEAR_START = 24
+
+    /** How far before its first match a cut line starts, before it moves on to a word. */
+    private const val BEFORE_MATCH = 12
+
+    private const val ELLIPSIS = "…"
+
     /** Every place where [wanted], lower-cased, stands in [text], each as a range of [text]. They do not overlap. */
     fun rangesIn(text: String, wanted: String): List<IntRange> {
         if (wanted.isEmpty()) return emptyList()

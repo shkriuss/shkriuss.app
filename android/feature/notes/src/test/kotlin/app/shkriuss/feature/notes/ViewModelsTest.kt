@@ -627,6 +627,52 @@ class ViewModelsTest {
     }
 
     @Test
+    fun theStatesOfTheFilesAreReadOnlyWhileTheGateIsOpenAndAgainEachTimeItOpens() {
+        val id = phone.note("Trip", "")
+        val adding = open(id)
+        adding.state.await { !it.loading }
+        adding.addFiles(listOf(TestPick()))
+        adding.state.await { it.files.size == 1 }
+        val gate = MutableStateFlow(false)
+
+        val note = NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait, gate) { elapsed }
+
+        note.state.await { !it.loading }
+        assertFalse("Locked, the states are not read", note.state.value.filesLoaded)
+        gate.value = true
+        assertEquals(FileState.READY, note.state.await { it.filesLoaded }.files.single().state)
+    }
+
+    @Test
+    fun saveACopyByTheFilesIdFindsTheFileAlsoBeforeTheRowsAreRead() {
+        val id = phone.note("Trip", "")
+        val adding = open(id)
+        adding.state.await { !it.loading }
+        adding.addFiles(listOf(TestPick()))
+        val file = adding.state.await { it.files.size == 1 }.files.single().file
+        val note = NoteViewModel(repository, adds, reader, snackbars, id, scope, Dispatchers.IO, wait, MutableStateFlow(false)) { elapsed }
+        val target = TestTarget()
+
+        note.saveCopyOf(file.id, target)
+
+        assertEquals(NotesMessage.Copy(CopyResult.SAVED), snackbars.current.await { it is NotesMessage.Copy })
+        assertEquals(2_400, target.written.size())
+    }
+
+    @Test
+    fun saveACopyOfAFileThatIsGoneDeletesTheEmptyDocument() {
+        val id = phone.note("Trip", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        val target = TestTarget()
+
+        note.saveCopyOf("7c9e6679-7425-40de-944b-e07fc1f90ae7", target)
+
+        assertEquals(NotesMessage.Copy(CopyResult.FAILED), snackbars.current.await { it is NotesMessage.Copy })
+        assertTrue(target.deleted)
+    }
+
+    @Test
     fun saveACopyShowsItsResultInTheSnackbar() {
         val id = phone.note("Trip", "")
         val note = open(id)

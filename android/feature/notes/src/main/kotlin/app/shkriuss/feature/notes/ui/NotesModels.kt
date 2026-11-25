@@ -30,7 +30,17 @@ class NotesModels(owner: ViewModelStoreOwner, services: NotesServices) {
                 val repository = services.repository
                 // An open note outlives this object when the phone is turned, so it holds the services' parts only.
                 OpenNoteViewModel(
-                    make = { noteId -> NoteViewModel(repository, services.adds, services.reader, services.snackbars, noteId, services.scope) },
+                    make = { noteId ->
+                        NoteViewModel(
+                            repository,
+                            services.adds,
+                            services.reader,
+                            services.snackbars,
+                            noteId,
+                            services.scope,
+                            gateOpen = services.gateOpen,
+                        )
+                    },
                     giveUp = repository::giveUpNewNote,
                     saved = createSavedStateHandle(),
                     reserveNew = {

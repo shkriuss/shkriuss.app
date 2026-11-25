@@ -10,11 +10,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -53,6 +57,8 @@ data class NoteState(
     val stored: Boolean = false,
     /** The shown files, oldest first. */
     val files: List<FileRowState> = emptyList(),
+    /** True once the files were read: before, an image view that is not among [files] may only not be read yet. */
+    val filesLoaded: Boolean = false,
     /** The files that wait to be added to this note or are being added. */
     val adding: List<AddingFile> = emptyList(),
     /** True while **Save a copy** writes: the dialog "Saving a copy". The fraction, or null before it starts. */
@@ -76,7 +82,10 @@ data class NoteState(
  * the reads and writes. [lasting] is a scope that outlives the screen,
  * the one of `NotesServices`: the save when Notes leaves the screen, and
  * the one when the screen goes, run there, so that the end of this
- * ViewModel never cuts them off.
+ * ViewModel never cuts them off. [gateOpen] is true while the gate of the
+ * app lock is open: the states of the files are read only then, and read
+ * again each time it opens, because the file keys cannot be used while
+ * Notes is locked.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NoteViewModel(
@@ -89,6 +98,7 @@ class NoteViewModel(
     private val lasting: CoroutineScope,
     private val work: CoroutineContext = Dispatchers.IO,
     private val wait: suspend (Long) -> Unit = { delay(it) },
+    private val gateOpen: Flow<Boolean> = flowOf(true),
     private val elapsed: () -> Long = SystemClock::elapsedRealtime,
 ) : ViewModel() {
     private val shown = MutableStateFlow(NoteState())
@@ -167,13 +177,15 @@ class NoteViewModel(
     }
 
     private suspend fun watchFiles() {
-        combine(repository.filesOf(noteId), checkAgain) { files, _ -> files }
+        // Each time the gate opens again, the states are read again: read while locked, every file would seem unusable.
+        combine(repository.filesOf(noteId), checkAgain, gateOpen) { files, _, open -> files.takeIf { open } }
+            .filterNotNull()
             .mapLatest { files -> files.map { FileRowState(it, reader.stateOf(it)) } }
             .catch { error ->
                 // The files cannot be read: the note shows "Could not open your notes." rather than no files.
                 if (error is SQLException) shown.update { it.copy(failed = true) } else throw error
             }
-            .collect { rows -> shown.update { it.copy(files = rows) } }
+            .collect { rows -> shown.update { it.copy(files = rows, filesLoaded = true) } }
     }
 
     /** Reads the state of each file again, as when Notes comes back from a screen of `core/security`. */
@@ -418,6 +430,29 @@ class NoteViewModel(
                 snackbars.offer { repository.removeFile(file.id)?.let(NotesMessage::FileRemoved) }
             } catch (_: SQLException) {
                 snackbars.show(NotesMessage.CouldNotChange)
+            }
+        }
+    }
+
+    /**
+     * **Save a copy** of the file [fileId] into [target], once the picker
+     * answers, also after Android stopped Notes while the picker was open
+     * and before the files are read again. A file that is gone by then gets
+     * no copy: the empty document is deleted, and "Could not save the
+     * copy." shows.
+     */
+    fun saveCopyOf(fileId: String, target: CopyTarget) {
+        viewModelScope.launch(work) {
+            val file = try {
+                repository.filesOf(noteId).first().firstOrNull { it.id == fileId }
+            } catch (_: SQLException) {
+                null
+            }
+            if (file != null) {
+                saveCopy(file, target)
+            } else {
+                val gone = target.delete()
+                snackbars.show(NotesMessage.Copy(if (gone) CopyResult.FAILED else CopyResult.FAILED_PART_LEFT))
             }
         }
     }

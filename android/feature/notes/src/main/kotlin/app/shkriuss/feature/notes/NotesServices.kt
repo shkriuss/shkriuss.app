@@ -43,7 +43,8 @@ class NotesServices(
     clock: Clock,
     ids: IdSource,
     private val crypto: ShkCrypto,
-    gateOpen: Flow<Boolean>,
+    /** True while the gate of the app lock is open. */
+    val gateOpen: Flow<Boolean>,
     work: CoroutineContext = Dispatchers.IO,
     zone: () -> ZoneId = ZoneId::systemDefault,
 ) {

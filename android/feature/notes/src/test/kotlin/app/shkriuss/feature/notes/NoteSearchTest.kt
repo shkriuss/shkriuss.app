@@ -46,6 +46,24 @@ class NoteSearchTest {
     }
 
     @Test
+    fun aMatchFarIntoALongLineShowsFromTheNextWordALittleBeforeIt() {
+        val line = "Bread, milk and eggs for the week, and something for dinner on Friday when the guests come"
+        val match = checkNotNull(NoteSearch.match(note(body = line), emptyList(), "guests")?.line)
+
+        val shown = NoteSearch.shownLine(match)
+
+        assertEquals("…when the guests come", shown.line)
+        assertEquals("guests", shown.line.substring(shown.ranges.single()))
+    }
+
+    @Test
+    fun aMatchNearTheStartShowsTheLineAsItIs() {
+        val match = checkNotNull(NoteSearch.match(note(body = "Bread, milk and eggs"), emptyList(), "milk")?.line)
+
+        assertEquals(match, NoteSearch.shownLine(match))
+    }
+
+    @Test
     fun aNoteThatDoesNotMatchIsLeftOutAndEveryMatchInALineIsFound() {
         assertNull(NoteSearch.match(note(title = "Trip", body = "Passport"), listOf("ticket.jpg"), "rent"))
         assertEquals(listOf(0..1, 3..4), NoteSearch.rangesIn("ab ab", "ab"))

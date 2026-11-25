@@ -23,8 +23,10 @@ Not released yet.
   keyboard in the text.
 - Search, as you type: the title, the text and the names of files, case
   ignored. A row shows the line that matches, or "File: ticket.jpg",
-  with the match in bold. "No notes match “rent”." is announced. Back
-  clears the search.
+  with the match in bold. A long line whose match is far from its start
+  shows from a word a little before the match, after "…", so the match
+  stays in sight. "No notes match “rent”." is announced. Back clears
+  the search.
 - A note: the title and the text, formatted as you type, with the
   formatting bar above the keyboard: heading, bold, italic, bulleted
   list, numbered list and checklist. A tap on the box of a checklist

@@ -86,10 +86,11 @@ internal fun OpenNotePane(open: OpenNote, models: NotesModels, snackbar: ShkSnac
     }
     var copyOf by rememberSaveable { mutableStateOf<String?>(null) }
     val saveCopy = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val file = state.files.firstOrNull { it.file.id == copyOf }?.file
+        val fileId = copyOf
         copyOf = null
         val document = NoteDocuments.chosenOf(result.resultCode, result.data, context)
-        if (file != null && document != null) model.saveCopy(file, ChosenDocument(resolver, document))
+        // By the file's id: after Android stopped Notes, the answer can come before the files are read again.
+        if (fileId != null && document != null) model.saveCopyOf(fileId, ChosenDocument(resolver, document))
     }
     val actions = FileActions(
         add = {
@@ -110,12 +111,15 @@ internal fun OpenNotePane(open: OpenNote, models: NotesModels, snackbar: ShkSnac
 
     val imageId = open.imageId
     val imageFile = state.files.firstOrNull { it.file.id == imageId }?.file
-    if (imageId != null && imageFile != null) {
-        ImageContent(imageFile, models.images, actions, snackbar, onBack = models.open::closeImage)
-    } else {
-        // The file of the image view was removed, here or by a restore: the note shows again.
-        if (imageId != null && !state.loading) LaunchedEffect(imageId) { models.open.closeImage() }
-        NoteScreen(state, model, open.isNew, models, actions, snackbar, onBack)
+    when {
+        imageId != null && imageFile != null -> ImageContent(imageFile, models.images, actions, snackbar, onBack = models.open::closeImage)
+        // Opened again after Android stopped Notes: the file of the image view is not read yet.
+        imageId != null && !state.filesLoaded && !state.failed -> ShkScreen {}
+        else -> {
+            // The file of the image view was removed, here or by a restore: the note shows again.
+            if (imageId != null) LaunchedEffect(imageId) { models.open.closeImage() }
+            NoteScreen(state, model, open.isNew, models, actions, snackbar, onBack)
+        }
     }
     state.copying?.let { fraction -> ShkProgressDialog(text = stringResource(R.string.notes_saving_copy), fraction = fraction) }
 }
