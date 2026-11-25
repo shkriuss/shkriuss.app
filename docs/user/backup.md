@@ -177,7 +177,7 @@ has changed after these either:
 | The app says | What it means | What to do |
 |---|---|---|
 | The file could not be read | Reading the file failed, for example because the storage was taken out. | Try again. |
-| Not enough room on the phone | The app could not put the backup aside before the restore. | Free room for about the size of the backup, then try again. |
+| Not enough room on the phone | The app could not put the backup aside before the restore, or could not write what the backup holds. | Free room for about the size of the backup, then try again. |
 | The app cannot read this backup | The file is a whole backup, but holds something this version of the app cannot read. | Update the app, then try again. |
 
 ## Keep your backups safe

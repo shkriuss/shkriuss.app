@@ -1,5 +1,6 @@
 package app.shkriuss.feature.reminders
 
+import android.database.SQLException
 import android.net.Uri
 import app.shkriuss.core.backup.BackupAnswer
 import app.shkriuss.core.backup.BackupDocuments
@@ -257,7 +258,9 @@ class RemindersBackups(
      * 3), inside the restore. The two are one step: it is not cut between
      * them when the screen goes away. If the document now holds another
      * backup, nothing changes, and the answer is the question again, with
-     * what the document holds now.
+     * what the document holds now. If the database refuses the records, as
+     * on a full disk, the transaction rolls back and the answer is that the
+     * phone has not enough room.
      */
     suspend fun restore(picked: Uri, question: BackupStep.Question): BackupStep = withContext(NonCancellable) {
         try {
@@ -269,6 +272,9 @@ class RemindersBackups(
         } catch (_: UnreadableBackupException) {
             BackupStep.Unreadable
         } catch (_: BackupStagingException) {
+            BackupStep.NoRoom
+        } catch (_: SQLException) {
+            // The database refused the restore's writes, as on a full disk: its transaction rolled back.
             BackupStep.NoRoom
         } catch (_: IOException) {
             BackupStep.NotRead

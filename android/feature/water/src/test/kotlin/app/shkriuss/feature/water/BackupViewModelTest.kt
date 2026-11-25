@@ -4,9 +4,11 @@ import android.net.Uri
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.RecoveryKey
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
+import app.shkriuss.core.notify.Alarm
 import app.shkriuss.core.security.RecoveryKeyNeed
 import app.shkriuss.core.testing.TestDocuments
 import app.shkriuss.core.testing.TestIdSource
+import app.shkriuss.feature.water.data.GoalEntity
 import java.io.File
 import java.io.FileNotFoundException
 import java.time.LocalDateTime
@@ -17,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -394,6 +397,25 @@ class BackupViewModelTest {
         assertEquals("the alarm of the restored settings", listOf(water.millisOf(at(15, 0))), water.waiting())
     }
 
+    @Test
+    fun aRestoreStandsWhenTheRemindersCannotReadTheDatabaseAfterIt() {
+        giveKeys()
+        backupOfAnotherPhone(crypto, clock, document) { addDrink(THE_DAY, 7 * 60, 150) }
+        // A reminder shows, so after the restore the reminders read today's goal to see whether it still fits.
+        runBlocking { repository.changeSettings { it.copy(remindersOn = true) } }
+        clock.setTo(at(15, 0))
+        water.reminders.onAlarm(Alarm(WaterReminders.ALARM, water.millisOf(at(15, 0))), water.app.notify.notifications)
+        assertNotNull(water.reminder())
+        look(document)
+        water.database.refuseReadsOf(GoalEntity.TABLE)
+
+        restore()
+
+        assertEquals(BackupStep.Restored, state.step)
+        assertEquals(listOf(150), runBlocking { water.database.intake().all() }.map { it.amountMl })
+        assertNotNull("the reminder stays until the next change", water.reminder())
+    }
+
     // A file Water does not take: each answer of docs/user/backup.md.
 
     @Test
@@ -502,6 +524,23 @@ class BackupViewModelTest {
         val staging = File(water.app.noBackupFilesDir, "shk-restore")
         staging.deleteRecursively()
         staging.writeText("in the way")
+
+        restore()
+
+        assertEquals(BackupStep.NoRoom, state.step)
+        assertEquals(emptyList<String>(), everything())
+    }
+
+    @Test
+    fun aRestoreThatTheDatabaseRefusesChangesNothingAndSaysThereIsNoRoom() {
+        giveKeys()
+        backupOfAnotherPhone(crypto, clock, document) {
+            addDrink(THE_DAY, 7 * 60, 150)
+            setGoal(THE_DAY, 2_500)
+        }
+        look(document)
+        // As on a full disk: every write to the table of goals fails. The drink comes first, so its write rolls back.
+        water.database.refuseWritesTo(GoalEntity.TABLE)
 
         restore()
 

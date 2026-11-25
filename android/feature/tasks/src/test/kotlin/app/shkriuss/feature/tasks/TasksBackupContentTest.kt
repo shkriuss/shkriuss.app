@@ -223,27 +223,29 @@ class TasksBackupContentTest {
         val newer = BackupRecord(stored.type, stored.fields.copy(updatedAt = stored.fields.updatedAt + 60_000), stored.content)
         val gone = TasksBackupCodec.encode(taskRow(title = "Gone", fields = fields(1, deletedAt = 5_000)))
         val newList = TasksBackupCodec.encode(listRow("Work"))
-        val handed = mutableListOf<List<String>>()
+        val handed = mutableListOf<List<TaskEntity>>()
 
         restore(TasksBackupContent(database, clock, ids) { handed += it }, backup.map { if (it == stored) newer else it } + gone + newList)
 
         // "Kept" has the same updatedAt as the backup, so it is not taken. A newer edit and a new task are, deleted or not.
         // A list is no task: it is taken, and not handed on.
         assertEquals("handed on once, after the transaction", 1, handed.size)
-        assertEquals(setOf(changed.id, gone.fields.id), handed.single().toSet())
-        assertTrue(kept.id !in handed.single())
+        val handedIds = handed.single().map { it.record.id }
+        assertEquals(setOf(changed.id, gone.fields.id), handedIds.toSet())
+        assertTrue(kept.id !in handedIds)
+        assertTrue("each as it was written, so a deleted one says so", handed.single().single { it.record.id == gone.fields.id }.record.deletedAt != null)
         assertEquals(listOf("Home", "Work"), database.lists().all().map { it.name }.sorted())
     }
 
     @Test
     fun aRestoreThatIsRefusedHandsOnNothing() {
-        val handed = mutableListOf<List<String>>()
+        val handed = mutableListOf<List<TaskEntity>>()
         val refusing = TasksBackupContent(database, clock, ids) { handed += it }
         val good = TasksBackupCodec.encode(taskRow())
 
         assertThrows(UnreadableBackupException::class.java) { restore(refusing, listOf(good, BackupRecord("reminder", fields(2), good.content))) }
 
-        assertEquals(emptyList<List<String>>(), handed)
+        assertEquals(emptyList<List<TaskEntity>>(), handed)
     }
 
     @Test

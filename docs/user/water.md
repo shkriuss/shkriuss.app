@@ -326,10 +326,10 @@ Limits of backups:
 Other:
 
 14. When the phone's storage is completely full, a quick amount,
-    **Save**, a change in **Settings** or a restore can close Water.
-    What was saved before stays, and a restore that stops changes
-    nothing. A snooze can be lost when Water stops. Free some room on
-    the phone.
+    **Save** or a change in **Settings** can close Water. What was
+    saved before stays. A restore says "Not enough room on the phone"
+    and changes nothing. A snooze can be lost when Water stops. Free
+    some room on the phone.
 15. Never type your real recovery words into a preview build of a pull
     request. Use test words.
 16. No accessibility checks run on an emulator for Water. A TalkBack

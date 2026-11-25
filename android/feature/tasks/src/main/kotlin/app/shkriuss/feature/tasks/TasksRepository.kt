@@ -438,18 +438,15 @@ class TasksRepository(
      * its snooze ends, and its notification goes. One that came back done
      * or deleted, or with no reminder, loses its entries, as a tick or a
      * delete does. Then the notifications follow, also when the restore
-     * took none. Like every write here, it runs to its end once it has
-     * begun.
+     * took none. [taken] are the tasks as the restore wrote them, so this
+     * reads nothing from the database, and a database that refuses a read
+     * just after the restore cannot stop it half way. Like every write
+     * here, it runs to its end once it has begun.
      */
-    suspend fun afterRestore(taken: List<String>, now: ClockReading = time.reading()) = withContext(NonCancellable) {
-        val ids = taken.distinct()
-        if (ids.isNotEmpty()) {
-            inTurn {
-                val wanted = ids.toHashSet()
-                writeCounting(now, tasks.all().filter { it.record.id in wanted })
-            }
-        }
-        onChange(TaskChange(TaskChange.Kind.RESTORED, ids))
+    suspend fun afterRestore(taken: List<TaskEntity>, now: ClockReading = time.reading()) = withContext(NonCancellable) {
+        val rows = taken.distinctBy { it.record.id }
+        if (rows.isNotEmpty()) inTurn { writeCounting(now, rows) }
+        onChange(TaskChange(TaskChange.Kind.RESTORED, rows.map { it.record.id }))
     }
 
     /**

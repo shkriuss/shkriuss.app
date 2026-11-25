@@ -1,6 +1,8 @@
 package app.shkriuss.feature.water
 
 import android.content.Context
+import androidx.room3.executeSQL
+import androidx.room3.useWriterConnection
 import androidx.test.platform.app.InstrumentationRegistry
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.inMemoryTestDatabaseBuilder
@@ -37,6 +39,28 @@ internal val context: Context get() = InstrumentationRegistry.getInstrumentation
 
 /** A Water database in memory, on the system SQLite driver. Close it at the end of the test. */
 internal fun memoryDatabase(): WaterDatabase = inMemoryTestDatabaseBuilder<WaterDatabase>(context).build()
+
+/**
+ * Makes every write to [table] that SQLite would do fail from now on, as
+ * when the disk is full: a trigger aborts each insert and update. Room
+ * throws an `android.database.SQLException`, and the transaction rolls
+ * back.
+ */
+internal fun WaterDatabase.refuseWritesTo(table: String) = runBlocking {
+    useWriterConnection { connection ->
+        connection.executeSQL("CREATE TRIGGER refuse_insert_$table BEFORE INSERT ON $table BEGIN SELECT RAISE(ABORT, 'refused'); END")
+        connection.executeSQL("CREATE TRIGGER refuse_update_$table BEFORE UPDATE ON $table BEGIN SELECT RAISE(ABORT, 'refused'); END")
+    }
+}
+
+/**
+ * Makes every read of [table] fail from now on, as when the database
+ * cannot be read: the table is gone. Room throws an
+ * `android.database.SQLException`.
+ */
+internal fun WaterDatabase.refuseReadsOf(table: String) = runBlocking {
+    useWriterConnection { connection -> connection.executeSQL("DROP TABLE $table") }
+}
 
 /** Waits up to five seconds for a state that [condition] accepts, and returns it. */
 internal fun <T> StateFlow<T>.await(condition: (T) -> Boolean): T = runBlocking {

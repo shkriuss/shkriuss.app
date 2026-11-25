@@ -506,7 +506,7 @@ second build must write the same mapping file, or the release stops. See
   - `AppLockGateTest` and `AppLockActivitiesTest` wait for the state
     they read
     ([Tests that wait for a background thread](#tests-that-wait-for-a-background-thread)).
-- `feature/water` has 13 test classes with 205 tests: the units, the
+- `feature/water` has 13 test classes with 250 tests: the units, the
   goal of a day, the settings in use and the next reminder as plain code
   (`UnitsTest`, `RulesTest`, `NextReminderTest`), the schema
   (`WaterDatabaseTest`), the repository, the backup content and the
@@ -533,12 +533,17 @@ second build must write the same mapping file, or the release stops. See
     with no key, a setup that stopped and a key; the count of drinks,
     without deleted drinks, goals and settings; a file that fails its
     check and one that cannot be read again; each of the six answers and
-    the three failures; Cancel at the question; a restore on the same
-    phone, which cannot undo a deletion; a restore from another phone;
-    that the reminders follow; that a second request before the first
-    screen opened is ignored; and that a pending move of the file keys
-    is finished only with keys. `WaterRemindersTest` has four tests of
-    `afterRestore`. `LicencesTest` checks that every part has a name, a
+    the three failures, also a restore that the database refuses;
+    Cancel at the question; a restore on the same phone, which cannot
+    undo a deletion; a restore from another phone; that the reminders
+    follow, and that the restore stands when they cannot read the
+    database after it; that a second request before the first screen
+    opened is ignored; and that a pending move of the file keys is
+    finished only with keys. A trigger that aborts every write to a
+    table stands for a disk that refuses a write, and a table that is
+    gone for a database that cannot be read. `WaterRemindersTest` has
+    four tests of `afterRestore`. `LicencesTest` checks that every part
+    has a name, a
     notice and a licence text, and that each licence text has the
     SHA-256 that [third-party.md](third-party.md) records.
 - `app/water` has seven test classes. Most of their tests are
@@ -565,12 +570,13 @@ second build must write the same mapping file, or the release stops. See
   - `WaterBackupScreensTest`: the rows of Backup and Security and what
     each opens, the first-need dialog and "go on after", a backup and a
     restore on the screen through `TestDocuments`, the answers, the
-    Licences screen, TalkBack labels and touch targets. It reads the
+    Licences screen, where a notice beside the list opens at its top,
+    TalkBack labels and touch targets. It reads the
     intent of the file picker from Robolectric and hands the result
     back as the picker would.
   - `WaterScreenshotTest`: the screenshots of every screen, sheet and
     dialog.
-- `feature/reminders` has 14 test classes with 216 tests: the occurrences
+- `feature/reminders` has 14 test classes with 238 tests: the occurrences
   of each repeat, the rule and the mark with the examples of the spec,
   in Tbilisi and Berlin, the limits, and when a time of the form has
   passed, also in the two hours of summer time, as plain code
@@ -588,7 +594,9 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersBackupContentTest` also writes a whole backup through
     `Backups` and restores it on a second app with the same recovery
     key, as Water's does. It checks that a restore hands on the
-    reminders it took, and only those, once its transaction is written.
+    reminders it took, as it wrote them, and only those, once its
+    transaction is written. `RemindersRepositoryTest` checks that what
+    follows then reads nothing from the database.
   - `BackupViewModelTest` is a copy of Water's, with a second phone
     (`AnotherPhone`) that makes the backups to restore. It also checks
     the example of the spec, a restore on Monday at 12:00, and that a
@@ -612,7 +620,8 @@ second build must write the same mapping file, or the release stops. See
     `WaterBackupScreensTest`: the rows of Backup and Security and what
     each opens, the first-need dialog with the sentence about another
     app's key, a backup and a restore on the screen, the answers, and
-    the Licences screen.
+    the Licences screen, where a notice beside the list opens at its
+    top.
   - `RemindersNotificationsTest` and
     `RemindersNotificationsWithTheAppLockTest`: the notifications from
     end to end through Robolectric's `AlarmManager` and the receivers of
@@ -620,7 +629,7 @@ second build must write the same mapping file, or the release stops. See
   - `RemindersScreenshotTest`: the screenshots of every screen, sheet
     and dialog. The date picker shows June 2100, because Material's
     picker marks the real today in the month it shows.
-- `feature/tasks` has 15 test classes with 265 tests: the dates of each
+- `feature/tasks` has 15 test classes with 267 tests: the dates of each
   repeat with the examples of the spec, the limits of every column and
   the rules that join two, the reminder number and moment, also in the
   two hours of summer time, the one alarm of a task, the order of each
@@ -644,8 +653,9 @@ second build must write the same mapping file, or the release stops. See
     every limit and rule that a restore refuses, and writes a whole
     backup through `Backups` and restores it on a second app with the
     same recovery key, as Reminders' does. It checks that a restore
-    hands on the tasks it took, and only those, once its transaction is
-    written.
+    hands on the tasks it took, as it wrote them, and only those, once
+    its transaction is written. `TasksRepositoryTest` checks that what
+    follows then reads nothing from the database.
   - `BackupViewModelTest` is a copy of Reminders', with a second phone
     (`AnotherPhone`) that makes the backups to restore. It also checks
     that a task the restore took counts from that moment, loses its
@@ -664,7 +674,8 @@ second build must write the same mapping file, or the release stops. See
     `RemindersBackupScreensTest`: the rows of Backup and Security and
     what each opens, the first-need dialog with the sentence about
     another app's key, a backup and a restore on the screen, the
-    answers, and the Licences screen.
+    answers, and the Licences screen, where a notice beside the list
+    opens at its top.
   - `TasksManifestTest` names everything Tasks' merged manifest lets
     another app reach: five permissions and none that it defines, the
     three receivers of `core/notify`, none exported, Tasks' screen and

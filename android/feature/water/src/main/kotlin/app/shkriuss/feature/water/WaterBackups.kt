@@ -1,5 +1,6 @@
 package app.shkriuss.feature.water
 
+import android.database.SQLException
 import android.net.Uri
 import app.shkriuss.core.backup.BackupAnswer
 import app.shkriuss.core.backup.BackupDocuments
@@ -251,13 +252,15 @@ class WaterBackups(
      * restored data (spec, "After a restore"). The two are one step: it is
      * not cut between them when the screen goes away. If the document now
      * holds another backup, nothing changes, and the answer is the
-     * question again, with what the document holds now.
+     * question again, with what the document holds now. If the database
+     * refuses the records, as on a full disk, the transaction rolls back
+     * and the answer is that the phone has not enough room.
      */
     suspend fun restore(picked: Uri, question: BackupStep.Question): BackupStep = withContext(NonCancellable) {
         try {
             when (val restored = backups.restore(picked, question.backup)) {
                 is RestoreResult.Restored -> {
-                    reminders.afterRestore()
+                    remindersFollow()
                     BackupStep.Restored
                 }
                 is RestoreResult.Changed -> questionOf(restored.backup)
@@ -267,8 +270,25 @@ class WaterBackups(
             BackupStep.Unreadable
         } catch (_: BackupStagingException) {
             BackupStep.NoRoom
+        } catch (_: SQLException) {
+            // The database refused the restore's writes, as on a full disk: its transaction rolled back.
+            BackupStep.NoRoom
         } catch (_: IOException) {
             BackupStep.NotRead
+        }
+    }
+
+    /**
+     * The reminders follow the restored data. The records are written by
+     * now, so a read that the database refuses here must not end in the
+     * answer that nothing changed. A reminder that shows then stays until
+     * the next change, and the alarm follows at the next start of Water.
+     */
+    private suspend fun remindersFollow() {
+        try {
+            reminders.afterRestore()
+        } catch (_: SQLException) {
+            // The restore stands.
         }
     }
 

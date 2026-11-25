@@ -60,6 +60,9 @@ class TasksRepositoryTest {
 
     private fun listRow(id: String): TaskListEntity = runBlocking { checkNotNull(database.lists().find(id)) }
 
+    /** The stored rows of [ids], in their order, as a restore hands on the tasks it wrote. */
+    private fun rows(vararg ids: String): List<TaskEntity> = runBlocking { ids.map { checkNotNull(database.tasks().find(it)) } }
+
     private fun add(title: String = "Pills", due: Due? = null, listId: String = INBOX): Task =
         runBlocking { checkNotNull(repository.addTask(NewTask(title, listId, due))) }
 
@@ -531,7 +534,7 @@ class TasksRepositoryTest {
 
         // As the backup content hands them on. "Call the bank" was not taken.
         clock.setTo(monday(12, 0, 30))
-        repository.afterRestore(listOf(pills.id, gym.id, dishes.id, pills.id))
+        repository.afterRestore(rows(pills.id, gym.id, dishes.id, pills.id))
 
         assertEquals("no snooze and nothing on screen, counted from 12:00", TaskEntry.countingFrom(pillsNumber, monday(12)), book.storedOf(pills.id))
         assertEquals("a deleted one keeps no entry", TaskEntry(), book.storedOf(gym.id))
@@ -547,7 +550,7 @@ class TasksRepositoryTest {
         RecordWriter(database, database.tasks(), clock, TestIdSource()).update(bank.id) { it.copy(doneAt = 1_000L) }
         assertTrue("its entries are still there", !book.storedOf(bank.id).isEmpty)
 
-        repository.afterRestore(listOf(bank.id))
+        repository.afterRestore(rows(bank.id))
 
         assertEquals(TaskEntry(), book.storedOf(bank.id))
     }
@@ -562,6 +565,23 @@ class TasksRepositoryTest {
 
         assertEquals(before, book.storedOf(pills.id))
         assertEquals(listOf(TaskChange(TaskChange.Kind.RESTORED, emptyList())), changes)
+    }
+
+    @Test
+    fun afterARestoreNothingIsReadFromTheDatabase() = runBlocking {
+        val pills = add(due = Due(MONDAY, PILLS, 540))
+        val pillsNumber = checkNotNull(TaskReminders.numberOf(pills.due!!))
+        val taken = rows(pills.id)
+        book.update(listOf(pills.id)) { _, entry -> entry.copy(snoozeMillis = 5L, showingMillis = 6L) }
+        changes.clear()
+        // As when the database cannot be read just after the restore wrote: the step still does all of its work.
+        database.refuseReadsOf(TaskEntity.TABLE)
+
+        clock.setTo(monday(12, 0, 30))
+        repository.afterRestore(taken)
+
+        assertEquals("no snooze and nothing on screen, counted from 12:00", TaskEntry.countingFrom(pillsNumber, monday(12)), book.storedOf(pills.id))
+        assertEquals(listOf(TaskChange(TaskChange.Kind.RESTORED, listOf(pills.id))), changes)
     }
 
     @Test

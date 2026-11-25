@@ -429,7 +429,7 @@ Restore a backup:
    | Water has no keys, or cannot use them now | No keys | "Water is not set up with a recovery key yet, or the phone was locked. Set up the recovery key, unlock the phone, and try again." |
    | The file is cut short or was changed | Damaged or changed | "The file is cut short or was changed. Use another copy of the backup." |
    | Reading the file failed | The file could not be read | "Try again." |
-   | The backup could not be put aside on the phone | Not enough room on the phone | "A restore needs free room for about the size of the backup." |
+   | The backup could not be put aside on the phone, or the database refused the records, as on a full disk | Not enough room on the phone | "A restore needs free room for about the size of the backup." |
    | Water's own code refuses a record | Water cannot read this backup | "It holds something this version of Water cannot read." |
 
    The first six are the answers of
@@ -1175,6 +1175,10 @@ that this backup holds something this version of Water cannot read.
    - The restore and this step are one: `WaterBackups` does not stop
      between them when the screen goes away
      (`WaterReminders.afterRestore`).
+   - If the database refuses a read in this step, the restore still
+     stands, since its records are written. A reminder that is showing
+     then stays until the next change, and the sync waits for the next
+     start of Water.
 2. Today and History show the restored drinks at once: their screens
    read the database through flows.
 3. If the backup turned reminders on and Android has not asked on this

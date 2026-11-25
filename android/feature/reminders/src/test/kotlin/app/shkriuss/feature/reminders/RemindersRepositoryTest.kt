@@ -3,6 +3,7 @@ package app.shkriuss.feature.reminders
 import app.shkriuss.core.data.BEFORE_FIRST_CHANGE
 import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.testing.TestIdSource
+import app.shkriuss.feature.reminders.data.ReminderEntity
 import app.shkriuss.feature.reminders.data.RemindersDatabase
 import java.time.LocalDate
 import kotlin.coroutines.CoroutineContext
@@ -52,6 +53,9 @@ class RemindersRepositoryTest {
     private fun live() = runBlocking { repository.reminders().first() }
 
     private fun add(title: String = "Pills", schedule: Schedule = pills()) = runBlocking { checkNotNull(repository.add(title, schedule)) }
+
+    /** The stored rows of [ids], in their order, as a restore hands on the reminders it wrote. */
+    private fun rows(vararg ids: String): List<ReminderEntity> = runBlocking { ids.map { checkNotNull(database.reminders().find(it)) } }
 
     @Test
     fun aReminderIsStoredWithItsTitleAndSchedule() = runBlocking {
@@ -222,7 +226,7 @@ class RemindersRepositoryTest {
 
         // As the backup content hands them on: "Pills" came back with a newer edit, "Gym" deleted. "Call the bank" was not taken.
         clock.setTo(monday(12, 0, 30))
-        repository.afterRestore(listOf(pills.id, gym.id, pills.id))
+        repository.afterRestore(rows(pills.id, gym.id, pills.id))
 
         assertEquals("no snooze and nothing on screen, counted from 12:00", ReminderEntry(mark = monday(12)), book.entryOf(pills.id))
         assertEquals("a deleted one keeps no entry", ReminderEntry(), book.entryOf(gym.id))
@@ -240,6 +244,22 @@ class RemindersRepositoryTest {
 
         assertEquals(before, book.entryOf(pills.id))
         assertEquals(listOf(ReminderChange(ReminderChange.Kind.RESTORED, emptyList())), changes)
+    }
+
+    @Test
+    fun afterARestoreNothingIsReadFromTheDatabase() = runBlocking {
+        val pills = add()
+        val taken = rows(pills.id)
+        book.update(listOf(pills.id)) { _, _ -> ReminderEntry(mark = monday(9), snoozeMillis = 1L, showingMillis = 2L) }
+        changes.clear()
+        // As when the database cannot be read just after the restore wrote: the step still does all of its work.
+        database.refuseReadsOf(ReminderEntity.TABLE)
+
+        clock.setTo(monday(12, 0, 30))
+        repository.afterRestore(taken)
+
+        assertEquals("no snooze and nothing on screen, counted from 12:00", ReminderEntry(mark = monday(12)), book.entryOf(pills.id))
+        assertEquals(listOf(ReminderChange(ReminderChange.Kind.RESTORED, listOf(pills.id))), changes)
     }
 
     @Test

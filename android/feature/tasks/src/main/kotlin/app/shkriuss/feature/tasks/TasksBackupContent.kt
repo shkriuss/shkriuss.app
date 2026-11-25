@@ -32,16 +32,16 @@ import java.util.UUID
  *
  * The phone-only entries are no part of it. After a restore, each task it
  * took counts from that moment (spec, "Backup contents", point 3): once
- * the transaction is written, [afterRestore] gets the `id` of every task
- * it took, and `TasksRepository.afterRestore` does the rest. A record the
- * phone has with the same `updatedAt`, or a later one, is not taken, so it
- * stays as it is.
+ * the transaction is written, [afterRestore] gets every task it took, as
+ * it wrote it, and `TasksRepository.afterRestore` does the rest without a
+ * read of the database. A record the phone has with the same `updatedAt`,
+ * or a later one, is not taken, so it stays as it is.
  */
 class TasksBackupContent(
     private val database: TasksDatabase,
     clock: Clock,
     ids: IdSource,
-    private val afterRestore: suspend (taken: List<String>) -> Unit = {},
+    private val afterRestore: suspend (taken: List<TaskEntity>) -> Unit = {},
 ) : BackupContent {
     // takeFromBackup keeps the record fields it is given; the clock and the ID source are never used for it.
     private val lists = RecordWriter(database, database.lists(), clock, ids)
@@ -62,7 +62,7 @@ class TasksBackupContent(
     override suspend fun restore(from: CheckedBackup) {
         if (from.dataVersion != DATA_VERSION) throw UnreadableBackupException("data version ${from.dataVersion}")
         if (from.fileCount != 0L) throw UnreadableBackupException("the backup holds files")
-        val taken = mutableListOf<String>()
+        val taken = mutableListOf<TaskEntity>()
         val seen = mapOf(TaskListEntity.TABLE to mutableSetOf<String>(), TaskEntity.TABLE to mutableSetOf())
         database.withWriteTransaction {
             from.forEachRecord { record ->
@@ -73,7 +73,7 @@ class TasksBackupContent(
                     TaskListEntity.TABLE -> lists.takeFromBackup(TasksBackupCodec.decodeList(record))
                     else -> {
                         val task = TasksBackupCodec.decodeTask(record)
-                        if (tasks.takeFromBackup(task) == BackupTake.TAKEN) taken += task.record.id
+                        if (tasks.takeFromBackup(task) == BackupTake.TAKEN) taken += task
                     }
                 }
             }
