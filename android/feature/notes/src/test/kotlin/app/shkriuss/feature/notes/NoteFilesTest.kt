@@ -211,14 +211,38 @@ class NoteFilesTest {
     }
 
     @Test
-    fun theFilesLeftOutOfALargeBatchAreToldAlsoWhenNoneWasRefusedForTheCount() {
+    fun aFileOfALargeBatchThatFailsLetsTheNextOneIn() {
         val id = phone.note()
-        val broken = TestPick("broken.jpg", bytes = ByteArray(10), failOpen = true)
+        val broken = Array(2) { TestPick("broken$it.jpg", bytes = ByteArray(10), failOpen = true) }
 
-        add(id, broken, *Array(22) { TestPick("f$it.jpg", bytes = ByteArray(10)) })
+        add(id, *broken, *Array(20) { TestPick("f$it.jpg", bytes = ByteArray(10)) })
 
-        assertEquals("One could not be read, so 20 of the 21 in the queue are added", 20, files(id).size)
-        assertEquals(listOf<AddProblem>(AddProblem.CouldNotRead("broken.jpg"), AddProblem.NoteFull(2)), problems)
+        assertEquals("Two could not be read, and the 20 after them fill the note", 20, files(id).size)
+        assertEquals(listOf<AddProblem>(AddProblem.CouldNotRead("broken0.jpg"), AddProblem.CouldNotRead("broken1.jpg")), problems)
+    }
+
+    @Test
+    fun theFilesOfALargeBatchKeepTheirOrderBeforeTheFilesPickedAfterThem() {
+        val trip = phone.note("Trip")
+        val home = phone.note("Home")
+        val opened = CopyOnWriteArrayList<String>()
+        fun logged(pick: TestPick, name: String) = object : PickedFile by pick {
+            override fun open(): java.io.InputStream {
+                opened += name
+                return pick.open()
+            }
+        }
+        val batch = List(2) { logged(TestPick("b$it.jpg", bytes = ByteArray(10), failOpen = true), "b$it") } +
+            List(20) { logged(TestPick("f$it.jpg", bytes = ByteArray(10)), "f$it") }
+        canStart.value = false
+
+        adds.add(trip, batch)
+        adds.add(home, listOf(logged(TestPick("home.jpg", bytes = ByteArray(10)), "home")))
+        canStart.value = true
+        adds.adding.await { it.isEmpty() }
+
+        assertEquals(listOf("b0", "b1") + List(20) { "f$it" } + "home", opened.toList())
+        assertEquals(20, files(trip).size)
     }
 
     @Test

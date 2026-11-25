@@ -99,6 +99,9 @@ class NotesSnackbars(
     /** The Undos that ended and whose wipe is not done yet. */
     private val ending = mutableListOf<Undo>()
 
+    /** Notes that closed and were kept, maybe only for a removed file whose Undo may still bring it back ([closedKept]). */
+    private val kept = mutableSetOf<String>()
+
     /** Counts the times Notes left the screen or the destination changed ([endUndo]), under [leaveLock]. */
     private var leaves = 0L
     private val leaveLock = Any()
@@ -195,6 +198,19 @@ class NotesSnackbars(
         }
     }
 
+    /**
+     * The note [noteId] closes and is about to be looked at: an empty
+     * note is deleted when it closes, but a removed file whose Undo may
+     * still bring it back counts as a file and keeps the note. So once
+     * the Undo of a file removed from it ends, the note is looked at
+     * again, and deleted if it is empty then (spec, "Saving", point 3).
+     * Called before the look, so an Undo that ends meanwhile finds it.
+     */
+    fun closedKept(noteId: String) = synchronized(kept) { kept += noteId }
+
+    /** The note [noteId] opened again, or was deleted as it closed: nothing is looked at for it when an Undo ends. */
+    fun forget(noteId: String) = synchronized(kept) { kept -= noteId }
+
     /** Notes leaves the screen, or the destination changes: a snackbar with Undo goes, and its Undo ends. */
     fun endUndo() {
         synchronized(leaveLock) {
@@ -231,6 +247,14 @@ class NotesSnackbars(
             // The next start wipes it (spec, "A write fails").
         } finally {
             stopEnding(undo)
+        }
+        val note = undo.note.id
+        if (undo.action == Undo.Action.FILE_REMOVED && synchronized(kept) { kept.remove(note) }) {
+            try {
+                repository.deleteIfEmpty(note)
+            } catch (_: SQLException) {
+                // The empty note stays, as when it closes. It shows as "Empty note" in the list.
+            }
         }
         afterUndo()
     }

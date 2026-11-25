@@ -133,6 +133,7 @@ class NoteViewModel(
     private var closing = false
 
     init {
+        snackbars.forget(noteId)
         viewModelScope.launch(work) { read() }
         viewModelScope.launch(work) { watchFiles() }
         viewModelScope.launch(work) {
@@ -370,7 +371,11 @@ class NoteViewModel(
                 // The adds decide: their first file makes the note, or the last one that fails gives it up.
                 stillAdding -> if (repository.isNewNote(noteId)) adds.giveUpNewNoteAfterAdds(noteId)
                 repository.findNote(noteId) == null -> repository.giveUpNewNote(noteId)
-                else -> repository.deleteIfEmpty(noteId)
+                else -> {
+                    // A removed file whose Undo is open keeps an empty note: it is looked at again when that Undo ends.
+                    snackbars.closedKept(noteId)
+                    if (repository.deleteIfEmpty(noteId)) snackbars.forget(noteId)
+                }
             }
         } catch (_: SQLException) {
             // The empty note stays. It shows as "Empty note" in the list.

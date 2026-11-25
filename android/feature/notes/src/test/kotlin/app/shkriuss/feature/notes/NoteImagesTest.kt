@@ -223,6 +223,26 @@ class NoteImagesTest {
         assertNull("Notes' own provider is never written", NoteDocuments.chosenOf(Activity.RESULT_OK, Intent().setData(ownProvider), context))
     }
 
+    @Test
+    fun anAnswerOfThousandsOfFilesTakesAFewLookUps() {
+        fun answer(uris: List<Uri>) = Intent().apply {
+            clipData = ClipData.newRawUri(null, uris.first()).also { clip -> uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) } }
+        }
+        val oneProvider = List(5_000) { Uri.parse("content://$it@documents/f$it") }
+        val manyProviders = List(5_000) { Uri.parse("content://p$it/f") }
+
+        assertEquals(
+            "One provider, with any user before it, is one look-up, and every file of it is taken",
+            5_000,
+            NoteDocuments.pickedOf(Activity.RESULT_OK, answer(oneProvider), context).size,
+        )
+        assertEquals(
+            "At most 21 providers are looked up: one for each file a note holds, and one more",
+            List(21) { Uri.parse("content://p$it/f") },
+            NoteDocuments.pickedOf(Activity.RESULT_OK, answer(manyProviders), context),
+        )
+    }
+
     /** Adds [pick] to a new note, as Add a file does, and gives the file. */
     private fun add(pick: PickedFile): NoteFile {
         val note = phone.note("Trip")

@@ -68,15 +68,17 @@ class ComponentPagesTest {
 
     @Test
     fun everyComponentHasALabelARoleAndATouchTargetOfItsOwn() {
+        // A text editor has no label: TalkBack reads its hint while it is empty, then its text (ShkTextEditorTest).
+        // So only the editor's samples that hold the sample note are taken by their text; every other field needs a label.
+        val editorNote = compose.activity.getString(R.string.sample_editor_text)
         COMPONENT_PAGES.forEach { page ->
             open(page)
             val components = compose.onAllNodes(IS_COMPONENT).fetchSemanticsNodes()
             assertTrue("${page.name} shows no components", components.size > 1)
             components.forEach { node ->
-                // A text editor has no label: TalkBack reads its hint while it is empty, then its text.
                 val label = node.config.getOrElse(SemanticsProperties.ContentDescription) { emptyList() } +
                     node.config.getOrElse(SemanticsProperties.Text) { emptyList() }.map { it.text } +
-                    listOfNotNull(node.config.getOrNull(SemanticsProperties.EditableText)?.text)
+                    listOfNotNull(node.config.getOrNull(SemanticsProperties.EditableText)?.text?.takeIf { it == editorNote })
                 assertTrue("${page.name}: a component has no label for TalkBack", label.any { it.isNotBlank() })
                 // TalkBack calls a text field an edit box and a slider a
                 // slider from what they are; everything else needs a role.

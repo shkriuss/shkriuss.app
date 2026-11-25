@@ -493,6 +493,45 @@ class ViewModelsTest {
     }
 
     @Test
+    fun anEmptyNoteKeptForTheUndoOfItsFileIsDeletedWhenThatUndoEnds() {
+        val id = phone.note("Photo", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        note.onTitleChange("")
+        note.removeFile(file)
+        val removed = checkNotNull(snackbars.current.await { it is NotesMessage.FileRemoved })
+        note.close()
+        note.state.await { it.closed }
+        assertNull("Kept while Undo may bring the file back", stored(id)?.record?.deletedAt)
+
+        snackbars.gone(removed)
+
+        eventually { stored(id)?.let(NoteRules::isWiped) == true }
+    }
+
+    @Test
+    fun aNoteOpenedAgainBeforeTheUndoOfItsFileEndsIsNotDeletedUnderIt() {
+        val id = phone.note("Photo", "")
+        val note = open(id)
+        note.state.await { !it.loading }
+        note.addFiles(listOf(TestPick()))
+        val file = note.state.await { it.files.size == 1 }.files.single().file
+        note.onTitleChange("")
+        note.removeFile(file)
+        val removed = checkNotNull(snackbars.current.await { it is NotesMessage.FileRemoved })
+        note.close()
+        note.state.await { it.closed }
+        open(id).state.await { !it.loading }
+
+        snackbars.gone(removed)
+
+        eventually { snackbars.openUndoIds.isEmpty() }
+        assertNull("The open note stays", stored(id)?.record?.deletedAt)
+    }
+
+    @Test
     fun leavingTheScreenSavesWhatIsTyped() {
         val id = phone.note("Trip", "")
         val note = open(id)

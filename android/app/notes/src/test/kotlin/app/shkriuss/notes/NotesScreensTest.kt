@@ -15,8 +15,10 @@ import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.testing.TestDocuments
+import app.shkriuss.feature.notes.OpenNoteViewModel
 import app.shkriuss.feature.notes.R
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -281,6 +283,32 @@ class NotesScreensTest(private val config: ScreenshotConfig) {
         compose.tap(R.string.notes_undo)
         compose.waitUntil(WAIT) { storedFiles().size == 1 }
         compose.waitFor(rowMatcher("plan.pdf"))
+    }
+
+    @Test
+    fun theMenuOfAFileStaysWithItsFileWhenARowBeforeItGoes() {
+        val trip = seed { addNote("Trip", "Passport") }
+        start()
+        compose.addFiles(
+            trip,
+            BytesPick("one.pdf", "application/pdf", ByteArray(FILE_BYTES)),
+            BytesPick("two.pdf", "application/pdf", ByteArray(FILE_BYTES)),
+        )
+        openNote("Trip")
+        // A tap on a file that is no image opens its menu.
+        compose.tap(rowMatcher("two.pdf"))
+        compose.waitForText(words(R.string.notes_save_copy))
+
+        scenario.onActivity { activity ->
+            val note = checkNotNull(ViewModelProvider(activity)[OpenNoteViewModel::class.java].open.value).model
+            note.removeFile(note.state.value.files.first { it.file.name == "one.pdf" }.file)
+        }
+        compose.waitUntil(WAIT) { storedFiles().size == 1 }
+        compose.waitForIdle()
+
+        // The menu that is still open is the one of two.pdf: its Remove removes two.pdf.
+        compose.tap(R.string.notes_remove)
+        compose.waitUntil(WAIT) { storedFiles().isEmpty() }
     }
 
     @Test
