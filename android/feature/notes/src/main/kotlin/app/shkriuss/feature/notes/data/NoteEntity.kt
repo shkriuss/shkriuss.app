@@ -67,6 +67,10 @@ interface NoteDao : RecordDao<NoteEntity> {
     @Query("SELECT COUNT(*) FROM note WHERE deletedAt IS NULL")
     suspend fun shownCount(): Int
 
+    /** Every note, deleted ones too, for a backup. */
+    @Query("SELECT * FROM note")
+    suspend fun all(): List<NoteEntity>
+
     /** The deleted notes that are not in the wiped form yet (docs/apps/notes/spec.md, "The wiped form"). */
     @Query("SELECT * FROM note WHERE deletedAt IS NOT NULL AND (title != '' OR body != '' OR pinned != 0 OR fileChanges != 0)")
     suspend fun deletedNotWiped(): List<NoteEntity>

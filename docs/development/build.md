@@ -66,7 +66,8 @@ Nothing outside section 3 of the [plan](../plan/PLAN.md) is used.
   [apps/tasks/spec.md](../apps/tasks/spec.md).
 - `android/feature/notes/`: the data and logic of Notes: its database,
   with the committed schemas in `schemas/`, the folder of the encrypted
-  streams of its files, its rules and its ViewModels. See
+  streams of its files, its rules, its ViewModels and its backup
+  content, and its screens, in the package `ui`. See
   [apps/notes/spec.md](../apps/notes/spec.md).
 - `android/app/catalog/`: the Catalog app, `app.shkriuss.catalog`, the
   design gallery.
@@ -376,7 +377,7 @@ second build must write the same mapping file, or the release stops. See
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
-- `core/backup` has 10 test classes with 72 tests. They are the items of
+- `core/backup` has 10 test classes with 80 tests. They are the items of
   "What the tests must cover" in
   [backup-format.md](../architecture/backup-format.md#what-the-tests-must-cover).
   - They use real keys: `SoftwareKeysApp` from the
@@ -409,7 +410,11 @@ second build must write the same mapping file, or the release stops. See
     document is opened in the mode that cuts off old content, that a
     failed backup is deleted, that only `content:` URIs are taken, that
     the result of the picker is taken only as a document of another
-    app, and the two intents of the system file picker.
+    app, and the two intents of the system file picker. It also checks
+    that a check and a restore tell how much of the document they have
+    read, out of its length.
+  - `ExportTest` also checks the progress of writing: the bytes of the
+    files out of the total the app gave, and no total without one.
   - No test opens the picker itself. That is checked by hand with the
     first app, Water
     ([emulator-tests.md](emulator-tests.md#what-an-emulator-cannot-check)).
@@ -451,7 +456,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has 19 test classes with 137 tests
+- `core/security` has 22 test classes with 209 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
@@ -676,7 +681,7 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 12 test classes with 181 tests: the limits of every
+- `feature/notes` has 15 test classes with 218 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
@@ -694,20 +699,45 @@ second build must write the same mapping file, or the release stops. See
   (`ViewModelsTest`), and which note is open, also after Android
   stopped Notes (`OpenNoteViewModelTest`);
   the clock of the screens (`NotesNowTest`); how far the image view
-  lets an image be dragged (`PanLimitsTest`); and how the screens write
+  lets an image be dragged (`PanLimitsTest`); how the screens write
   times, dates, sizes and percents, and what TalkBack reads for them
-  (`NotesFormatTest`). The work runs off the test's thread, and
+  (`NotesFormatTest`); and backup and restore and the licences
+  (`NotesBackupContentTest`, `BackupViewModelTest`, `LicencesTest`).
+  The work runs off the test's thread, and
   each test waits for the state it expects. The pauses before a search
   and a save are the test's own, and so is the clock of the save times.
   A trigger that aborts every write to a table stands for a disk that
   refuses a write. `NoteFilesTest` also checks that the length of a
   stream follows the rule of crypto-design.md at the edges of its
   segments.
-- `app/notes` has four test classes:
+  - The tests of backup and restore run on the real `NotesServices`
+    (`NotesPhone`), each phone with its own folder for its streams, its
+    keys and its staging, so that a test can restore on a second phone
+    with the same recovery key.
+  - `NotesBackupContentTest` checks the bytes of the spec's example and
+    of the wiped forms, every limit and rule that a restore refuses, a
+    whole backup that comes back on another phone byte for byte, the
+    files that are left out, the wipe before a backup, which streams
+    move in after a restore, a wiped note that a later edit of another
+    copy brings back, and the progress of a backup and a restore.
+  - `BackupViewModelTest`: the rows of Settings, going on after the
+    recovery key with the move of the file keys done first, a backup and
+    what stops one before it is written, the question, a restore, and
+    the answers.
+  - `LicencesTest` is a copy of Tasks'.
+- `app/notes` has five test classes:
   - `EveryScreenIsBehindTheAppLockTest`, a copy of Water's. It also
     locks the app over the menu of a note, the menu of a file, the menu
-    of the image view, the question "This note is not saved" and the
-    dialog "Saving a copy".
+    of the image view, the question "This note is not saved", the
+    dialog "Saving a copy", the dialogs of backup and restore and the
+    progress dialog, held open by the test, and the Licences list and a
+    notice.
+  - `NotesBackupScreensTest`, a copy of Tasks' `TasksBackupScreensTest`:
+    the rows of Backup and Security and what each opens, the first-need
+    dialog, a backup and a restore on the screen, the files a backup
+    left out, the progress bar of a restore and the screen kept on,
+    and the Licences screen. A restore is held at its end by holding
+    the lock of the streams.
   - `NotesManifestTest` names everything Notes' merged manifest lets
     another app reach: two permissions and none that it defines, no
     receiver, Notes' screen and the eight of `core/security`, and as the

@@ -4,7 +4,7 @@ The recovery key is your account. It is 24 words that you write on
 paper. With it you can read your backups and your synced data, and set
 up the apps on a new phone.
 
-Water, Reminders and Tasks have these screens.
+Water, Reminders, Tasks and Notes have these screens.
 
 Where they are: open the app's **Settings**. Under **Security**, tap
 **Recovery key**. That opens the app's security screen. The row says

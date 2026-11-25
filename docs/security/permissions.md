@@ -322,15 +322,14 @@ Notes' manifest removes one permission that a library asks for:
 
 Other components that libraries add, none of them a permission:
 
-- The eight screens of `core/security` ([Screens](#screens)). Notes
-  has Settings, with Files and About only: it has no Security section
-  yet, so nothing in Notes opens seven of them, and the app lock cannot
-  be turned on. The eighth, the handover screen, is exported with no
-  permission, as in Water. A screen of the module needs both
-  permissions, and the APK rules check fails a build of Notes without
-  them. `NotesManifestTest` checks that Notes'
-  screens are its own and these eight, and that none but the handover
-  screen is exported or has an intent filter.
+- The eight screens of `core/security` ([Screens](#screens)). Notes'
+  Settings opens them from **Recovery key** and **App lock**, and from
+  the dialog for the moment the recovery key is first needed. The
+  handover screen is exported with no permission, as in Water. A
+  screen of the module needs both permissions, and the APK rules check
+  fails a build of Notes without them. `NotesManifestTest` checks that
+  Notes' screens are its own and these eight, and that none but the
+  handover screen is exported or has an intent filter.
 - The status provider of `core/security`, authority
   `app.shkriuss.notes.keeper`, exported with no permission, as in
   Water.

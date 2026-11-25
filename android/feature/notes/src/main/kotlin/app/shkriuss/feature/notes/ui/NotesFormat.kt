@@ -12,7 +12,9 @@ import app.shkriuss.feature.notes.R
 import java.math.RoundingMode
 import java.text.NumberFormat
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.math.floor
 
@@ -38,9 +40,20 @@ class NotesFormat(
     private val shortDateWithYear = pattern("EEEdMMMy")
     private val spokenDate = pattern("EEEEdMMMM")
     private val spokenDateWithYear = pattern("EEEEdMMMMy")
+    private val longDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)
 
     /** [number] in the phone's format: "5,000". */
     fun number(number: Int): String = numbers.format(number.toLong())
+
+    /** A count of a backup in the phone's format: "5,000". */
+    fun count(count: Long): String = numbers.format(count)
+
+    /**
+     * When a backup was made, [at] in the phone's time zone, in its long
+     * date format and its clock, for the question before a restore:
+     * "16 November 2026, 14:05".
+     */
+    fun madeAt(at: LocalDateTime): String = resources.getString(R.string.notes_made_at, longDate.format(at), clockTime.format(at))
 
     /** [fraction], from 0 to 1, as a whole percent, rounded down so that 100% means done: "40%". */
     fun percent(fraction: Float): String =

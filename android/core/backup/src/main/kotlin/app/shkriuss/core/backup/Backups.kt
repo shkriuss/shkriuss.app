@@ -8,6 +8,7 @@ import app.shkriuss.core.crypto.BackupCrypto
 import app.shkriuss.core.data.Clock
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.withContext
 
@@ -26,6 +27,10 @@ import kotlinx.coroutines.withContext
  * [stagingFolder] is a folder inside the app's private storage that only
  * this class uses, and not the cache folder. [io] is where the reading and
  * writing runs, for example `Dispatchers.IO`.
+ *
+ * Each of the three calls can tell a `progress` how far it has come
+ * ([BackupProgress]). It is called on [io], often, and must return at
+ * once.
  */
 class Backups(
     private val resolver: ContentResolver,
@@ -56,12 +61,15 @@ class Backups(
      * A document that could not even be opened for writing is left as it
      * was: nothing of it was cut off, so an older backup in it is still
      * whole.
+     *
+     * [progress] is told the bytes of the files written so far, out of the
+     * total the app gave (`BackupSink.fileBytes`).
      */
-    suspend fun export(to: Uri): ExportResult = withContext(io) {
+    suspend fun export(to: Uri, progress: (BackupProgress) -> Unit = {}): ExportResult = withContext(io) {
         requireFromPicker(to)
         var opened = false
         val result = try {
-            engine.write {
+            engine.write(progress) {
                 // Only a document that was opened for writing has lost its old content. One that could not be opened stays as it was.
                 providerCall { resolver.openOutputStream(to, WRITE_AND_CUT) }
                     ?.also { opened = true }
@@ -80,10 +88,13 @@ class Backups(
      * everything a restore checks. It stores nothing, changes nothing and
      * never calls the app's [BackupContent]. So a backup that cannot be
      * restored is found on the day it is made.
+     *
+     * [progress] is told the bytes of the document read so far, out of its
+     * length when its provider tells it.
      */
-    suspend fun check(from: Uri): CheckResult = withContext(io) {
+    suspend fun check(from: Uri, progress: (BackupProgress) -> Unit = {}): CheckResult = withContext(io) {
         requireFromPicker(from)
-        open(from).use { engine.check(it) }
+        open(from, progress).use { engine.check(it) }
     }
 
     /**
@@ -98,14 +109,39 @@ class Backups(
      * A read of the document that fails throws its [IOException]. Staging
      * that cannot be written throws [BackupStagingException]. What the
      * app's own [BackupContent.restore] throws passes through.
+     *
+     * [progress] is told the bytes of the document read so far, out of its
+     * length when its provider tells it. When all of it is read, the app's
+     * own [BackupContent.restore] still runs.
      */
-    suspend fun restore(from: Uri, shown: BackupSummary): RestoreResult = withContext(io) {
+    suspend fun restore(from: Uri, shown: BackupSummary, progress: (BackupProgress) -> Unit = {}): RestoreResult = withContext(io) {
         requireFromPicker(from)
-        open(from).use { engine.restore(it, shown) }
+        open(from, progress).use { engine.restore(it, shown) }
     }
 
-    private fun open(document: Uri) =
-        (providerCall { resolver.openInputStream(document) } ?: throw IOException("The document cannot be opened for reading")).buffered()
+    /**
+     * Opens [document] for reading, as `ContentResolver.openInputStream`
+     * does, and counts the bytes read for [progress]. The total is the
+     * length of the document that its provider tells, or of the file
+     * behind it; a provider that streams the document tells none.
+     */
+    private fun open(document: Uri, progress: (BackupProgress) -> Unit): InputStream {
+        val descriptor = providerCall { resolver.openAssetFileDescriptor(document, READ) }
+            ?: throw IOException("The document cannot be opened for reading")
+        val total = try {
+            descriptor.length.takeIf { it >= 0 }
+        } catch (_: RuntimeException) {
+            // A descriptor that cannot say its length: the progress has no total.
+            null
+        }
+        val input = try {
+            descriptor.createInputStream()
+        } catch (failed: IOException) {
+            runCatching { descriptor.close() }
+            throw failed
+        }
+        return CountingInput(input, total, progress).buffered()
+    }
 
     /**
      * Opens a document through its provider. A provider that refuses with
@@ -138,5 +174,8 @@ class Backups(
     private companion object {
         /** Write, and cut off what the document held before. Without it a longer old file would keep its end. */
         const val WRITE_AND_CUT = "wt"
+
+        /** Read only. */
+        const val READ = "r"
     }
 }

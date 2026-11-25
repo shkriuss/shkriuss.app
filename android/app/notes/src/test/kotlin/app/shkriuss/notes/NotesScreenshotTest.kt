@@ -15,6 +15,9 @@ import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import android.content.Intent
+import android.net.Uri
+import app.shkriuss.core.security.R as SecurityR
 import androidx.lifecycle.ViewModelProvider
 import androidx.room3.executeSQL
 import androidx.room3.useWriterConnection
@@ -66,8 +69,12 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
 
     private var scenario: ActivityScenario<NotesActivity>? = null
 
+    /** Holds a backup that is being written, so that its progress dialog stays. Let go at the end of the test. */
+    private val held = CountDownLatch(1)
+
     @After
     fun closeTheScreen() {
+        held.countDown()
         TestDocuments.onOpen = {}
         scenario?.close()
     }
@@ -229,6 +236,8 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         // Settings closes the note, as Back does under 840dp: its save fails again, and the question comes.
         compose.tap(R.string.notes_settings)
         compose.waitFor(isDialog())
+        // Settings shows behind the question, with every section once the keys were read.
+        compose.waitForSettings()
         captureWindows("NoteNotSaved")
     }
 
@@ -344,17 +353,18 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
     fun settingsWithNoFiles() {
         start(ready = words(R.string.notes_no_notes))
         compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
         compose.waitForText(words(R.string.notes_no_files))
         compose.captureWholeScreen("SettingsNoFiles", config)
     }
 
-    /** Settings when the files cannot be counted: the error state in the section Files, and About under it. */
+    /** Settings when the files cannot be counted: the error state in the section Files, and the other sections under it. */
     @Test
     fun settingsWhenTheFilesCannotBeCounted() {
         runBlocking { testApp.test.database.useWriterConnection { it.executeSQL("DROP TABLE ${AttachmentEntity.TABLE}") } }
         start(ready = words(R.string.notes_could_not_open))
         compose.tap(R.string.notes_settings)
-        compose.waitForText(words(R.string.notes_version))
+        compose.waitForSettings()
         compose.waitForText(words(R.string.notes_could_not_open))
         compose.captureWholeScreen("SettingsCouldNotCount", config)
     }
@@ -365,8 +375,154 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         start()
         compose.addFiles(trip, BytesPick("ticket.png", "image/png", pngBytes()), BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES)))
         compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
         compose.waitForText("2 files", substring = true)
         compose.captureWholeScreen("Settings", config)
+    }
+
+    // Backup, Security and Licences.
+
+    @Test
+    @Config(application = NewNotesApp::class)
+    fun settingsWithNoRecoveryKey() {
+        openSettings()
+        compose.captureWholeScreen("SettingsNoRecoveryKey", config)
+    }
+
+    @Test
+    @Config(application = StoppedSetupNotesApp::class)
+    fun settingsAfterASetupThatStopped() {
+        openSettings()
+        compose.captureWholeScreen("SettingsSetupNotFinished", config)
+    }
+
+    /** With the owner's sentence about a recovery key made in another app. */
+    @Test
+    @Config(application = NewNotesApp::class)
+    fun theDialogWhenTheRecoveryKeyIsFirstNeededForABackup() {
+        openSettings()
+        compose.tap(R.string.notes_make_backup)
+        compose.waitForText(words(SecurityR.string.sec_first_need_set_up_title))
+        captureWindows("FirstNeedBackup")
+    }
+
+    /** Before the files are counted, the circle. */
+    @Test
+    fun theProgressDialogWhileABackupIsWritten() {
+        pickerDocuments()
+        // The storage does not answer, so "Writing the backup" stays on screen.
+        TestDocuments.onOpen = { held.await() }
+        openSettings()
+        pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_writing))
+        captureWindows("BackupWriting")
+    }
+
+    /** With the bar and the percent: the whole file is read, and the files move in. */
+    @Test
+    fun theProgressDialogWhileABackupIsRestored() {
+        pickerDocuments()
+        val trip = seedNotes()
+        start()
+        compose.addFiles(trip, BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES)))
+        val backup = writeABackup()
+        compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        // The streams are held, so the restore waits after it has read the whole file.
+        val streams = testApp.test.services.repository.streams
+        runBlocking { streams.lock() }
+        try {
+            compose.tap(R.string.notes_restore)
+            compose.waitFor(hasContentDescription(words(R.string.notes_backup_restoring)) and SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "100%"))
+            captureWindows("BackupRestoring")
+        } finally {
+            streams.unlock()
+        }
+    }
+
+    /** With one file that is not on this phone, so the dialog says that it is not in the backup. */
+    @Test
+    fun theDialogWhenABackupIsWrittenAndChecked() {
+        pickerDocuments()
+        val trip = seedNotes()
+        start()
+        compose.addFiles(trip, BytesPick("ticket.png", "image/png", pngBytes()), BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES)))
+        testApp.test.services.repository.store.stream(storedFiles().single { it.name == "plan.pdf" }.id).delete()
+        compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
+        pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
+        compose.waitForText(words(R.string.notes_backup_written_title))
+        captureWindows("BackupWritten")
+    }
+
+    @Test
+    fun theQuestionBeforeARestore() {
+        pickerDocuments()
+        val trip = seedNotes()
+        start()
+        compose.addFiles(trip, BytesPick("ticket.png", "image/png", pngBytes()), BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES)))
+        val backup = writeABackup()
+        compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.notes_restore_question_title))
+        captureWindows("RestoreQuestion")
+    }
+
+    @Test
+    fun theDialogWhenABackupIsRestored() {
+        pickerDocuments()
+        seedNotes()
+        val backup = writeABackup()
+        openSettings(ready = "Shopping")
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.tap(R.string.notes_restore)
+        compose.waitForText(words(R.string.notes_restored_title))
+        captureWindows("BackupRestored")
+    }
+
+    @Test
+    fun theAnswerForAFileThatIsNoBackup() {
+        pickerDocuments()
+        TestDocuments.file("photo.jpg").writeText("not a backup")
+        openSettings()
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, TestDocuments.uri("photo.jpg"))
+        compose.waitForText(words(R.string.notes_refused_not_a_backup_title))
+        captureWindows("RestoreNotABackup")
+    }
+
+    @Test
+    fun licences() {
+        openSettings()
+        compose.tap(R.string.notes_licences)
+        compose.waitForText(words(R.string.notes_licences_intro))
+        compose.captureWholeScreen("Licences", config)
+    }
+
+    /** The shortest licence, so that the whole notice fits in a few images. */
+    @Test
+    fun theNoticeOfOnePartOfLicences() {
+        openSettings()
+        compose.tap(R.string.notes_licences)
+        compose.tap("BIP-39 English word list")
+        compose.waitForText("Copyright (c) 2013-2016 Pavol Rusnak", substring = true)
+        compose.captureWholeScreen("LicenceNotice", config)
+    }
+
+    /** Starts Notes, waits until the list shows [ready], and opens Settings, with all of its sections. */
+    private fun openSettings(ready: String = words(R.string.notes_no_notes)) {
+        start(ready)
+        compose.tap(R.string.notes_settings)
+        compose.waitForSettings()
+    }
+
+    /** Taps the row [row] of Settings and picks [document] in the file picker that Notes opens with [action]. */
+    private fun pick(row: Int, action: String, document: Uri) {
+        compose.tap(row)
+        val shown = checkNotNull(scenario)
+        compose.waitForOpened(shown) { it.action == action }
+        compose.theOpenedScreenCloses(shown, document)
     }
 
     private fun start(ready: String = "Shopping") {

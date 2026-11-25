@@ -24,7 +24,9 @@ import androidx.room3.executeSQL
 import androidx.room3.useWriterConnection
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import app.shkriuss.core.security.SecurityHost
 import app.shkriuss.core.testing.TestDocuments
+import app.shkriuss.feature.notes.BackupStep
 import app.shkriuss.feature.notes.Note
 import app.shkriuss.feature.notes.NoteFile
 import app.shkriuss.feature.notes.NotesRepository
@@ -250,6 +252,33 @@ fun ComposeTestRule.theOpenedScreenCloses(scenario: ActivityScenario<NotesActivi
         shadowOf(activity).receiveResult(opened.intent, if (data != null) Activity.RESULT_OK else Activity.RESULT_CANCELED, data)
     }
     waitForIdle()
+}
+
+/**
+ * Waits until Settings shows all of its sections. Backup and Security come
+ * once the keys were read, on a thread Compose does not wait for, so a
+ * screenshot waits for them: otherwise it could be taken without them.
+ */
+fun ComposeTestRule.waitForSettings() {
+    waitForText(words(app.shkriuss.feature.notes.R.string.notes_version))
+    waitForText(words(app.shkriuss.feature.notes.R.string.notes_make_backup))
+}
+
+/** The backup file of the tests, as Notes suggests its name on the day of [THE_TIME]. */
+const val BACKUP_NAME = "notes-2026-11-24.shkbackup"
+
+/** The app of the test gets its keys from a new recovery key, as the create flow of core/security stores them. */
+fun giveTheAppARecoveryKey() {
+    val crypto = (ApplicationProvider.getApplicationContext<Application>() as SecurityHost).crypto
+    crypto.setup.storeDerivedKeys(crypto.setup.createRecoveryKey())
+}
+
+/** Writes a backup of what the test's app holds now into the document [name], past the screens, and checks it. */
+fun writeABackup(name: String = BACKUP_NAME): Uri {
+    val document = TestDocuments.uri(name)
+    val ended = runBlocking { testApp.test.services.backups.write(document) {} }
+    check(ended is BackupStep.Written) { "The backup of the test was not written: $ended" }
+    return document
 }
 
 private const val WAIT_MILLIS = 5_000L

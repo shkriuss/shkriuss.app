@@ -95,6 +95,28 @@ Your keyboard sees what you type into a title or the name of a list, as
 in any app. Tasks asks it not to learn those words, so that it does not
 keep them or suggest them in other apps. A keyboard can ignore this.
 
+### Notes
+
+On your phone, Notes stores:
+
+- your notes: the title, the text with its marks, and whether it is
+  pinned;
+- your files: each one's name, type and size, and a copy of it,
+  encrypted with a key of its own;
+- the settings of its app lock;
+- its keys, kept as Water's are.
+
+The titles, the texts and the names of files are what you write or
+pick. A deleted note or file is deleted for good once its **Undo** ends:
+its title, text, name and key are cleared, and its file is removed.
+What stays is a marked row with no content. A backup you made before
+that still holds it: delete such a backup where you put it. Notes stores
+no name of yours, no location and no data from other apps, and it never
+reads what a file holds, such as where a photo was taken.
+
+Your keyboard sees what you type into a title or a text, as in any app.
+Notes asks it not to learn those words. A keyboard can ignore this.
+
 ### Later apps
 
 Each app adds its part to this page before its first release.
@@ -116,6 +138,12 @@ Without the words, whoever has the file can still see:
 - the date, from the name the app suggests, unless you change it.
 
 [Back up and restore](backup.md) has the details.
+
+### Copies of files that you save
+
+In Notes, **Save a copy** writes a file you attached to the place you
+pick, as it was before Notes encrypted it. The copy is not locked. It
+holds everything the original held, such as where a photo was taken.
 
 ### Notifications
 

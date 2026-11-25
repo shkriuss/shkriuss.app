@@ -20,6 +20,7 @@ import app.shkriuss.core.design.ShkNavigationScaffold
 import app.shkriuss.core.design.ShkSnackbarHostState
 import app.shkriuss.core.design.ShkSnackbarResult
 import app.shkriuss.core.design.rememberShkSnackbarHostState
+import app.shkriuss.core.security.rememberRecoveryKeyFirstNeedState
 import app.shkriuss.feature.notes.NoteViewModel
 import app.shkriuss.feature.notes.NotesSnackbars
 import app.shkriuss.feature.notes.OpenNoteViewModel
@@ -33,12 +34,16 @@ import app.shkriuss.feature.notes.R
  * - Each destination keeps its scroll position when the user switches.
  *   Changing the destination closes the open note after its save, and ends
  *   the **Undo** of a snackbar.
- * - Back from Settings goes to Notes. On Notes, the image view, the open
- *   note under 840dp and a search close first. Back from Notes leaves the
- *   app.
+ * - Back from Settings goes to Notes. So does Licences, which Settings
+ *   opens in its own place. On Notes, the image view, the open note under
+ *   840dp and a search close first. Back from Notes leaves the app.
  * - The one snackbar of Notes shows on the screen in front, and the
  *   question "This note is not saved" over every destination, because a
  *   note can close while Settings shows.
+ * - A backup, a restore and the moment the recovery key is first needed
+ *   are drawn once, after the destinations ([BackupFlow]), so their
+ *   dialogs and the results of the file picker do not depend on which
+ *   destination shows.
  *
  * There is no navigation library (ADR 0003, point 2): the chosen
  * destination is saved state, and the open note is in the [NotesModels].
@@ -49,6 +54,7 @@ import app.shkriuss.feature.notes.R
 @Composable
 fun NotesScreens(models: NotesModels, versionName: String) {
     var destination by rememberSaveable { mutableStateOf(NotesDestination.NOTES) }
+    var licencesOpen by rememberSaveable { mutableStateOf(false) }
     val go = { to: NotesDestination ->
         if (to != destination) {
             models.snackbars.endUndo()
@@ -56,25 +62,36 @@ fun NotesScreens(models: NotesModels, versionName: String) {
             destination = to
         }
     }
-    // Before the content, so that the Back of the image view, an open note and a search comes first.
+    // Before the content, so that the Back of the image view, an open note, a search and that of Licences comes first.
     BackHandler(enabled = destination != NotesDestination.NOTES) { go(NotesDestination.NOTES) }
     val snackbar = rememberShkSnackbarHostState()
     NotesSnackbar(models.snackbars, snackbar)
     val saved = rememberSaveableStateHolder()
+    val firstNeed = rememberRecoveryKeyFirstNeedState()
     ShkNavigationScaffold(
         destinations = NotesDestination.entries.map { ShkDestination(stringResource(it.label), painterResource(it.icon)) },
         selectedIndex = destination.ordinal,
         onSelect = { go(NotesDestination.entries[it]) },
     ) {
-        saved.SaveableStateProvider(destination.name) {
+        val licences = destination == NotesDestination.SETTINGS && licencesOpen
+        // Licences has a saved state of its own, so Settings keeps its scroll position under it.
+        saved.SaveableStateProvider(if (licences) LICENCES_KEY else destination.name) {
             when (destination) {
                 NotesDestination.NOTES -> NotesContent(models, snackbar)
-                NotesDestination.SETTINGS -> SettingsContent(models.settings, versionName, snackbar)
+                NotesDestination.SETTINGS -> if (licences) {
+                    LicencesContent(onBack = { licencesOpen = false })
+                } else {
+                    SettingsContent(models.settings, models.backup, firstNeed, versionName, snackbar, onLicences = { licencesOpen = true })
+                }
             }
         }
     }
     UnsavedQuestion(models.open)
+    BackupFlow(models.backup, firstNeed)
 }
+
+/** The key of the saved state of Licences, beside those of the destinations. */
+private const val LICENCES_KEY = "LICENCES"
 
 /** The two destinations of Notes, in the order the navigation shows them. */
 private enum class NotesDestination(@param:StringRes val label: Int, @param:DrawableRes val icon: Int) {

@@ -6,6 +6,8 @@ import app.shkriuss.core.security.AppGate
 import app.shkriuss.core.security.SecurityHost
 import app.shkriuss.core.testing.AppLockOnForTests
 import app.shkriuss.core.testing.LockedAppForTests
+import app.shkriuss.core.testing.NewAppForTests
+import app.shkriuss.core.testing.StoppedSetupAppForTests
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.core.testing.UnlockedAppForTests
@@ -66,5 +68,32 @@ class AppLockOnNotesApp : AppLockOnForTests(NOTES), NotesTestApp {
 
 /** Notes' app class with the app lock off, for screenshots and tests of the screens. */
 class UnlockedNotesApp : UnlockedAppForTests(NOTES), NotesTestApp {
+    private var started: TestNotes? = null
+
+    override val test: TestNotes
+        get() = started ?: TestNotes(this).also { started = it }
+
+    /**
+     * The same app on a phone with no notes: new objects on an empty
+     * database, with the same keys, clock and source of IDs. As a second
+     * phone that has entered the same recovery words, before a restore.
+     */
+    fun startOnAPhoneWithNoData() {
+        val before = test
+        started = TestNotes(this, before.clock, ids = before.ids)
+    }
+}
+
+/**
+ * Notes' app class with no recovery key yet, as right after Notes was
+ * installed, for what Settings shows before the recovery key is first
+ * needed (Water's spec, "The recovery key when first needed").
+ */
+class NewNotesApp : NewAppForTests(NOTES), NotesTestApp {
+    override val test: TestNotes by lazy { TestNotes(this) }
+}
+
+/** Notes' app class after a setup of the recovery key that stopped half way. */
+class StoppedSetupNotesApp : StoppedSetupAppForTests(NOTES), NotesTestApp {
     override val test: TestNotes by lazy { TestNotes(this) }
 }

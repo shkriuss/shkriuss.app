@@ -4,7 +4,7 @@ A backup is one file that holds everything one app has stored. You choose
 where the file goes. You can restore it later, on the same phone or on
 another one.
 
-Water, Reminders and Tasks make backups.
+Water, Reminders, Tasks and Notes make backups.
 
 Where the buttons are: open the app's **Settings**. Under **Backup** are
 **Make a backup** and **Restore a backup**. Later apps have the same two
@@ -48,7 +48,8 @@ so. For Water, see [Back up and restore](water.md#back-up-and-restore) in
 its guide. For Reminders, see
 [Back up and restore](reminders-app.md#back-up-and-restore) in its
 guide. For Tasks, see [Back up and restore](tasks.md#back-up-and-restore)
-in its guide.
+in its guide. For Notes, see
+[Back up and restore](notes.md#back-up-and-restore) in its guide.
 
 What the file shows to anyone who has it, without the words:
 
@@ -72,7 +73,8 @@ What the file shows to anyone who has it, without the words:
    You may change it.
 5. Tap **Save**.
 6. Wait. The app says "Writing the backup" and then "Checking the
-   backup".
+   backup". An app with files, such as Notes, shows a bar and the
+   percent, and keeps the screen on until it is done.
 7. The app says **Backup written**, and how many records the backup
    holds. In Water: "The backup is written and checked. It holds 42
    drinks." If some files are not on this phone, an app with files says
@@ -90,6 +92,8 @@ make it. You do not have to ask for the check.
 | Backup written, not checked | The file is written. The storage app did not let the app read it again, or it gave back another file, such as an older copy. | To check it: tap **Restore a backup**, pick the file, and tap **Cancel** when the app asks. |
 | The backup could not be written | Writing failed, for example because the storage is full. | Make room, or choose another place, and try again. If an unfinished file stays, delete it. It is never taken for a backup. |
 | No backup was made | The app cannot use its keys now. | Open **Recovery key** in the app's settings, then try again. |
+| No backup was made, "cannot move some files to your recovery key yet" | An app with files has files whose keys could not move to the recovery key yet. | Remove the files marked damaged, or open **Recovery key** in the app's settings. |
+| The backup could not be written, "could not finish deleting some notes first" | Notes could not first delete for good what you deleted, so that no backup holds it. | Try again. |
 
 To check an older backup file: tap **Restore a backup**, pick the file,
 and read what the app says. If it asks "Restore this backup?", the file
@@ -133,6 +137,9 @@ moment, as in Reminders: a reminder time that passed before the restore
 does not show late. Its snooze ends, and its notification goes. If this
 phone does not allow Tasks' notifications yet, **Today** says so and
 offers **Allow**.
+
+After a restore in Notes, the files of the backup move in. A file of a
+note that is deleted is deleted for good, as at every start of Notes.
 
 ## What a restore does
 

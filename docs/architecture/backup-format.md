@@ -339,6 +339,15 @@ own pages. The first is Water
 7. Write End with the two counts. Close the stream. Closing writes the
    last segment.
 
+While it writes, the app can be told how far it has come: the bytes of
+the files written so far, out of the total the app gave before its first
+file (`BackupSink.fileBytes`). The records come before the files and are
+not counted. An app that gives no total gets a progress with none, and
+its screen shows a circle. A check and a restore tell the bytes of the
+document read so far, out of the document's length when its provider
+tells it. A restore then still writes the records and moves the files
+in. None of this is in the file.
+
 A backup that was written gives back three numbers: the records in it,
 the files in it, and the files that were left out. It also gives back,
 for each type name, how many of its records are not deleted, so that a
@@ -629,10 +638,10 @@ For sync, later:
 | What | Who writes it | What it does |
 |---|---|---|
 | `BackupContent` | Each app, once | `dataVersion`: the app's data version. `list(into)`: lists every record and then every file into a `BackupSink`, and says how many files it left out. `restore(from)`: takes a `CheckedBackup` into the app. |
-| `BackupSink` | `core/backup` | Where an app lists: `record(...)`, `file(id, length, content)` and `filesLeftOut(count)` |
+| `BackupSink` | `core/backup` | Where an app lists: `record(...)`, `file(id, length, content)`, `filesLeftOut(count)`, and `fileBytes(total)`, the bytes of all its files, for the progress |
 | `BackupRecord` | `core/backup` | One record on its way: type name, the four fields (`RecordFields` of `core/data`), content |
 | `CheckedBackup`, `CheckedFile` | `core/backup` | A backup that passed every check, as the app gets it: its data version, when it was made, the counts, every record, and every file. A file can be opened or moved into the app's file store. |
-| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto`, its app name, its staging folder and a clock. `export(to)` writes a backup to a URI and says how many records, files and left-out files there were, how many records of each type name are not deleted, and when it was made (`madeAt`). `ExportResult.Written.isThe` tells whether a backup read back is that one. `check(from)` checks one, and gives a `BackupSummary` with the same counts. `restore(from)` restores one. `start()` empties the staging folder at app start. |
+| `Backups` | `core/backup` | Made with the app's `BackupContent`, its `BackupCrypto`, its app name, its staging folder and a clock. `export(to)` writes a backup to a URI and says how many records, files and left-out files there were, how many records of each type name are not deleted, and when it was made (`madeAt`). `ExportResult.Written.isThe` tells whether a backup read back is that one. `check(from)` checks one, and gives a `BackupSummary` with the same counts. `restore(from)` restores one. Each of the three can tell a `progress` how far it has come (`BackupProgress`: the bytes done, and the total when it is known). `start()` empties the staging folder at app start. |
 | `ExportResult`, `CheckResult`, `RestoreResult`, `BackupAnswer` | `core/backup` | What the three functions give back: a result, or one of the answers of this page |
 | `BackupDocuments` | `core/backup` | The two intents for the system file picker, the result of the picker, and the suggested file name |
 | `RecordWriter.takeFromBackup` | `core/data` | The only way a record of a backup is written ([ADR 0027](../adr/0027-record-fields-and-stamping.md), point 8). It answers with a `BackupTake`. |
@@ -844,6 +853,9 @@ Unit tests in `core/backup`, on the JVM, with real keys and a fake app.
     `toString` shows content.
 13. Files that are left out: the result of writing carries their number,
     their records are in the backup, and their streams are not.
+14. Progress: writing tells the bytes of the files out of the total the
+    app gave, or no total without one; a check and a restore tell the
+    bytes of the document read, out of its length, up to all of it.
 
 In `core/data`: `takeFromBackup` gives each of its three answers, keeps
 the four fields, takes a change number only when it writes, and several
@@ -951,12 +963,18 @@ What is left, with the work that decides it.
    decided. Water stores no files and has what it needs: a dialog with
    a progress circle and no button, no way to stop in the middle, and
    no service that keeps the app running. A restore and the step after
-   it are not stopped when the screen goes away. Open for the first app
-   that stores large files.
+   it are not stopped when the screen goes away. Answered for Notes in
+   its [specification](../apps/notes/spec.md#writing): a progress bar
+   and the percent from `BackupProgress`, the screen kept on while a
+   backup, its check or a restore runs, and no service and no
+   permission for one. A backup that Android stops is not made. Drive
+   and Photos decide again for larger files.
 4. **One snapshot of records and files.** How an app with files makes
    sure that a file in a backup is the content its record describes,
-   when a file can change while a backup runs. The first app that stores
-   files.
+   when a file can change while a backup runs. Answered for Notes in its
+   [specification](../apps/notes/spec.md#writing), point 2: one read of
+   the database gives every record and the list of files, a file never
+   changes, and no stream is removed while a backup is written.
 5. **What Water puts in**, and its type names and contents. Answered in
    Water's
    [specification](../apps/water/spec.md#backup-contents): data version

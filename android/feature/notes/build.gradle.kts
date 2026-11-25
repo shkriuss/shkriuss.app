@@ -20,6 +20,11 @@ dependencies {
     // app class makes its ShkCrypto with it. Cryptography only through
     // core/crypto (CLAUDE.md).
     implementation(project(":core:crypto"))
+    // Backup and restore: Notes' records and files in a backup
+    // (NotesBackupContent), and Backups, which writes, checks and restores
+    // the file the user picks. Also BackupDocuments.isFromAnotherApp, the
+    // check of what a file picker gives, which Notes' own pickers share.
+    implementation(project(":core:backup"))
     implementation(libs.lifecycle.viewmodel)
     // The screens: the Shk* components, and BackHandler and the launchers
     // of the system file picker from Activity Compose, which the app has
@@ -27,6 +32,11 @@ dependencies {
     // note and its image view, as Tasks has three destinations and one open
     // list (ADR 0003, point 2).
     implementation(project(":core:design"))
+    // The recovery key and the app lock: Settings opens the screens of
+    // core/security through SecurityScreens, and shows its dialog for the
+    // moment the recovery key is first needed (ADR 0035). It comes after
+    // core/design, as in the build files of the apps.
+    implementation(project(":core:security"))
     implementation(libs.activity.compose)
 
     testImplementation(project(":core:testing"))

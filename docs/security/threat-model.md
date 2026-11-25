@@ -11,11 +11,10 @@ does not. It ends with the OWASP MASVS controls and every open question.
   [The owner's decisions](#the-owners-decisions). Where
   nothing is decided, it says **Open**. Every open point is listed at
   the [end](#open-questions).
-- What exists today: Catalog, Water, Reminders, Tasks, the data and
-  logic of Notes, and the core modules
-  ([modules.md](../architecture/modules.md)). Water is the first data
-  app, Reminders the second and Tasks the third. Notes, the fourth, has
-  no screens yet. There is no Sync
+- What exists today: Catalog, Water, Reminders, Tasks, Notes, and the
+  core modules ([modules.md](../architecture/modules.md)). Water is the
+  first data app, Reminders the second and Tasks the third. Notes, the
+  fourth, is not released yet. There is no Sync
   app and no sync server yet. Where this page speaks of sync, it
   describes what is decided for it, not what is built. The handover
   between apps is built. What each app stores is in the
@@ -216,6 +215,8 @@ What does not:
    ended: the text, the file names and the wrapped keys are cleared, the
    streams are removed, and the write-ahead file is cut to zero
    ([ADR 0042](../adr/0042-wiping-the-content-of-deleted-records.md)).
+   Before a backup, Notes wipes every deleted record first, and makes no
+   backup if it cannot, so its backups never hold deleted content.
    What a wipe cannot reach: a backup made before it, and old blocks
    that the flash storage keeps, under Android's file-based encryption.
    An old block that held a wrapped key could still be opened with the
@@ -1452,8 +1453,9 @@ Status: **Met for what is built.**
     An app that poses as the picker cannot make an app write a backup
     over its own files or read one of them as a backup.
   - Notes adds a file from, and writes a copy to, only a `content:`
-    address of another app's provider, as the system picker gives it
-    (`NoteDocuments.isSafe`). An app that poses as the picker cannot hand
+    address of another app's provider, as the system picker gives it,
+    with the check that every backup uses
+    (`BackupDocuments.isFromAnotherApp`). An app that poses as the picker cannot hand
     Notes a `file:` path or a provider of Notes' own, also not one named
     with a user before it (`content://0@…`), so it cannot make Notes read
     or overwrite its own database or keys. Nor can it stall Notes with an
@@ -1550,10 +1552,11 @@ Status: **Partly met.**
   - The data stays on the phone unless the user sets up sync or makes a
     backup.
   - Backup and restore to a file of the user's choice exist in
-    `core/backup`. Water, Reminders and Tasks have the screens
+    `core/backup`. Water, Reminders, Tasks and Notes have the screens
     ([Water's spec](../apps/water/spec.md#backup-and-restore-screens),
     [Reminders' spec](../apps/reminders/spec.md#as-in-water),
-    [Tasks' spec](../apps/tasks/spec.md#as-in-water-and-reminders)). The
+    [Tasks' spec](../apps/tasks/spec.md#as-in-water-and-reminders),
+    [Notes' spec](../apps/notes/spec.md#backup-contents)). The
     app reads every backup again right after it is written and checks
     it, so a backup that cannot be restored is found on the day it is
     made.

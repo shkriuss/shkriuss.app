@@ -1,0 +1,10 @@
+Kotlin standard library
+
+Kotlin Compiler
+Copyright 2010-2024 JetBrains s.r.o and respective authors and developers
+
+Licensed under the Apache License, Version 2.0.
+
+Source: https://github.com/JetBrains/kotlin
+
+The two lines above the licence are the notice of Kotlin's own NOTICE file.

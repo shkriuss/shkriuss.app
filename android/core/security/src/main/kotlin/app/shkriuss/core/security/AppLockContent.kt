@@ -178,13 +178,16 @@ private fun AppLockSettings(screen: AppLockSettingsScreen, actions: AppLockActio
             )
         }
         Paragraph(stringResource(R.string.sec_lock_after_screen_off))
-        ShkSectionHeader(stringResource(R.string.sec_section_notifications))
-        ShkSwitch(
-            text = stringResource(R.string.sec_notification_text_switch),
-            checked = screen.notificationText,
-            onCheckedChange = actions.onNotificationText,
-        )
-        Paragraph(stringResource(R.string.sec_notification_text_help))
+        // An app that shows no notifications has no text to show or hide in them.
+        if (screen.showsNotifications) {
+            ShkSectionHeader(stringResource(R.string.sec_section_notifications))
+            ShkSwitch(
+                text = stringResource(R.string.sec_notification_text_switch),
+                checked = screen.notificationText,
+                onCheckedChange = actions.onNotificationText,
+            )
+            Paragraph(stringResource(R.string.sec_notification_text_help))
+        }
     }
     ShkSectionHeader(stringResource(R.string.sec_section_screenshots))
     ShkSwitch(

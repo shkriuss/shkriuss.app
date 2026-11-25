@@ -60,6 +60,8 @@ data class AppLockSettingsScreen(
     val notificationText: Boolean = false,
     /** True if turning the app lock off did not work now. */
     val turnOffFailed: Boolean = false,
+    /** False in an app that shows no notifications: the screen leaves out the choice about their text. */
+    val showsNotifications: Boolean = true,
 ) : AppLockScreen
 
 /** The prompt found the key file of the app lock damaged. Only the 24 words repair it. */

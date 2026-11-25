@@ -152,4 +152,89 @@
     <string name="notes_no_files">No files</string>
     <string name="notes_section_about">About</string>
     <string name="notes_version">Version</string>
+    <!-- A row with a value under its name is read as both: "Recovery key, Not set up". -->
+    <string name="notes_setting_spoken">%1$s, %2$s</string>
+
+    <!-- Backup, in Settings. The note is text, not a button; it shows only while the app has no recovery key. -->
+    <string name="notes_section_backup">Backup</string>
+    <string name="notes_backup_note_no_key">Backups are locked with a recovery key. You set it up when you make your first backup.</string>
+    <string name="notes_backup_note_unfinished">Finish setting up your recovery key to make backups.</string>
+    <string name="notes_make_backup">Make a backup</string>
+    <string name="notes_restore_backup">Restore a backup</string>
+
+    <!-- Security, in Settings. Each row shows its state under its name. -->
+    <string name="notes_section_security">Security</string>
+    <string name="notes_recovery_key">Recovery key</string>
+    <string name="notes_recovery_key_not_set_up">Not set up</string>
+    <string name="notes_recovery_key_unfinished">Setup not finished</string>
+    <string name="notes_recovery_key_set_up">Set up</string>
+    <string name="notes_app_lock">App lock</string>
+    <string name="notes_app_lock_off">Off</string>
+    <string name="notes_app_lock_on">On</string>
+
+    <!--
+        The dialogs of a backup and a restore. While Notes works, one of these three, with a progress bar and the
+        percent under it, or a circle while the total is not known.
+    -->
+    <string name="notes_backup_writing">Writing the backup</string>
+    <string name="notes_backup_checking">Checking the backup</string>
+    <string name="notes_backup_restoring">Restoring the backup</string>
+    <string name="notes_ok">OK</string>
+    <string name="notes_cancel">Cancel</string>
+    <!-- How many notes a backup holds, without the deleted ones: "42 notes". The files are counted with notes_file_count. -->
+    <plurals name="notes_note_count">
+        <item quantity="one">%s note</item>
+        <item quantity="other">%s notes</item>
+    </plurals>
+    <!-- A backup is read again and checked right after it is written, as in Water. "It holds 42 notes and 12 files." -->
+    <string name="notes_backup_written_title">Backup written</string>
+    <string name="notes_backup_written_text">The backup is written and checked. It holds %1$s and %2$s.</string>
+    <!-- After the text of a backup that was written, when files were left out. -->
+    <plurals name="notes_backup_left_out">
+        <item quantity="one">%s file is not on this phone or is damaged, and is not in this backup.</item>
+        <item quantity="other">%s files are not on this phone or are damaged, and are not in this backup.</item>
+    </plurals>
+    <string name="notes_backup_not_usable_title">This backup cannot be used</string>
+    <string name="notes_backup_not_usable_text">Notes wrote the file, but could not read it back as a whole backup. Make the backup again, in another place.</string>
+    <string name="notes_backup_not_checked_title">Backup written, not checked</string>
+    <string name="notes_backup_not_checked_text">The backup is written. Notes could not read the file again to check it. To check it, choose Restore a backup, pick the file, and cancel at the question.</string>
+    <string name="notes_backup_not_written_title">The backup could not be written</string>
+    <string name="notes_backup_not_written_text">Writing the file failed, for example because the storage is full. If an unfinished file stays, delete it. It is never taken for a backup.</string>
+    <string name="notes_backup_not_wiped_text">Notes could not finish deleting some notes first. Try again.</string>
+    <string name="notes_backup_no_keys_title">No backup was made</string>
+    <string name="notes_backup_no_keys_text">Notes cannot use its keys now. Open Recovery key in Settings, then try again.</string>
+    <string name="notes_backup_files_moving_text">Notes cannot move some files to your recovery key yet. Remove the files marked damaged, or open Recovery key in Settings.</string>
+    <!-- When a backup was made, in the phone's long date format and its clock: "24 November 2026, 14:05". -->
+    <string name="notes_made_at">%1$s, %2$s</string>
+    <!-- The question before a restore: when the backup was made, and how many notes and files it holds. -->
+    <string name="notes_restore_question_title">Restore this backup?</string>
+    <string name="notes_restore_question_text">Made on %1$s. It holds %2$s and %3$s. A restore cannot undo a deletion or an edit you made after the backup.</string>
+    <string name="notes_restore">Restore</string>
+    <string name="notes_restored_title">Backup restored</string>
+    <string name="notes_restored_text">For every record, the newest edit stays.</string>
+    <!-- When Notes does not take a file: the answers of docs/user/backup.md. In each case nothing has changed. -->
+    <string name="notes_refused_not_a_backup_title">Not a backup</string>
+    <string name="notes_refused_not_a_backup_text">The file is something else, for example a photo. Pick the backup file. Nothing in Notes has changed.</string>
+    <string name="notes_refused_newer_title">Made by a newer version of Notes</string>
+    <string name="notes_refused_newer_text">The backup comes from a newer version of Notes than the one on this phone. Update Notes, then restore. Nothing in Notes has changed.</string>
+    <string name="notes_refused_other_app_title">Backup of another app</string>
+    <string name="notes_refused_other_app_text">This is a backup of the app “%1$s”. Open the app the backup is from. Nothing in Notes has changed.</string>
+    <string name="notes_refused_other_key_title">Needs another recovery key</string>
+    <string name="notes_refused_other_key_text">The backup was made with other recovery words than Notes has. The short name of the key it needs is %1$s. Restore it in an app that is set up with those words. Nothing in Notes has changed.</string>
+    <string name="notes_refused_no_keys_title">No keys</string>
+    <string name="notes_refused_no_keys_text">Notes is not set up with a recovery key yet, or the phone was locked. Set up the recovery key, unlock the phone, and try again. Nothing in Notes has changed.</string>
+    <string name="notes_refused_damaged_title">Damaged or changed</string>
+    <string name="notes_refused_damaged_text">The file is cut short or was changed. Use another copy of the backup. Nothing in Notes has changed.</string>
+    <string name="notes_not_read_title">The file could not be read</string>
+    <string name="notes_not_read_text">Nothing in Notes has changed. Try again.</string>
+    <string name="notes_no_room_title">Not enough room on the phone</string>
+    <string name="notes_no_room_text">A restore needs free room for about the size of the backup. Nothing in Notes has changed.</string>
+    <string name="notes_unreadable_title">Notes cannot read this backup</string>
+    <string name="notes_unreadable_text">It holds something this version of Notes cannot read. Nothing in Notes has changed.</string>
+
+    <!-- Licences: every third-party part that ships in Notes, and its notice and licence in full. -->
+    <string name="notes_licences">Licences</string>
+    <string name="notes_licences_intro">Notes contains these parts made by others. Tap one to read its notice and its licence.</string>
+    <string name="notes_choose_a_part">Choose a part.</string>
+    <string name="notes_licence_notice">Notice</string>
 </resources>
