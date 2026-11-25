@@ -127,7 +127,7 @@ no account and no network, and encrypts every file.
    at the end a **More** button with **Save a copy** and **Remove**. A
    tap on an image opens the [image view](#the-image-view); on another
    file, the same menu. While a file is added, its row says "Adding
-   ticket.jpg", with a `ShkProgressBar`.
+   ticket.jpg", with a `ShkProgressBar` once the picker gives its size.
 5. A new note opens with the keyboard in the text. A note that exists
    opens at its top, with no keyboard. Both fields ask the keyboard not
    to learn what is typed, as the titles of Reminders and Tasks do.
@@ -755,7 +755,7 @@ late, and when the clock or the time zone changes
    note after this phone wiped it brings the note back, with its newer
    files only ([After a restore](#after-a-restore), point 4).
 
-For the screens, six more:
+For the screens, seven more:
 
 6. From 840dp, the card of the open note is marked as selected in the
    list, as an open item of a list is ([Notes](#notes), point 4).
@@ -773,6 +773,10 @@ For the screens, six more:
     as not added with the words of a full note, so a picker that gives
     thousands of files that fail cannot hold up the adds
     ([Adding a file](#adding-a-file), point 2).
+12. The row of a file being added shows its progress bar once the
+    picker gives the file's size. A picker that gives no size is rare,
+    and its row says "Adding ticket.jpg" alone ([A note](#a-note),
+    point 4).
 
 ## Assumptions
 

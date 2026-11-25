@@ -42,7 +42,7 @@ Not released yet.
   picture for an
   image, its size, or why it cannot be opened, and **Save a copy** and
   **Remove**, with **Undo**. While a file is added, its row says so,
-  with a progress bar. An image opens in the image view, which zooms
+  with a progress bar once its size is known. An image opens in the image view, which zooms
   from 1× to 5×. **Save a copy** writes the file where you choose, under
   "Saving a copy" with a progress bar.
 - Settings: **Files**, how many files Notes keeps and how much of 1 GB
