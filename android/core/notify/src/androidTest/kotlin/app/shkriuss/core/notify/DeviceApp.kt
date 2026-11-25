@@ -64,7 +64,9 @@ class DeviceReminders(private val app: Application) : AlarmSource, AlarmHandler,
 
     override fun alarms(): List<Alarm> {
         asked.incrementAndGet()
-        return wanted.toList()
+        // One copy of the list as it is now. toList() reads the size first and then each alarm, so a test that
+        // changes the list on its own thread in between made it read past the end.
+        return ArrayList(wanted)
     }
 
     override fun onAlarm(alarm: Alarm, notifications: Notifications) {
