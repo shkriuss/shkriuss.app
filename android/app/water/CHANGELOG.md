@@ -15,6 +15,9 @@ get reminders during the hours you choose. Its specification is
   Water changes.
 - **Licences** on a tablet: a notice opened beside the list starts at
   its top, also after another notice was read to its end.
+- Two changes in Settings made one right after the other are written in
+  the order you made them. On a busy phone the older of two changes of
+  the same setting could be the one that stayed.
 
 ## 1.0.2 (2026-11-22)
 

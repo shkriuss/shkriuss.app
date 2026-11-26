@@ -591,6 +591,31 @@ class ViewModelsTest {
     }
 
     @Test
+    fun twoChangesOfOneSettingMadeOneRightAfterTheOtherLandInTheOrderTheyWereMade() {
+        // The screen and its database work on one thread that takes the newest work first.
+        val work = NewestFirstWork()
+        val busy = memoryDatabaseOn(work)
+        try {
+            val stored = WaterRepository(busy, clock, TestIdSource())
+            val model = SettingsViewModel(stored, date, work)
+            model.state.await { it.loaded }
+            // Both changes are made before the phone gets to the first one.
+            work.hold()
+            model.setInterval(30)
+            model.setInterval(90)
+
+            work.letGo()
+            work.awaitIdle()
+
+            assertEquals("The change made last is the one that is stored", 90, runBlocking { stored.settingsNow() }.intervalMinutes)
+            assertEquals("and the one that shows", 90, model.state.value.settings.intervalMinutes)
+        } finally {
+            busy.close()
+            work.close()
+        }
+    }
+
+    @Test
     fun aChangeOfTheUnitTakesTheDefaultQuickAmountsOfTheNewUnit() {
         val model = settings()
         model.state.await { it.loaded }
