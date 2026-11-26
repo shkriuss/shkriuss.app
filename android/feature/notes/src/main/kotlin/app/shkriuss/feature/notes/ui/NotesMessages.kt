@@ -22,6 +22,8 @@ internal fun notesMessageText(message: NotesMessage, format: NotesFormat): Strin
     is NotesMessage.FileRemoved -> stringResource(R.string.notes_file_removed)
     NotesMessage.NotesFull -> pluralStringResource(R.plurals.notes_notes_full, NoteLimits.MOST_NOTES, format.number(NoteLimits.MOST_NOTES))
     NotesMessage.CouldNotChange -> stringResource(R.string.notes_could_not_change)
+    // The same words, and Undo with them: the press can be tried again.
+    is NotesMessage.UndoFailed -> stringResource(R.string.notes_could_not_change)
     is NotesMessage.NotAdded -> addProblemText(message.problem, format)
     is NotesMessage.Copy -> copyText(message.result)
 }

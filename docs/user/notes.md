@@ -138,6 +138,15 @@ the screen, Notes deletes it for good: it clears the title, the text,
 the file names and keys, and removes the files. What is left is a
 marker that something was deleted, with no content.
 
+If an **Undo** cannot be written, for example because the phone is
+full, Notes says "Could not change your notes. Try again." and keeps
+**Undo** in that message. Tap it again. Nothing is deleted for good
+until that message goes.
+
+A message about a file that is still being added, such as "The note was
+deleted. The file was not added.", never ends an **Undo**. It waits,
+and shows after the message with **Undo** has gone.
+
 ## Settings
 
 **Files**: how many files Notes keeps and how much of 1 GB they take,
@@ -284,8 +293,12 @@ Not known yet:
 1. How TalkBack reads the marks in the text, such as "- [ ]".
 2. Whether the keyboard, which is asked not to learn what you type,
    makes long texts too hard to type.
-3. How fast search is with many long notes. It reads every title, text
-   and file name.
+3. How many long notes Notes can hold. The list keeps the text of
+   every note in memory, a search reads every title, text and file
+   name, and the list reads every text again after each save. With very
+   many very long notes Notes gets slow, and it can run out of memory
+   and close each time it opens. Nobody has measured where that starts.
+   It is below the limits of 5,000 notes with 100,000 characters each.
 4. Whether TalkBack goes back to the item that opened a dialog or a
    menu, when it closes. Notes does nothing of its own for it.
 

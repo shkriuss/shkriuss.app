@@ -17,8 +17,8 @@
     "Permissions").
 
     Notes stores its data in its own database and its files in its own
-    folder, and will back them up only into the backup file of the suite,
-    so Android backup and device-to-device transfer are turned off
+    folder, and backs them up only into the backup file of the suite, so
+    Android backup and device-to-device transfer are turned off
     (docs/user/backup.md).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"

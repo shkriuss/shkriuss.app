@@ -880,7 +880,10 @@ They are checked on the owner's devices with Water ([emulator-tests.md](../devel
   [ADR 0035](../adr/0035-recovery-key-when-first-needed.md) when the key
   is first needed. Closed.
 - How an app shows files that were given up (open question 13 of
-  crypto-design.md).
+  crypto-design.md). Answered for Notes in its
+  [specification](../apps/notes/spec.md#files-that-cannot-be-opened):
+  a row that says "This file can no longer be opened", with **Remove**.
+  Closed for Notes.
 - The check that every app that uses these screens requests
   `USE_BIOMETRIC` and `HIDE_OVERLAY_WINDOWS`. It is part of the APK
   rules check, with Water's allow list

@@ -81,6 +81,9 @@ fun clockAt(millis: Long) {
 /** The notes that are not deleted, as the database holds them now. */
 fun storedNotes(): List<Note> = runBlocking { testApp.test.services.repository.notes().first() }
 
+/** Every note as the database holds it now, deleted ones too. */
+fun everyNote(): List<NoteEntity> = runBlocking { testApp.test.database.notes().all() }
+
 /** The files that are not deleted, as the database holds them now. */
 fun storedFiles(): List<NoteFile> = runBlocking { testApp.test.services.repository.shownFiles().first() }
 
@@ -356,6 +359,43 @@ fun damageTheKeyOf(id: String) = runBlocking {
     key[key.size - 1] = (key[key.size - 1] + 1).toByte()
     val hex = key.joinToString("") { "%02x".format(it) }
     database.useWriterConnection { it.executeSQL("UPDATE attachment SET wrappedKey = x'$hex' WHERE id = '$id'") }
+}
+
+/**
+ * The database refuses to bring a deleted note back from now on, as a disk
+ * that refuses a write, and takes every other write: an Undo fails, and a
+ * wipe would not.
+ */
+fun refuseBringingNotesBack() = runBlocking {
+    testApp.test.database.useWriterConnection {
+        it.executeSQL(
+            "CREATE TRIGGER refuse_back BEFORE UPDATE ON ${NoteEntity.TABLE} WHEN OLD.deletedAt IS NOT NULL AND NEW.deletedAt IS NULL " +
+                "BEGIN SELECT RAISE(ABORT, 'refused'); END",
+        )
+    }
+}
+
+/**
+ * Seals the key of the file [id] with the keys of other recovery words,
+ * past the app, as the key of a file whose own keys were given up: the
+ * file can no longer be opened.
+ */
+fun sealTheKeyOfWithOtherWords(id: String) = runBlocking {
+    val other = keysOfOtherWords(NotesServices.APP_NAME)
+    val hex = other.files.wrap(id, other.files.newFileKey()).joinToString("") { "%02x".format(it) }
+    testApp.test.database.useWriterConnection { it.executeSQL("UPDATE attachment SET wrappedKey = x'$hex' WHERE id = '$id'") }
+}
+
+/**
+ * Changes the last byte of the keyset file that seals the keys of the
+ * files, on the disk, and drops the keys Notes holds in memory, as a lock
+ * does: no file opens until the recovery key repairs the keyset.
+ */
+fun damageTheFileKeyset() {
+    val app = ApplicationProvider.getApplicationContext<Application>()
+    val keyset = File(app.filesDir, "shk-keys/file-key")
+    keyset.writeBytes(keyset.readBytes().also { it[it.size - 1] = (it[it.size - 1] + 1).toByte() })
+    (app as SecurityHost).crypto.appLock.lock()
 }
 
 private const val WAIT_MILLIS = 5_000L

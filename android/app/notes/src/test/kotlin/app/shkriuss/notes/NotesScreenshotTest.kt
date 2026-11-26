@@ -7,6 +7,7 @@ import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.assertIsNotFocused
@@ -25,9 +26,14 @@ import androidx.test.core.app.ActivityScenario
 import app.shkriuss.core.testing.TestDocuments
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
+import app.shkriuss.feature.notes.AddProblem
+import app.shkriuss.feature.notes.CopyResult
 import app.shkriuss.feature.notes.NotesListViewModel
+import app.shkriuss.feature.notes.NotesMessage
 import app.shkriuss.feature.notes.OpenNoteViewModel
+import app.shkriuss.feature.notes.PickedFile
 import app.shkriuss.feature.notes.R
+import app.shkriuss.feature.notes.TextEdit
 import app.shkriuss.feature.notes.data.AttachmentEntity
 import app.shkriuss.feature.notes.data.NoteEntity
 import app.shkriuss.core.crypto.AppName
@@ -80,6 +86,7 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
     @After
     fun closeTheScreen() {
         held.countDown()
+        testApp.test.work.letGo()
         TestDocuments.onOpen = {}
         scenario?.close()
     }
@@ -131,6 +138,18 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         compose.captureWholeScreen("NotesCouldNotOpen", config)
     }
 
+    /** No pinned note, so no headings, and a note with a mark and no words, which the list calls "Empty note". */
+    @Test
+    fun theListWithNoPinnedNote() {
+        clockAt(at(2026, 11, 16, 14, 5))
+        seed { addNote("Shopping", "Bread, milk and eggs") }
+        clockAt(at(2026, 11, 24, 9, 30))
+        seed { addNote("", "- [ ] ") }
+        start()
+        compose.waitFor(rowMatcher(words(R.string.notes_empty_note)))
+        compose.captureWholeScreen("NotesNoPinned", config, LIST)
+    }
+
     /** The list right after Delete note, with "Note deleted" and Undo. */
     @Test
     fun theSnackbarOfADeletedNote() {
@@ -142,6 +161,102 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         compose.waitForText(words(R.string.notes_note_deleted))
         compose.waitForIdle()
         captureWindows("NoteDeletedSnackbar")
+    }
+
+    // The other snackbars: each over the screen it shows on, once.
+
+    /** An Undo that the database refused: "Could not change your notes. Try again.", and Undo with it. */
+    @Test
+    fun theSnackbarOfAnUndoThatFailed() {
+        seedNotes()
+        start()
+        openNote("Shopping")
+        compose.tap(DesignR.string.shk_more_options)
+        compose.tap(R.string.notes_delete_note)
+        compose.waitForText(words(R.string.notes_note_deleted))
+        refuseBringingNotesBack()
+        compose.tap(R.string.notes_undo)
+        compose.waitForText(words(R.string.notes_could_not_change))
+        compose.waitFor(hasText(words(R.string.notes_undo)) and hasClickAction())
+        captureWindows("UndoFailedSnackbar")
+    }
+
+    @Test
+    fun theSnackbarOfARemovedFile() {
+        val trip = seedNotes()
+        start()
+        compose.addFiles(trip, BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES)))
+        openNote("Trip")
+        compose.runAction(rowMatcher("plan.pdf"), words(R.string.notes_remove))
+        compose.waitForText(words(R.string.notes_file_removed))
+        captureWindows("FileRemovedSnackbar")
+    }
+
+    /** New note at 5,000 notes, over the list. */
+    @Test
+    fun theSnackbarWhenNotesIsFull() = snackbar("NotesFullSnackbar", NotesMessage.NotesFull, "5,000", overANote = false)
+
+    /** A file picked for a note that was deleted meanwhile, over the list. */
+    @Test
+    fun theSnackbarOfAFileWhoseNoteWasDeleted() =
+        snackbar("NoteGoneSnackbar", NotesMessage.NotAdded(AddProblem.NoteDeleted), words(R.string.notes_note_gone), overANote = false)
+
+    @Test
+    fun theSnackbarWhenAChangeFailed() = snackbar("CouldNotChangeSnackbar", NotesMessage.CouldNotChange, words(R.string.notes_could_not_change))
+
+    /** Two sentences: the count of a note, and how many files of the pick were not added. */
+    @Test
+    fun theSnackbarOfANoteThatIsFull() = snackbar("NoteFullSnackbar", NotesMessage.NotAdded(AddProblem.NoteFull(3)), "3 files were not added")
+
+    @Test
+    fun theSnackbarWhenAllFilesAreFull() = snackbar("AllFullSnackbar", NotesMessage.NotAdded(AddProblem.AllFull), "1 GB of files")
+
+    @Test
+    fun theSnackbarOfAFileThatIsTooLarge() =
+        snackbar("TooLargeSnackbar", NotesMessage.NotAdded(AddProblem.TooLarge("holiday-film.mp4")), "is larger than 25 MB")
+
+    @Test
+    fun theSnackbarOfAFileThatCouldNotBeAdded() =
+        snackbar("CouldNotAddSnackbar", NotesMessage.NotAdded(AddProblem.CouldNotAdd("ticket.png")), words(R.string.notes_could_not_add, "ticket.png"))
+
+    @Test
+    fun theSnackbarOfAFileThatCouldNotBeRead() =
+        snackbar("CouldNotReadSnackbar", NotesMessage.NotAdded(AddProblem.CouldNotRead("ticket.png")), words(R.string.notes_could_not_read, "ticket.png"))
+
+    @Test
+    fun theSnackbarWhenNoFileKeyCanBeMade() =
+        snackbar("KeysNotUsableSnackbar", NotesMessage.NotAdded(AddProblem.KeysNotUsable), words(R.string.notes_keys_not_usable))
+
+    @Test
+    fun theSnackbarOfACopyThatIsSaved() = snackbar("CopySavedSnackbar", NotesMessage.Copy(CopyResult.SAVED), words(R.string.notes_copy_saved))
+
+    @Test
+    fun theSnackbarOfACopyOfADamagedFile() = snackbar("CopyDamagedSnackbar", NotesMessage.Copy(CopyResult.DAMAGED), words(R.string.notes_copy_damaged))
+
+    /** The longest words of a snackbar. */
+    @Test
+    fun theSnackbarOfACopyOfADamagedFileThatCouldNotBeDeleted() =
+        snackbar("CopyDamagedPartSnackbar", NotesMessage.Copy(CopyResult.DAMAGED_PART_LEFT), words(R.string.notes_copy_damaged_part))
+
+    @Test
+    fun theSnackbarOfACopyThatFailed() = snackbar("CopyFailedSnackbar", NotesMessage.Copy(CopyResult.FAILED), words(R.string.notes_copy_failed))
+
+    @Test
+    fun theSnackbarOfACopyThatFailedAndCouldNotBeDeleted() =
+        snackbar("CopyFailedPartSnackbar", NotesMessage.Copy(CopyResult.FAILED_PART_LEFT), words(R.string.notes_copy_failed_part))
+
+    /**
+     * Shows [message] as Notes shows it, through the one snackbar of the
+     * app, over the open note "Trip", or over the list, and captures it as
+     * [name] once [words] show.
+     */
+    private fun snackbar(name: String, message: NotesMessage, words: String, overANote: Boolean = true) {
+        seedNotes()
+        start()
+        if (overANote) openNote("Trip")
+        testApp.test.services.snackbars.show(message)
+        compose.waitForText(words, substring = true)
+        captureWindows(name)
     }
 
     // A note.
@@ -246,7 +361,125 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         captureWindows("NoteNotSaved")
     }
 
+    /** A text past 100,000 characters: refused, with the words under it. */
+    @Test
+    fun aTextTooLong() {
+        seedNotes()
+        start()
+        openNote("Shopping")
+        // As pasting would, but with no field focused, so no blinking cursor can change the screenshot.
+        checkNotNull(scenario).onActivity {
+            ViewModelProvider(it)[OpenNoteViewModel::class.java].open.value?.model?.onBodyChange(TextEdit("x".repeat(TOO_LONG_TEXT), 0))
+        }
+        compose.waitFor(hasError(compose.textTooLong()))
+        compose.captureWholeScreen("NoteTextTooLong", config)
+    }
+
+    /** A note that cannot be read: "Could not open your notes." in its place. */
+    @Test
+    fun aNoteThatCannotBeRead() {
+        seedNotes()
+        start()
+        runBlocking { testApp.test.database.useWriterConnection { it.executeSQL("DROP TABLE ${NoteEntity.TABLE}") } }
+        compose.tap(rowMatcher("Shopping"))
+        compose.waitFor(hasContentDescription(words(R.string.notes_add_file)))
+        compose.waitForText(words(R.string.notes_could_not_open))
+        compose.captureWholeScreen("NoteCouldNotOpen", config)
+    }
+
+    /** The menu of a note that is not pinned: Pin, and Delete note. */
+    @Test
+    fun theMenuOfANoteThatIsNotPinned() {
+        seedNotes()
+        start()
+        openNote("Shopping")
+        compose.tap(DesignR.string.shk_more_options)
+        compose.waitForText(words(R.string.notes_pin))
+        captureWindows("NoteMenuPin")
+    }
+
+    /** The menu of a new note with nothing in it yet: Pin is turned off. */
+    @Test
+    fun theMenuOfANewNote() {
+        seedNotes()
+        start()
+        compose.tap(R.string.notes_new_note)
+        compose.waitFor(hasContentDescription(words(R.string.notes_checklist)))
+        compose.tap(DesignR.string.shk_more_options)
+        compose.waitForText(words(R.string.notes_delete_note))
+        captureWindows("NewNoteMenu")
+    }
+
     // Files.
+
+    /** Three files that cannot be opened, each with why: not on this phone, its key given up, and damaged. */
+    @Test
+    fun filesThatCannotBeOpened() {
+        val trip = seedNotes()
+        start()
+        compose.addFiles(
+            trip,
+            BytesPick("map.png", "image/png", pngBytes()),
+            BytesPick("contract.pdf", "application/pdf", ByteArray(PDF_BYTES)),
+            BytesPick("scan.pdf", "application/pdf", ByteArray(PDF_BYTES)),
+        )
+        val files = storedFiles().associateBy { it.name }
+        val store = testApp.test.services.repository.store
+        store.remove(files.getValue("map.png").id)
+        sealTheKeyOfWithOtherWords(files.getValue("contract.pdf").id)
+        // The stream of the scan is cut short.
+        store.stream(files.getValue("scan.pdf").id).let { it.writeBytes(it.readBytes().copyOf(CUT_STREAM)) }
+        openNote("Trip")
+        listOf(R.string.notes_not_on_phone, R.string.notes_no_longer_opens, R.string.notes_damaged).forEach {
+            compose.waitFor(hasText(words(it)), useUnmergedTree = true)
+        }
+        compose.captureWholeScreen("FilesNotOpened", config, NOTE)
+    }
+
+    /** A keyset file is damaged: no file opens until the recovery key repairs it, and each row says where to go. */
+    @Test
+    fun filesWhoseKeysCannotBeUsedNow() {
+        val trip = seedNotes()
+        start()
+        compose.addFiles(trip, BytesPick("ticket.png", "image/png", pngBytes()), BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES)))
+        damageTheFileKeyset()
+        openNote("Trip")
+        compose.waitFor(hasText(words(R.string.notes_keys_not_usable)), useUnmergedTree = true)
+        compose.captureWholeScreen("FilesKeysNotUsable", config, NOTE)
+    }
+
+    /** The menu of a file that cannot be opened: Remove alone. */
+    @Test
+    fun theMenuOfAFileThatCannotBeOpened() {
+        val trip = seedNotes()
+        start()
+        compose.addFiles(trip, BytesPick("map.png", "image/png", pngBytes()))
+        testApp.test.services.repository.store.remove(storedFiles().single().id)
+        openNote("Trip")
+        compose.tap(rowMatcher("map.png"))
+        compose.waitFor(hasText(words(R.string.notes_remove)) and hasClickAction())
+        captureWindows("FileMenuRemoveOnly")
+    }
+
+    /** Two files that wait: one being added whose size the picker does not give, so it has no bar, and one whose turn has not come. */
+    @Test
+    fun filesThatWaitToBeAdded() {
+        val trip = seedNotes()
+        start()
+        openNote("Trip")
+        val hold = CountDownLatch(1)
+        try {
+            val noSize = object : PickedFile by BytesPick("ticket.png", "image/png", ByteArray(ADDED_BYTES), hold) {
+                override fun reportedSize(): Long? = null
+            }
+            testApp.test.services.adds.add(trip, listOf(noSize, BytesPick("plan.pdf", "application/pdf", ByteArray(PDF_BYTES))))
+            compose.waitForText(words(R.string.notes_adding, "ticket.png"))
+            compose.waitForText(words(R.string.notes_adding_a_file))
+            compose.captureWholeScreen("FilesWaiting", config, NOTE)
+        } finally {
+            hold.countDown()
+        }
+    }
 
     /** The menu of a file that is not an image: Save a copy and Remove. */
     @Test
@@ -320,6 +553,30 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         compose.captureWholeScreen("ImageViewZoomed", config)
     }
 
+    /** The menu of the image view: Save a copy and Remove. */
+    @Test
+    fun theMenuOfTheImageView() {
+        openTheImageView()
+        compose.tap(DesignR.string.shk_more_options)
+        compose.waitForText(words(R.string.notes_save_copy))
+        captureWindows("ImageMenu")
+    }
+
+    /** The image view while its image is decoded: "Opening the image". */
+    @Test
+    fun theImageViewWhileItsImageIsDecoded() {
+        val trip = seedNotes()
+        start()
+        compose.addFiles(trip, BytesPick("ticket.png", "image/png", pngBytes(IMAGE_WIDTH, IMAGE_HEIGHT)))
+        openNote("Trip")
+        compose.waitFor(hasContentDescription("ticket.png, image", substring = true))
+        // The work of the app waits from here, so the image is not decoded yet, and "Opening the image" stays.
+        testApp.test.work.hold()
+        compose.tap(rowMatcher("ticket.png"))
+        compose.waitForText(words(R.string.notes_opening_image))
+        compose.captureWholeScreen("ImageOpening", config)
+    }
+
     /** Opens the image view of an image added to Trip, and gives the image. */
     private fun openTheImageView(): SemanticsNodeInteraction {
         val trip = seedNotes()
@@ -387,6 +644,15 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
 
     // Backup, Security and Licences.
 
+    /** With the app lock on, its row says "On". */
+    @Test
+    @Config(application = AppLockOnNotesApp::class)
+    fun settingsWithTheAppLockOn() {
+        openSettings()
+        compose.waitFor(hasContentDescription("App lock, On"))
+        compose.captureWholeScreen("SettingsAppLockOn", config)
+    }
+
     @Test
     @Config(application = NewNotesApp::class)
     fun settingsWithNoRecoveryKey() {
@@ -421,6 +687,25 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         pick(R.string.notes_make_backup, Intent.ACTION_CREATE_DOCUMENT, TestDocuments.uri(BACKUP_NAME))
         compose.waitForText(words(R.string.notes_backup_writing))
         captureWindows("BackupWriting")
+    }
+
+    /** While the picked file is checked, before the question of a restore. */
+    @Test
+    fun theProgressDialogWhileAFileIsChecked() {
+        pickerDocuments()
+        seedNotes()
+        val backup = writeABackup()
+        // The storage does not answer, so "Checking the backup" stays on screen. Then the read fails, and nothing changes.
+        TestDocuments.onOpen = { mode ->
+            if (mode == "r") {
+                held.await()
+                throw FileNotFoundException("the test has ended")
+            }
+        }
+        openSettings(ready = "Shopping")
+        pick(R.string.notes_restore_backup, Intent.ACTION_OPEN_DOCUMENT, backup)
+        compose.waitForText(words(R.string.notes_backup_checking))
+        captureWindows("BackupChecking")
     }
 
     /** With the bar and the percent: the whole file is read, and the files move in. */
@@ -753,6 +1038,8 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         private const val HALF = 0.5f
         private const val ADDED_BYTES = 6_000_000
         private const val TOO_LONG_TITLE = 200
+        private const val TOO_LONG_TEXT = 100_001
+        private const val CUT_STREAM = 100
         private const val IMAGE_WIDTH = 600
         private const val IMAGE_HEIGHT = 400
 
@@ -761,6 +1048,11 @@ class NotesScreenshotTest(private val config: ScreenshotConfig) {
         fun configs(): List<ScreenshotConfig> = ScreenshotConfig.all()
     }
 }
+
+/** "A note has at most 100,000 characters." */
+private fun androidx.compose.ui.test.junit4.ComposeTestRule.textTooLong(): String =
+    androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        .resources.getQuantityString(R.plurals.notes_text_too_long, 100_000, "100,000")
 
 /** "A title has at most 200 characters." */
 private fun androidx.compose.ui.test.junit4.ComposeTestRule.titleTooLong(): String =

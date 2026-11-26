@@ -52,7 +52,7 @@ class OpenNoteViewModelTest {
     private val givenUp = CopyOnWriteArrayList<String>()
 
     private val snackbars by lazy { NotesSnackbars(repository, {}, scope, Dispatchers.IO) }
-    private val adds by lazy { FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), {}, scope, Dispatchers.IO) }
+    private val adds by lazy { FileAdds(repository, crypto.files, MutableStateFlow(true), Mutex(), {}, { "File" }, scope, Dispatchers.IO) }
     private val reader by lazy { FileReader(repository, crypto.files, { false }, Dispatchers.IO) }
     private val store = ViewModelStore()
 

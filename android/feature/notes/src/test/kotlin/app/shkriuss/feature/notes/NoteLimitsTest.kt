@@ -138,15 +138,15 @@ class NoteLimitsTest {
 
     @Test
     fun aPickedNameIsCleanedInTheOrderOfTheSpec() {
-        assertEquals("ticket.jpg", FileText.name("ticket.jpg"))
-        assertEquals("Line breaks and control characters become spaces", "tick et.jpg", FileText.name("tick\net.jpg"))
-        assertEquals("a b", FileText.name("a\u0000b"))
-        assertEquals("Spaces at both ends go", "ticket.jpg", FileText.name("  ticket.jpg\n"))
-        assertEquals(NoteLimits.UNNAMED, FileText.name("   "))
-        assertEquals(NoteLimits.UNNAMED, FileText.name(null))
-        assertEquals("It keeps its first 255 characters", "x".repeat(255), FileText.name("x".repeat(300)))
-        assertEquals("The cut comes before the spaces go", "x".repeat(254), FileText.name("x".repeat(254) + " y"))
-        assertTrue(FileText.isName(FileText.name("😀".repeat(300))))
+        assertEquals("ticket.jpg", FileText.name("ticket.jpg", "File"))
+        assertEquals("Line breaks and control characters become spaces", "tick et.jpg", FileText.name("tick\net.jpg", "File"))
+        assertEquals("a b", FileText.name("a\u0000b", "File"))
+        assertEquals("Spaces at both ends go", "ticket.jpg", FileText.name("  ticket.jpg\n", "File"))
+        assertEquals("File", FileText.name("   ", "File"))
+        assertEquals("File", FileText.name(null, "File"))
+        assertEquals("It keeps its first 255 characters", "x".repeat(255), FileText.name("x".repeat(300), "File"))
+        assertEquals("The cut comes before the spaces go", "x".repeat(254), FileText.name("x".repeat(254) + " y", "File"))
+        assertTrue(FileText.isName(FileText.name("😀".repeat(300), "File")))
     }
 
     @Test

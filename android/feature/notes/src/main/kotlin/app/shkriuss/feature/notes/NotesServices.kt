@@ -82,7 +82,9 @@ class NotesServices(
         crypto.files,
         combine(shown, gateOpen) { onScreen, open -> onScreen && open },
         fileKeys,
-        { problem -> snackbars.show(NotesMessage.NotAdded(problem)) },
+        { problem -> snackbars.tell(NotesMessage.NotAdded(problem)) },
+        // Read at each add, so it follows the phone's language.
+        unnamed = { context.getString(R.string.notes_unnamed_file) },
         scope,
         work,
         afterLastAdd = { noteId -> snackbars.lookAgain(noteId) },

@@ -1535,8 +1535,8 @@ Status: **Partly met.**
   stores, that data apps have no network permission, what the Sync app
   and its server will see, and that nothing tracks the user.
 - MASWE-0073, declared data: met for what is built. The
-  [data inventory](data-inventory.md) lists what Catalog, Water and
-  Reminders store,
+  [data inventory](data-inventory.md) lists what Catalog, Water,
+  Reminders, Tasks and Notes store,
   where, and what leaves the phone and how. It is written from the
   code. Each later app adds its part before its first release.
 - MASWE-0074, tracking domains: met. Data apps connect nowhere. The hub
@@ -1549,8 +1549,8 @@ Status: **Partly met.**
 Status: **Partly met.**
 
 - MASWE-0076, managing data:
-  - The data stays on the phone unless the user sets up sync or makes a
-    backup.
+  - The data stays on the phone unless the user sets up sync, makes a
+    backup or, in Notes, saves a copy of a file.
   - Backup and restore to a file of the user's choice exist in
     `core/backup`. Water, Reminders, Tasks and Notes have the screens
     ([Water's spec](../apps/water/spec.md#backup-and-restore-screens),
@@ -1567,7 +1567,9 @@ Status: **Partly met.**
 - MASWE-0077, what is shown: the user chooses whether notifications show
   their text, and whether the app blocks screenshots.
 - MASWE-0078, consent: nothing leaves the phone unless the user sets up
-  sync or saves a backup.
+  sync or saves a backup. In Notes, **Save a copy** also writes one
+  file, not encrypted, to the place the user picks
+  ([data-inventory.md](data-inventory.md#notes-appshkriussnotes)).
 
 ### Resilience: skipped on purpose
 
@@ -1646,12 +1648,15 @@ Water:
    ([build.md](../development/build.md#the-security-screens-rule),
    [ADR 0033](../adr/0033-hide-overlay-windows-for-the-security-screens.md)).
 
-The first app that stores files:
+The first app that stores files, Notes:
 
-7. How an app shows files whose keys were given up
-   ([crypto-design.md](crypto-design.md#open-questions), question 13).
-8. One snapshot of records and files in a backup
-   ([backup-format.md](../architecture/backup-format.md#open-questions),
+7. Done: how an app shows files whose keys were given up. Notes keeps
+   their rows, with "This file can no longer be opened" and **Remove**
+   ([Notes' spec](../apps/notes/spec.md#files-that-cannot-be-opened);
+   [crypto-design.md](crypto-design.md#open-questions), question 13).
+8. Done: one snapshot of records and files in a backup
+   ([Notes' spec](../apps/notes/spec.md#writing), point 2;
+   [backup-format.md](../architecture/backup-format.md#open-questions),
    question 4).
 
 The handover between apps:

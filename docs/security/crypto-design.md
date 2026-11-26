@@ -12,8 +12,10 @@ follows this page.
 - The recovery key screens and the app lock screens are in
   `android/core/security`
   ([security-screens.md](../architecture/security-screens.md)).
-- Not built yet: sealing file keys again in the database (the first app
-  that stores files), and a new recovery key (the sync design).
+- Sealing file keys again in the database is built with Notes, the
+  first app that stores files
+  ([Notes' spec](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)).
+- Not built yet: a new recovery key (the sync design).
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -2225,8 +2227,11 @@ What is left, with what decides it.
     Decided ([A damaged keyset file](#a-damaged-keyset-file)).
 13. **Files whose keys were given up.** Their records stay, and their
     files can never be opened again. How does an app show them: hide
-    them, mark them, or offer to delete them? Decided with the first app
-    that stores files.
+    them, mark them, or offer to delete them? Answered for Notes in its
+    [specification](../apps/notes/spec.md#files-that-cannot-be-opened):
+    each stays as a row that says "This file can no longer be opened"
+    and offers **Remove**. Each later app with files decides in its own
+    spec.
 14. **Repair once a keyset holds keys of two recovery keys.** Repair
     needs an exact match of another stored keyset. After a new recovery
     key, each keyset holds keys of two recovery keys, and the new words
