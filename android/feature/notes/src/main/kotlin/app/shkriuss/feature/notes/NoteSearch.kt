@@ -73,9 +73,22 @@ object NoteSearch {
 
     private const val ELLIPSIS = "…"
 
-    /** Every place where [wanted], lower-cased, stands in [text], each as a range of [text]. They do not overlap. */
+    /**
+     * Every place where [wanted], lower-cased, stands in [text], each as a
+     * range of [text]. They do not overlap.
+     *
+     * Most texts do not hold what was typed, and a search asks this of
+     * every line of every note. So it first lower-cases [text] once and
+     * looks: only a text that holds [wanted] pays for the places
+     * ([placesIn]), which cost about ten times as much.
+     */
     fun rangesIn(text: String, wanted: String): List<IntRange> {
-        if (wanted.isEmpty()) return emptyList()
+        if (wanted.isEmpty() || !text.lowercase(Locale.ROOT).contains(wanted)) return emptyList()
+        return placesIn(text, wanted)
+    }
+
+    /** What [rangesIn] gives for a [wanted] that is not empty, worked out for any [text]: the places of every character are kept ([Lowered]). */
+    internal fun placesIn(text: String, wanted: String): List<IntRange> {
         val lowered = Lowered(text)
         return buildList {
             var from = 0

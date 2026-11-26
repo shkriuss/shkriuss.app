@@ -1,7 +1,10 @@
 package app.shkriuss.feature.notes
 
+import java.util.Locale
+import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Search, the order of the list and what a row shows (docs/apps/notes/spec.md, "Notes" and "Search"). */
@@ -161,5 +164,58 @@ class NoteSearchTest {
         assertNull("An empty search matches no file", NoteSearch.inFileNames(listOf("map.pdf"), ""))
         assertEquals(NoteSearch.inNote(trip, "ticket"), NoteSearch.match(trip, listOf("ticket.jpg"), "ticket"))
         assertEquals(NoteSearch.inFileNames(listOf("map.pdf"), "map"), NoteSearch.match(trip, listOf("map.pdf"), "map"))
+    }
+
+    /**
+     * A search first asks the cheap question, whether the text lower-cased
+     * once holds what was typed, and works out the places only then
+     * ([NoteSearch.placesIn]). The question must never leave a match out.
+     */
+    private fun assertTheSameWithAndWithoutTheCheapQuestion(text: String, typed: String): Int {
+        val wanted = typed.lowercase(Locale.ROOT)
+        val places = NoteSearch.placesIn(text, wanted)
+        assertEquals("\"$typed\" in \"$text\"", places, NoteSearch.rangesIn(text, wanted))
+        return places.size
+    }
+
+    @Test
+    fun theCheapQuestionOfASearchLeavesNoMatchOut() {
+        val texts = listOf(
+            "", "Trip", "TRIP trip TrIp", "Café CAFÉ", "İstanbul İ", "i̇", "ΟΣ ΤΑ ΟΣ", "Σ", "aΣ", "Σa",
+            "😀 Trip 😀", "ǅ ǆ Ǆ", "STRASSE straße", "a\nb", "  spaces  ", "**bold** *italic*",
+        )
+        val typed = listOf("trip", "TRIP", "é", "É", "i", "i̇", "̇", "ς", "σ", "ος", "ΟΣ", "😀", "ǆ", "ss", "ß", " ", "**", "\n", "a\nb")
+
+        val found = texts.sumOf { text -> typed.sumOf { assertTheSameWithAndWithoutTheCheapQuestion(text, it) } }
+
+        assertTrue("Matches were found: $found", found > 30)
+    }
+
+    @Test
+    fun theCheapQuestionOfASearchLeavesNoMatchOutOfTenThousandMadeUpTexts() {
+        val random = Random(20261126)
+        val pieces = listOf("a", "B", "é", "É", "İ", "i", "̇", "Σ", "σ", "ς", "Ο", " ", "\n", "😀", "ǅ", "ß", "*", "-")
+        var found = 0
+
+        repeat(10_000) {
+            val text = buildString { repeat(random.nextInt(12)) { append(pieces[random.nextInt(pieces.size)]) } }
+            val typed = buildString { repeat(1 + random.nextInt(3)) { append(pieces[random.nextInt(pieces.size)]) } }
+            if (assertTheSameWithAndWithoutTheCheapQuestion(text, typed) > 0) found++
+        }
+
+        assertTrue("Texts that match and texts that do not were both tried: $found matched", found in 500..9_000)
+    }
+
+    @Test
+    fun theCheapQuestionOfASearchLeavesOutNoCharacterOfUnicode() {
+        var found = 0
+        for (codePoint in 0..Character.MAX_CODE_POINT) {
+            if (codePoint in Character.MIN_SURROGATE.code..Character.MAX_SURROGATE.code) continue
+            val character = String(Character.toChars(codePoint))
+            // Between letters, at the end of a word and after a Greek capital: the final sigma looks at the letters around it.
+            found += assertTheSameWithAndWithoutTheCheapQuestion("a${character}a $character Α$character", character)
+        }
+
+        assertTrue("Every character was found where it stands: $found places", found >= 3 * (Character.MAX_CODE_POINT - 2_048))
     }
 }

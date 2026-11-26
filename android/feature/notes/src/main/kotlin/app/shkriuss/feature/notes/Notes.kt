@@ -115,5 +115,5 @@ object NoteRow {
      * [NoteLimits.MOST_ROW_TEXT] characters of the text, marks removed and
      * line breaks as spaces. The screen shows two lines of it.
      */
-    fun preview(note: Note): String = NoteText.first(NoteFormatting.plain(note.body).trim(), NoteLimits.MOST_ROW_TEXT)
+    fun preview(note: Note): String = NoteFormatting.plainStart(note.body, NoteLimits.MOST_ROW_TEXT)
 }
