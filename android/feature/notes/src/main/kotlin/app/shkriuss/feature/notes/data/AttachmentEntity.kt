@@ -87,12 +87,18 @@ interface AttachmentDao : RecordDao<AttachmentEntity> {
     fun observeShownCounts(): Flow<List<FileCount>>
 
     /**
-     * The names of the files of the notes [noteIds] that are not deleted,
-     * each with what puts it in the order of its note. A search asks for
-     * a small group of notes at a time.
+     * Up to [limit] names of the files of the notes [noteIds] that are not
+     * deleted, each with what puts it in the order of its note: those
+     * whose `id` comes after [afterId], in the order of their `id`s. A
+     * search reads them page by page, from "" on, for a small group of
+     * notes. The group alone sets no limit: a restore can give one note
+     * any number of files.
      */
-    @Query("SELECT noteId, id, name, createdAt FROM attachment WHERE noteId IN (:noteIds) AND deletedAt IS NULL")
-    suspend fun shownNamesOf(noteIds: List<String>): List<FileName>
+    @Query(
+        "SELECT noteId, id, name, createdAt FROM attachment " +
+            "WHERE noteId IN (:noteIds) AND deletedAt IS NULL AND id > :afterId ORDER BY id LIMIT :limit",
+    )
+    suspend fun shownNamesOf(noteIds: List<String>, afterId: String, limit: Int): List<FileName>
 
     /** The `id` and the size of every file that is not deleted, in the order of the change numbers. A backup finds the streams by them. */
     @Query("SELECT id, size FROM attachment WHERE deletedAt IS NULL ORDER BY changeNumber")

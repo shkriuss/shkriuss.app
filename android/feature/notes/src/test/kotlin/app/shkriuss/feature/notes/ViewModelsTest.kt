@@ -268,6 +268,34 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aSearchReadsTheNamesOfANoteWithMoreFilesThanOnePageAndShowsTheFirstThatMatches() {
+        // A restore can give one note any number of files: here 520, more than are read at a time.
+        val id = phone.note("Trip", "Passport")
+        fun addRecord(name: String) = runBlocking {
+            val fileId = repository.reserveFileId()
+            val key = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
+            assertEquals(FileAdded.ADDED, repository.addFile(id, fileId, name, "application/pdf", 1_000, key))
+            repository.releaseFileId(fileId)
+        }
+        phone.clock.advanceBy(10_000)
+        repeat(260) { addRecord("film$it.mp4") }
+        addRecord("rent-later.pdf")
+        repeat(258) { addRecord("photo$it.jpg") }
+        // The last record has the highest id, so it is read on the second page. But it is the oldest file of the note.
+        phone.clock.advanceBy(-5_000)
+        addRecord("rent-first.pdf")
+        val list = list()
+        list.shown { it.others.singleOrNull()?.fileCount == 520 }
+
+        list.search("rent")
+        endPause.trySend(Unit)
+
+        val found = list.shown { it.query == "rent" }.others.single()
+        assertEquals("The first file in the note's order that matches", "rent-first.pdf", found.match?.fileName)
+        assertEquals(listOf(0..3), found.match?.inFileName)
+    }
+
+    @Test
     fun aSearchKeepsTheOrderAndTheSectionsAndOnlyTheNamesOfShownFilesMatch() {
         val trip = phone.note("Trip", "Buy a ticket")
         phone.clock.advanceBy(1_000)

@@ -7,6 +7,7 @@ import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.data.isDeleted
 import app.shkriuss.feature.notes.data.AttachmentEntity
+import app.shkriuss.feature.notes.data.FileName
 import app.shkriuss.feature.notes.data.FileTotals
 import app.shkriuss.feature.notes.data.NoteEntity
 import app.shkriuss.feature.notes.data.NoteMark
@@ -140,15 +141,27 @@ class NotesRepository(
     fun fileCounts(): Flow<Map<String, Int>> = attachments.observeShownCounts().map { rows -> rows.associate { it.noteId to it.count } }
 
     /**
-     * The names of the files of the notes [noteIds] that are not deleted,
-     * by the `id` of their note, in the order the note shows them. Ask for
-     * a small group of notes at a time: Notes can hold a hundred thousand
-     * names.
+     * For each of the notes [noteIds], by its `id`, what [find] gives for
+     * the first of its files that are not deleted for which it gives
+     * something, in the order the note shows them. A note with no such
+     * file is not in it. The names are read a page at a time and none is
+     * kept: Notes can hold a hundred thousand names, and a restore can
+     * give one note any number of them.
      */
-    suspend fun shownFileNames(noteIds: List<String>): Map<String, List<String>> =
-        attachments.shownNamesOf(noteIds)
-            .groupBy { it.noteId }
-            .mapValues { (_, files) -> files.sortedWith(NoteOrder.FILE_NAMES).map { it.name } }
+    suspend fun <T : Any> firstInFileNames(noteIds: List<String>, find: (name: String) -> T?): Map<String, T> {
+        val first = HashMap<String, Pair<FileName, T>>()
+        var after = ""
+        do {
+            val page = attachments.shownNamesOf(noteIds, after, NoteLimits.FILES_AT_A_TIME)
+            page.forEach { file ->
+                val best = first[file.noteId]?.first
+                // Only a file that comes before the one found so far is asked: the first in the note's order wins.
+                if (best == null || NoteOrder.FILE_NAMES.compare(file, best) < 0) find(file.name)?.let { first[file.noteId] = file to it }
+            }
+            page.lastOrNull()?.let { after = it.id }
+        } while (page.size == NoteLimits.FILES_AT_A_TIME)
+        return first.mapValues { (_, found) -> found.second }
+    }
 
     /** The note [id], and again after each change of it. Null while it is not stored or is deleted. */
     fun note(id: String): Flow<Note?> = notes.observe(id).map { row -> row?.takeUnless { it.record.isDeleted }?.let(::noteOf) }

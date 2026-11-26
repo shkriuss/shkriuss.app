@@ -259,16 +259,15 @@ class NotesListViewModel(
 
     /**
      * The matches of [query] in the names of the shown files of the notes
-     * of [rows], by the `id` of the note. The names are read for a few
-     * notes at a time, and only the name that matches is kept: Notes can
-     * hold a hundred thousand names.
+     * of [rows], by the `id` of the note: for each note, the match in the
+     * first of its files whose name holds [query]. The names are read for
+     * a few notes at a time, a page at a time, and only a name that
+     * matches is kept: Notes can hold a hundred thousand names.
      */
     private suspend fun matchesInFileNames(rows: List<NoteRowState>, query: String): Map<String, SearchMatch> {
         val matches = HashMap<String, SearchMatch>()
         rows.map { it.id }.chunked(NoteLimits.NOTES_AT_A_TIME).forEach { group ->
-            repository.shownFileNames(group).forEach { (noteId, names) ->
-                NoteSearch.inFileNames(names, query)?.let { matches[noteId] = it }
-            }
+            matches += repository.firstInFileNames(group) { name -> NoteSearch.inFileNames(listOf(name), query) }
         }
         return matches
     }
