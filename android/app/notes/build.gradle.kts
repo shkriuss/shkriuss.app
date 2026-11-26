@@ -9,9 +9,9 @@ android {
 
     defaultConfig {
         applicationId = "app.shkriuss.notes"
-        // Not released yet. Follows from versionName by the rule in ADR 0021. CI checks it.
-        versionCode = 10000101
-        versionName = "1.0.0-alpha.1"
+        // Follows from versionName by the rule in ADR 0021. CI checks it.
+        versionCode = 10000900
+        versionName = "1.0.0"
     }
 }
 

@@ -13,8 +13,8 @@ does not. It ends with the OWASP MASVS controls and every open question.
   the [end](#open-questions).
 - What exists today: Catalog, Water, Reminders, Tasks, Notes, and the
   core modules ([modules.md](../architecture/modules.md)). Water is the
-  first data app, Reminders the second and Tasks the third. Notes, the
-  fourth, is not released yet. There is no Sync
+  first data app, Reminders the second, Tasks the third and Notes the
+  fourth. There is no Sync
   app and no sync server yet. Where this page speaks of sync, it
   describes what is decided for it, not what is built. The handover
   between apps is built. What each app stores is in the
