@@ -10,8 +10,8 @@ Every app has an ID of the form `app.shkriuss.<name>`.
   their time.
 - Tasks 1.0.0 keeps the things you have to do in lists, with a due date,
   a repeat and a reminder if you want them.
-- Notes 1.0.0 keeps notes with simple formatting and attached files,
-  encrypted on your phone, and finds them again with search.
+- Notes 1.0.0 keeps notes with simple formatting and the files you
+  attach, encrypts every file, and finds them again with search.
 - Catalog 0.3.0 is a gallery of the design components and shared screens
   for development.
 
