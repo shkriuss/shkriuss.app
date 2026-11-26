@@ -867,9 +867,10 @@ Choices this page made without a decision by the owner on that point.
    text and file name, and the list reads every text once to make its
    rows. Notes reads them a few at a time, so memory is no limit: a test
    on the emulator stores more text than the app's memory holds and
-   runs the list, a search and a backup. How long they take on a phone
-   with 5,000 notes of 100,000 characters each is not measured; an
-   index or a lower limit would be a change to this page.
+   runs the list, a search and a backup. That test fails when the list
+   takes more than 10 seconds or a search more than 40. How long they
+   take on a phone with 5,000 notes of 100,000 characters each is not
+   measured; an index or a lower limit would be a change to this page.
 7. **A damaged stream of the right length, or a damaged wrapped key,**
    stays damaged after a restore that holds a good copy, when the stored
    file has the same `updatedAt`: the restore writes nothing for it.

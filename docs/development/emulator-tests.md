@@ -340,6 +340,15 @@ runs out of memory, and the run fails. If that happens in the list or
 in a search, `java.lang.OutOfMemoryError` is in Android's log, the
 process of the tests ends, and the later steps do not run.
 
+The list and each search also have a limit of time: a test fails when
+the list takes more than 10 seconds or a search more than 40. On the
+emulator the list takes about 1 second and a search 2 to 11 seconds,
+so the limits leave room for a slow runner. They guard the speed. Notes
+makes a row from the start of its note's text, and in a search it
+lower-cases a text once. Code that works through the whole of every
+text takes 17 to 62 seconds for the list here, and 80 to 296 for a
+search.
+
 A test fails, and stores nothing, when it cannot store more than the
 heap holds: when 5,000 notes are not enough text for this heap, or when
 the emulator has too little room. With less it would pass and show

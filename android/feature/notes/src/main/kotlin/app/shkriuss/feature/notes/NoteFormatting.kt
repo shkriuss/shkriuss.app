@@ -251,14 +251,37 @@ object NoteFormatting {
     }
 
     /**
-     * [text] for a row of the list: marks removed and each line break as a
-     * space. The line marks go, and the marks of bold and italic that count.
+     * The first [most] characters of [text] for a row of the list: marks
+     * removed, each line break as a space, and no space at either end.
+     * The line marks go, and the marks of bold and italic that count.
+     *
+     * It reads [text] line by line and stops at the first character that
+     * is no space after the [most] it keeps: from there on nothing can
+     * change the answer. A text can hold a hundred thousand characters,
+     * and the list makes a row for every note. A line is read whole,
+     * however long: the marks of bold and italic pair within their line.
      */
-    fun plain(text: String): String = buildString(text.length) {
-        forEachLine(text) { lineStart, line ->
-            if (lineStart > 0) append(' ')
-            append(plainLine(line))
+    fun plainStart(text: String, most: Int): String {
+        val kept = StringBuilder()
+        // Where the first `most` characters of `kept` end, once it holds more of them.
+        var cut = -1
+        // `kept` holds only spaces from `cut` to here.
+        var looked = 0
+        forEachLine(text) { _, line ->
+            val plain = plainLine(line)
+            // A line break is a space, and the text starts with no space.
+            if (kept.isEmpty()) kept.append(plain.trimStart()) else kept.append(' ').append(plain)
+            if (cut < 0 && kept.length > most && kept.codePointCount(0, kept.length) > most) {
+                cut = kept.offsetByCodePoints(0, most)
+                looked = cut
+            }
+            if (cut >= 0) {
+                for (index in looked until kept.length) if (!kept[index].isWhitespace()) return kept.substring(0, cut)
+                looked = kept.length
+            }
         }
+        // No text follows the first `most` characters, so the spaces at the end go.
+        return kept.trimEnd().toString()
     }
 
     /** One line without its line mark and the inline marks that count. */

@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import kotlin.random.Random
 import org.junit.Test
 
 /** The marks of the text, and what the formatting bar, Enter and a tap on a box do (docs/apps/notes/spec.md, "Formatting"). */
@@ -175,7 +176,7 @@ class NoteFormattingTest {
         val started = System.nanoTime()
 
         assertEquals(emptyList<LookRange>(), NoteFormatting.looks(line).filter { it.look != Look.MARK })
-        assertEquals(line.replace(" ", " "), NoteFormatting.plain(line))
+        assertEquals(line.replace(" ", " "), NoteFormatting.plainLine(line))
 
         val seconds = (System.nanoTime() - started) / 1e9
         assertTrue("It took $seconds seconds", seconds < 2.0)
@@ -183,8 +184,53 @@ class NoteFormattingTest {
 
     @Test
     fun aRowShowsTheTextWithoutItsMarksAndLineBreaksAsSpaces() {
-        assertEquals("Trip Passport Tickets", NoteFormatting.plain("# Trip\n- [ ] Passport\n- [x] **Tickets**"))
-        assertEquals("Marks that do not count stay", "a ** b", NoteFormatting.plain("a ** b"))
-        assertEquals("1 and 2", NoteFormatting.plain("1. 1 and *2*"))
+        assertEquals("Trip Passport Tickets", NoteFormatting.plainStart("# Trip\n- [ ] Passport\n- [x] **Tickets**", 1_000))
+        assertEquals("Marks that do not count stay", "a ** b", NoteFormatting.plainStart("a ** b", 1_000))
+        assertEquals("1 and 2", NoteFormatting.plainStart("1. 1 and *2*", 1_000))
+    }
+
+    /** The whole text for a row, as it was made before a row read only the start: marks removed and each line break as a space. */
+    private fun wholePlain(text: String): String = buildString(text.length) {
+        NoteFormatting.forEachLine(text) { lineStart, line ->
+            if (lineStart > 0) append(' ')
+            append(NoteFormatting.plainLine(line))
+        }
+    }
+
+    /** The first [most] characters of a row's text, from the whole text: what [NoteFormatting.plainStart] must give. */
+    private fun startOfWholePlain(text: String, most: Int): String = NoteText.first(wholePlain(text).trim(), most)
+
+    @Test
+    fun theStartOfARowsTextIsTheStartOfTheWholeTextWithoutItsMarks() {
+        val texts = listOf(
+            "", " ", "\n\n", "Passport", "  Passport  ", "\n\n# Trip\n\n", "abcde", "abcdef", "abcde ", "abcde \n \n", "abcde \n \nf", "abcd \n \n",
+            "abcde\nf", "abcd\n\n\nf", "\n \n\tabcde", "😀😀😀😀😀", "😀😀😀😀😀😀", "😀😀😀😀😀 \n", "**ab** *cd* ef", "- [ ] a\n- [x] b\n1. c",
+            "  a  ", "a ** b", "\t\ta\tb\t", "# \n- \n- [ ] ", "a\n# \n- \nb",
+        )
+
+        texts.forEach { text ->
+            listOf(1, 5, 1_000).forEach { most ->
+                assertEquals("The first $most of \"$text\"", startOfWholePlain(text, most), NoteFormatting.plainStart(text, most))
+            }
+        }
+        assertEquals("A text cut after its fifth character keeps a space there", "abcd ", NoteFormatting.plainStart("abcd\n\n\nf", 5))
+        assertEquals("With only spaces after them, the spaces at the end go", "abcde", NoteFormatting.plainStart("abcde \n \n", 5))
+        assertEquals("Also a space among the first five, when no text follows", "abcd", NoteFormatting.plainStart("abcd \n \n", 5))
+    }
+
+    @Test
+    fun theStartOfARowsTextIsRightForTenThousandMadeUpTexts() {
+        val random = Random(20261126)
+        val pieces = listOf("a", "b", " ", " ", "\n", "\n", "\t", " ", "😀", "**", "*", "# ", "- ", "- [ ] ", "- [x] ", "1. ", "é")
+        var cut = 0
+
+        repeat(10_000) {
+            val text = buildString { repeat(random.nextInt(40)) { append(pieces[random.nextInt(pieces.size)]) } }
+            val most = 1 + random.nextInt(30)
+            assertEquals("The first $most of \"$text\"", startOfWholePlain(text, most), NoteFormatting.plainStart(text, most))
+            if (NoteText.length(wholePlain(text).trim()) > most) cut++
+        }
+
+        assertTrue("Texts that are cut and texts that are not were both tried: $cut were cut", cut in 2_000..8_000)
     }
 }

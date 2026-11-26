@@ -21,6 +21,9 @@ Not released yet. How to use it:
   list, a search, a backup and the move of the file keys. So very many
   very long notes, or tens of thousands of files, do not use up its
   memory. TalkBack reads a row with those 1,000 characters at most.
+- The list and a search are much faster with long notes. A row is made
+  from the start of its note's text, not from the whole of it, and a
+  search lower-cases each text once. What they show is the same.
 - A message about a file that is still being added, such as "The note
   was deleted. The file was not added.", waits while a message with
   **Undo** shows, and shows after it. So it never ends an **Undo**.
