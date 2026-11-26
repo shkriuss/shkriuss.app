@@ -328,9 +328,22 @@ The steps, on the device that joins:
    joined with a setup code, the Sync app tells the user to delete
    the secret `SETUP_CODE` in the dashboard.
 
-So a code alone does nothing: the statement is checked first, and only
-someone with the words can make one. A statement alone does nothing
-either.
+So on a server that has an account, a code alone does nothing: the
+statement is checked first, and only someone with the words can make
+one. A statement alone does nothing either.
+
+A server with no account is different. It has no account key yet, so
+it takes the one that the request brings, and the setup code alone
+decides who claims it. Decided by the owner: this stays so.
+
+1. Someone who has the setup code and the server's address can claim
+   the empty server with a key of their own, if they are faster than
+   the user.
+2. They get an empty server. The user's own `enrol` is then answered
+   `0A`, and the Sync app says that the server belongs to another
+   recovery key. No data app sends anything, so nothing is exposed
+   and nothing is lost.
+3. The user then deploys a new server, with a new setup code.
 
 ### The list of devices
 
@@ -1987,6 +2000,7 @@ built. If one is wrong, the fix is a change to this page first.
 | How the list of devices names a device | A name that the server stores sealed. The Sync app holds one key for it, made from the recovery key, which opens nothing else ([The name key](#the-name-key)). |
 | A deletion and an edit with the same `updatedAt` | The edit wins, on every device ([Conflict rules](#conflict-rules)). |
 | A hostile server that shows a new device a record that was deleted since | Kept as a known limit of this version. Nothing proves to a new device that it was shown everything ([Attacks considered](#attacks-considered), [Open questions](#open-questions), question 5). |
+| A server with no account, which the setup code alone protects | Kept. The setup code is not bound to the recovery key. Someone who has the code and is faster than the user gets an empty server, and the user deploys a new one ([Joining](#joining)). |
 
 ## Attacks considered
 
@@ -2035,7 +2049,7 @@ A stranger on the internet:
 |---|---|
 | Asks for `info`. | **Does not fail.** They learn that a sync server is there, its ID, and whether it is in use. |
 | Finds the address and joins. | Needs a statement, so the words, and a code. |
-| Claims a new, empty server before the user does. | Needs the setup code, which is in the user's own dashboard. |
+| Claims a new, empty server before the user does. | Needs the setup code, which is in the user's own dashboard. With the code: **does not fully fail.** They get an empty server. The user's own join is refused and says why, and the user deploys a new server. No data is there. |
 | Guesses a device code. | The statement is checked first. Then 5 tries in 10 minutes. |
 | Floods the server. | **Does not fail.** The day's requests are used and sync waits a day. The data is safe. Cloudflare's rate limit helps. |
 

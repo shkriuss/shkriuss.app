@@ -6,7 +6,7 @@
   the owner's review of
   [pull request 4](https://github.com/shkriuss/shkriuss.app/pull/4).
   Completed on 2026-11-26 in Phase 5, step 1
-  ([PROMPTS.md](../development/PROMPTS.md)), with the owner's eight
+  ([PROMPTS.md](../development/PROMPTS.md)), with the owner's
   decisions in the planning session of that step. The detail is in
   [sync-protocol.md](../architecture/sync-protocol.md).
 
@@ -220,6 +220,10 @@ every rule. The code follows that page exactly.
   fail. One of them: a new device can be shown a record that was
   deleted since. The owner decided to keep that as a known limit of
   this version.
+- A server with no account has no account key to check a statement
+  with. The setup code alone decides who claims it. The owner decided
+  to keep that: whoever is faster than the user gets an empty server,
+  and the user deploys a new one.
 - [crypto-design.md](../security/crypto-design.md#sync-keys) gets the
   device key, the account key, the name key, the statements and the
   signed request. Its lines "signatures are not used", "no keys are
