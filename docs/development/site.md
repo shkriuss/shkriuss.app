@@ -32,16 +32,17 @@ fingerprint, and a link to the source.
 | `/water/` | [`docs/user/water.md`](../user/water.md) |
 | `/reminders/` | [`docs/user/reminders-app.md`](../user/reminders-app.md) |
 | `/tasks/` | [`docs/user/tasks.md`](../user/tasks.md) |
+| `/notes/` | [`docs/user/notes.md`](../user/notes.md) |
 | `/recovery-key/` | [`docs/user/recovery-key.md`](../user/recovery-key.md) |
 | `/app-lock/` | [`docs/user/app-lock.md`](../user/app-lock.md) |
 | `/backup/` | [`docs/user/backup.md`](../user/backup.md) |
 | `/notifications/` | [`docs/user/reminders.md`](../user/reminders.md) |
 | Any other address | [`site/404.md`](../../site/404.md) |
 
-The menu shows Apps, Install, Verify, Privacy, Water, Reminders and
-Tasks. The pages of the recovery key, the app lock, backups, and
+The menu shows Apps, Install, Verify, Privacy, Water, Reminders, Tasks
+and Notes. The pages of the recovery key, the app lock, backups, and
 reminders and notifications are not in the menu: the pages of Water,
-Reminders and Tasks and the other guides link to them. On the verify
+Reminders, Tasks and Notes and the other guides link to them. On the verify
 page, the box for AppVerifier copies as exactly two lines.
 
 Every page has a link to the source code on GitHub. A link in a page to

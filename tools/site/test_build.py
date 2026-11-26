@@ -416,6 +416,18 @@ class RealSiteTest(unittest.TestCase):
         self.assertIn('href="/tasks/', files["backup/index.html"].decode())
         self.assertIn("app.shkriuss.tasks", files["verify/index.html"].decode())
 
+    def test_the_guides_of_notes_are_on_the_site(self):
+        config = json.loads((build.ROOT / build.CONFIG).read_text(encoding="utf-8"))
+        files = build.Site(build.ROOT, config).build()
+        notes = files["notes/index.html"].decode()
+        for name in ("recovery-key", "app-lock", "backup"):
+            with self.subTest(name=name):
+                self.assertIn(f"{name}/index.html", files)
+                self.assertIn(f'href="/{name}/', notes)
+        self.assertIn('href="/notes/"', files["apps/index.html"].decode())
+        self.assertIn('href="/notes/', files["backup/index.html"].decode())
+        self.assertIn("app.shkriuss.notes", files["verify/index.html"].decode())
+
 
 if __name__ == "__main__":
     unittest.main()

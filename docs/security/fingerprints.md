@@ -32,6 +32,7 @@ form:
 | Water | `app.shkriuss.water` |
 | Reminders | `app.shkriuss.reminders` |
 | Tasks | `app.shkriuss.tasks` |
+| Notes | `app.shkriuss.notes` |
 
 Preview APKs from pull requests have a package name that ends in
 `.preview`. All previews of one run share one throwaway key, made and

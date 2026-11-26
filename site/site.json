@@ -10,6 +10,7 @@
     { "path": "water/index.html", "source": "docs/user/water.md", "nav": "Water" },
     { "path": "reminders/index.html", "source": "docs/user/reminders-app.md", "nav": "Reminders" },
     { "path": "tasks/index.html", "source": "docs/user/tasks.md", "nav": "Tasks" },
+    { "path": "notes/index.html", "source": "docs/user/notes.md", "nav": "Notes" },
     { "path": "recovery-key/index.html", "source": "docs/user/recovery-key.md" },
     { "path": "app-lock/index.html", "source": "docs/user/app-lock.md" },
     { "path": "backup/index.html", "source": "docs/user/backup.md" },

@@ -287,7 +287,7 @@ Notes' keys. A backup then opens only with your 24 words.
 
 ## Known problems
 
-Notes is not released yet. These are its known problems and limits.
+Version 1.0.0 has these known problems and limits.
 
 Not known yet:
 
@@ -356,7 +356,7 @@ Other:
     answer "No keys" of a restore. Their words were not checked at a
     large font size.
 
-Not in version 1:
+Not in version 1.0.0:
 
 - Folders, tags, colours, an order you choose, and a grid.
 - Links, tables, code, quotes, nested lists, more heading levels,

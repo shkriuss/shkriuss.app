@@ -7,7 +7,11 @@ again with search. Its specification is
 
 ## Unreleased
 
-Not released yet. How to use it:
+## 1.0.0 (2026-11-26)
+
+Released as `notes-v1.0.0`.
+
+The first release of Notes. How to use it:
 [Notes](../../../docs/user/notes.md).
 
 - An **Undo** that cannot be written, for example on a full phone,
