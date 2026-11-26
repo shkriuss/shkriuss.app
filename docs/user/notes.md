@@ -294,12 +294,11 @@ Not known yet:
 1. How TalkBack reads the marks in the text, such as "- [ ]".
 2. Whether the keyboard, which is asked not to learn what you type,
    makes long texts too hard to type.
-3. How fast the list and a search are on a phone with very many very
-   long notes. A search reads every title, text and file name. Notes
-   reads them a few at a time, so it does not run out of memory. In a
-   test on an emulator, with more than 2,000 notes of 100,000
-   characters each, the list took about a second and a search about
-   ten seconds. Nobody has measured a phone.
+3. How fast the list and a search are with very many very long notes.
+   A search reads every title, text and file name. Notes reads them a
+   few at a time, so it does not run out of memory, but nobody has
+   measured the time on a phone at 5,000 notes with 100,000 characters
+   each.
 4. Whether TalkBack goes back to the item that opened a dialog or a
    menu, when it closes. Notes does nothing of its own for it.
 

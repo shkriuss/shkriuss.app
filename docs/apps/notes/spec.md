@@ -863,15 +863,14 @@ Choices this page made without a decision by the owner on that point.
    check on a phone has noted it yet.
 5. **The keyboard that does not learn** ([assumption 5](#assumptions)),
    if it makes long texts too hard to type.
-6. **Speed at the limits on a phone.** With no index, a search reads
-   every title, text and file name, and the list reads every text once
-   to make its rows. Notes reads them a few at a time, so memory is no
-   limit. A test on the emulator stores more text than the app's memory
-   holds, 2,215 notes of 100,000 characters each, and runs the list, a
-   search and a backup. There the list takes about 1 second and a
-   search 7 to 11 seconds, and the test fails above 10 and 40 seconds.
-   How long they take on a phone is not measured; an index or a lower
-   limit would be a change to this page.
+6. **Speed at the limits.** With no index, a search reads every title,
+   text and file name, and the list reads every text once to make its
+   rows. Notes reads them a few at a time, so memory is no limit: a test
+   on the emulator stores more text than the app's memory holds and
+   runs the list, a search and a backup. That test fails when the list
+   takes more than 10 seconds or a search more than 40. How long they
+   take on a phone with 5,000 notes of 100,000 characters each is not
+   measured; an index or a lower limit would be a change to this page.
 7. **A damaged stream of the right length, or a damaged wrapped key,**
    stays damaged after a restore that holds a good copy, when the stored
    file has the same `updatedAt`: the restore writes nothing for it.
