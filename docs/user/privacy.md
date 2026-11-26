@@ -201,12 +201,18 @@ Sync is decided, but not built yet. This is what is decided:
    read anything.
 4. The server, and Cloudflare, which runs it, can still see:
    - when each of your devices connects, and from which network address;
+   - when each device was added;
    - which of the apps you sync;
    - how many items you sync, how large each is, and how often each
      changes;
+   - which items are files, and how large each file is;
+   - most of the time, that an item was deleted;
    - which device sent what;
    - the short name of your recovery key, which ties all your synced
      data together.
+
+   It cannot see what is in an item or a file, the name of a file, or
+   the names you give your devices.
 5. A new device will need your 24 words and a one-time code. The code
    comes from a device that already syncs, or from your own Cloudflare
    account. The words alone will not add a device.

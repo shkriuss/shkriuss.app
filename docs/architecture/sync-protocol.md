@@ -435,7 +435,7 @@ All calls are `call` on the provider. Version 1 has these.
 - the version of the courier interface, and the app's data version;
 - whether sync is on in this app, and whether the app can sync now.
   It cannot while it has no `record` keyset;
-- the epoch and the cursor;
+- the epoch, the cursor and Known;
 - the key ID of the app's current key;
 - whether a [comparison of everything](#comparing-everything) is
   running;
@@ -776,11 +776,17 @@ send.
 | 16 | The epoch |
 | 4 | The current key ID |
 | 1 | How many apps follow |
-| ... | For each app: A (1 byte), the app's name (A bytes), its head (8 bytes) |
+| ... | For each app: A (1 byte), the app's name (A bytes), its head (8 bytes), and the highest number the server told this device for it (8 bytes) |
 
-The Sync app remembers the head it last saw for each app, so that it
-need not wake a data app whose head did not move and that has nothing
-to do ([When the Sync app runs](#when-the-sync-app-runs), point 2).
+1. The Sync app remembers the head it last saw for each app, so that
+   it need not wake a data app whose head did not move and that has
+   nothing to do
+   ([When the Sync app runs](#when-the-sync-app-runs), point 2).
+2. It also compares, for each app, the number the server says it told
+   this device with the app's Known. If the server's number is lower,
+   the server lost something, even when the head is the app's cursor
+   again. The Sync app then fetches for that app, and the fetch makes
+   the server start a new epoch ([The epoch](#the-epoch)).
 
 ### Fetch
 
@@ -845,7 +851,7 @@ The answer:
 | 8 | The app's head before this batch |
 | 8 | The app's head after it |
 | 4 | How many results follow: one for each record, in order |
-| ... | For each record: one result byte, and after `00` its new number (8 bytes) |
+| ... | For each record: one result byte, and after `00` or `04` its new number (8 bytes) |
 
 | Result | Meaning |
 |---|---|
@@ -853,6 +859,7 @@ The answer:
 | `01` | Not stored: the server's copy changed after the batch's cursor |
 | `02` | Not stored: the blob names another key ID than the current one |
 | `03` | Not stored: not a sealed record of 50 to 524,288 bytes |
+| `04` | Stored, under the number that follows. The chunks of this record's file were deleted before: the stream must be sent again. |
 
 1. If the batch's epoch is not the server's, the answer is `0B` with
    the server's epoch, and no new epoch is made. If Known is above
@@ -870,6 +877,9 @@ The answer:
    writes of the day is answered `07` with `01`.
 6. The server remembers the head after the batch as the highest
    number it told this device for this app.
+7. A record that is stored over one marked "its chunks were deleted"
+   gets the result `04`, and the mark is taken off
+   ([`files/delete`](#fileshave-filesfetch-filesdelete)).
 
 ### `files/send`
 
@@ -907,8 +917,19 @@ most 4,194,304 bytes at once. It knows each length before it asks. A
 request for more is answered `0C`.
 
 `POST /v1/files/delete?app=<name>`: a count of 2 bytes, 1 to 256, and
-for each file its ID (16). The server deletes every chunk of those
-files. The answer is `00`.
+for each file its ID (16) and the number under which the device's
+batch stored the file's deleted record (8). The answer is `00` and
+one byte for each file: `00` deleted, `01` not deleted.
+
+1. The server deletes a file's chunks only if its copy of the record
+   with that ID still has that number. If the record changed since,
+   another device stored a newer version, and nothing is deleted.
+2. Before it deletes the chunks, and in the same step as that check,
+   the server marks the record: "its chunks were deleted". A record
+   that is later stored over a marked one gets the result `04`
+   ([Send](#send)), so that the device that sent it sends the stream
+   again.
+3. Deleting again changes nothing.
 
 ### `account-key`
 
@@ -948,7 +969,7 @@ the signature of the account key the server has now (64 bytes).
 | D1, a row for each device | Its ID, public key, sealed name, state, when added, last day seen | On join, rename, remove, and once on each day the device calls |
 | D1, a row for each app | The app's head | With every stored batch |
 | D1, a row for each device and app | The highest number the server told it | With every page and every stored batch that moves it |
-| D1, a row for each record | The app, the record ID, its number, the blob. An index on app and number. | With every stored record: two row writes |
+| D1, a row for each record | The app, the record ID, its number, the blob, and the mark "its chunks were deleted". An index on app and number. | With every stored record: two row writes. One more when a file's chunks are deleted. |
 | D1, a few rows | The device code's hash, the hashes of used setup codes, the row writes of the day | When a code is made or used, with every stored batch |
 | R2 | One object for each chunk | When a chunk is sent |
 
@@ -1000,7 +1021,9 @@ the signature of the account key the server has now (64 bytes).
 5. The Sync app fetches for an app whenever the app's head is not its
    cursor. A head above the cursor means there is something to fetch.
    A head below the cursor means the server lost something, and the
-   fetch makes the server say so.
+   fetch makes the server say so. It also fetches when `heads` shows
+   that the server told this device less than the app's Known
+   ([`heads`](#heads), point 2).
 
 ### The epoch
 
@@ -1042,7 +1065,7 @@ it is never in a backup, and it is never synced.
 | To send | The IDs of records that must go to the server. Each is marked "ordinary" or "comparison". |
 | Skipped | The lowest number of a record that was skipped and may open later, the counts by reason, and the IDs of records whose damaged version was answered |
 | Comparison | Its state: none, fetching or sending. While it fetches: the IDs it has seen on the server. |
-| Streams | For each file: its stream's hash, whether the server is known to have it, whether it is to be deleted there, and how many bytes of a fetch are here |
+| Streams | For each file: its stream's hash, whether the server is known to have it, whether it is to be deleted there and the number its deleted record was stored under, and how many bytes of a fetch are here |
 | Stopped | Why the app sends nothing now, if so |
 
 It is in the same database as the records, so that a cursor and the
@@ -1085,7 +1108,9 @@ transaction.
 
 `exported` then, in one transaction, for the batch its token names:
 
-1. takes each stored record out of **To send**;
+1. takes each stored record out of **To send**, and keeps the number
+   of a file's deleted record. After a result `04` the file's stream
+   counts as not known to be on the server;
 2. leaves each record that was refused with `01` in **To send**. If
    it is a file's record, its stream counts as not known to be on the
    server;
@@ -1344,13 +1369,18 @@ cursor still moves past it.
 1. A device asks the server to delete a file's chunks only when its
    own batch stored the file's deleted record there, wiped where the
    app wipes. The app then lists the file in `streams` as "to
-   delete". The Sync app calls `files/delete`, and then
-   `streamDeleted`.
-2. So a deletion that lost against a newer version of the file's
-   record on the server deletes no chunks: its batch was refused.
-3. Every other device removes its own copy of the stream when it
+   delete", with the number that record got. The Sync app calls
+   `files/delete`, and then `streamDeleted`.
+2. The server deletes the chunks only while that deleted record is
+   still its copy. So a deletion that lost against a newer version of
+   the file's record deletes no chunks, however late the request
+   comes.
+3. If another device brings the file back after the chunks were
+   deleted, its batch gets the result `04`, and that device sends the
+   stream again.
+4. Every other device removes its own copy of the stream when it
    takes the deleted record.
-4. A server that keeps the chunks keeps bytes it cannot open.
+5. A server that keeps the chunks keeps bytes it cannot open.
 
 ## Deletion markers
 
@@ -1435,7 +1465,8 @@ What that means:
    network, soon after a data app poked it, and when the user asks.
 2. A run asks for `heads`. Then it serves every data app that needs
    it:
-   - an app whose head is not its cursor;
+   - an app whose head is not its cursor, or whose Known is above
+     what `heads` says the server told this device;
    - an app that poked;
    - an app whose last `status` said that it has something to send,
      to fetch or to compare.
@@ -1695,8 +1726,7 @@ The server:
 
 1. Every call, every answer byte, and every refusal of a body that is
    cut, too long or of a wrong layout.
-2. The order of the checks of a signed request and of `enrol`.
-   Nothing is written before the last check has passed.
+2. The order of the checks of a signed request.
 3. Send: a record is stored only if the server's copy is at or below
    the batch's cursor; a batch is one step; the results are in order;
    a blob of another key ID is refused.
@@ -1704,13 +1734,19 @@ The server:
    reads and finds no gap.
 5. What the server told a device, and the new epoch when a fetch or a
    batch shows that a device knows more. A request with an older
-   epoch gets the server's epoch and makes no new one.
-6. The codes: one use, the end, the wrong tries, a setup code that
+   epoch gets the server's epoch and makes no new one. A database put
+   back and filled again to the same head is still found, through
+   `heads`.
+6. `files/delete`: chunks go only while the deleted record is still
+   the server's copy, and a record stored over it gets `04`.
+7. The codes: one use, the end, the wrong tries, a setup code that
    was used.
-7. The row writes of each call, asserted from D1's own count.
-8. Every call made twice gives the same end.
-9. A closed server.
-10. The test vectors of
+8. The order of the checks of `enrol`: nothing is stored before the
+   check of the code, and a device that is in already gets `00`.
+9. The row writes of each call, asserted from D1's own count.
+10. Every call sent twice does no harm (rule 7).
+11. A closed server.
+12. The test vectors of
     [crypto-design.md](../security/crypto-design.md#sync-keys): a
     statement, a signed request, both signatures.
 
@@ -1733,8 +1769,8 @@ The server:
    not the ID outside, a record that is too large, a page that is
    cut.
 8. Streams: a wrong hash, a wrong length, a fetch that stops and
-   goes on, and a file that came back after another device asked the
-   server to delete its chunks.
+   goes on, and a file that came back before and after another device
+   asked the server to delete its chunks.
 9. A new recovery key: the three key IDs in every combination. S
    never moves to an older key.
 
