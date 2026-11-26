@@ -26,8 +26,8 @@ does not. It ends with the OWASP MASVS controls and every open question.
 |---|---|---|
 | [A lost or stolen phone](#a-lost-or-stolen-phone) | Android's file-based encryption, keys in the phone's hardware, the optional app lock | All of it rests on the screen lock. Notification text on the lock screen while the app lock is off. |
 | [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported but the launcher and the two parts of the handover, which check the caller first, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
-| [A network attacker](#a-network-attacker) | Data apps have no network permission. Everything synced is sealed. | Traffic analysis (out of scope). The Sync app's network settings are Open. |
-| [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing and the key ID. Replay and withholding wait for the sync design. |
+| [A network attacker](#a-network-attacker) | Data apps have no network permission. Everything synced is sealed. | Traffic analysis (out of scope). Someone with a false certificate for the sync server sees what the server sees. |
+| [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing, the key ID and which apps sync. It can hold records back, or show an older state. |
 | [Malicious dependencies or CI actions](#malicious-dependencies-or-ci-actions) | Dependency verification, pinned GitHub actions, secrets in one step, reproducible builds, Dependabot alerts for the libraries that ship | Trust on first use. A harmful release signed by its real publisher. Known vulnerabilities in the build tools and test libraries. |
 | [Takeover of GitHub, Cloudflare or the domain](#takeover-of-github-cloudflare-or-the-domain) | The owner's approval, a second factor on the owner's accounts, narrow tokens, the registrar lock and DNSSEC, the fingerprint in more than one place | A takeover of the owner's GitHub account can sign a release with the suite key. |
 | [Unsafe changes by an AI agent](#unsafe-changes-by-an-ai-agent) | Write access only, the owner's review, owner-only build checks | For most code, the owner's review is the only gate. |
@@ -82,8 +82,10 @@ Section 10 of the plan names five things.
    phone's screen lock.
 5. A new recovery key cannot take back what the old one could already
    open ([crypto-design.md](crypto-design.md#a-new-recovery-key)).
-6. Open: whether the words alone let someone add a device to the sync
-   server. That belongs to the sync design.
+6. The words alone do not add a device to the sync server. A new
+   device also needs a one-time code: from a device that is in, or
+   saved in the user's own Cloudflare dashboard
+   ([sync-protocol.md](../architecture/sync-protocol.md#joining)).
 
 So the paper is worth as much as all the data. The user guide says the
 same: "Whoever has the words can read your backups and your synced data"
@@ -98,9 +100,9 @@ same: "Whoever has the words can read your backups and your synced data"
    read out, not even by the app.
 2. They wrap the app's keysets, which are stored as files in the app's
    no-backup folder ([crypto-design.md](crypto-design.md#where-keys-are-stored)).
-3. Later, each device gets a sync signing key that cannot leave it
-   ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). Its
-   design is Open (crypto-design.md, open question 7, the sync design).
+3. For sync, each device gets a signing key that cannot leave it, in
+   the Sync app ([crypto-design.md](crypto-design.md#sync-keys)). It is
+   not built yet.
 
 ### The signing key
 
@@ -406,8 +408,12 @@ What does not:
 2. A user who installs from somewhere else and skips the check with
    AppVerifier.
 
-Open: the Sync app's network settings, and whether it pins the server's
-identity (the sync design). See [Network](#network) under MASVS.
+Decided, and not built yet: the Sync app uses HTTPS only, trusts only
+the certificate authorities built into Android, and does not pin the
+server. Everything it sends is sealed and every request is signed, so a
+false certificate gives an attacker what the server has, and no more
+([sync-protocol.md](../architecture/sync-protocol.md#the-connection)). See [Network](#network)
+under MASVS.
 
 ### A compromised or curious sync server
 
@@ -424,23 +430,34 @@ What stops it:
 2. A blob that is changed, cut, moved to another record or read as
    another kind does not open
    ([crypto-design.md](crypto-design.md#associated-data)).
-3. Conflicts are resolved on the devices, not on the server.
+3. Conflicts are resolved on the devices, not on the server. The end
+   does not depend on the order in which records arrive.
+4. An older version that is handed out again loses on a device that
+   has a newer one. Deletion markers are never purged, so a deleted
+   record does not come back on a device that holds its marker.
+5. A device fetches only a file that a sealed record names, up to the
+   length that record gives, and keeps it only if its hash fits. So
+   the server cannot fill a phone with bytes that never open.
+6. A device joins only with a statement signed by a key that comes
+   from the recovery key, and a one-time code. A device that the
+   server adds by itself has no keys.
 
 What does not:
 
 1. What the server can still learn. See
    [below](#what-the-sync-server-and-the-network-can-still-learn).
-2. Replay and withholding. It can hand out an old sealed record again, or
-   hold one back. Both are valid blobs
-   ([crypto-design.md](crypto-design.md#what-the-design-protects)).
-3. Reordering, and deleting everything. The apps are local-first, so
-   each device keeps its own copy. Backups are separate files.
-4. Filling a phone's storage. File ciphertext that arrives while an app
-   is locked is stored unchecked until the file is opened
-   (crypto-design.md, open question 9).
+2. Holding records back, and showing a device an older state. Both
+   look like another device that is offline. A new device that is
+   shown an older state can also see a record that was deleted since.
+   Nothing proves that the server showed everything.
+3. Deleting everything, and refusing to work. The apps are
+   local-first, so each device keeps its own copy. Backups are
+   separate files.
+4. Keeping what it was asked to delete.
 
-Open: the protocol, a hostile server, replay and reordering, lost and
-revoked devices (ADR 0009, the sync design).
+The design is [sync-protocol.md](../architecture/sync-protocol.md), not built yet. It lists every
+attack that was considered, and marks the ones that do not fail
+([Attacks considered](../architecture/sync-protocol.md#attacks-considered)).
 
 ### Malicious dependencies or CI actions
 
@@ -847,8 +864,9 @@ Limits that other pages decided:
 2. **Sizes, counts and timing** of what is stored and synced
    ([crypto-design.md](crypto-design.md#what-the-design-protects)).
 
-Replay and withholding by the sync server are not out of scope. They
-wait for the sync design.
+Replay and withholding by the sync server are not out of scope. What
+the design does about each is in
+[sync-protocol.md](../architecture/sync-protocol.md#attacks-considered).
 
 ### How the optional app lock fits
 
@@ -949,15 +967,15 @@ How this fits with an unlocked phone in an attacker's hands:
 ## What the sync server and the network can still learn
 
 Nothing of sync is built. This section says what follows from the
-formats that are fixed, and what the sync design still has to decide
-([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
+design ([sync-protocol.md](../architecture/sync-protocol.md#what-the-server-can-still-learn) has
+the whole table).
 
 ### The network
 
 1. A data app sends nothing. It has no network permission.
 2. Someone who watches the Sync app's traffic sees when it talks, how
-   much it sends and receives, and which server it talks to. What else
-   they see depends on the Sync app's network settings, which are Open.
+   much it sends and receives, and which server it talks to. The
+   traffic itself is HTTPS.
 3. Obtainium and the browser fetch from GitHub and from the hub site.
    Those see what any web server sees, such as addresses and times.
 
@@ -985,14 +1003,16 @@ What it learns for certain, from the formats in crypto-design.md:
 7. **The network details** of each request, such as the address and the
    time.
 
-What depends on the sync design (Open): whether record IDs, app
-names, kinds of record, file IDs and deletion markers travel in the
-clear, and how a file's ciphertext is tied to its record. A sealed
-record is opened with its record ID, which comes with it, not inside it.
+Also in the clear: the name of each app that syncs, the ID of every
+record and of every file, and the public key of every device. Not
+told: the kind of a record, its times, whether it is deleted, and the
+name of a device. The server can still tell a file's record by its
+chunks, and can often guess a deletion from a change of size. A
+file's ciphertext is tied to its record by its length and its hash,
+which are inside the sealed record.
 
 What it can do: hand out old records again, hold some back, change their
-order, delete them, or fill a phone with file ciphertext that never
-opens.
+order, delete them, or refuse to work.
 
 What it cannot do: read anything sealed, change a blob so that it still
 opens, or move a blob to another record or file.
@@ -1124,8 +1144,9 @@ Status: **Met for what is built.**
   words and of the word list.
 - MASWE-0009, MACs: met. There is no MAC of our own. The AEADs check
   every blob.
-- MASWE-0010 and 0011, signatures: nothing signs yet. The sync signing
-  key is Open (crypto-design.md, open question 7, the sync design).
+- MASWE-0010 and 0011, signatures: nothing signs yet. The two signing
+  keys of sync are designed and not built
+  ([crypto-design.md](crypto-design.md#sync-keys)).
 - MASWE-0012, random numbers: met. Every key, nonce and salt comes from
   Tink or the Keystore.
 - MASWE-0047, standard APIs: met. Tink and the Android Keystore only,
@@ -1156,19 +1177,22 @@ Status: **Partly met.**
     ([crypto-design.md](crypto-design.md#a-phone-with-no-screen-lock)).
   - MASWE-0020 and 0022: as AUTH-2.
   - MASWE-0001: as STORAGE-1.
-- Open: a new recovery key, and the sync signing key (crypto-design.md,
-  open questions 6 and 7, the sync design).
+- Open: a new recovery key and the keys of sync are designed and not
+  built ([crypto-design.md](crypto-design.md#sync-keys),
+  [A new recovery key](crypto-design.md#a-new-recovery-key)).
 
 ### Authentication
 
 **MASVS-AUTH-1: The app uses secure authentication and authorization
 protocols and follows the relevant best practices.**
-Status: **Open (the sync design).**
+Status: **Met for what is built.**
 
-- No app talks to a server yet, so there is no remote login. The sync
-  server will check a signature from each device
-  ([ADR 0007](../adr/0007-recovery-key-instead-of-passwords.md)). The
-  protocol is Open.
+- No app talks to a server yet, so there is no remote login. The
+  design: every request is signed by a key that cannot leave the
+  device, and a device joins only with a statement signed by a key
+  from the recovery key, and a one-time code
+  ([sync-protocol.md](../architecture/sync-protocol.md#keys-and-identity)). It is not built, so it
+  is Open.
 - MASWE-0018, components: met for what is built. Nothing is exported
   except the launcher screen and the two parts of the handover. Those
   two have no permission: each checks the caller's certificate first,
@@ -1228,22 +1252,28 @@ Status: **Partly met.**
 
 **MASVS-NETWORK-1: The app secures all network traffic according to the
 current best practices.**
-Status: **Does not apply to data apps. Open for the Sync app.**
+Status: **Does not apply to data apps. Decided for the Sync app, which
+is not built.**
 
 - Data apps have no network permission
   ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). They
   have no traffic, so MASWE-0026 and 0027 do not apply to them.
-- The Sync app does not exist yet. Its TLS settings and certificate
-  checks are Open (the sync design).
+- The Sync app does not exist yet. The owner decided its settings:
+  HTTPS only, no cleartext, only the certificate authorities built
+  into Android and none that a user added, and no redirect to another
+  host ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)).
 
 **MASVS-NETWORK-2: The app performs identity pinning for all remote
 endpoints under the developer's control.**
-Status: **Open (the sync design).**
+Status: **Does not apply. The Sync app does not pin, by decision.**
 
 - MASWE-0028. Only the Sync app will have a remote endpoint. Each user
   deploys the server to their own Cloudflare account (plan section 7),
-  so it is under the user's control, not the developer's. Whether the
-  Sync app pins anything is Open.
+  so it is under the user's control, not the developer's. The owner
+  decided that the Sync app pins nothing: the server's certificate
+  changes every few months, and a false certificate gives an attacker
+  only what the server has, which the design trusts with nothing
+  ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)).
 
 ### Platform
 
@@ -1393,8 +1423,9 @@ Status: **Not met.**
   ([SECURITY.md](../../SECURITY.md)).
 - Accepted deviation, decided by the owner: no forced
   update. Data apps have no network, and updates come through Obtainium.
-  The sync protocol design decides again for the Sync app
-  ([PROMPTS.md](../development/PROMPTS.md#51-protocol-design)).
+  Decided again for the Sync app, the same way: it checks versions
+  only with the user's own server and never contacts shkriuss.app
+  ([sync-protocol.md](../architecture/sync-protocol.md#versions)).
 
 **MASVS-CODE-3: The app only uses software components without known
 vulnerabilities.**
@@ -1475,9 +1506,10 @@ Status: **Met for what is built.**
   `ProcessBuilder.start`
   ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
 - MASWE-0045: as CODE-3.
-- Open: what the Sync app takes in (the sync design). File ciphertext that
-  arrives while an app is locked is checked only when the file is first
-  opened (crypto-design.md, open question 9).
+- Not built yet: what the Sync app and a data app take in from the
+  server. A page of records is checked record by record, and a file is
+  kept only if its length and its hash are the ones its sealed record
+  names ([sync-protocol.md](../architecture/sync-protocol.md#what-a-reader-checks)).
 
 ### Privacy
 
@@ -1562,8 +1594,11 @@ Status: **Partly met.**
     made.
   - Clearing an app's data in Android's settings deletes everything of
     that app, keys included.
-  - How a user deletes their data from the sync server is Open
-    (the sync design).
+  - Deleting from the sync server: one action in the Sync app closes
+    the server for every device, and the user then deletes the server
+    and its storage in the Cloudflare dashboard
+    ([sync-protocol.md](../architecture/sync-protocol.md#deleting-everything-and-moving)). Not
+    built yet.
 - MASWE-0077, what is shown: the user chooses whether notifications show
   their text, and whether the app blocks screenshots.
 - MASWE-0078, consent: nothing leaves the phone unless the user sets up
@@ -1596,9 +1631,9 @@ The owner's decisions on this page. Each is built into the page above.
 | Question | Decision |
 |---|---|
 | The six deviations from MASVS: unencrypted rows (ADR 0004), the prompt takes the phone's PIN (ADR 0031), a new fingerprint does not invalidate keys, keys change on events only, the Background key works with no prompt while the phone is locked, a phone with no screen lock is allowed | Accepted ([Status words](#status-words)). |
-| The points under [Found while writing this page](#found-while-writing-this-page) | Each point says what answers it. Point 5 is an accepted deviation. Points 6 and 12, and the CAA records of point 10, are Open. |
+| The points under [Found while writing this page](#found-while-writing-this-page) | Each point says what answers it. Point 5 is an accepted deviation, for the data apps and for the Sync app. Points 6 and 12 are decided with the sync protocol. The CAA records of point 10 are Open. |
 | Required checks | The emulator job for Android 15 is required. The job for Android 17 is not. Whether it becomes required is an open point with no date: the owner decides it when asking for it ([ci.md](../development/ci.md#the-emulator-jobs)). |
-| The seventh deviation | No forced update (MASVS-CODE-2). Accepted. The sync protocol design decides again for the Sync app. |
+| The seventh deviation | No forced update (MASVS-CODE-2). Accepted, for the data apps and, decided again, for the Sync app. |
 | The name of Claude's machine account | `shkriuss-bot`. Recorded in [working-with-claude.md](../development/working-with-claude.md#claude). |
 | MASVS-CODE-1 | **Met.** The overlay gaps that remain are deviations under PLATFORM-3, not CODE-1. |
 | The deviations for overlays and accessibility services: the lock screen is not marked and takes a tap under another app's window; a partly covered screen is not refused; the other screens of the apps get no protection against other apps | Accepted ([PLATFORM-3](#platform)). |
@@ -1662,39 +1697,42 @@ The first app that stores files, Notes:
 The handover between apps:
 
 9. Decided ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
-   Left: how the apps on a phone take a new recovery key, also through
-   the handover. Part of that flow, with the sync design
-   ([crypto-design.md](crypto-design.md#open-questions), question 6).
+   How the apps on a phone take a new recovery key, also through the
+   handover, is decided in outline
+   ([sync-protocol.md](../architecture/sync-protocol.md#a-new-recovery-key)). Its screens are
+   open.
 
 Sync:
 
-10. The protocol: formats, cursors, conflicts, a hostile server, replay,
-    rollback and reordering, lost and revoked devices, and what the
-    server can still learn
-    ([ADR 0009](../adr/0009-sync-protocol-and-server.md),
-    [PROMPTS.md](../development/PROMPTS.md)).
-11. The courier interface between the data apps and the Sync app
+10. The protocol. Designed, not built
+    ([sync-protocol.md](../architecture/sync-protocol.md),
+    [ADR 0009](../adr/0009-sync-protocol-and-server.md)). Open there:
+    a proof that the server held nothing back, and the other points
+    under its [open questions](../architecture/sync-protocol.md#open-questions).
+11. The courier interface between the data apps and the Sync app.
+    Decided
     ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
-12. A new recovery key, repair once a keyset holds keys of two recovery
-    keys, and backups made with an older key
-    ([crypto-design.md](crypto-design.md#open-questions), questions 6
-    and 14;
-    [backup-format.md](../architecture/backup-format.md#open-questions),
-    question 9).
-13. The sync signing key
-    ([crypto-design.md](crypto-design.md#open-questions), question 7).
+12. A new recovery key. Decided in outline
+    ([sync-protocol.md](../architecture/sync-protocol.md#a-new-recovery-key)). Open: its screens,
+    and repair once a keyset holds keys of two recovery keys
+    ([crypto-design.md](crypto-design.md#open-questions), question
+    14). A backup made with an older key opens in an app that still
+    holds that key.
+13. The sync signing key. Decided
+    ([crypto-design.md](crypto-design.md#sync-keys)).
 14. The largest sealed record, and file ciphertext stored unchecked
-    until it is opened
+    until it is opened. Decided
     ([crypto-design.md](crypto-design.md#open-questions), questions 8
     and 9).
 15. Ties, purged deletion markers and old backups, and one encoding for
-    records in backups and in sync
-    ([backup-format.md](../architecture/backup-format.md#open-questions),
-    questions 6 to 8; [data.md](../architecture/data.md#open)).
+    records in backups and in sync. Decided
+    ([sync-protocol.md](../architecture/sync-protocol.md#conflict-rules),
+    [Deletion markers](../architecture/sync-protocol.md#deletion-markers),
+    [The sealed record](../architecture/sync-protocol.md#the-sealed-record)).
 16. A notification that is not a reminder, for example in the Sync app
     ([notifications.md](../architecture/notifications.md#open),
-    question 3).
-17. The QR code for the words, decided again with sync
+    question 3). Open, with the Sync app's specification.
+17. The QR code for the words. Decided again with sync: words only
     ([crypto-design.md](crypto-design.md#the-qr-code)).
 
 Other:
@@ -1763,11 +1801,15 @@ points by their numbers.
    ([ci.md](../development/ci.md#dependency-graph)).
 5. Whether there is a way to make users update (CODE-2).
    **Decided: no forced update.** Data apps have no network, and
-   updates come through Obtainium. An accepted deviation. The sync
-   protocol design decides again for the Sync app.
+   updates come through Obtainium. An accepted deviation.
+   **Decided again for the Sync app: no forced update.** It checks
+   versions only with the user's own server
+   ([sync-protocol.md](../architecture/sync-protocol.md#versions)).
 6. The Sync app's TLS settings, and whether it pins the server
    (NETWORK-1 and NETWORK-2).
-   **Open**: the sync protocol design decides it.
+   **Decided**: HTTPS only, no cleartext, only the certificate
+   authorities built into Android, no redirect, and no pin
+   ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)).
 7. Protection against overlays, and marking views as sensitive for
    accessibility services (PLATFORM-3, CODE-1).
    **Done**, as the owner decided
@@ -1806,4 +1848,7 @@ points by their numbers.
     ([What the rehearsal showed](../development/signing-key-rehearsal.md#what-the-rehearsal-showed)).
 12. Whether the recovery words alone can add a device to the sync
     server.
-    **Open**: the sync protocol design decides it.
+    **Decided: no.** A new device needs the words and a one-time code,
+    which a device that is in shows, or which the user saves in the
+    Cloudflare dashboard
+    ([sync-protocol.md](../architecture/sync-protocol.md#joining)).

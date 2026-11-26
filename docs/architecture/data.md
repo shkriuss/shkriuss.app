@@ -188,8 +188,10 @@ newest edit wins.
      `takeFromBackup` throws `IllegalArgumentException`.
    - An app checks first, with `RecordFields.timesAreWithinLimits`, and
      gives the answer it gives for any record it cannot read.
-6. It is the function for backups. Sync gets its own, because there the
-   same `updatedAt` must end the same on every device.
+6. It is the function for backups. Sync gets its own, `takeFromSync`,
+   because there the same `updatedAt` must end the same on every device
+   ([sync-protocol.md](sync-protocol.md#conflict-rules)). It is not
+   built yet.
 
 ### Writes that are not edits
 
@@ -259,9 +261,8 @@ first.
 
 ## Reading changes ("changed since")
 
-The pattern that sync can use later to find what changed. It is not the
-sync design, which is still to come
-([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
+The pattern that sync uses to find what changed
+([sync-protocol.md](sync-protocol.md#sending)). Sync is not built yet.
 
 1. `changedSince(afterChangeNumber, limit)` returns up to `limit` records
    whose change number is above `afterChangeNumber`, lowest first.
@@ -319,13 +320,18 @@ interface IntakeDao : RecordDao<IntakeEntity> {
 4. The one exception is a future purge of deleted records: one function
    per DAO may be marked `@PurgesDeletedRecords`, if it is
    `DELETE FROM <table> WHERE deletedAt IS NOT NULL`, optionally followed
-   by `AND` and more conditions, with no `OR`. When a purge is allowed at
-   all is for the sync design. A purge never touches the counter.
+   by `AND` and more conditions, with no `OR`. No purge is allowed in
+   this version of sync
+   ([sync-protocol.md](sync-protocol.md#deletion-markers)), so nothing
+   uses it. A purge never touches the counter.
 5. There is no other exception. If a table that is not a record ever
    needs a write, stop and ask the owner. Restoring a backup has its own
    `RecordWriter` function, `takeFromBackup`
    ([Records from a backup](#records-from-a-backup)). Importing from sync
-   will get its own, with the sync design.
+   gets its own, `takeFromSync`. Sync also needs one table that is not
+   a record in each app's database
+   ([sync-protocol.md](sync-protocol.md#what-a-data-app-keeps-for-sync)).
+   The owner is asked for it when it is built.
 6. Reads that show records to the user filter out deleted ones with
    `deletedAt IS NULL`.
 
@@ -451,11 +457,18 @@ All of them run in `./gradlew check`, on the JVM with Robolectric. Their
 SQLite is Robolectric's, not a phone's. None of them runs on an emulator
 yet ([emulator-tests.md](../development/emulator-tests.md)).
 
-## Open
+## With sync
 
-- **When deletion markers may be removed.** Deleted records stay stored.
-  When, if ever, they may be purged is for the sync design (ADR 0009).
-  `@PurgesDeletedRecords` is ready for that one query.
-- **Migrations and sync.** How a migration on one device relates to
-  records that arrive from a device on an older version is for the sync
-  design.
+Sync is designed and not built
+([sync-protocol.md](sync-protocol.md)). Two of its rules belong on
+this page:
+
+- **Deletion markers are never removed** in this version of sync.
+  Deleted records stay stored
+  ([sync-protocol.md](sync-protocol.md#deletion-markers)).
+  `@PurgesDeletedRecords` stays unused.
+- **Migrations.** A sealed record carries the data version of the app
+  that sealed it. An app reads a record of a lower version with its
+  reader for that version, and skips a record of a higher version
+  until the app is updated
+  ([sync-protocol.md](sync-protocol.md#what-a-reader-checks)).

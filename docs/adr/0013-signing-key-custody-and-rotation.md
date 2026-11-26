@@ -1,7 +1,12 @@
 # 0013 Signing key custody and rotation
 
 - Status: Accepted; point 7 superseded by
-  [0037](0037-signing-key-rotation.md)
+  [0037](0037-signing-key-rotation.md). The "signature-level
+  permission" and the "signature-protected interface" between the data
+  apps and the Sync app are, since
+  [0005](0005-no-network-permission-in-data-apps.md) was completed, an
+  interface with no permission, whose two sides compare the signing
+  certificate themselves. It still needs one key for the suite.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 2 (decision 5), 10, 13, 14
   and 15, the owner's review of
