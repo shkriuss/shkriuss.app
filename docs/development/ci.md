@@ -280,12 +280,12 @@ No action starts the emulator. The usual one,
 actions. The Android Gradle Plugin's Managed Devices are not used either:
 they need artifacts that are not in the verification metadata (ADR 0028).
 
-A job takes ten to twenty minutes: the runners differ in speed. About
+A job takes seven to twelve minutes: the runners differ in speed. About
 four to five minutes go to the SDK packages, the test APKs and the
 start of the emulator, and about one and a half to the tests of
 `core/crypto` and `core/notify`. The rest goes to the tests of Notes at
-its limits, which write and read hundreds of megabytes: 4 minutes on a
-fast runner and 13 on a slow one
+its limits, which write and read hundreds of megabytes: one and a half
+minutes on a fast runner and four on a slow one
 ([emulator-tests.md](emulator-tests.md#the-tests-of-notes-at-its-limits)).
 
 ### When CI fails

@@ -50,6 +50,11 @@ import org.junit.Test
  * that: they run on the heap of the build's own machine. One database
  * with both, and wiping every note at once, would need more room than
  * the emulator has.
+ *
+ * The list and each search also have a limit of time, several times
+ * what they take on the emulator: a test fails when Notes gets slow
+ * again, as it was while a row and a search worked through the whole
+ * of every text.
  */
 class NotesAtTheLimitsTest {
     private val context = TestDevice.context
@@ -134,16 +139,16 @@ class NotesAtTheLimitsTest {
         val snackbars = NotesSnackbars(repository, {}, scope, Dispatchers.IO)
         val factory = viewModelFactory { initializer { NotesListViewModel(repository, snackbars, Dispatchers.IO) } }
         val list = ViewModelProvider.create(models, factory)[NotesListViewModel::class]
-        timed(test, "the list") {
+        timed(test, "the list", MOST_LIST_SECONDS) {
             val all = list.shown("")
             assertEquals("Every note has its row", NOTES, all.size)
             assertTrue("Every row counts its files", all.all { it.fileCount == stored.filesPerNote })
         }
-        timed(test, "a search in the texts") {
+        timed(test, "a search in the texts", MOST_SEARCH_SECONDS) {
             list.search(WORD)
             assertEquals("The word stands at the end of every long text", stored.long, list.shown(WORD).size)
         }
-        timed(test, "a search in the file names") {
+        timed(test, "a search in the file names", MOST_SEARCH_SECONDS) {
             val name = fileName(NOTES - 1, 0, stored.nameLength).take(NAME_START)
             list.search(name)
             assertEquals("Only the files of the last note start with it", 1, list.shown(name).size)
@@ -210,11 +215,19 @@ class NotesAtTheLimitsTest {
         }
     }
 
-    /** Runs [step] and writes down how long it took, under the name of the test, [test]. A step that runs out of memory ends the run before its line. */
-    private suspend fun <T> timed(test: String, name: String, step: suspend () -> T): T {
+    /**
+     * Runs [step] and writes down how long it took, under the name of the
+     * test, [test]. A step that runs out of memory ends the run before its
+     * line. A step with a limit, [mostSeconds], fails when it took longer.
+     */
+    private suspend fun <T> timed(test: String, name: String, mostSeconds: Long? = null, step: suspend () -> T): T {
         val start = System.nanoTime()
         val result = step()
-        TestDevice.note("$test: $name, ${(System.nanoTime() - start) / NANOS_PER_SECOND} s")
+        val nanos = System.nanoTime() - start
+        TestDevice.note("$test: $name, ${nanos / NANOS_PER_SECOND} s")
+        if (mostSeconds != null) {
+            assertTrue("$name took ${nanos / NANOS_PER_SECOND} seconds, and its limit is $mostSeconds: Notes got slow", nanos <= mostSeconds * NANOS_PER_SECOND)
+        }
         return result
     }
 
@@ -265,6 +278,12 @@ class NotesAtTheLimitsTest {
 
         /** Fifteen minutes: the emulator reads and writes hundreds of megabytes. */
         const val WAIT_MILLIS = 15 * 60 * 1_000L
+
+        /** The most seconds the list may take to show every note. On the emulator it takes about 1; made from the whole of every text it took 17 to 62. */
+        const val MOST_LIST_SECONDS = 10L
+
+        /** The most seconds a search may take. On the emulator it takes 2 to 11; with every line lower-cased one character at a time it took 80 to 296. */
+        const val MOST_SEARCH_SECONDS = 40L
 
         /** How many notes are marked deleted for the sweep: the first ones, which are long notes in the test of the texts. */
         const val SWEPT = 200
