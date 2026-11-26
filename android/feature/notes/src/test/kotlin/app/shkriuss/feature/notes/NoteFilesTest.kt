@@ -133,7 +133,7 @@ class NoteFilesTest {
         canStart.value = true
         adds.adding.await { it.isEmpty() }
 
-        val all = runBlocking { phone.database.attachments().observeShown().first() }
+        val all = runBlocking { phone.database.attachments().every() }
         assertEquals(listOf("a.jpg", "b.jpg", "c.jpg"), all.sortedBy { it.changeNumber }.map { it.name })
         assertFalse(adds.isAddingTo(home))
     }
@@ -629,11 +629,31 @@ class NoteFilesTest {
     }
 
     @Test
+    fun theMoveOfTheFileKeysFindsMoreKeysThanAreReadAtATimeAndLeavesAnOpenUndoAlone() = runBlocking {
+        val id = phone.note()
+        repeat(520) { number ->
+            val fileId = repository.reserveFileId()
+            val key = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
+            assertEquals(FileAdded.ADDED, repository.addFile(id, fileId, "film$number.mp4", "video/mp4", 1_000, key))
+            repository.releaseFileId(fileId)
+        }
+        val all = phone.database.attachments().every().map { it.record.id }
+
+        val found = repository.filesToSealAgain(emptySet()) { true }
+
+        assertEquals("Each file once", 520, found.size)
+        assertEquals(all.toSet(), found.toSet())
+        val open = setOf(all[3], all[510])
+        assertEquals("The records of an open Undo are left alone", all.toSet() - open, repository.filesToSealAgain(open) { true }.toSet())
+        assertEquals("A key that needs no new seal is not found", emptyList<String>(), repository.filesToSealAgain(emptySet()) { false })
+    }
+
+    @Test
     fun theKeysOfFilesAddedBeforeTheRecoveryKeyMoveToItWithUpdatedAtAsItWas() = runBlocking {
         val id = phone.note()
         add(id, TestPick("a.jpg"), TestPick("b.jpg"))
         checkNotNull(repository.removeFile(shown(id).last().id))
-        val before = phone.database.attachments().withKeys().associateBy { it.record.id }
+        val before = phone.database.attachments().every().filter { it.wrappedKey.isNotEmpty() }.associateBy { it.record.id }
         crypto.getRecoveryKey()
         assertTrue(crypto.setup.fileKeyMoveIsPending())
         phone.clock.advanceBy(60_000)
@@ -641,7 +661,7 @@ class NoteFilesTest {
         assertTrue(keyMove.run())
 
         assertFalse(crypto.setup.fileKeyMoveIsPending())
-        val after = phone.database.attachments().withKeys().associateBy { it.record.id }
+        val after = phone.database.attachments().every().filter { it.wrappedKey.isNotEmpty() }.associateBy { it.record.id }
         assertEquals("A deleted file that is not wiped moves too", before.keys, after.keys)
         after.values.forEach { row ->
             assertEquals(before.getValue(row.record.id).record, row.record)

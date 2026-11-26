@@ -14,6 +14,27 @@ object NoteLimits {
     /** The longest text, in code points. */
     const val MOST_BODY: Int = 100_000
 
+    /**
+     * How many code points of its note's text a row of the list keeps: the
+     * text under the title, the title of a note that has none of its own,
+     * and the line that matches a search. A row shows two lines of it.
+     */
+    const val MOST_ROW_TEXT: Int = 1_000
+
+    /**
+     * How many notes are read at a time where Notes reads all of them: the
+     * list, a search and a backup. Each can hold [MOST_BODY] characters,
+     * and every text at once is more than the app's memory holds.
+     */
+    const val NOTES_AT_A_TIME: Int = 20
+
+    /**
+     * How many file records are read at a time where Notes reads all of
+     * them: a backup and the move of the file keys. Notes can hold a
+     * hundred thousand, each with a name and a key.
+     */
+    const val FILES_AT_A_TIME: Int = 500
+
     /** **Add a file** adds no file to a note that holds this many. A restore can bring more. */
     const val MOST_FILES_PER_NOTE: Int = 20
 
@@ -99,6 +120,10 @@ object NoteText {
 
     /** The number of code points of [text]: what the limits count as characters. */
     fun length(text: String): Int = text.codePointCount(0, text.length)
+
+    /** The first [most] code points of [text], as a text of its own, or [text] if it has no more. */
+    fun first(text: String, most: Int): String =
+        if (length(text) > most) text.substring(0, text.offsetByCodePoints(0, most)) else text
 
     /** True for a character that ends a line in the title: the control characters and the line and paragraph separators. */
     private fun Char.isLineBreak(): Boolean = this == '\n' || this == '\r' || this == ' ' || this == ' '

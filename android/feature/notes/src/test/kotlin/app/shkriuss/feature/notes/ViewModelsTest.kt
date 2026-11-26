@@ -124,8 +124,8 @@ class ViewModelsTest {
 
         val shown = list.shown { it.pinned.size == 1 }
 
-        assertEquals(listOf(home), shown.pinned.map { it.note.id })
-        assertEquals(listOf(trip), shown.others.map { it.note.id })
+        assertEquals(listOf(home), shown.pinned.map { it.id })
+        assertEquals(listOf(trip), shown.others.map { it.id })
         assertEquals("Home", shown.pinned.single().title)
         assertEquals("Home Keys", shown.pinned.single().preview)
         assertEquals("Passport", shown.others.single().preview)
@@ -187,6 +187,115 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aRowKeepsAThousandCharactersOfANoteOfAHundredThousand() {
+        // One line of 100,000 characters, with the word of the search at its far end.
+        phone.note("", "word ".repeat(19_999) + "rent ")
+        val list = list()
+
+        val row = list.shown { it.others.size == 1 }.others.single()
+
+        assertEquals(1_000, row.preview.length)
+        assertEquals("With no title, the first line is the title: 1,000 characters of it", 1_000, row.title.length)
+        assertFalse(row.hasTitle)
+        list.search("rent")
+        endPause.trySend(Unit)
+        val line = checkNotNull(list.shown { it.query == "rent" }.others.single().match?.line)
+        assertTrue("The line of the match is kept as the row shows it", line.line.length <= 1_000)
+        assertEquals("rent", line.line.substring(line.ranges.single()))
+    }
+
+    @Test
+    fun theListShowsMoreNotesThanAreReadAtATimeInOrderAndASearchFindsThemInEveryGroup() {
+        val ids = (1..45).map { number ->
+            phone.clock.advanceBy(1_000)
+            phone.note("Note $number", if (number % 9 == 0) "Pay the rent" else "Text")
+        }
+        val rent = ids.filterIndexed { index, _ -> (index + 1) % 9 == 0 }
+        runBlocking { listOf(ids[0], ids[20], ids[44]).forEach { repository.setPinned(it, shownPinned = false) } }
+        // More notes with a file than are asked for their names at a time. The last of them matches by that name only.
+        val withFile = ids[40]
+        ids.subList(10, 34).forEach { adds.add(it, listOf(TestPick(name = "ticket.jpg"))) }
+        adds.add(withFile, listOf(TestPick(name = "rent-contract.pdf")))
+        adds.adding.await { it.isEmpty() }
+        val expected = NoteOrder.sections(runBlocking { repository.shownNotes(ids) })
+        val list = list()
+
+        val shown = list.shown { rows -> rows.pinned.size == 3 && rows.others.size == 42 && (rows.pinned + rows.others).count { it.fileCount == 1 } == 25 }
+
+        assertEquals(expected.pinned.map { it.id }, shown.pinned.map { it.id })
+        assertEquals(expected.others.map { it.id }, shown.others.map { it.id })
+        list.search("rent")
+        endPause.trySend(Unit)
+        val found = list.shown { it.query == "rent" }
+        val matching = (rent + withFile).toSet()
+        assertEquals("The pinned note of the five keeps its section", expected.pinned.map { it.id }.filter { it in matching }, found.pinned.map { it.id })
+        assertEquals("The others keep their order", expected.others.map { it.id }.filter { it in matching }, found.others.map { it.id })
+        assertEquals(6, found.pinned.size + found.others.size)
+        assertEquals("rent-contract.pdf", found.others.single { it.id == withFile }.match?.fileName)
+    }
+
+    @Test
+    fun theListReadsTheNotesInGroupsAndANoteAgainOnlyWhenItChangedOrASearchNeedsIt() {
+        val ids = (1..45).map { phone.note("Note $it", "Text $it") }
+        val reads = CopyOnWriteArrayList<List<String>>()
+        val rows = KeptRows { group ->
+            reads += group
+            repository.shownNotes(group)
+        }
+        fun marks() = runBlocking { repository.noteMarks().first() }
+
+        val first = runBlocking { rows.of(marks(), "") }
+
+        assertEquals(45, first.size)
+        assertEquals("Twenty notes at a time", listOf(20, 20, 5), reads.map { it.size })
+        reads.clear()
+        assertEquals(Saved.WRITTEN, runBlocking { repository.save(ids[7], "Note 8", "Changed") })
+        val second = runBlocking { rows.of(marks(), "") }
+        assertEquals("Only the note that changed is read again", listOf(listOf(ids[7])), reads.toList())
+        assertEquals("Changed", second.single { it.id == ids[7] }.preview)
+        reads.clear()
+        val found = runBlocking { rows.of(marks(), "text 4") }
+        assertEquals("A search reads every text", 45, reads.sumOf { it.size })
+        assertEquals("Text 4, and Text 40 to Text 45", 7, found.count { it.match != null })
+        reads.clear()
+        runBlocking { rows.of(marks(), "text 4") }
+        assertTrue("The same search again reads nothing", reads.isEmpty())
+        val cleared = runBlocking { rows.of(marks(), "") }
+        assertTrue("Clearing the search reads nothing", reads.isEmpty())
+        assertTrue("And no row keeps its match", cleared.all { it.match == null })
+        runBlocking { repository.deleteNote(ids[0]) }
+        assertEquals("A deleted note has no row", 44, runBlocking { rows.of(marks(), "") }.size)
+    }
+
+    @Test
+    fun aSearchReadsTheNamesOfANoteWithMoreFilesThanOnePageAndShowsTheFirstThatMatches() {
+        // A restore can give one note any number of files: here 520, more than are read at a time.
+        val id = phone.note("Trip", "Passport")
+        fun addRecord(name: String) = runBlocking {
+            val fileId = repository.reserveFileId()
+            val key = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
+            assertEquals(FileAdded.ADDED, repository.addFile(id, fileId, name, "application/pdf", 1_000, key))
+            repository.releaseFileId(fileId)
+        }
+        phone.clock.advanceBy(10_000)
+        repeat(260) { addRecord("film$it.mp4") }
+        addRecord("rent-later.pdf")
+        repeat(258) { addRecord("photo$it.jpg") }
+        // The last record has the highest id, so it is read on the second page. But it is the oldest file of the note.
+        phone.clock.advanceBy(-5_000)
+        addRecord("rent-first.pdf")
+        val list = list()
+        list.shown { it.others.singleOrNull()?.fileCount == 520 }
+
+        list.search("rent")
+        endPause.trySend(Unit)
+
+        val found = list.shown { it.query == "rent" }.others.single()
+        assertEquals("The first file in the note's order that matches", "rent-first.pdf", found.match?.fileName)
+        assertEquals(listOf(0..3), found.match?.inFileName)
+    }
+
+    @Test
     fun aSearchKeepsTheOrderAndTheSectionsAndOnlyTheNamesOfShownFilesMatch() {
         val trip = phone.note("Trip", "Buy a ticket")
         phone.clock.advanceBy(1_000)
@@ -203,8 +312,8 @@ class ViewModelsTest {
         endPause.trySend(Unit)
 
         val found = list.shown { it.query == "ticket" }
-        assertEquals("The pinned note stays in its section", listOf(trip), found.pinned.map { it.note.id })
-        assertEquals("The others stay newest first: a file was added to Home last", listOf(home, work), found.others.map { it.note.id })
+        assertEquals("The pinned note stays in its section", listOf(trip), found.pinned.map { it.id })
+        assertEquals("The others stay newest first: a file was added to Home last", listOf(home, work), found.others.map { it.id })
         assertEquals("ticket.jpg", found.others.first().match?.fileName)
         assertEquals("Each row still counts its files", 2, found.others.first().fileCount)
 
@@ -212,8 +321,8 @@ class ViewModelsTest {
         val ticket = runBlocking { phone.database.attachments().shownOf(home) }.single { it.name == "ticket.jpg" }.record.id
         runBlocking { checkNotNull(repository.removeFile(ticket)) }
 
-        val after = list.shown { rows -> rows.query == "ticket" && rows.others.none { it.note.id == home } }
-        assertEquals(listOf(work), after.others.map { it.note.id })
+        val after = list.shown { rows -> rows.query == "ticket" && rows.others.none { it.id == home } }
+        assertEquals(listOf(work), after.others.map { it.id })
     }
 
     @Test

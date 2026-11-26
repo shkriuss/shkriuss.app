@@ -323,5 +323,5 @@ class OpenNoteViewModelTest {
     /** Runs what waits on the main thread, where the ViewModel watches the open note close. */
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
 
-    private fun NotesRepository.notesNow(): List<Note> = runBlocking { notes().first() }
+    private fun NotesRepository.notesNow(): List<Note> = runBlocking { shownNotes(noteMarks().first().map { it.id }) }
 }

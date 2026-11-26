@@ -204,6 +204,41 @@ class NotesBackupContentTest {
     }
 
     @Test
+    fun aBackupOfMoreNotesThanAreReadAtATimeHoldsEveryOneAndComesBackWhole() {
+        val (first, second) = twoPhones()
+        val ids = (1..45).map { first.note("Note $it", "Text $it") }
+        // A note that changed has the highest change number, so it comes last, after the notes made later.
+        assertEquals(Saved.WRITTEN, runBlocking { first.repository.save(ids[2], "Note 3", "Changed") })
+
+        assertEquals(BackupStep.Written(notes = 45, files = 0, leftOut = 0), backUp(first))
+        assertEquals(BackupStep.Restored, restore(second))
+
+        assertEquals(45, second.notes().size)
+        assertEquals(first.notes().map { it.copy(changeNumber = 0) }.toSet(), second.notes().map { it.copy(changeNumber = 0) }.toSet())
+    }
+
+    @Test
+    fun aBackupOfMoreFileRecordsThanAreReadAtATimeHoldsEveryOneAndComesBackWhole() {
+        val (first, second) = twoPhones()
+        val trip = first.note("Trip")
+        // Records of files whose streams are not on this phone: a backup lists them and leaves their streams out.
+        runBlocking {
+            repeat(520) { number ->
+                val fileId = first.repository.reserveFileId()
+                val key = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
+                assertEquals(FileAdded.ADDED, first.repository.addFile(trip, fileId, "file$number.pdf", "application/pdf", 1_000, key))
+                first.repository.releaseFileId(fileId)
+            }
+        }
+
+        assertEquals(BackupStep.Written(notes = 1, files = 0, leftOut = 520), backUp(first))
+        assertEquals(BackupStep.Restored, restore(second))
+
+        assertEquals(520, second.files().size)
+        assertEquals(first.files().map { it.copy(changeNumber = 0) }.toSet(), second.files().map { it.copy(changeNumber = 0) }.toSet())
+    }
+
+    @Test
     fun aFileThatIsNotOnThePhoneOrIsDamagedIsLeftOutAndItsRecordGoesIn() {
         val (first, second) = twoPhones()
         val trip = first.note("Trip")

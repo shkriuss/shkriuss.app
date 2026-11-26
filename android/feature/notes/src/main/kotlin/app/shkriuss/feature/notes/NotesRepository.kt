@@ -7,8 +7,10 @@ import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.data.isDeleted
 import app.shkriuss.feature.notes.data.AttachmentEntity
+import app.shkriuss.feature.notes.data.FileName
 import app.shkriuss.feature.notes.data.FileTotals
 import app.shkriuss.feature.notes.data.NoteEntity
+import app.shkriuss.feature.notes.data.NoteMark
 import app.shkriuss.feature.notes.data.NotesDatabase
 import app.shkriuss.feature.notes.data.checkpoint
 import kotlinx.coroutines.CoroutineScope
@@ -117,11 +119,49 @@ class NotesRepository(
      */
     val streams: Mutex = Mutex()
 
-    /** The notes that are not deleted, in no order. */
-    fun notes(): Flow<List<Note>> = notes.observeShown().map { rows -> rows.map(::noteOf) }
+    /**
+     * The `id` and the change number of every note that is not deleted,
+     * in no order, again after each change of a note. No title and no
+     * text: the list reads those in small groups ([shownNotes]).
+     */
+    fun noteMarks(): Flow<List<NoteMark>> = notes.observeShownMarks()
 
-    /** The files that are not deleted, of every note, in no order. */
-    fun shownFiles(): Flow<List<NoteFile>> = attachments.observeShown().map { rows -> rows.map(::fileOf) }
+    /**
+     * The notes among [ids] that are not deleted, in no order, each with
+     * its whole text. Ask for a small group at a time: every text at once
+     * is more than the app's memory holds.
+     */
+    suspend fun shownNotes(ids: List<String>): List<Note> = notes.shownByIds(ids).map(::noteOf)
+
+    /**
+     * For each note that has a file that is not deleted, by its `id`, how
+     * many it has, again after each change of a file. A note with none is
+     * not in it.
+     */
+    fun fileCounts(): Flow<Map<String, Int>> = attachments.observeShownCounts().map { rows -> rows.associate { it.noteId to it.count } }
+
+    /**
+     * For each of the notes [noteIds], by its `id`, what [find] gives for
+     * the first of its files that are not deleted for which it gives
+     * something, in the order the note shows them. A note with no such
+     * file is not in it. The names are read a page at a time and none is
+     * kept: Notes can hold a hundred thousand names, and a restore can
+     * give one note any number of them.
+     */
+    suspend fun <T : Any> firstInFileNames(noteIds: List<String>, find: (name: String) -> T?): Map<String, T> {
+        val first = HashMap<String, Pair<FileName, T>>()
+        var after = ""
+        do {
+            val page = attachments.shownNamesOf(noteIds, after, NoteLimits.FILES_AT_A_TIME)
+            page.forEach { file ->
+                val best = first[file.noteId]?.first
+                // Only a file that comes before the one found so far is asked: the first in the note's order wins.
+                if (best == null || NoteOrder.FILE_NAMES.compare(file, best) < 0) find(file.name)?.let { first[file.noteId] = file to it }
+            }
+            page.lastOrNull()?.let { after = it.id }
+        } while (page.size == NoteLimits.FILES_AT_A_TIME)
+        return first.mapValues { (_, found) -> found.second }
+    }
 
     /** The note [id], and again after each change of it. Null while it is not stored or is deleted. */
     fun note(id: String): Flow<Note?> = notes.observe(id).map { row -> row?.takeUnless { it.record.isDeleted }?.let(::noteOf) }
@@ -387,12 +427,12 @@ class NotesRepository(
      */
     suspend fun sweep(turns: UndoTurns): Boolean = withContext(NonCancellable) {
         database.withWriteTransaction {
-            attachments.shownOfDeletedNotes().forEach { fileWriter.markDeleted(it.record.id) }
+            attachments.shownIdsOfDeletedNotes().forEach { fileWriter.markDeleted(it) }
         }
         turns.inTurn { openUndo ->
             database.withWriteTransaction {
-                notes.deletedNotWiped().filter { it.record.id !in openUndo }.forEach { noteWriter.wipe(it.record.id, NoteRules::wiped) }
-                attachments.deletedNotWiped().filter { it.record.id !in openUndo }.forEach { fileWriter.wipe(it.record.id, NoteRules::wiped) }
+                notes.deletedNotWipedIds().filter { it !in openUndo }.forEach { noteWriter.wipe(it, NoteRules::wiped) }
+                attachments.deletedNotWipedIds().filter { it !in openUndo }.forEach { fileWriter.wipe(it, NoteRules::wiped) }
             }
         }
         val removed = removeUnneededStreams()
@@ -444,8 +484,17 @@ class NotesRepository(
      * the records of an Undo that is still open (spec, "Before the
      * recovery key: the file key move", point 3).
      */
-    internal suspend fun filesToSealAgain(leaveAlone: Set<String>, needsNewSeal: (ByteArray) -> Boolean): List<String> =
-        attachments.withKeys().filter { it.record.id !in leaveAlone && needsNewSeal(it.wrappedKey) }.map { it.record.id }
+    internal suspend fun filesToSealAgain(leaveAlone: Set<String>, needsNewSeal: (ByteArray) -> Boolean): List<String> {
+        val ids = ArrayList<String>()
+        // A page of keys is looked at before the next is read, so only a few are in memory. Nothing is written meanwhile.
+        var after = ""
+        do {
+            val page = attachments.keysAfter(after, NoteLimits.FILES_AT_A_TIME)
+            page.forEach { file -> if (file.id !in leaveAlone && needsNewSeal(file.wrappedKey)) ids += file.id }
+            page.lastOrNull()?.let { after = it.id }
+        } while (page.size == NoteLimits.FILES_AT_A_TIME)
+        return ids
+    }
 
     /**
      * Writes the file [id] with its key sealed again by [sealAgain], in its

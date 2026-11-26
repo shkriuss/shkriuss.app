@@ -44,7 +44,6 @@ import app.shkriuss.core.design.ShkTheme
 import app.shkriuss.core.design.ShkTopBar
 import app.shkriuss.core.design.ShkWindowWidth
 import app.shkriuss.feature.notes.NoteRowState
-import app.shkriuss.feature.notes.NoteSearch
 import app.shkriuss.feature.notes.NotesClock
 import app.shkriuss.feature.notes.NotesListState
 import app.shkriuss.feature.notes.R
@@ -143,7 +142,7 @@ private fun ListPane(models: NotesModels, openNoteId: String?, snackbar: ShkSnac
                 )
                 else -> {
                     val room = with(LocalDensity.current) { buttonHeight.toDp() } + ShkSpacing.Large
-                    val onOpen = { row: NoteRowState -> models.open.open(row.note.id) }
+                    val onOpen = { row: NoteRowState -> models.open.open(row.id) }
                     val headings = shown.pinned.isNotEmpty()
                     // With no heading above it, the first row keeps the distance from the search field that the rows keep from
                     // each other.
@@ -176,7 +175,7 @@ private fun LazyListScope.noteSection(
 ) {
     if (rows.isEmpty()) return
     if (heading != null) item(key = key) { ShkSectionHeader(stringResource(heading)) }
-    items(rows, key = { it.note.id }) { row -> NoteCard(row, selected = row.note.id == openNoteId, clock, format) { onOpen(row) } }
+    items(rows, key = { it.id }) { row -> NoteCard(row, selected = row.id == openNoteId, clock, format) { onOpen(row) } }
 }
 
 /**
@@ -191,17 +190,16 @@ private fun LazyListScope.noteSection(
 private fun NoteCard(row: NoteRowState, selected: Boolean, clock: NotesClock, format: NotesFormat, onOpen: () -> Unit) {
     val colors = ShkTheme.colors
     val title = row.title.ifEmpty { stringResource(R.string.notes_empty_note) }
-    val titleMatch = row.match?.inTitle.orEmpty().takeIf { row.note.title.isNotEmpty() }.orEmpty()
+    val titleMatch = row.match?.inTitle.orEmpty().takeIf { row.hasTitle }.orEmpty()
     val line = row.match?.line
     val fileName = row.match?.fileName
     val under: String
     val underBold: List<IntRange>
     when {
         line != null -> {
-            // From a little before the match when it is far into the line, so it stays in the two lines a row shows.
-            val shown = NoteSearch.shownLine(line)
-            under = shown.line
-            underBold = shown.ranges
+            // The row keeps the line as it shows: from a little before the match when that is far into the line.
+            under = line.line
+            underBold = line.ranges
         }
         fileName != null -> {
             under = stringResource(R.string.notes_file_match, fileName)
@@ -214,14 +212,14 @@ private fun NoteCard(row: NoteRowState, selected: Boolean, clock: NotesClock, fo
             underBold = emptyList()
         }
     }
-    val change = format.lastChange(row.note.lastChange, clock)
+    val change = format.lastChange(row.lastChange, clock)
     val files = pluralStringResource(R.plurals.notes_file_count, row.fileCount, format.number(row.fileCount))
     val meta = if (row.fileCount == 0) change else stringResource(R.string.notes_row_meta, change, files)
     val resources = LocalResources.current
     val spoken = listOfNotNull(
         title,
-        stringResource(R.string.notes_spoken_pinned).takeIf { row.note.pinned },
-        stringResource(R.string.notes_spoken_changed, format.spokenChange(row.note.lastChange, clock)),
+        stringResource(R.string.notes_spoken_pinned).takeIf { row.pinned },
+        stringResource(R.string.notes_spoken_changed, format.spokenChange(row.lastChange, clock)),
         files.takeIf { row.fileCount > 0 },
         under.takeIf { it.isNotEmpty() },
     ).reduce { said, next -> resources.getString(R.string.notes_spoken_parts, said, next) }

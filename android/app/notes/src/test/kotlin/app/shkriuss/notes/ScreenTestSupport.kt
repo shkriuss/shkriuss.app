@@ -35,6 +35,7 @@ import app.shkriuss.core.crypto.RecoveryWords
 import app.shkriuss.core.crypto.RecoveryWordsResult
 import app.shkriuss.core.crypto.ShkCrypto
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
+import app.shkriuss.core.data.BEFORE_FIRST_CHANGE
 import app.shkriuss.core.data.RecordFields
 import app.shkriuss.core.security.SecurityHost
 import app.shkriuss.core.testing.TestDocuments
@@ -79,13 +80,16 @@ fun clockAt(millis: Long) {
 }
 
 /** The notes that are not deleted, as the database holds them now. */
-fun storedNotes(): List<Note> = runBlocking { testApp.test.services.repository.notes().first() }
+fun storedNotes(): List<Note> = runBlocking {
+    val repository = testApp.test.services.repository
+    repository.shownNotes(repository.noteMarks().first().map { it.id })
+}
 
 /** Every note as the database holds it now, deleted ones too. */
-fun everyNote(): List<NoteEntity> = runBlocking { testApp.test.database.notes().all() }
+fun everyNote(): List<NoteEntity> = runBlocking { testApp.test.database.notes().changedSince(BEFORE_FIRST_CHANGE, Int.MAX_VALUE) }
 
 /** The files that are not deleted, as the database holds them now. */
-fun storedFiles(): List<NoteFile> = runBlocking { testApp.test.services.repository.shownFiles().first() }
+fun storedFiles(): List<NoteFile> = runBlocking { storedNotes().flatMap { note -> testApp.test.services.repository.filesOf(note.id).first() } }
 
 /** Every write to the table of notes fails from now on, as on a disk that refuses. */
 fun refuseWrites() = runBlocking {

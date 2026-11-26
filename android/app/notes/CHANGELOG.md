@@ -16,6 +16,11 @@ Not released yet. How to use it:
   good until that message goes.
 - With no pinned note, the list has no headings, and its first note
   keeps a gap from the search field.
+- A row of the list keeps the first 1,000 characters of its note's
+  text, and Notes reads notes and file records a few at a time: in the
+  list, a search, a backup and the move of the file keys. So very many
+  very long notes, or tens of thousands of files, do not use up its
+  memory. TalkBack reads a row with those 1,000 characters at most.
 - A message about a file that is still being added, such as "The note
   was deleted. The file was not added.", waits while a message with
   **Undo** shows, and shows after it. So it never ends an **Undo**.

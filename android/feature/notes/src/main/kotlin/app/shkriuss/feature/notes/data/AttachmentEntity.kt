@@ -82,13 +82,27 @@ interface AttachmentDao : RecordDao<AttachmentEntity> {
     @Query("SELECT * FROM attachment WHERE " + RecordSql.CHANGED_SINCE)
     override suspend fun changedSince(afterChangeNumber: Long, limit: Int): List<AttachmentEntity>
 
-    /** Every file, deleted ones too, for a backup. */
-    @Query("SELECT * FROM attachment")
-    suspend fun all(): List<AttachmentEntity>
+    /** For each note with a file that is not deleted, how many it has, again after each change of a file. The list shows the number. */
+    @Query("SELECT noteId, COUNT(*) AS count FROM attachment WHERE deletedAt IS NULL GROUP BY noteId")
+    fun observeShownCounts(): Flow<List<FileCount>>
 
-    /** The files that are not deleted, of every note. The list and its search read their names and counts. */
-    @Query("SELECT * FROM attachment WHERE deletedAt IS NULL")
-    fun observeShown(): Flow<List<AttachmentEntity>>
+    /**
+     * Up to [limit] names of the files of the notes [noteIds] that are not
+     * deleted, each with what puts it in the order of its note: those
+     * whose `id` comes after [afterId], in the order of their `id`s. A
+     * search reads them page by page, from "" on, for a small group of
+     * notes. The group alone sets no limit: a restore can give one note
+     * any number of files.
+     */
+    @Query(
+        "SELECT noteId, id, name, createdAt FROM attachment " +
+            "WHERE noteId IN (:noteIds) AND deletedAt IS NULL AND id > :afterId ORDER BY id LIMIT :limit",
+    )
+    suspend fun shownNamesOf(noteIds: List<String>, afterId: String, limit: Int): List<FileName>
+
+    /** The `id` and the size of every file that is not deleted, in the order of the change numbers. A backup finds the streams by them. */
+    @Query("SELECT id, size FROM attachment WHERE deletedAt IS NULL ORDER BY changeNumber")
+    suspend fun shownSizes(): List<FileSize>
 
     /** The files of the note [noteId] that are not deleted. The note puts them in its order. */
     @Query("SELECT * FROM attachment WHERE noteId = :noteId AND deletedAt IS NULL")
@@ -121,19 +135,19 @@ interface AttachmentDao : RecordDao<AttachmentEntity> {
     @Query("SELECT COUNT(*) AS count, COALESCE(SUM(size), 0) AS bytes FROM attachment WHERE deletedAt IS NULL")
     fun observeTotals(): Flow<FileTotals>
 
-    /** The files that are not deleted and whose note is: the sweep marks them deleted (spec, "Removing a file, and the wipe", point 3). */
+    /** The `id`s of the files that are not deleted and whose note is: the sweep marks them deleted (spec, "Removing a file, and the wipe", point 3). */
     @Query(
-        "SELECT attachment.* FROM attachment JOIN note ON note.id = attachment.noteId " +
+        "SELECT attachment.id FROM attachment JOIN note ON note.id = attachment.noteId " +
             "WHERE attachment.deletedAt IS NULL AND note.deletedAt IS NOT NULL",
     )
-    suspend fun shownOfDeletedNotes(): List<AttachmentEntity>
+    suspend fun shownIdsOfDeletedNotes(): List<String>
 
-    /** The deleted files that are not in the wiped form yet (spec, "The wiped form"). */
+    /** The `id`s of the deleted files that are not in the wiped form yet (spec, "The wiped form"). */
     @Query(
-        "SELECT * FROM attachment WHERE deletedAt IS NOT NULL " +
+        "SELECT id FROM attachment WHERE deletedAt IS NOT NULL " +
             "AND (name != '' OR mimeType != '' OR size != 0 OR length(wrappedKey) != 0)",
     )
-    suspend fun deletedNotWiped(): List<AttachmentEntity>
+    suspend fun deletedNotWipedIds(): List<String>
 
     /** The `id` of every file that is not wiped: each one names a stream the phone keeps. */
     @Query(
@@ -142,10 +156,51 @@ interface AttachmentDao : RecordDao<AttachmentEntity> {
     )
     suspend fun unwipedIds(): List<String>
 
-    /** The files that hold a wrapped key, deleted ones that are not wiped too, for the move of the file keys. */
-    @Query("SELECT * FROM attachment WHERE length(wrappedKey) > 0")
-    suspend fun withKeys(): List<AttachmentEntity>
+    /**
+     * Up to [limit] files that hold a wrapped key, deleted ones that are
+     * not wiped too, each with its key and nothing else: those whose `id`
+     * comes after [afterId], in the order of their `id`s. The move of the
+     * file keys reads them page by page, from "" on.
+     */
+    @Query("SELECT id, wrappedKey FROM attachment WHERE id > :afterId AND length(wrappedKey) > 0 ORDER BY id LIMIT :limit")
+    suspend fun keysAfter(afterId: String, limit: Int): List<KeyOfFile>
 }
+
+/** How many files of one note are not deleted. */
+data class FileCount(
+    /** The `id` of the note. */
+    val noteId: String,
+    /** The number of its files that are not deleted. */
+    val count: Int,
+)
+
+/** The name of one file, with what puts it in the order of its note. */
+data class FileName(
+    /** The `id` of its note. */
+    val noteId: String,
+    /** The record's `id`. */
+    val id: String,
+    /** The file's name. */
+    val name: String,
+    /** When it was added, in milliseconds since 1970 UTC. */
+    val createdAt: Long,
+)
+
+/** Where a backup finds the stream of one file, and how long it must be. */
+data class FileSize(
+    /** The record's `id`, which names its stream. */
+    val id: String,
+    /** Its length in bytes, before encryption. */
+    val size: Long,
+)
+
+/** The wrapped key of one file. */
+class KeyOfFile(
+    /** The record's `id`. */
+    val id: String,
+    /** Its file key, wrapped. */
+    val wrappedKey: ByteArray,
+)
 
 /** How many files are not deleted, and how many bytes they hold: "12 files, 120 MB of 1 GB". */
 data class FileTotals(
