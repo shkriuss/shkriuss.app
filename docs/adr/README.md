@@ -74,6 +74,12 @@ record. The owner decided on 2026-11-24 that the text and the files of
 a deleted note are wiped when its Undo ends. Claude proposed the
 details in pull request 109, and the owner accepted them in the review
 of that pull request, on 2026-11-24.
+Records 0005 and 0009 were completed in Phase 5, step 1, the design of
+the sync protocol, with the owner's decisions of 2026-11-26. Their
+detail is in [sync-protocol.md](../architecture/sync-protocol.md). 0005
+now says how the courier interface is protected, with no permission of
+the suite's own, as 0041 found for the handover. 0009 supersedes "never
+Sync" in points 1 and 7 of 0041.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -84,15 +90,15 @@ How a record may be edited or replaced is in point 7 of
 | 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025, then superseded by 0039; point 2 superseded by 0040 |
 | 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031; Navigation 3 not used by Water (step 2.3) |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027; point 4 superseded by 0036 |
-| 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted |
+| 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted; detail in sync-protocol.md |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md; its sentence on Android 13 and 14 superseded by 0040 |
 | 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md; "signature-protected" in point 12 superseded by 0041 |
 | 0008 | [Backup file format](0008-backup-file-format.md) | Accepted; detail in backup-format.md |
-| 0009 | [Sync protocol and server](0009-sync-protocol-and-server.md) | Accepted |
+| 0009 | [Sync protocol and server](0009-sync-protocol-and-server.md) | Accepted; detail in sync-protocol.md |
 | 0010 | [Exact alarms and reminder storage](0010-exact-alarms-and-reminder-storage.md) | Accepted |
 | 0011 | [No native code, Grammar exception](0011-no-native-code-grammar-exception.md) | Accepted; its sentence on the GrapheneOS checklist superseded by 0039 |
 | 0012 | [No DI framework](0012-no-di-framework.md) | Accepted |
-| 0013 | [Signing key custody and rotation](0013-signing-key-custody-and-rotation.md) | Accepted; point 7 superseded by 0037 |
+| 0013 | [Signing key custody and rotation](0013-signing-key-custody-and-rotation.md) | Accepted; point 7 superseded by 0037; its "signature-level permission" read as in 0005 |
 | 0014 | [Release flow and reproducible builds](0014-release-flow-and-reproducible-builds.md) | Accepted |
 | 0015 | [Distribution channels](0015-distribution-channels.md) | Accepted |
 | 0016 | [No developer registration with Google for now](0016-no-google-developer-registration-for-now.md) | Accepted |
@@ -120,5 +126,5 @@ How a record may be edited or replaced is in point 7 of
 | 0038 | [A stolen signing key](0038-a-stolen-signing-key.md) | Accepted |
 | 0039 | [No manual checklist for a release](0039-no-manual-checklist-for-a-release.md) | Accepted |
 | 0040 | [Minimum Android 15](0040-minimum-android-15.md) | Accepted |
-| 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Accepted |
+| 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Accepted; "never Sync" in points 1 and 7 superseded by 0009 |
 | 0042 | [Wiping the content of deleted records](0042-wiping-the-content-of-deleted-records.md) | Accepted |

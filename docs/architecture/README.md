@@ -11,6 +11,11 @@ Pages:
 - [Backup file format](backup-format.md): the bytes of a backup file,
   what an app puts into it, and how a backup is written, checked and
   restored.
+- [Sync protocol](sync-protocol.md): how records and files reach other
+  devices through a server that is never trusted: the keys, how a
+  device joins, the courier interface between a data app and the Sync
+  app, every call of the server, the rules for conflicts, and the
+  attacks that were considered. Designed, not built.
 
 - [Notifications and alarms](notifications.md): how `core/notify` sets
   exact alarms, keeps them right after a reboot, an update and a change
@@ -25,7 +30,6 @@ Pages:
 What else belongs here:
 
 - The database schema of each app, when the app exists.
-- The sync protocol. File: `sync-protocol.md`.
 
 A change to the backup or sync format must update this folder in the same
 pull request.

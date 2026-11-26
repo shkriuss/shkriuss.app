@@ -623,15 +623,15 @@ edit, and mark as deleted every stored record the backup does not list.
 No field is missing for that. Whether to build it is an
 [open question](#open-questions).
 
-For sync, later:
+For sync:
 
 - "Same keeps the stored record" is right for a restore, which touches
   one device. In sync it would let two devices keep different records
-  with the same `updatedAt`. The sync design must decide ties so that
-  all devices end the same
-  ([ADR 0009](../adr/0009-sync-protocol-and-server.md)).
-- `takeFromBackup` is the function for backups. It is not assumed to be
-  the function sync uses. ADR 0027 gives sync its own.
+  with the same `updatedAt`. So sync decides a tie by one fixed order,
+  and all devices end the same
+  ([sync-protocol.md](sync-protocol.md#conflict-rules)).
+- `takeFromBackup` is the function for backups. Sync has its own,
+  `takeFromSync`.
 
 ## The interface each app implements
 
@@ -899,7 +899,7 @@ On the format and `core/backup`:
 | What the user is told | The user guide says plainly that a restore cannot undo a deletion or an edit made after the backup. |
 | The restore rule and the format | The format stays free of the rule, so that a "restore as it was" mode can be added later without a new format version. |
 | Checking a backup after it is written | One function reads a backup from a URI, checks everything a restore checks, and changes nothing. The app's screens decide when to call it (below). |
-| Ties in sync | Not decided here. The sync design must decide ties so that all devices end the same. `takeFromBackup` is not assumed to be sync's function. |
+| Ties in sync | Decided with the sync protocol: one fixed order, so that all devices end the same ([sync-protocol.md](sync-protocol.md#conflict-rules)). `takeFromBackup` is not sync's function. |
 | The very large file test | If it takes more than about a minute in CI, a cheaper proof is used. |
 | A backup with a higher data version | It is refused right after the Manifest, before anything is staged. This is a rule of the order of reading, not of the file format. |
 
@@ -980,17 +980,22 @@ What is left, with the work that decides it.
    [specification](../apps/water/spec.md#backup-contents): data version
    1, the types `intake`, `goal` and `settings`, and no files.
 6. **Whether the content of a record is also the plaintext of a sealed
-   record in sync.** One encoding for both would be less code. The sync
-   design.
-7. **Ties in sync.** See [The restore rule](#the-restore-rule). The sync
-   design.
-8. **Purged deletion markers and old backups.** If deletion markers are
-   ever purged, an old backup holds a record whose marker is gone, and a
-   restore would bring it back. When markers may be purged is for the
-   sync design ([ADR 0009](../adr/0009-sync-protocol-and-server.md)),
-   which must look at backups too.
+   record in sync.** Decided: one encoding. The plaintext of a sealed
+   record is the Record entry of this page, with five bytes before it
+   and a stream part after it
+   ([sync-protocol.md](sync-protocol.md#the-sealed-record)). A sealed
+   record is at most 524,288 bytes, so a record that a backup takes can
+   be too large for sync. No app has one today.
+7. **Ties in sync.** Decided
+   ([sync-protocol.md](sync-protocol.md#conflict-rules)).
+8. **Purged deletion markers and old backups.** Decided: deletion
+   markers are never purged in this version of sync. So an old backup
+   cannot bring a deleted record back
+   ([sync-protocol.md](sync-protocol.md#deletion-markers)).
 9. **A backup made with an older recovery key** opens while that key is
-   still in the `backup` keyset. What happens to old backups when an old
-   key is dropped belongs to the "new recovery key" flow
+   still in the `backup` keyset. Nothing drops an old key by itself
+   ([sync-protocol.md](sync-protocol.md#what-the-rules-give)). An app
+   that was set up with the new words only does not hold the old key.
+   How it takes the older words belongs to the screens of a new
+   recovery key, which are open
    ([crypto-design.md](../security/crypto-design.md#a-new-recovery-key)).
-   The sync design.

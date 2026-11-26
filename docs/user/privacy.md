@@ -201,12 +201,19 @@ Sync is decided, but not built yet. This is what is decided:
    read anything.
 4. The server, and Cloudflare, which runs it, can still see:
    - when each of your devices connects, and from which network address;
-   - how many items you sync, and how large each is;
+   - which of the apps you sync;
+   - how many items you sync, how large each is, and how often each
+     changes;
    - which device sent what;
    - the short name of your recovery key, which ties all your synced
      data together.
-
-How you delete your data from the server is still open.
+5. A new device will need your 24 words and a one-time code. The code
+   comes from a device that already syncs, or from your own Cloudflare
+   account. The words alone will not add a device.
+6. To delete your data from the server, you will close the server
+   from the Sync app, and then delete the server and its storage in
+   your Cloudflare account. Nothing on your phones is deleted by
+   this.
 
 ## The website and the downloads
 

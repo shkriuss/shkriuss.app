@@ -1,6 +1,12 @@
 # 0041 The handover between apps
 
-- Status: Accepted
+- Status: Accepted. "Never Sync" in points 1 and 7 superseded by
+  [0009](0009-sync-protocol-and-server.md), point 17: the Sync app may
+  open a keeper's handover screen to have its device key signed and to
+  get the key for the names of devices. It never gets a key that opens
+  data. How the apps on a phone take a new recovery key, left open in
+  point 14, is decided in
+  [sync-protocol.md](../architecture/sync-protocol.md#a-new-recovery-key).
 - Date: 2026-11-21
 - Source: the step "3.0 Handover"
   ([PROMPTS.md](../development/PROMPTS.md)). ADR 0007,
