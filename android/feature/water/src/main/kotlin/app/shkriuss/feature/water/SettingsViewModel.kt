@@ -68,7 +68,11 @@ class SettingsViewModel(
     fun setGoal(text: String, openedMl: Int): Boolean {
         val unit = settings.unit
         val amount = amountOf(text, openedMl, unit, unit.goalLimits) ?: return false
-        if (amount != openedMl) inOrder { repository.setGoal(today.date.value, amount) }
+        if (amount != openedMl) {
+            // The day of the press: the write can wait for one before it, and midnight can pass meanwhile.
+            val day = today.date.value
+            inOrder { repository.setGoal(day, amount) }
+        }
         return true
     }
 

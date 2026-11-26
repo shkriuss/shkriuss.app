@@ -616,6 +616,34 @@ class ViewModelsTest {
     }
 
     @Test
+    fun aGoalSavedWhileAnotherChangeIsStillWrittenCountsFromTheDayItWasSaved() {
+        val work = NewestFirstWork()
+        val busy = memoryDatabaseOn(work)
+        try {
+            val stored = WaterRepository(busy, clock, TestIdSource())
+            val model = SettingsViewModel(stored, date, work)
+            val shown = model.state.await { it.loaded }
+            // A change of "Every" is not written yet when the goal is saved, a moment before midnight.
+            work.hold()
+            model.setInterval(30)
+            assertTrue(model.setGoal("2500", shown.goalMl))
+            clock.setTo(THE_DAY.plusDays(1).atTime(0, 1))
+            theWaitEnds()
+            date.date.await { it == THE_DAY.plusDays(1) }
+
+            work.letGo()
+            work.awaitIdle()
+
+            val goals = runBlocking { stored.goals().first() }
+            assertEquals("The goal counts from the day it was saved", 2_500, goals.goalOf(THE_DAY.asWaterDay()))
+            assertEquals(30, runBlocking { stored.settingsNow() }.intervalMinutes)
+        } finally {
+            busy.close()
+            work.close()
+        }
+    }
+
+    @Test
     fun aChangeOfTheUnitTakesTheDefaultQuickAmountsOfTheNewUnit() {
         val model = settings()
         model.state.await { it.loaded }

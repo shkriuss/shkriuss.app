@@ -506,7 +506,7 @@ second build must write the same mapping file, or the release stops. See
   - `AppLockGateTest` and `AppLockActivitiesTest` wait for the state
     they read
     ([Tests that wait for a background thread](#tests-that-wait-for-a-background-thread)).
-- `feature/water` has 13 test classes with 251 tests: the units, the
+- `feature/water` has 13 test classes with 252 tests: the units, the
   goal of a day, the settings in use and the next reminder as plain code
   (`UnitsTest`, `RulesTest`, `NextReminderTest`), the schema
   (`WaterDatabaseTest`), the repository, the backup content and the
