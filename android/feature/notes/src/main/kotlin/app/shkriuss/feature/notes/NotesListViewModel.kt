@@ -3,6 +3,7 @@ package app.shkriuss.feature.notes
 import android.database.SQLException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.shkriuss.feature.notes.data.NoteMark
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -13,25 +14,97 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** One row of the list (docs/apps/notes/spec.md, "Notes", point 3, and "Search", point 2). */
+/**
+ * One row of the list (docs/apps/notes/spec.md, "Notes", point 3, and
+ * "Search", point 2). It keeps what the row shows of its note and never
+ * the whole text: the list holds a row for every note.
+ */
 data class NoteRowState(
-    /** The note. */
-    val note: Note,
+    override val id: String,
     /** The title the row shows, or "" for "Empty note". */
     val title: String,
-    /** The text under the title, marks removed and line breaks as spaces. The screen shows two lines of it. */
+    /** True if the note has a title of its own. Only then do the matches of a search in the title show in [title]. */
+    val hasTitle: Boolean,
+    /**
+     * The text under the title: the first 1,000 characters of the text,
+     * marks removed and line breaks as spaces ([NoteRow.preview]). The
+     * screen shows two lines of it.
+     */
     val preview: String,
+    override val pinned: Boolean,
+    override val createdAt: Long,
+    override val lastChange: Long,
     /** How many shown files the note has: "2 files". */
     val fileCount: Int,
-    /** How it matches the search, or null with no search. */
+    /**
+     * How it matches the search, or null with no search. Its line is the
+     * line as the row keeps it ([NoteSearch.rowLine]).
+     */
     val match: SearchMatch? = null,
-)
+) : Listed
+
+/**
+ * The rows of the list, kept between two reads of the notes. It reads
+ * the notes in groups of [NoteLimits.NOTES_AT_A_TIME] through [read], so
+ * that only a few texts are in memory at a time, and keeps of each note
+ * only its row. A note is read again only when its change number moved,
+ * or when a search needs its text again.
+ *
+ * One coroutine uses it, one call after the other.
+ */
+internal class KeptRows(private val read: suspend (ids: List<String>) -> List<Note>) {
+    /** A row without its files, for the search [query], of the note as it was at [changeNumber]. */
+    private class Kept(val changeNumber: Long, val query: String, val row: NoteRowState)
+
+    private var kept: Map<String, Kept> = emptyMap()
+
+    /**
+     * The rows of the notes of [marks] for the search [query], in the
+     * order of [marks], each without its files: with no file count, and
+     * with the match in its title or text only. A note that went since
+     * [marks] were read has no row.
+     */
+    suspend fun of(marks: List<NoteMark>, query: String): List<NoteRowState> {
+        val next = HashMap<String, Kept>(marks.size)
+        val toRead = ArrayList<String>()
+        marks.forEach { mark ->
+            val old = kept[mark.id]
+            // With no search, a kept row needs no text. With one, it must be the row of that search.
+            val stillRight = old != null && old.changeNumber == mark.changeNumber && (query.isEmpty() || old.query == query)
+            if (stillRight) next[mark.id] = checkNotNull(old) else toRead += mark.id
+        }
+        toRead.chunked(NoteLimits.NOTES_AT_A_TIME).forEach { group ->
+            read(group).forEach { note -> next[note.id] = Kept(note.changeNumber, query, rowOf(note, query)) }
+        }
+        kept = next
+        return marks.mapNotNull { mark ->
+            // A row kept from a search shows without its match once the search is cleared.
+            next[mark.id]?.row?.let { row -> if (query.isEmpty() && row.match != null) row.copy(match = null) else row }
+        }
+    }
+
+    private fun rowOf(note: Note, query: String): NoteRowState {
+        val match = NoteSearch.inNote(note, query)?.let { found -> found.copy(line = found.line?.let(NoteSearch::rowLine)) }
+        return NoteRowState(
+            id = note.id,
+            title = NoteRow.title(note),
+            hasTitle = note.title.isNotEmpty(),
+            preview = NoteRow.preview(note),
+            pinned = note.pinned,
+            createdAt = note.createdAt,
+            lastChange = note.lastChange,
+            fileCount = 0,
+            match = match,
+        )
+    }
+}
 
 /** What the list shows. */
 sealed interface NotesListState {
@@ -77,6 +150,9 @@ data class NotesListScreen(
  * It has one state, [state]. What is typed is set in it at once, on the
  * thread of the press, so the field never shows an older text; the list
  * is read on [work] and set in it when it is ready.
+ *
+ * The list never holds the text of every note: it reads the notes a few
+ * at a time and keeps only their rows ([KeptRows]).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NotesListViewModel(
@@ -99,9 +175,14 @@ class NotesListViewModel(
         text
     }
 
+    private val rows = KeptRows(repository::shownNotes)
+
     init {
         viewModelScope.launch(work) {
-            combine(repository.notes(), repository.shownFiles(), searched) { notes, files, query -> shown(notes, files, query) as NotesListState }
+            combine(repository.noteMarks(), repository.shownFiles(), searched) { marks, files, query -> Triple(marks, files, query) }
+                // One answer is read to its end before the next starts, so what a read kept is there for the next.
+                .conflate()
+                .map { (marks, files, query) -> shown(marks, files, query) as NotesListState }
                 .catch { error -> if (error is SQLException) emit(NotesListState.Failed) else throw error }
                 .collect { list -> screen.update { it.copy(list = list) } }
         }
@@ -158,21 +239,21 @@ class NotesListViewModel(
         screen.value.newNote?.let(repository::giveUpNewNote)
     }
 
-    private fun shown(notes: List<Note>, files: List<NoteFile>, query: String): NotesListState.Shown {
-        val namesByNote = files.groupBy({ it.noteId }, { it })
-        val rows = notes.mapNotNull { note ->
-            val shownFiles = namesByNote[note.id].orEmpty().sortedWith(NoteOrder.FILES)
-            val match = if (query.isEmpty()) null else NoteSearch.match(note, shownFiles.map { it.name }, query) ?: return@mapNotNull null
-            NoteRowState(note, NoteRow.title(note), NoteRow.preview(note), shownFiles.size, match)
+    private suspend fun shown(marks: List<NoteMark>, files: List<NoteFile>, query: String): NotesListState.Shown {
+        val filesByNote = files.groupBy { it.noteId }
+        val shownRows = rows.of(marks, query).mapNotNull { row ->
+            val shownFiles = filesByNote[row.id].orEmpty().sortedWith(NoteOrder.FILES)
+            // A note whose title and text do not match can still match by the name of a file.
+            val match = if (query.isEmpty()) null else row.match ?: NoteSearch.inFileNames(shownFiles.map { it.name }, query) ?: return@mapNotNull null
+            row.copy(fileCount = shownFiles.size, match = match)
         }
-        val sections = NoteOrder.sections(rows.map { it.note })
-        val byId = rows.associateBy { it.note.id }
+        val sections = NoteOrder.sections(shownRows)
         return NotesListState.Shown(
             query = query,
-            pinned = sections.pinned.map { byId.getValue(it.id) },
-            others = sections.others.map { byId.getValue(it.id) },
-            noNotes = notes.isEmpty(),
-            noMatch = query.isNotEmpty() && rows.isEmpty(),
+            pinned = sections.pinned,
+            others = sections.others,
+            noNotes = marks.isEmpty(),
+            noMatch = query.isNotEmpty() && shownRows.isEmpty(),
         )
     }
 

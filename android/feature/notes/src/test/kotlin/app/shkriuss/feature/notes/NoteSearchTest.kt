@@ -123,4 +123,43 @@ class NoteSearchTest {
         assertEquals("Only line marks and spaces: Empty note", "", NoteRow.title(note(title = "", body = "\n- [ ] \n# ")))
         assertEquals("Kutaisi Passport", NoteRow.preview(note(body = "# Kutaisi\n- [ ] Passport")))
     }
+
+    @Test
+    fun aRowKeepsTheFirstThousandCharactersOfTheTextAndNeverHalfACharacter() {
+        val words = "word ".repeat(20_000)
+        assertEquals(100_000, words.length)
+        assertEquals(words.take(1_000), NoteRow.preview(note(body = words)))
+        assertEquals("With no title, the first line is the title: its first 1,000 characters", "a".repeat(1_000), NoteRow.title(note(title = "", body = "a".repeat(100_000))))
+        // 1,001 characters that take two places each: the row keeps 1,000 whole ones.
+        assertEquals("😀".repeat(1_000), NoteRow.preview(note(body = "😀".repeat(1_001))))
+        assertEquals("A short text is kept whole", "Passport", NoteRow.preview(note(body = "Passport")))
+        assertEquals("A title of the note's own is kept whole", "t".repeat(200), NoteRow.title(note(title = "t".repeat(200), body = words)))
+    }
+
+    @Test
+    fun theLineOfAMatchIsKeptAsTheRowShowsItAndNoLongerThanAThousandCharacters() {
+        val line = "a".repeat(50_000) + " rent " + "b".repeat(49_994)
+        val match = checkNotNull(NoteSearch.match(note(body = line), emptyList(), "rent"))
+
+        val kept = NoteSearch.rowLine(checkNotNull(match.line))
+
+        assertEquals(1_000, NoteText.length(kept.line))
+        assertEquals("It starts just before the match", "…rent b", kept.line.take(7))
+        assertEquals("The match is where its range says", "rent", kept.line.substring(kept.ranges.single()))
+        val both = "rent " + "c".repeat(2_000) + " rent"
+        val first = NoteSearch.rowLine(checkNotNull(NoteSearch.match(note(body = both), emptyList(), "rent")?.line))
+        assertEquals("A match past the part that is kept is not marked", listOf(0..3), first.ranges)
+        val short = MatchedLine("Pay the rent", listOf(8..11))
+        assertEquals("A short line stays as it is", short, NoteSearch.rowLine(short))
+    }
+
+    @Test
+    fun aMatchInTheTitleOrTheTextComesBeforeOneInAFileName() {
+        val trip = note(title = "Trip", body = "Buy a ticket")
+        assertNull(NoteSearch.inNote(trip, "pdf"))
+        assertEquals("map.pdf", NoteSearch.inFileNames(listOf("ticket.jpg", "map.pdf"), "PDF")?.fileName)
+        assertNull("An empty search matches no file", NoteSearch.inFileNames(listOf("map.pdf"), ""))
+        assertEquals(NoteSearch.inNote(trip, "ticket"), NoteSearch.match(trip, listOf("ticket.jpg"), "ticket"))
+        assertEquals(NoteSearch.inFileNames(listOf("map.pdf"), "map"), NoteSearch.match(trip, listOf("map.pdf"), "map"))
+    }
 }

@@ -55,9 +55,18 @@ interface NoteDao : RecordDao<NoteEntity> {
     @Query("SELECT * FROM note WHERE " + RecordSql.CHANGED_SINCE)
     override suspend fun changedSince(afterChangeNumber: Long, limit: Int): List<NoteEntity>
 
-    /** The notes that are not deleted. The list puts them in its order. */
-    @Query("SELECT * FROM note WHERE deletedAt IS NULL")
-    fun observeShown(): Flow<List<NoteEntity>>
+    /**
+     * The `id` and the change number of every note that is not deleted,
+     * again after each change of a note. The list sees in them which notes
+     * there are and which changed. It reads no title and no text here:
+     * every text at once is more than the app's memory holds.
+     */
+    @Query("SELECT id, changeNumber FROM note WHERE deletedAt IS NULL")
+    fun observeShownMarks(): Flow<List<NoteMark>>
+
+    /** The notes among [ids] that are not deleted, whole. The list asks for a small group at a time. */
+    @Query("SELECT * FROM note WHERE id IN (:ids) AND deletedAt IS NULL")
+    suspend fun shownByIds(ids: List<String>): List<NoteEntity>
 
     /** The note [id], deleted or not, and again after each change of it. Null while there is none. */
     @Query("SELECT * FROM note WHERE id = :id")
@@ -67,11 +76,15 @@ interface NoteDao : RecordDao<NoteEntity> {
     @Query("SELECT COUNT(*) FROM note WHERE deletedAt IS NULL")
     suspend fun shownCount(): Int
 
-    /** Every note, deleted ones too, for a backup. */
-    @Query("SELECT * FROM note")
-    suspend fun all(): List<NoteEntity>
-
-    /** The deleted notes that are not in the wiped form yet (docs/apps/notes/spec.md, "The wiped form"). */
-    @Query("SELECT * FROM note WHERE deletedAt IS NOT NULL AND (title != '' OR body != '' OR pinned != 0 OR fileChanges != 0)")
-    suspend fun deletedNotWiped(): List<NoteEntity>
+    /** The `id`s of the deleted notes that are not in the wiped form yet (docs/apps/notes/spec.md, "The wiped form"). */
+    @Query("SELECT id FROM note WHERE deletedAt IS NOT NULL AND (title != '' OR body != '' OR pinned != 0 OR fileChanges != 0)")
+    suspend fun deletedNotWipedIds(): List<String>
 }
+
+/** What the list reads of every shown note at once: which note it is, and a number that moves when the note changes. */
+data class NoteMark(
+    /** The record's `id`. */
+    val id: String,
+    /** The change number of the stored record. */
+    val changeNumber: Long,
+)

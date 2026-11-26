@@ -9,6 +9,7 @@ import app.shkriuss.core.data.isDeleted
 import app.shkriuss.feature.notes.data.AttachmentEntity
 import app.shkriuss.feature.notes.data.FileTotals
 import app.shkriuss.feature.notes.data.NoteEntity
+import app.shkriuss.feature.notes.data.NoteMark
 import app.shkriuss.feature.notes.data.NotesDatabase
 import app.shkriuss.feature.notes.data.checkpoint
 import kotlinx.coroutines.CoroutineScope
@@ -117,8 +118,19 @@ class NotesRepository(
      */
     val streams: Mutex = Mutex()
 
-    /** The notes that are not deleted, in no order. */
-    fun notes(): Flow<List<Note>> = notes.observeShown().map { rows -> rows.map(::noteOf) }
+    /**
+     * The `id` and the change number of every note that is not deleted,
+     * in no order, again after each change of a note. No title and no
+     * text: the list reads those in small groups ([shownNotes]).
+     */
+    fun noteMarks(): Flow<List<NoteMark>> = notes.observeShownMarks()
+
+    /**
+     * The notes among [ids] that are not deleted, in no order, each with
+     * its whole text. Ask for a small group at a time: every text at once
+     * is more than the app's memory holds.
+     */
+    suspend fun shownNotes(ids: List<String>): List<Note> = notes.shownByIds(ids).map(::noteOf)
 
     /** The files that are not deleted, of every note, in no order. */
     fun shownFiles(): Flow<List<NoteFile>> = attachments.observeShown().map { rows -> rows.map(::fileOf) }
@@ -391,7 +403,7 @@ class NotesRepository(
         }
         turns.inTurn { openUndo ->
             database.withWriteTransaction {
-                notes.deletedNotWiped().filter { it.record.id !in openUndo }.forEach { noteWriter.wipe(it.record.id, NoteRules::wiped) }
+                notes.deletedNotWipedIds().filter { it !in openUndo }.forEach { noteWriter.wipe(it, NoteRules::wiped) }
                 attachments.deletedNotWiped().filter { it.record.id !in openUndo }.forEach { fileWriter.wipe(it.record.id, NoteRules::wiped) }
             }
         }

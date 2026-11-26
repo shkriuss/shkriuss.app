@@ -12,14 +12,27 @@ import java.util.Locale
  */
 object NoteSearch {
     /** How [note], with the names of its shown [fileNames], matches [query], or null if it does not. An empty query matches nothing here. */
-    fun match(note: Note, fileNames: List<String>, query: String): SearchMatch? {
+    fun match(note: Note, fileNames: List<String>, query: String): SearchMatch? = inNote(note, query) ?: inFileNames(fileNames, query)
+
+    /** How the title or the text of [note] matches [query], or null if neither does. */
+    fun inNote(note: Note, query: String): SearchMatch? {
         if (query.isEmpty()) return null
         val wanted = Lowered(query).text
         val inTitle = rangesIn(note.title, wanted)
         val line = matchingLine(note.body, wanted)
-        val file = if (inTitle.isEmpty() && line == null) fileNames.firstOrNull { rangesIn(it, wanted).isNotEmpty() } else null
-        if (inTitle.isEmpty() && line == null && file == null) return null
-        return SearchMatch(inTitle, line, file, file?.let { rangesIn(it, wanted) }.orEmpty())
+        return if (inTitle.isEmpty() && line == null) null else SearchMatch(inTitle, line, null)
+    }
+
+    /**
+     * The match of a note whose title and text do not hold [query]: the
+     * first of the names of its shown files, [fileNames], that does, or
+     * null if none does.
+     */
+    fun inFileNames(fileNames: List<String>, query: String): SearchMatch? {
+        if (query.isEmpty()) return null
+        val wanted = Lowered(query).text
+        val file = fileNames.firstOrNull { rangesIn(it, wanted).isNotEmpty() } ?: return null
+        return SearchMatch(emptyList(), null, file, rangesIn(file, wanted))
     }
 
     /**
@@ -38,6 +51,18 @@ object NoteSearch {
         if (Character.isLowSurrogate(line.line[start])) start++
         val shift = ELLIPSIS.length - start
         return MatchedLine(ELLIPSIS + line.line.substring(start), line.ranges.filter { it.first >= start }.map { it.first + shift..it.last + shift })
+    }
+
+    /**
+     * [line] as a row keeps it: as it shows ([shownLine]), and no more than
+     * [NoteLimits.MOST_ROW_TEXT] characters of that, as a text of its own,
+     * with the matches that are whole in it. A row shows two lines, so
+     * nothing that shows is cut.
+     */
+    fun rowLine(line: MatchedLine): MatchedLine {
+        val shown = shownLine(line)
+        val kept = NoteText.first(shown.line, NoteLimits.MOST_ROW_TEXT)
+        return if (kept.length == shown.line.length) shown else MatchedLine(kept, shown.ranges.filter { it.last < kept.length })
     }
 
     /** A match that starts this far into a line, or nearer, shows without cutting the line. */

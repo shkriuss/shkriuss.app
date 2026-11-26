@@ -391,7 +391,7 @@ class NotesRepositoryTest {
         val ticket = file(shown)
         file(shown, "old.jpg").also { checkNotNull(repository.removeFile(it)) }
 
-        assertEquals(listOf(shown), repository.notes().first().map { it.id })
+        assertEquals(listOf(shown), repository.noteMarks().first().map { it.id })
         assertEquals(listOf(ticket), repository.filesOf(shown).first().map { it.id })
         assertNull(repository.note(gone).first())
         assertEquals(1, repository.totals().first().count)

@@ -7,6 +7,7 @@ import app.shkriuss.core.backup.BackupRecord
 import app.shkriuss.core.backup.BackupSink
 import app.shkriuss.core.backup.CheckedBackup
 import app.shkriuss.core.backup.CheckedFile
+import app.shkriuss.core.data.BEFORE_FIRST_CHANGE
 import app.shkriuss.core.data.BackupTake
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.data.IdSource
@@ -32,8 +33,11 @@ import kotlinx.coroutines.sync.withLock
  * of each file, byte for byte as it is stored, under its file's `id`. A
  * file's key is only in its record, wrapped.
  *
- * Writing ([list]) is one snapshot: one read of the database gives every
+ * Writing ([list]) is one snapshot: one read transaction gives every
  * record of both tables, deleted ones too, and the list of files. The
+ * notes are read and given to the backup a few at a time
+ * ([NoteLimits.NOTES_AT_A_TIME]), in the order of their change numbers, because
+ * every text at once is more than the app's memory holds. The
  * streams of the files of that read that are not deleted and are whole on
  * the phone follow, and the rest are counted as left out. No stream is
  * removed while it runs: it holds `NotesRepository.streams`. The wipe of
@@ -64,13 +68,22 @@ class NotesBackupContent(
     override val dataVersion: Int = DATA_VERSION
 
     override suspend fun list(into: BackupSink) = repository.streams.withLock {
-        // One snapshot: every row is read in one read transaction, and only then given to the backup. A stream never
-        // changes, and none is removed while this holds the lock, so each stream below is the file its record describes.
-        val (noteRows, fileRows) = database.withReadTransaction { database.notes().all() to database.attachments().all() }
-        val unwiped = noteRows.any { it.record.isDeleted && !NoteRules.isWiped(it) } ||
-            fileRows.any { it.record.isDeleted && !NoteRules.isWiped(it) }
-        if (unwiped) throw NotWipedException()
-        noteRows.forEach { into.record(NotesBackupCodec.encode(it)) }
+        // One snapshot: every row is read in one read transaction. A stream never changes, and none is removed while
+        // this holds the lock, so each stream below is the file its record describes.
+        val fileRows = database.withReadTransaction {
+            val fileRows = database.attachments().all()
+            val unwiped = database.notes().deletedNotWipedIds().isNotEmpty() ||
+                fileRows.any { it.record.isDeleted && !NoteRules.isWiped(it) }
+            if (unwiped) throw NotWipedException()
+            // A page of notes is given to the backup before the next is read, so only a few texts are in memory.
+            var after = BEFORE_FIRST_CHANGE
+            do {
+                val page = database.notes().changedSince(after, NoteLimits.NOTES_AT_A_TIME)
+                page.forEach { into.record(NotesBackupCodec.encode(it)) }
+                page.lastOrNull()?.let { after = it.changeNumber }
+            } while (page.size == NoteLimits.NOTES_AT_A_TIME)
+            fileRows
+        }
         fileRows.forEach { into.record(NotesBackupCodec.encode(it)) }
 
         val shown = fileRows.filterNot { it.record.isDeleted }

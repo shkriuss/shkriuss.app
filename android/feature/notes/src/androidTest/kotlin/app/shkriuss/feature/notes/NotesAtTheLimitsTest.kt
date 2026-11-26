@@ -117,18 +117,17 @@ class NotesAtTheLimitsTest {
 
     /**
      * How many notes get a text of 100,000 characters: a tenth more than
-     * the heap could hold at one byte a character, at most every note, and
-     * no more than the emulator has room for.
+     * the heap could hold at one byte a character. The test fails if that
+     * is more notes than Notes allows, or more than the emulator has room
+     * for: with less text it would pass and show nothing.
      */
     private fun longNotesFor(heap: Long): Int {
         val overTheHeap = heap / NoteLimits.MOST_BODY * 11 / 10 + 1
         // Each text is written once, written again when its note is deleted, and passes through the write-ahead file.
-        val room = maxOf(0, (context.filesDir.usableSpace - ROOM_FOR_THE_REST) / ROOM_PER_LONG_NOTE)
-        val long = minOf(overTheHeap, room, NOTES.toLong()).toInt()
-        if (long < overTheHeap) {
-            TestDevice.note("Notes at its limits: only $long long notes. More than the heap holds would be $overTheHeap; the emulator has room for $room.")
-        }
-        return long
+        val room = (context.filesDir.usableSpace - ROOM_FOR_THE_REST) / ROOM_PER_LONG_NOTE
+        assertTrue("A heap of ${heap / MEGA} MB holds every text that $NOTES notes can have, so this test can show nothing here", overTheHeap <= NOTES)
+        assertTrue("The emulator has room for $room long notes, and the test needs $overTheHeap", overTheHeap <= room)
+        return overTheHeap.toInt()
     }
 
     /** Stores [NOTES] notes, the first [long] of them with the longest text, each with 20 files. Returns their `id`s in that order. */
