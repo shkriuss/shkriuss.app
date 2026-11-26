@@ -179,7 +179,7 @@ class NotesListViewModel(
 
     init {
         viewModelScope.launch(work) {
-            combine(repository.noteMarks(), repository.shownFiles(), searched) { marks, files, query -> Triple(marks, files, query) }
+            combine(repository.noteMarks(), repository.fileCounts(), searched) { marks, files, query -> Triple(marks, files, query) }
                 // One answer is read to its end before the next starts, so what a read kept is there for the next.
                 .conflate()
                 .map { (marks, files, query) -> shown(marks, files, query) as NotesListState }
@@ -239,13 +239,13 @@ class NotesListViewModel(
         screen.value.newNote?.let(repository::giveUpNewNote)
     }
 
-    private suspend fun shown(marks: List<NoteMark>, files: List<NoteFile>, query: String): NotesListState.Shown {
-        val filesByNote = files.groupBy { it.noteId }
-        val shownRows = rows.of(marks, query).mapNotNull { row ->
-            val shownFiles = filesByNote[row.id].orEmpty().sortedWith(NoteOrder.FILES)
-            // A note whose title and text do not match can still match by the name of a file.
-            val match = if (query.isEmpty()) null else row.match ?: NoteSearch.inFileNames(shownFiles.map { it.name }, query) ?: return@mapNotNull null
-            row.copy(fileCount = shownFiles.size, match = match)
+    private suspend fun shown(marks: List<NoteMark>, fileCounts: Map<String, Int>, query: String): NotesListState.Shown {
+        val found = rows.of(marks, query)
+        // A note whose title and text do not match can still match by the name of a file.
+        val byFileName = if (query.isEmpty()) emptyMap() else matchesInFileNames(found.filter { it.match == null && it.id in fileCounts }, query)
+        val shownRows = found.mapNotNull { row ->
+            val match = if (query.isEmpty()) null else row.match ?: byFileName[row.id] ?: return@mapNotNull null
+            row.copy(fileCount = fileCounts[row.id] ?: 0, match = match)
         }
         val sections = NoteOrder.sections(shownRows)
         return NotesListState.Shown(
@@ -255,6 +255,22 @@ class NotesListViewModel(
             noNotes = marks.isEmpty(),
             noMatch = query.isNotEmpty() && shownRows.isEmpty(),
         )
+    }
+
+    /**
+     * The matches of [query] in the names of the shown files of the notes
+     * of [rows], by the `id` of the note. The names are read for a few
+     * notes at a time, and only the name that matches is kept: Notes can
+     * hold a hundred thousand names.
+     */
+    private suspend fun matchesInFileNames(rows: List<NoteRowState>, query: String): Map<String, SearchMatch> {
+        val matches = HashMap<String, SearchMatch>()
+        rows.map { it.id }.chunked(NoteLimits.NOTES_AT_A_TIME).forEach { group ->
+            repository.shownFileNames(group).forEach { (noteId, names) ->
+                NoteSearch.inFileNames(names, query)?.let { matches[noteId] = it }
+            }
+        }
+        return matches
     }
 
     private companion object {

@@ -9,6 +9,11 @@ import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.testing.TestClock
 import app.shkriuss.core.testing.TestIdSource
 import app.shkriuss.core.testing.inMemoryTestDatabaseBuilder
+import app.shkriuss.core.data.BEFORE_FIRST_CHANGE
+import app.shkriuss.feature.notes.data.AttachmentDao
+import app.shkriuss.feature.notes.data.AttachmentEntity
+import app.shkriuss.feature.notes.data.NoteDao
+import app.shkriuss.feature.notes.data.NoteEntity
 import app.shkriuss.feature.notes.data.NotesDatabase
 import app.shkriuss.feature.notes.data.SecureDelete
 import java.io.ByteArrayInputStream
@@ -39,6 +44,12 @@ internal val THE_TIME: Long = LocalDateTime.of(2026, 11, 24, 9, 30).toInstant(Zo
 
 /** A Notes database in memory, on the system SQLite driver, with `secure_delete` on. Close it at the end of the test. */
 internal fun memoryDatabase(): NotesDatabase = inMemoryTestDatabaseBuilder<NotesDatabase>(context).addCallback(SecureDelete).build()
+
+/** Every note, deleted ones too. A test holds few. */
+internal suspend fun NoteDao.every(): List<NoteEntity> = changedSince(BEFORE_FIRST_CHANGE, Int.MAX_VALUE)
+
+/** Every file, deleted ones too. A test holds few. */
+internal suspend fun AttachmentDao.every(): List<AttachmentEntity> = changedSince(BEFORE_FIRST_CHANGE, Int.MAX_VALUE)
 
 /** A database in memory that does its reads and writes on [work], so that a test can hold them ([HoldableWork]). */
 internal fun memoryDatabaseOn(work: CoroutineDispatcher): NotesDatabase =

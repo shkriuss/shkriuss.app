@@ -89,7 +89,7 @@ fun storedNotes(): List<Note> = runBlocking {
 fun everyNote(): List<NoteEntity> = runBlocking { testApp.test.database.notes().changedSince(BEFORE_FIRST_CHANGE, Int.MAX_VALUE) }
 
 /** The files that are not deleted, as the database holds them now. */
-fun storedFiles(): List<NoteFile> = runBlocking { testApp.test.services.repository.shownFiles().first() }
+fun storedFiles(): List<NoteFile> = runBlocking { storedNotes().flatMap { note -> testApp.test.services.repository.filesOf(note.id).first() } }
 
 /** Every write to the table of notes fails from now on, as on a disk that refuses. */
 fun refuseWrites() = runBlocking {

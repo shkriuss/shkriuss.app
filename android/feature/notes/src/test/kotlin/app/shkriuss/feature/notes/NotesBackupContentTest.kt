@@ -218,6 +218,27 @@ class NotesBackupContentTest {
     }
 
     @Test
+    fun aBackupOfMoreFileRecordsThanAreReadAtATimeHoldsEveryOneAndComesBackWhole() {
+        val (first, second) = twoPhones()
+        val trip = first.note("Trip")
+        // Records of files whose streams are not on this phone: a backup lists them and leaves their streams out.
+        runBlocking {
+            repeat(520) { number ->
+                val fileId = first.repository.reserveFileId()
+                val key = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
+                assertEquals(FileAdded.ADDED, first.repository.addFile(trip, fileId, "file$number.pdf", "application/pdf", 1_000, key))
+                first.repository.releaseFileId(fileId)
+            }
+        }
+
+        assertEquals(BackupStep.Written(notes = 1, files = 0, leftOut = 520), backUp(first))
+        assertEquals(BackupStep.Restored, restore(second))
+
+        assertEquals(520, second.files().size)
+        assertEquals(first.files().map { it.copy(changeNumber = 0) }.toSet(), second.files().map { it.copy(changeNumber = 0) }.toSet())
+    }
+
+    @Test
     fun aFileThatIsNotOnThePhoneOrIsDamagedIsLeftOutAndItsRecordGoesIn() {
         val (first, second) = twoPhones()
         val trip = first.note("Trip")

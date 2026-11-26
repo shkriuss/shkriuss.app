@@ -12,7 +12,6 @@ import app.shkriuss.core.backup.Backups
 import app.shkriuss.core.backup.CheckedBackup
 import app.shkriuss.core.backup.ExportResult
 import app.shkriuss.core.crypto.RecoveryKey
-import app.shkriuss.core.data.BEFORE_FIRST_CHANGE
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.data.IdSource
 import app.shkriuss.core.data.RecordFields
@@ -107,10 +106,10 @@ internal class NotesPhone(
         runBlocking { database.attachments().shownOf(noteId) }.sortedWith(compareBy({ it.record.createdAt }, { it.record.id }))
 
     /** Every note, deleted ones too. */
-    fun notes(): List<NoteEntity> = runBlocking { database.notes().changedSince(BEFORE_FIRST_CHANGE, Int.MAX_VALUE) }
+    fun notes(): List<NoteEntity> = runBlocking { database.notes().every() }
 
     /** Every file, deleted ones too. */
-    fun files(): List<AttachmentEntity> = runBlocking { database.attachments().all() }
+    fun files(): List<AttachmentEntity> = runBlocking { database.attachments().every() }
 
     /** The bytes of the file [row], decrypted, as **Save a copy** writes them. */
     fun read(row: AttachmentEntity): ByteArray = runBlocking { services.reader.open(fileOf(row)).use { it.readBytes() } }

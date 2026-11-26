@@ -1,6 +1,7 @@
 package app.shkriuss.feature.notes
 
 import app.shkriuss.feature.notes.data.AttachmentEntity
+import app.shkriuss.feature.notes.data.FileName
 import app.shkriuss.feature.notes.data.NoteEntity
 
 /** What the order of the list needs of a note (docs/apps/notes/spec.md, "Notes", point 2). */
@@ -70,6 +71,9 @@ object NoteOrder {
 
     /** The files of a note: oldest first, by `createdAt`, then `id`. */
     val FILES: Comparator<NoteFile> = compareBy<NoteFile> { it.createdAt }.thenBy { it.id }
+
+    /** The names of the files of a note, in the order of [FILES]. */
+    val FILE_NAMES: Comparator<FileName> = compareBy<FileName> { it.createdAt }.thenBy { it.id }
 
     /** The pinned notes and the others, each in [NOTES] order. Without a pinned note, [Sections.pinned] is empty and the list has no heading. */
     fun <T : Listed> sections(notes: List<T>): Sections<T> {

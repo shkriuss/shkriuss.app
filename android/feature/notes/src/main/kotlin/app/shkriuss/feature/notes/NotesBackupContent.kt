@@ -11,6 +11,8 @@ import app.shkriuss.core.data.BEFORE_FIRST_CHANGE
 import app.shkriuss.core.data.BackupTake
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.data.IdSource
+import app.shkriuss.core.data.Record
+import app.shkriuss.core.data.RecordDao
 import app.shkriuss.core.data.RecordWriter
 import app.shkriuss.core.data.isDeleted
 import app.shkriuss.core.data.timesAreWithinLimits
@@ -35,9 +37,10 @@ import kotlinx.coroutines.sync.withLock
  *
  * Writing ([list]) is one snapshot: one read transaction gives every
  * record of both tables, deleted ones too, and the list of files. The
- * notes are read and given to the backup a few at a time
- * ([NoteLimits.NOTES_AT_A_TIME]), in the order of their change numbers, because
- * every text at once is more than the app's memory holds. The
+ * records are read and given to the backup a page at a time
+ * ([NoteLimits.NOTES_AT_A_TIME], [NoteLimits.FILES_AT_A_TIME]), in the
+ * order of their change numbers, because every text or every file record
+ * at once is more than the app's memory holds. The
  * streams of the files of that read that are not deleted and are whole on
  * the phone follow, and the rest are counted as left out. No stream is
  * removed while it runs: it holds `NotesRepository.streams`. The wipe of
@@ -70,31 +73,34 @@ class NotesBackupContent(
     override suspend fun list(into: BackupSink) = repository.streams.withLock {
         // One snapshot: every row is read in one read transaction. A stream never changes, and none is removed while
         // this holds the lock, so each stream below is the file its record describes.
-        val fileRows = database.withReadTransaction {
-            val fileRows = database.attachments().all()
-            val unwiped = database.notes().deletedNotWipedIds().isNotEmpty() ||
-                fileRows.any { it.record.isDeleted && !NoteRules.isWiped(it) }
+        val shown = database.withReadTransaction {
+            val unwiped = database.notes().deletedNotWipedIds().isNotEmpty() || database.attachments().deletedNotWipedIds().isNotEmpty()
             if (unwiped) throw NotWipedException()
-            // A page of notes is given to the backup before the next is read, so only a few texts are in memory.
-            var after = BEFORE_FIRST_CHANGE
-            do {
-                val page = database.notes().changedSince(after, NoteLimits.NOTES_AT_A_TIME)
-                page.forEach { into.record(NotesBackupCodec.encode(it)) }
-                page.lastOrNull()?.let { after = it.changeNumber }
-            } while (page.size == NoteLimits.NOTES_AT_A_TIME)
-            fileRows
+            eachRecord(database.notes(), NoteLimits.NOTES_AT_A_TIME) { into.record(NotesBackupCodec.encode(it)) }
+            eachRecord(database.attachments(), NoteLimits.FILES_AT_A_TIME) { into.record(NotesBackupCodec.encode(it)) }
+            database.attachments().shownSizes()
         }
-        fileRows.forEach { into.record(NotesBackupCodec.encode(it)) }
-
-        val shown = fileRows.filterNot { it.record.isDeleted }
-        val whole = shown.filter { store.isWhole(it.record.id, it.size) }
+        val whole = shown.filter { store.isWhole(it.id, it.size) }
         // Not on this phone, or damaged: its record is in the backup, its stream is not (spec, "Writing", point 3).
         into.filesLeftOut((shown.size - whole.size).toLong())
         into.fileBytes(whole.sumOf { StreamLength.of(it.size) })
-        whole.forEach { row ->
-            val id = row.record.id
-            FileInputStream(store.stream(id)).use { into.file(id, StreamLength.of(row.size), it) }
+        whole.forEach { file ->
+            FileInputStream(store.stream(file.id)).use { into.file(file.id, StreamLength.of(file.size), it) }
         }
+    }
+
+    /**
+     * Gives every record that [dao] reads to [action], deleted ones too,
+     * in the order of their change numbers. A page of [pageSize] records
+     * is given before the next is read, so only a few are in memory.
+     */
+    private suspend fun <T : Record<T>> eachRecord(dao: RecordDao<T>, pageSize: Int, action: suspend (T) -> Unit) {
+        var after = BEFORE_FIRST_CHANGE
+        do {
+            val page = dao.changedSince(after, pageSize)
+            page.forEach { action(it) }
+            page.lastOrNull()?.let { after = it.changeNumber }
+        } while (page.size == pageSize)
     }
 
     override suspend fun restore(from: CheckedBackup) {

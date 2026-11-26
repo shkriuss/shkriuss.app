@@ -212,14 +212,15 @@ class ViewModelsTest {
         }
         val rent = ids.filterIndexed { index, _ -> (index + 1) % 9 == 0 }
         runBlocking { listOf(ids[0], ids[20], ids[44]).forEach { repository.setPinned(it, shownPinned = false) } }
-        // One note matches by the name of a file only.
-        val withFile = ids[30]
+        // More notes with a file than are asked for their names at a time. The last of them matches by that name only.
+        val withFile = ids[40]
+        ids.subList(10, 34).forEach { adds.add(it, listOf(TestPick(name = "ticket.jpg"))) }
         adds.add(withFile, listOf(TestPick(name = "rent-contract.pdf")))
         adds.adding.await { it.isEmpty() }
         val expected = NoteOrder.sections(runBlocking { repository.shownNotes(ids) })
         val list = list()
 
-        val shown = list.shown { it.pinned.size == 3 && it.others.size == 42 && it.others.any { row -> row.fileCount == 1 } }
+        val shown = list.shown { rows -> rows.pinned.size == 3 && rows.others.size == 42 && (rows.pinned + rows.others).count { it.fileCount == 1 } == 25 }
 
         assertEquals(expected.pinned.map { it.id }, shown.pinned.map { it.id })
         assertEquals(expected.others.map { it.id }, shown.others.map { it.id })

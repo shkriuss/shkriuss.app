@@ -28,6 +28,13 @@ object NoteLimits {
      */
     const val NOTES_AT_A_TIME: Int = 20
 
+    /**
+     * How many file records are read at a time where Notes reads all of
+     * them: a backup and the move of the file keys. Notes can hold a
+     * hundred thousand, each with a name and a key.
+     */
+    const val FILES_AT_A_TIME: Int = 500
+
     /** **Add a file** adds no file to a note that holds this many. A restore can bring more. */
     const val MOST_FILES_PER_NOTE: Int = 20
 
