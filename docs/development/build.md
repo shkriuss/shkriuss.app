@@ -695,11 +695,12 @@ second build must write the same mapping file, or the release stops. See
   - `TasksScreenshotTest`: the screenshots of every screen, sheet,
     dialog and menu. The date picker shows June 2100, because
     Material's picker marks the real today in the month it shows.
-- `feature/notes` has 15 test classes with 242 tests: the limits of every
+- `feature/notes` has 15 test classes with 251 tests: the limits of every
   column, the wiped form, and how a title, a text, a file name and a
   type are kept (`NoteLimitsTest`), the marks of the text, the
   formatting bar, Enter and a tap on a box (`NoteFormattingTest`),
-  search, the order of the list and what a row shows
+  search, the order of the list, what a row shows and the 1,000
+  characters it keeps
   (`NoteSearchTest`), as plain code; the schema, `secure_delete` on the
   connection that writes and the checkpoint that cuts the write-ahead
   file to zero, on a database in a file (`NotesDatabaseTest`); the
@@ -710,8 +711,10 @@ second build must write the same mapping file, or the release stops. See
   code of `core/crypto` (`NoteFilesTest`); the images decoded from their
   streams, scaled down, and the intents of the file picker
   (`NoteImagesTest`); the ViewModels and the one snackbar
-  (`ViewModelsTest`), with an Undo that the database refuses and a
-  message about an add that waits for an Undo to be over, and which
+  (`ViewModelsTest`), with an Undo that the database refuses, a
+  message about an add that waits for an Undo to be over, and a list of
+  more notes than are read at a time, which reads a note again only
+  when it changed, and which
   note is open, also after Android
   stopped Notes (`OpenNoteViewModelTest`);
   the clock of the screens (`NotesNowTest`); how far the image view
@@ -741,7 +744,8 @@ second build must write the same mapping file, or the release stops. See
     whole backup that comes back on another phone byte for byte, the
     files that are left out, the wipe before a backup, which streams
     move in after a restore, a wiped note that a later edit of another
-    copy brings back, more files of one note than an add allows, the
+    copy brings back, more files of one note than an add allows, more
+    notes and more file records than a backup reads at a time, the
     progress of a backup and a restore, that what a stopped restore
     left is deleted off the thread that starts Notes, and what every
     start does: the wipe of what a stop left, the streams and parts no
@@ -793,8 +797,9 @@ second build must write the same mapping file, or the release stops. See
 ### Instrumented tests
 
 Tests that need a real Android run on an emulator, in the job "Emulator"
-of CI. Today those are the tests of the hardware keys in `core/crypto`
-and the tests of the alarms in `core/notify`. They cannot run in a cloud
+of CI. Today those are the tests of the hardware keys in `core/crypto`,
+the tests of the alarms in `core/notify`, and the test of Notes at its
+limits in `feature/notes`. They cannot run in a cloud
 session, which has no emulator. What they are, how they run and what
 they found is in [emulator-tests.md](emulator-tests.md).
 

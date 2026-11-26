@@ -85,7 +85,9 @@ no account and no network, and encrypts every file.
    and the number of files: "14:05 · 2 files". With no file, only the
    last change: "14:05". A date shows as in Tasks, "Mon 16 Nov", with
    its year when it is not this year. With no title, the first line of
-   the text is the title; with neither, "Empty note".
+   the text is the title; with neither, "Empty note". A row keeps the
+   first 1,000 characters of the text for its two lines, and of a first
+   line that is its title. So the list never holds a whole text.
 4. A tap opens the note: in place under 840dp, with Back. From 840dp,
    `ShkListDetailScaffold`: the list, 360dp wide, and the open note
    beside it, or "Choose a note.". The card of the open note is marked
@@ -104,7 +106,8 @@ no account and no network, and encrypts every file.
    Marks are text.
 2. The rows keep their order and sections. Under the title they show the
    first line of the text that matches, as it is stored, with the match
-   in bold, or "File: ticket.jpg" for a match in a file name only. A
+   in bold, or "File: ticket.jpg" for a match in a file name only. A row
+   keeps 1,000 characters of that line, from where it shows it. A
    match in the title only shows the row as in the list, with the match
    in bold in the title.
 3. With no match: "No notes match “rent”.", announced by TalkBack.
@@ -297,6 +300,7 @@ and `core/crypto` are as in Water.
 | One file | At most 25 MB: 25,000,000 bytes |
 | All files | At most 1 GB: 1,000,000,000 bytes, of files that are not deleted |
 | File name | 1 to 255 characters. A longer one keeps its first 255. |
+| A row of the list | Keeps the first 1,000 characters of its note's text |
 | Pinned | Off for a new note |
 | Saving | One second after the last change, and at least every 10 seconds while typing goes on |
 
@@ -697,7 +701,9 @@ None. Notes uses no alarm and shows no notification.
 As in Water and Tasks, and:
 
 1. A note row is one item: "Trip, pinned, changed Monday 16 November, 2
-   files, Passport, Tickets". Pinned, Other notes and Files are headings.
+   files, Passport, Tickets". It ends with the text the row keeps, the
+   first 1,000 characters at most, not with the whole text. Pinned,
+   Other notes and Files are headings.
 2. The bar's buttons have their names, "Heading", "Bold", "Italic",
    "Bulleted list", "Numbered list", "Checklist", and say whether they
    are on for the line where the cursor is.
@@ -763,7 +769,7 @@ late, and when the clock or the time zone changes
    note after this phone wiped it brings the note back, with its newer
    files only ([After a restore](#after-a-restore), point 4).
 
-For the screens, nine more:
+For the screens, ten more:
 
 6. From 840dp, the card of the open note is marked as selected in the
    list, as an open item of a list is ([Notes](#notes), point 4).
@@ -795,6 +801,13 @@ For the screens, nine more:
     added to it can be brought back
     ([Removing a file, and the wipe](#removing-a-file-and-the-wipe),
     point 2).
+15. A row of the list keeps the first 1,000 characters of its note's
+    text, and no whole text: for its two lines, for a first line that
+    is its title, and for the line that matches a search. The screen
+    shows the same two lines, and TalkBack reads what the row keeps.
+    Notes reads its notes and file records a few at a time, so that
+    very many very long notes do not use up its memory
+    ([Notes](#notes), point 3).
 
 ## Assumptions
 
@@ -850,10 +863,13 @@ Choices this page made without a decision by the owner on that point.
    check on a phone has noted it yet.
 5. **The keyboard that does not learn** ([assumption 5](#assumptions)),
    if it makes long texts too hard to type.
-6. **Search at the limits.** With no index, a search reads every title,
-   text and file name. 5,000 notes of 100,000 characters each would make
-   it slow. The build measures it; an index or a lower limit would be a
-   change to this page.
+6. **Speed at the limits.** With no index, a search reads every title,
+   text and file name, and the list reads every text once to make its
+   rows. Notes reads them a few at a time, so memory is no limit: a test
+   on the emulator stores more text than the app's memory holds and
+   runs the list, a search and a backup. How long they take on a phone
+   with 5,000 notes of 100,000 characters each is not measured; an
+   index or a lower limit would be a change to this page.
 7. **A damaged stream of the right length, or a damaged wrapped key,**
    stays damaged after a restore that holds a good copy, when the stored
    file has the same `updatedAt`: the restore writes nothing for it.

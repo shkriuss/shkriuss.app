@@ -242,9 +242,10 @@ app lock and its settings, and your recovery key.
 ## TalkBack
 
 - Each note row is one item, such as "Trip, pinned, changed Monday 16
-  November, 2 files, Passport, Tickets". **Pinned**, **Other notes**
-  and **Files** are headings, and so are the section headers of
-  Settings.
+  November, 2 files, Passport, Tickets". It ends with the start of the
+  note's text, 1,000 characters at most. Open the note to hear all of
+  it. **Pinned**, **Other notes** and **Files** are headings, and so
+  are the section headers of Settings.
 - The buttons of the formatting bar have their names, and say whether
   they are on for the line of the cursor. On a checklist item, the text
   has the action "Tick" or "Open again".
@@ -293,12 +294,11 @@ Not known yet:
 1. How TalkBack reads the marks in the text, such as "- [ ]".
 2. Whether the keyboard, which is asked not to learn what you type,
    makes long texts too hard to type.
-3. How many long notes Notes can hold. The list keeps the text of
-   every note in memory, a search reads every title, text and file
-   name, and the list reads every text again after each save. With very
-   many very long notes Notes gets slow, and it can run out of memory
-   and close each time it opens. Nobody has measured where that starts.
-   It is below the limits of 5,000 notes with 100,000 characters each.
+3. How fast the list and a search are with very many very long notes.
+   A search reads every title, text and file name. Notes reads them a
+   few at a time, so it does not run out of memory, but nobody has
+   measured the time on a phone at 5,000 notes with 100,000 characters
+   each.
 4. Whether TalkBack goes back to the item that opened a dialog or a
    menu, when it closes. Notes does nothing of its own for it.
 

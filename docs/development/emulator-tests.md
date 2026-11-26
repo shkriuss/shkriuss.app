@@ -1,8 +1,9 @@
 # Emulator tests
 
 Tests that need a real Android run on an emulator in GitHub Actions. They
-are called instrumented tests. Two modules have them: `core/crypto`, for
-the hardware keys, and `core/notify`, for alarms and notifications.
+are called instrumented tests. Three modules have them: `core/crypto`,
+for the hardware keys, `core/notify`, for alarms and notifications, and
+`feature/notes`, for Notes at its limits on a real Android heap.
 
 Emulator tests run only in GitHub Actions. The cloud environment has no
 KVM, so it cannot run an emulator ([cloud-environment.md](cloud-environment.md)).
@@ -48,8 +49,8 @@ the tests compile.
 6. The job finds the module by its folder `src/androidTest/`. Nothing in
    `ci.yml` changes.
 
-Today only library modules have instrumented tests: `core/crypto` and
-`core/notify`. A library's test APK
+Today only library modules have instrumented tests: `core/crypto`,
+`core/notify` and `feature/notes`. A library's test APK
 holds the library and its tests, and is its own app on the emulator. An
 app module would need its app APK installed too. The job does not do that
 yet.
@@ -293,6 +294,48 @@ What the log says with the wait:
 - The warning shows on the page of the run, above the jobs. It shows
   on every run for as long as the Android 17 image has this fault. If
   a later image fixes it, the warning stops by itself.
+
+## The test of Notes at its limits
+
+`feature/notes` has one test on the emulator, `NotesAtTheLimitsTest`.
+The unit tests of Notes run on the heap of the build's own machine,
+which is far larger than the heap Android gives an app. So they cannot
+show that Notes holds too much in memory. This test can.
+
+What it stores, in Notes' own database, opened as the app opens it:
+
+1. 5,000 notes, the most that Notes makes
+   ([spec.md](../apps/notes/spec.md#limits-and-defaults)).
+2. So many of them with a text of 100,000 characters that these texts
+   are a tenth larger than the heap, `Runtime.maxMemory()`. The others
+   have a short text.
+3. 20 files for each note: 100,000 file records, each with a name of
+   255 characters and a wrapped key of 1,024 bytes. They have no
+   streams.
+
+What it then runs, as Notes does:
+
+1. The list, to its first rows: every note has its row and its number
+   of files.
+2. A search for a word at the end of every long text, and a search for
+   the start of the file names of one note.
+3. A backup, into a sink that only counts: every record is listed, and
+   every stream is counted as left out.
+4. The read of the move of the file keys.
+5. The sweep, after every long note was marked deleted: it wipes them
+   and their files.
+
+Code that holds every text or every file record in memory at once runs
+out of memory in step 1, and the run fails with
+`java.lang.OutOfMemoryError` in Android's log.
+
+The test fails, and stores nothing, when it cannot store more text than
+the heap holds: when 5,000 notes are not enough for this heap, or when
+the emulator has too little room. With less text it would pass and show
+nothing.
+
+It writes a `NOTE` with the heap and the number of long notes, and one
+with the seconds of each step.
 
 ## What an emulator cannot check
 
