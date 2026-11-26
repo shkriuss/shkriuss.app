@@ -528,8 +528,12 @@ come with `core/security`, in every data app.
 6. Neither part gives any data by itself. The keys come only after the
    user allowed it on the keeper's screen and answered the system
    prompt. They are only the calling app's own keys.
-7. Catalog removes both parts and the `<queries>`. Sync will remove them
-   too (ADR 0041, point 7).
+7. Catalog removes both parts and the `<queries>`. Sync, which is not
+   built yet, will remove both parts and keep the `<queries>`: it is
+   never a keeper, but it must see the data apps, to ask a keeper for
+   its statement and to find the apps it carries for
+   ([sync-protocol.md](../architecture/sync-protocol.md#the-courier-interface),
+   [ADR 0009](../adr/0009-sync-protocol-and-server.md), point 17).
 
 ### A receiver registered at runtime
 

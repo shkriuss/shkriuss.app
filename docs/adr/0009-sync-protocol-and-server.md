@@ -25,7 +25,9 @@
   limit is reached, until 00:00 UTC; a write to a table with an index
   counts as one more row; a value or a row in D1 is at most 2,000,000
   bytes; a D1 database is at most 500 MB; a batch of statements counts
-  as one query of the 50 that one request may make. R2 gives 10 GB,
+  as one query of the 50 that one request may make; one request may
+  make 1,000 calls to Cloudflare's own services, such as D1 and R2,
+  and 50 to other hosts. R2 gives 10 GB,
   1,000,000 writing and 10,000,000 reading operations a month, and
   checks a SHA-256 that comes with an upload. A request body is at most
   100 MB. The Worker's Web Crypto checks ECDSA and Ed25519 signatures.

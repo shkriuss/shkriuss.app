@@ -720,10 +720,14 @@ is built ([Assumptions](#assumptions)).
 | 1 | `00`: no account yet. `01`: in use. `02`: closed. |
 | 4 | The most records in one batch or page, 1 to 100 |
 | 4 | The most bytes of blobs in one batch or page, 65,536 to 524,288 |
-| 4 | The most chunks in one file request, 1 to 256 |
+| 4 | The most chunks, streams or files that one file request may name, 1 to 256 |
 
 A device obeys the last three inside these bounds, and treats a value
 outside them as the nearest bound.
+
+The last limit holds for all four file calls
+([`files/send`](#filessend) and the three after it). A request that
+names more is answered `0C`.
 
 The byte limit only says how many records go together. One record
 alone always fits, in a batch and in a page, whatever this limit
@@ -1409,7 +1413,9 @@ cursor still moves past it.
    own batch stored the file's deleted record there, wiped where the
    app wipes. The app then lists the file in `streams` as "to
    delete", with the number that record got. The Sync app calls
-   `files/delete`, and then `streamDeleted`.
+   `files/delete`, and then `streamDeleted`, whatever the server
+   answered. Taking a version of the file's record that is not
+   deleted also drops the mark "to delete".
 2. The server deletes the chunks only while that deleted record is
    still its copy. So a deletion that lost against a newer version of
    the file's record deletes no chunks, however late the request
@@ -1481,7 +1487,9 @@ What that means:
    three days and goes on by itself.
 5. **Files.** 1 GB of files is at least 239 requests. 100,000 small
    files go 256 to a request, so about 400 requests and 100,000
-   writes in R2.
+   writes in R2. If `info` allows only 40 to a request, they take
+   2,500 requests, which still fits in a day. Asking which chunks the
+   server has costs one reading operation of R2 for each chunk asked.
 6. **When a limit is reached**, the server says so
    ([Answers](#answers), `07` and `08`), or Cloudflare does. The
    device waits. Nothing is lost: the changes wait in the data apps.
@@ -1869,8 +1877,10 @@ built. If one is wrong, the fix is a change to this page first.
 12. The server's clock is right.
 13. Every record of today's four apps fits into 524,288 bytes when
     sealed.
-14. One request to the Worker may make 256 calls to R2. If it may
-    make fewer, `info` names a lower number of chunks.
+14. One request to the Worker may make 256 calls to R2 beside its
+    calls to D1. Cloudflare counts both as calls to its own services,
+    which have a higher limit than calls to other hosts. If fewer
+    fit, `info` names a lower number for the four file calls.
 15. A D1 database that is full still takes the small update that a
     fetch makes.
 16. Android's own HTTP client lets the Sync app set its `User-Agent`.
