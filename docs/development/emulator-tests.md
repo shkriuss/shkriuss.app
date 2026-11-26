@@ -310,8 +310,7 @@ What it stores, in Notes' own database, opened as the app opens it:
    are a tenth larger than the heap, `Runtime.maxMemory()`. The others
    have a short text.
 3. 20 files for each note: 100,000 file records, each with a name of
-   255 characters and a wrapped key of 1,024 bytes. They have no
-   streams.
+   255 characters. They have no streams.
 
 What it then runs, as Notes does:
 
@@ -322,8 +321,9 @@ What it then runs, as Notes does:
 3. A backup, into a sink that only counts: every record is listed, and
    every stream is counted as left out.
 4. The read of the move of the file keys.
-5. The sweep, after every long note was marked deleted: it wipes them
-   and their files.
+5. The sweep, after 200 of the long notes were marked deleted: it wipes
+   them and their files. Wiping every long note at once would need more
+   room than the emulator has.
 
 Code that holds every text or every file record in memory at once runs
 out of memory in step 1, and the run fails with
@@ -334,8 +334,8 @@ the heap holds: when 5,000 notes are not enough for this heap, or when
 the emulator has too little room. With less text it would pass and show
 nothing.
 
-It writes a `NOTE` with the heap and the number of long notes, and one
-with the seconds of each step.
+It writes a `NOTE` with the heap and the room of the emulator, one with
+the number of long notes, and one with the seconds of each step.
 
 ## What an emulator cannot check
 

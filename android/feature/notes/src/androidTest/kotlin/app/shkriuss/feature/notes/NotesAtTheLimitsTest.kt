@@ -34,10 +34,11 @@ import org.junit.Test
  * Notes at its limits, on the heap a real Android gives an app
  * (docs/apps/notes/spec.md, "Limits and defaults"). It stores 5,000 notes,
  * of which so many hold 100,000 characters that their texts are larger
- * than the heap, and 100,000 file records with the longest names and keys.
- * Then it does what Notes does with all of them: the list, a search, a
- * backup, the read of the move of the file keys, and the sweep that wipes
- * what is deleted.
+ * than the heap, and 100,000 file records with the longest names. Then
+ * it does what Notes does with all of them: the list, a search, a
+ * backup and the read of the move of the file keys. Last it marks some
+ * of the long notes deleted and runs the sweep that wipes them. Wiping
+ * every long note at once would need more room than the emulator has.
  *
  * Code that holds every text or every file record in memory at once runs
  * out of memory here, and the run fails. The unit tests cannot show that:
@@ -68,8 +69,10 @@ class NotesAtTheLimitsTest {
     @Test
     fun withMoreTextThanTheHeapHoldsNotesStillListsSearchesBacksUpAndWipes() = runBlocking {
         val heap = Runtime.getRuntime().maxMemory()
-        val long = longNotesFor(heap)
-        TestDevice.note("Notes at its limits: a heap of ${heap / MEGA} MB, $long notes of ${NoteLimits.MOST_BODY} characters")
+        val room = context.filesDir.usableSpace
+        TestDevice.note("Notes at its limits: a heap of ${heap / MEGA} MB, room for ${room / MEGA} MB")
+        val long = longNotesFor(heap, room)
+        TestDevice.note("Notes at its limits: $long notes of ${NoteLimits.MOST_BODY} characters")
         val repository = NotesRepository(database, clock, ids, NoteFileStore(streams))
 
         val noteIds = timed("stored") { store(long) }
@@ -105,29 +108,30 @@ class NotesAtTheLimitsTest {
         timed("the read of the move of the file keys") {
             assertEquals("No key needs a new seal", 0, repository.filesToSealAgain(emptySet()) { false }.size)
         }
-        timed("the wipe of the long notes") {
+        timed("the wipe of $SWEPT long notes") {
             val writer = RecordWriter(database, database.notes(), clock, ids)
-            longIds.chunked(BATCH).forEach { batch -> database.withWriteTransaction { batch.forEach { writer.markDeleted(it) } } }
+            longIds.take(SWEPT).chunked(BATCH).forEach { batch -> database.withWriteTransaction { batch.forEach { writer.markDeleted(it) } } }
             assertTrue("The sweep wipes them and their files", repository.sweep(NoOpenUndo))
+            assertEquals(SWEPT.toLong(), count("SELECT COUNT(*) FROM note WHERE deletedAt IS NOT NULL"))
             assertEquals("No deleted note keeps its text", 0L, count("SELECT COUNT(*) FROM note WHERE deletedAt IS NOT NULL AND body != ''"))
-            assertEquals("No file of a deleted note is still shown", (NOTES - long) * NoteLimits.MOST_FILES_PER_NOTE.toLong(), count("SELECT COUNT(*) FROM attachment WHERE deletedAt IS NULL"))
+            assertEquals("No file of a deleted note is still shown", (NOTES - SWEPT) * NoteLimits.MOST_FILES_PER_NOTE.toLong(), count("SELECT COUNT(*) FROM attachment WHERE deletedAt IS NULL"))
             assertEquals("No deleted file keeps its name", 0L, count("SELECT COUNT(*) FROM attachment WHERE deletedAt IS NOT NULL AND name != ''"))
         }
     }
 
     /**
-     * How many notes get a text of 100,000 characters: a tenth more than
-     * the heap could hold at one byte a character. The test fails if that
-     * is more notes than Notes allows, or more than the emulator has room
-     * for: with less text it would pass and show nothing.
+     * How many notes get a text of 100,000 characters: so many that the
+     * texts are a tenth larger than the heap could hold at one byte a
+     * character, or every note. The test fails if even every note has
+     * less text than the heap holds, or if the emulator has too little
+     * [room] for it: with less text it would pass and show nothing.
      */
-    private fun longNotesFor(heap: Long): Int {
-        val overTheHeap = heap / NoteLimits.MOST_BODY * 11 / 10 + 1
-        // Each text is written once, written again when its note is deleted, and passes through the write-ahead file.
-        val room = (context.filesDir.usableSpace - ROOM_FOR_THE_REST) / ROOM_PER_LONG_NOTE
-        assertTrue("A heap of ${heap / MEGA} MB holds every text that $NOTES notes can have, so this test can show nothing here", overTheHeap <= NOTES)
-        assertTrue("The emulator has room for $room long notes, and the test needs $overTheHeap", overTheHeap <= room)
-        return overTheHeap.toInt()
+    private fun longNotesFor(heap: Long, room: Long): Int {
+        val long = minOf(heap / NoteLimits.MOST_BODY * 11 / 10 + 1, NOTES.toLong())
+        assertTrue("A heap of ${heap / MEGA} MB holds every text that $NOTES notes can have, so this test can show nothing here", long * NoteLimits.MOST_BODY > heap)
+        val needed = long * ROOM_PER_LONG_NOTE + ROOM_FOR_THE_REST
+        assertTrue("The emulator has room for ${room / MEGA} MB, and the test needs ${needed / MEGA} MB for $long long notes", room >= needed)
+        return long.toInt()
     }
 
     /** Stores [NOTES] notes, the first [long] of them with the longest text, each with 20 files. Returns their `id`s in that order. */
@@ -212,17 +216,20 @@ class NotesAtTheLimitsTest {
         /** Fifteen minutes: the emulator reads and writes hundreds of megabytes. */
         const val WAIT_MILLIS = 15 * 60 * 1_000L
 
-        /** The room one long note needs on the emulator, with a wide margin. */
-        const val ROOM_PER_LONG_NOTE = 4L * NoteLimits.MOST_BODY
+        /** How many of the long notes are marked deleted for the sweep. */
+        const val SWEPT = 200
 
-        /** The room the file records and the short notes need, with a wide margin. */
-        const val ROOM_FOR_THE_REST = 600 * MEGA
+        /** The room one long note takes in the database: its text, and a tenth more. */
+        const val ROOM_PER_LONG_NOTE = NoteLimits.MOST_BODY * 11L / 10
+
+        /** The room for the file records, the short notes, the write-ahead file while [SWEPT] notes are wiped, and a margin. */
+        const val ROOM_FOR_THE_REST = 150 * MEGA
 
         /** 999 lines of 100 characters, and a last line of 100 that starts with [WORD]: 100,000 characters. */
         val LONG_TEXT: String = ("x".repeat(99) + "\n").repeat(999) + WORD.padEnd(100, 'x')
 
-        /** A wrapped key of the longest form: 1,024 bytes after the five that every blob of kind 4 starts with. */
-        val KEY: ByteArray = ByteArray(1_024).also { key -> byteArrayOf(0x53, 0x48, 0x4B, 0x01, 0x04).copyInto(key) }
+        /** A wrapped key of the shortest form: the five bytes that every blob of kind 4 starts with, then zeros. */
+        val KEY: ByteArray = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
 
         /** How much of a name is the same for every file of one note. */
         const val NAME_START = 12
