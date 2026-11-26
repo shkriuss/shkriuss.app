@@ -26,7 +26,9 @@ import org.robolectric.RobolectricTestRunner
  * The ViewModels of Today, Day, History and Settings on a real database
  * in memory, at 14:05 on Friday, 13 November 2026. Their work runs at
  * once on the thread that starts it, and each test waits for the state it
- * expects.
+ * expects. The tests of the order of two changes are the exception: there
+ * the screen and its database work on one thread that the test holds and
+ * that then takes the newest work first ([NewestFirstWork]).
  */
 @RunWith(RobolectricTestRunner::class)
 class ViewModelsTest {
@@ -609,6 +611,31 @@ class ViewModelsTest {
 
             assertEquals("The change made last is the one that is stored", 90, runBlocking { stored.settingsNow() }.intervalMinutes)
             assertEquals("and the one that shows", 90, model.state.value.settings.intervalMinutes)
+        } finally {
+            busy.close()
+            work.close()
+        }
+    }
+
+    @Test
+    fun twoGoalsSavedOneRightAfterTheOtherAreWrittenInTheOrderTheyWereSaved() {
+        val work = NewestFirstWork()
+        val busy = memoryDatabaseOn(work)
+        try {
+            val stored = WaterRepository(busy, clock, TestIdSource())
+            val model = SettingsViewModel(stored, date, work)
+            val shown = model.state.await { it.loaded }
+            // Both goals are saved before the phone gets to the first one.
+            work.hold()
+            assertTrue(model.setGoal("2500", shown.goalMl))
+            assertTrue(model.setGoal("3000", shown.goalMl))
+
+            work.letGo()
+            work.awaitIdle()
+
+            val goals = runBlocking { stored.goals().first() }
+            assertEquals("The goal saved last is the one that is stored", 3_000, goals.goalOf(THE_DAY.asWaterDay()))
+            assertEquals("and the one that shows", 3_000, model.state.value.goalMl)
         } finally {
             busy.close()
             work.close()
