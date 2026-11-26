@@ -225,8 +225,9 @@ The job takes about ten minutes.
 Two jobs side by side, one for each Android version: "Emulator (Android
 15)", the minimum, and "(Android 17)", the newest. Each runs the
 instrumented tests of every module that has a folder `src/androidTest/`.
-Today that is `core/crypto`, with the tests of the hardware keys, and
-`core/notify`, with the tests of the alarms
+Today that is `core/crypto`, with the tests of the hardware keys,
+`core/notify`, with the tests of the alarms, and `feature/notes`, with
+the tests of Notes at its limits
 ([emulator-tests.md](emulator-tests.md)). One version that fails does not
 stop the others.
 
@@ -279,9 +280,11 @@ No action starts the emulator. The usual one,
 actions. The Android Gradle Plugin's Managed Devices are not used either:
 they need artifacts that are not in the verification metadata (ADR 0028).
 
-A job takes four to five minutes: about one minute to install the SDK
-packages, two to build the test APK, half a minute to start the emulator
-and one for the tests.
+A job takes ten to fifteen minutes. About four go to the SDK packages,
+the test APKs and the start of the emulator, and about one and a half
+to the tests of `core/crypto` and `core/notify`. The rest goes to the
+tests of Notes at its limits, which write and read hundreds of megabytes
+([emulator-tests.md](emulator-tests.md#the-tests-of-notes-at-its-limits)).
 
 ### When CI fails
 

@@ -561,6 +561,7 @@ at it.
 |---|---|---|
 | `app.shkriuss.core.crypto.test` | `android.permission.USE_BIOMETRIC` | Android's own system prompt needs it. The tests of the Lock key and the Recovery guard show the prompt and answer it with the emulator's PIN. |
 | `app.shkriuss.core.notify.test` | `android.permission.POST_NOTIFICATIONS`, `android.permission.USE_EXACT_ALARM`, `android.permission.RECEIVE_BOOT_COMPLETED` | The three permissions of `core/notify`, from the module's own manifest, as an app gets them. The tests set real alarms and show real notifications on the emulator. The test APK also has the module's three receivers. |
+| `app.shkriuss.feature.notes.test` | `android.permission.USE_BIOMETRIC`, `android.permission.HIDE_OVERLAY_WINDOWS` | The two permissions of `core/security`, which `feature/notes` builds on, from that module's manifest, as an app gets them. The test APK also has that module's screens and its two exported parts, `HandoverActivity` and `KeeperStatusProvider` ([The handover between apps](#the-handover-between-apps)). The tests of Notes at its limits use none of them: they show no screen and make no key. |
 
 No app gets `USE_BIOMETRIC` from the test APK. Apps get it from
 `core/security`

@@ -28,7 +28,7 @@ Pages:
   components and when to use each, and their tests.
 - [Emulator tests](emulator-tests.md): the instrumented tests that run
   on emulators in CI, how a module gets them, the tests of the hardware
-  keys and what they showed, the test of Notes at its limits, and what
+  keys and what they showed, the tests of Notes at its limits, and what
   an emulator cannot check.
 - [Third-party material](third-party.md): what others made and the apps
   contain, with the source, the licence and the notice of each:

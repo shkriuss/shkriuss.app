@@ -898,8 +898,9 @@ Why the helper lives in `core/testing`:
 - `core/testing` names `core/security`, the test fixtures of
   `core/crypto`, Activity Compose and the Compose test library as
   `compileOnly`. An app's unit tests bring all of them at run time. The
-  tests on an emulator of `core/crypto` and `core/notify`, which use
-  `core/testing` too, get none of them.
+  tests on an emulator of `core/crypto`, `core/notify` and
+  `feature/notes`, which use `core/testing` too, get none of them from
+  it.
 - Activity Compose comes before the Compose test library in its build
   file on purpose. In the other order Gradle reads the metadata of old
   AndroidX versions that `androidx.test:core` 1.5.0 asks for, which no

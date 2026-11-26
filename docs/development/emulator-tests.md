@@ -295,47 +295,58 @@ What the log says with the wait:
   on every run for as long as the Android 17 image has this fault. If
   a later image fixes it, the warning stops by itself.
 
-## The test of Notes at its limits
+## The tests of Notes at its limits
 
-`feature/notes` has one test on the emulator, `NotesAtTheLimitsTest`.
-The unit tests of Notes run on the heap of the build's own machine,
-which is far larger than the heap Android gives an app. So they cannot
-show that Notes holds too much in memory. This test can.
+`feature/notes` has two tests on the emulator, in
+`NotesAtTheLimitsTest`. The unit tests of Notes run on the heap of the
+build's own machine, which is far larger than the heap Android gives an
+app. So they cannot show that Notes holds too much in memory. These
+tests can.
 
-What it stores, in Notes' own database, opened as the app opens it:
+Each test stores 5,000 notes, the most that Notes makes
+([spec.md](../apps/notes/spec.md#limits-and-defaults)), in Notes' own
+database, opened as the app opens it. The file records have no streams.
 
-1. 5,000 notes, the most that Notes makes
-   ([spec.md](../apps/notes/spec.md#limits-and-defaults)).
-2. So many of them with a text of 100,000 characters that these texts
-   are a tenth larger than the heap, `Runtime.maxMemory()`. The others
-   have a short text.
-3. 20 files for each note: 100,000 file records, each with a name of
-   255 characters. They have no streams.
+1. **More text than the heap holds.** So many of the notes have a text
+   of 100,000 characters that these texts are a tenth larger than the
+   heap, `Runtime.maxMemory()`. The others have a short text. Each note
+   has 20 files: 100,000 file records, each with a name of 255
+   characters and the shortest key.
+2. **More file keys than the heap holds.** Each note has so many files,
+   each with the longest key of 1,024 bytes, that the keys are at least
+   a tenth larger than the heap. On a heap of 201 MB that is 44 files
+   for each note: 220,000 file records. A restore can bring a note more
+   than 20 files. The names are short, so that the test fits the
+   emulator's room.
 
-What it then runs, as Notes does:
+One database with both would need more room than the emulator of
+Android 17 has.
+
+What each test then runs, as Notes does:
 
 1. The list, to its first rows: every note has its row and its number
    of files.
 2. A search for a word at the end of every long text, and a search for
-   the start of the file names of one note.
+   the start of the name of one file.
 3. A backup, into a sink that only counts: every record is listed, and
    every stream is counted as left out.
 4. The read of the move of the file keys.
-5. The sweep, after 200 of the long notes were marked deleted: it wipes
-   them and their files. Wiping every long note at once would need more
-   room than the emulator has.
+5. The sweep, after the first 200 notes were marked deleted: it wipes
+   them and their files. In the first test these are long notes. Wiping
+   every long note at once would need more room than the emulator has.
 
-Code that holds every text or every file record in memory at once runs
-out of memory in step 1, and the run fails with
-`java.lang.OutOfMemoryError` in Android's log.
+Code that holds every text, or every file record, in memory at once
+runs out of memory, and the run fails. If that happens in the list or
+in a search, `java.lang.OutOfMemoryError` is in Android's log, the
+process of the tests ends, and the later steps do not run.
 
-The test fails, and stores nothing, when it cannot store more text than
-the heap holds: when 5,000 notes are not enough for this heap, or when
-the emulator has too little room. With less text it would pass and show
+A test fails, and stores nothing, when it cannot store more than the
+heap holds: when 5,000 notes are not enough text for this heap, or when
+the emulator has too little room. With less it would pass and show
 nothing.
 
-It writes a `NOTE` with the heap and the room of the emulator, one with
-the number of long notes, and one with the seconds of each step.
+Each test writes a `NOTE` with the heap and the room of the emulator,
+one with what it stores, and one with the seconds of each step.
 
 ## What an emulator cannot check
 

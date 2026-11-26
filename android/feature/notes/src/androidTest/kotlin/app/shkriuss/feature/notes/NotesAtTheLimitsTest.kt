@@ -32,17 +32,24 @@ import org.junit.Test
 
 /**
  * Notes at its limits, on the heap a real Android gives an app
- * (docs/apps/notes/spec.md, "Limits and defaults"). It stores 5,000 notes,
- * of which so many hold 100,000 characters that their texts are larger
- * than the heap, and 100,000 file records with the longest names. Then
- * it does what Notes does with all of them: the list, a search, a
+ * (docs/apps/notes/spec.md, "Limits and defaults"). Each test stores 5,000
+ * notes and their file records, with more in them than the heap holds.
+ * Then it does what Notes does with all of them: the list, a search, a
  * backup and the read of the move of the file keys. Last it marks some
- * of the long notes deleted and runs the sweep that wipes them. Wiping
- * every long note at once would need more room than the emulator has.
+ * notes deleted and runs the sweep that wipes them.
  *
- * Code that holds every text or every file record in memory at once runs
- * out of memory here, and the run fails. The unit tests cannot show that:
- * they run on the heap of the build's own machine.
+ * - One test stores more text than the heap holds: so many of the notes
+ *   have 100,000 characters. Each note has 20 files with the longest
+ *   names.
+ * - The other stores more file keys than the heap holds: each note has so
+ *   many files, each with the longest key. A restore can bring a note
+ *   more than 20 files.
+ *
+ * Code that holds every text, or every file record, in memory at once
+ * runs out of memory here, and the run fails. The unit tests cannot show
+ * that: they run on the heap of the build's own machine. One database
+ * with both, and wiping every note at once, would need more room than
+ * the emulator has.
  */
 class NotesAtTheLimitsTest {
     private val context = TestDevice.context
@@ -70,53 +77,22 @@ class NotesAtTheLimitsTest {
     fun withMoreTextThanTheHeapHoldsNotesStillListsSearchesBacksUpAndWipes() = runBlocking {
         val heap = Runtime.getRuntime().maxMemory()
         val room = context.filesDir.usableSpace
-        TestDevice.note("Notes at its limits: a heap of ${heap / MEGA} MB, room for ${room / MEGA} MB")
+        TestDevice.note("$TEXTS: a heap of ${heap / MEGA} MB, room for ${room / MEGA} MB")
         val long = longNotesFor(heap, room)
-        TestDevice.note("Notes at its limits: $long notes of ${NoteLimits.MOST_BODY} characters")
-        val repository = NotesRepository(database, clock, ids, NoteFileStore(streams))
+        TestDevice.note("$TEXTS: $long notes of ${NoteLimits.MOST_BODY} characters")
 
-        val noteIds = timed("stored") { store(long) }
-        val longIds = noteIds.take(long)
+        notesDoesItsWork(TEXTS, Stored(long, NoteLimits.MOST_FILES_PER_NOTE, NoteLimits.MOST_NAME, SHORTEST_KEY))
+    }
 
-        val models = ViewModelStore()
-        val snackbars = NotesSnackbars(repository, {}, scope, Dispatchers.IO)
-        val factory = viewModelFactory { initializer { NotesListViewModel(repository, snackbars, Dispatchers.IO) } }
-        val list = ViewModelProvider.create(models, factory)[NotesListViewModel::class]
-        timed("the list") {
-            val all = list.shown("")
-            assertEquals("Every note has its row", NOTES, all.size)
-            assertTrue("Every row counts its files", all.all { it.fileCount == NoteLimits.MOST_FILES_PER_NOTE })
-        }
-        timed("a search in the texts") {
-            list.search(WORD)
-            assertEquals("The word stands at the end of every long text", long, list.shown(WORD).size)
-        }
-        timed("a search in the file names") {
-            val name = fileName(NOTES - 1, 0).take(NAME_START)
-            list.search(name)
-            assertEquals("Only the files of the last note start with it", 1, list.shown(name).size)
-        }
-        models.clear()
+    @Test
+    fun withMoreFileKeysThanTheHeapHoldsNotesStillListsSearchesBacksUpAndWipes() = runBlocking {
+        val heap = Runtime.getRuntime().maxMemory()
+        val room = context.filesDir.usableSpace
+        TestDevice.note("$KEYS: a heap of ${heap / MEGA} MB, room for ${room / MEGA} MB")
+        val files = filesPerNoteFor(heap, room)
+        TestDevice.note("$KEYS: $files files for each note, each with a key of ${LONGEST_KEY.size} bytes")
 
-        timed("a backup") {
-            val sink = CountingSink()
-            NotesBackupContent(database, repository, clock, ids).list(sink)
-            assertEquals("Every note and every file record is in the backup", (NOTES + FILES).toLong(), sink.records)
-            assertEquals("No stream is on this phone", FILES.toLong(), sink.leftOut)
-            assertEquals(0L, sink.files)
-        }
-        timed("the read of the move of the file keys") {
-            assertEquals("No key needs a new seal", 0, repository.filesToSealAgain(emptySet()) { false }.size)
-        }
-        timed("the wipe of $SWEPT long notes") {
-            val writer = RecordWriter(database, database.notes(), clock, ids)
-            longIds.take(SWEPT).chunked(BATCH).forEach { batch -> database.withWriteTransaction { batch.forEach { writer.markDeleted(it) } } }
-            assertTrue("The sweep wipes them and their files", repository.sweep(NoOpenUndo))
-            assertEquals(SWEPT.toLong(), count("SELECT COUNT(*) FROM note WHERE deletedAt IS NOT NULL"))
-            assertEquals("No deleted note keeps its text", 0L, count("SELECT COUNT(*) FROM note WHERE deletedAt IS NOT NULL AND body != ''"))
-            assertEquals("No file of a deleted note is still shown", (NOTES - SWEPT) * NoteLimits.MOST_FILES_PER_NOTE.toLong(), count("SELECT COUNT(*) FROM attachment WHERE deletedAt IS NULL"))
-            assertEquals("No deleted file keeps its name", 0L, count("SELECT COUNT(*) FROM attachment WHERE deletedAt IS NOT NULL AND name != ''"))
-        }
+        notesDoesItsWork(KEYS, Stored(1, files, SHORT_NAME, LONGEST_KEY))
     }
 
     /**
@@ -134,15 +110,76 @@ class NotesAtTheLimitsTest {
         return long.toInt()
     }
 
-    /** Stores [NOTES] notes, the first [long] of them with the longest text, each with 20 files. Returns their `id`s in that order. */
-    private suspend fun store(long: Int): List<String> {
+    /**
+     * How many files each note gets: so many that the keys of all file
+     * records are at least a tenth larger than the heap. The test fails
+     * if the emulator has too little [room] for them: with fewer it would
+     * pass and show nothing.
+     */
+    private fun filesPerNoteFor(heap: Long, room: Long): Int {
+        val files = heap / LONGEST_KEY.size * 11 / 10 / NOTES + 1
+        val needed = files * NOTES * ROOM_PER_LONG_KEY + ROOM_FOR_THE_REST
+        assertTrue("The emulator has room for ${room / MEGA} MB, and the test needs ${needed / MEGA} MB for ${files * NOTES} file records", room >= needed)
+        return files.toInt()
+    }
+
+    /** Stores what [stored] says. Then every step of Notes that reads all notes or all file records, each timed under the name of the test, [test]. */
+    private suspend fun notesDoesItsWork(test: String, stored: Stored) {
+        val files = NOTES.toLong() * stored.filesPerNote
+        val repository = NotesRepository(database, clock, ids, NoteFileStore(streams))
+
+        val noteIds = timed(test, "stored") { store(stored) }
+
+        val models = ViewModelStore()
+        val snackbars = NotesSnackbars(repository, {}, scope, Dispatchers.IO)
+        val factory = viewModelFactory { initializer { NotesListViewModel(repository, snackbars, Dispatchers.IO) } }
+        val list = ViewModelProvider.create(models, factory)[NotesListViewModel::class]
+        timed(test, "the list") {
+            val all = list.shown("")
+            assertEquals("Every note has its row", NOTES, all.size)
+            assertTrue("Every row counts its files", all.all { it.fileCount == stored.filesPerNote })
+        }
+        timed(test, "a search in the texts") {
+            list.search(WORD)
+            assertEquals("The word stands at the end of every long text", stored.long, list.shown(WORD).size)
+        }
+        timed(test, "a search in the file names") {
+            val name = fileName(NOTES - 1, 0, stored.nameLength).take(NAME_START)
+            list.search(name)
+            assertEquals("Only the files of the last note start with it", 1, list.shown(name).size)
+        }
+        models.clear()
+
+        timed(test, "a backup") {
+            val sink = CountingSink()
+            NotesBackupContent(database, repository, clock, ids).list(sink)
+            assertEquals("Every note and every file record is in the backup", NOTES + files, sink.records)
+            assertEquals("No stream is on this phone", files, sink.leftOut)
+            assertEquals(0L, sink.files)
+        }
+        timed(test, "the read of the move of the file keys") {
+            assertEquals("No key needs a new seal", 0, repository.filesToSealAgain(emptySet()) { false }.size)
+        }
+        timed(test, "the wipe of $SWEPT notes") {
+            val writer = RecordWriter(database, database.notes(), clock, ids)
+            noteIds.take(SWEPT).chunked(BATCH).forEach { batch -> database.withWriteTransaction { batch.forEach { writer.markDeleted(it) } } }
+            assertTrue("The sweep wipes them and their files", repository.sweep(NoOpenUndo))
+            assertEquals(SWEPT.toLong(), count("SELECT COUNT(*) FROM note WHERE deletedAt IS NOT NULL"))
+            assertEquals("No deleted note keeps its text", 0L, count("SELECT COUNT(*) FROM note WHERE deletedAt IS NOT NULL AND body != ''"))
+            assertEquals("No file of a deleted note is still shown", (NOTES - SWEPT).toLong() * stored.filesPerNote, count("SELECT COUNT(*) FROM attachment WHERE deletedAt IS NULL"))
+            assertEquals("No deleted file keeps its name", 0L, count("SELECT COUNT(*) FROM attachment WHERE deletedAt IS NOT NULL AND name != ''"))
+        }
+    }
+
+    /** Stores [NOTES] notes, the first [Stored.long] of them with the longest text, each with its files. Returns their `id`s in that order. */
+    private suspend fun store(stored: Stored): List<String> {
         val notes = RecordWriter(database, database.notes(), clock, ids)
         val files = RecordWriter(database, database.attachments(), clock, ids)
         val noteIds = ArrayList<String>(NOTES)
         (0 until NOTES).chunked(BATCH).forEach { batch ->
             database.withWriteTransaction {
                 batch.forEach { number ->
-                    val text = if (number < long) LONG_TEXT else "Short"
+                    val text = if (number < stored.long) LONG_TEXT else "Short"
                     noteIds += notes.create { fields, change -> NoteEntity(fields, change, "Note $number", text, false, 0) }.record.id
                 }
             }
@@ -150,8 +187,9 @@ class NotesAtTheLimitsTest {
         noteIds.withIndex().chunked(BATCH).forEach { batch ->
             database.withWriteTransaction {
                 batch.forEach { (number, noteId) ->
-                    repeat(NoteLimits.MOST_FILES_PER_NOTE) { file ->
-                        files.create { fields, change -> AttachmentEntity(fields, change, noteId, fileName(number, file), "image/jpeg", FILE_BYTES, KEY) }
+                    repeat(stored.filesPerNote) { file ->
+                        val name = fileName(number, file, stored.nameLength)
+                        files.create { fields, change -> AttachmentEntity(fields, change, noteId, name, "image/jpeg", FILE_BYTES, stored.key) }
                     }
                 }
             }
@@ -172,13 +210,20 @@ class NotesAtTheLimitsTest {
         }
     }
 
-    /** Runs [step] and writes down how long it took. A step that runs out of memory ends the run before its line. */
-    private suspend fun <T> timed(name: String, step: suspend () -> T): T {
+    /** Runs [step] and writes down how long it took, under the name of the test, [test]. A step that runs out of memory ends the run before its line. */
+    private suspend fun <T> timed(test: String, name: String, step: suspend () -> T): T {
         val start = System.nanoTime()
         val result = step()
-        TestDevice.note("Notes at its limits: $name, ${(System.nanoTime() - start) / NANOS_PER_SECOND} s")
+        TestDevice.note("$test: $name, ${(System.nanoTime() - start) / NANOS_PER_SECOND} s")
         return result
     }
+
+    /**
+     * What one test stores: [long] of the notes have the longest text, and
+     * each note has [filesPerNote] files, each with a name of [nameLength]
+     * characters and the wrapped key [key].
+     */
+    private class Stored(val long: Int, val filesPerNote: Int, val nameLength: Int, val key: ByteArray)
 
     /** A backup that counts what it is given and keeps none of it. */
     private class CountingSink : BackupSink {
@@ -206,35 +251,59 @@ class NotesAtTheLimitsTest {
 
     private companion object {
         const val NOTES = NoteLimits.MOST_NOTES
-        const val FILES = NOTES * NoteLimits.MOST_FILES_PER_NOTE
         const val BATCH = 50
         const val WORD = "needle"
         const val FILE_BYTES = 1_000L
         const val MEGA = 1_000_000L
         const val NANOS_PER_SECOND = 1_000_000_000L
 
+        /** How the lines of the test with more text than the heap holds start. */
+        const val TEXTS = "Notes at its limits, the texts"
+
+        /** How the lines of the test with more file keys than the heap holds start. */
+        const val KEYS = "Notes at its limits, the file keys"
+
         /** Fifteen minutes: the emulator reads and writes hundreds of megabytes. */
         const val WAIT_MILLIS = 15 * 60 * 1_000L
 
-        /** How many of the long notes are marked deleted for the sweep. */
+        /** How many notes are marked deleted for the sweep: the first ones, which are long notes in the test of the texts. */
         const val SWEPT = 200
 
         /** The room one long note takes in the database: its text, and a tenth more. */
         const val ROOM_PER_LONG_NOTE = NoteLimits.MOST_BODY * 11L / 10
 
-        /** The room for the file records, the short notes, the write-ahead file while [SWEPT] notes are wiped, and a margin. */
+        /**
+         * The room one file record with the longest key and a name of
+         * [SHORT_NAME] characters takes in the database: three fit a page
+         * of 4,096 bytes, and its three index entries take a tenth more.
+         */
+        const val ROOM_PER_LONG_KEY = 1_500L
+
+        /** The room for what is small in a test: the short notes, the file records with short keys, the write-ahead file while [SWEPT] notes are wiped, and a margin. */
         const val ROOM_FOR_THE_REST = 150 * MEGA
 
         /** 999 lines of 100 characters, and a last line of 100 that starts with [WORD]: 100,000 characters. */
         val LONG_TEXT: String = ("x".repeat(99) + "\n").repeat(999) + WORD.padEnd(100, 'x')
 
         /** A wrapped key of the shortest form: the five bytes that every blob of kind 4 starts with, then zeros. */
-        val KEY: ByteArray = NoteLimits.WRAPPED_KEY_START + ByteArray(NoteLimits.WRAPPED_KEY_LENGTH.first - NoteLimits.WRAPPED_KEY_START.size)
+        val SHORTEST_KEY: ByteArray = keyOf(NoteLimits.WRAPPED_KEY_LENGTH.first)
 
-        /** How much of a name is the same for every file of one note. */
+        /** A wrapped key of the longest form. */
+        val LONGEST_KEY: ByteArray = keyOf(NoteLimits.WRAPPED_KEY_LENGTH.last)
+
+        /**
+         * The length of a file name beside the longest key. With the
+         * longest name too, only two records would fit a page of the
+         * database, and the test would need more room than the emulator has.
+         */
+        const val SHORT_NAME = 20
+
+        /** How many characters at its start set a name apart from every other: "t0004999-00-". */
         const val NAME_START = 12
 
-        /** The name of the file [file] of the note [note], 255 characters long: "t0004999-00-yyy….jpg". */
-        fun fileName(note: Int, file: Int): String = "t%07d-%02d-".format(note, file).padEnd(NoteLimits.MOST_NAME - 4, 'y') + ".jpg"
+        private fun keyOf(length: Int): ByteArray = NoteLimits.WRAPPED_KEY_START + ByteArray(length - NoteLimits.WRAPPED_KEY_START.size)
+
+        /** The name of the file [file] of the note [note], [length] characters long: "t0004999-00-yyy….jpg". */
+        fun fileName(note: Int, file: Int, length: Int): String = "t%07d-%02d-".format(note, file).padEnd(length - 4, 'y') + ".jpg"
     }
 }
