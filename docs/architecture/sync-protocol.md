@@ -355,8 +355,9 @@ either.
 4. Removing does not take back the keys the device holds. For that,
    see [A lost device](#a-lost-device).
 5. Each Sync app remembers the IDs of the devices it has seen as
-   removed. If the server's account revision ever goes back, it
-   removes them again ([`heads`](#heads), point 4).
+   removed. If one of them is ever in again, or the server's account
+   revision goes back, it removes them again ([`heads`](#heads),
+   points 4 to 6).
 
 ## The courier interface
 
@@ -426,7 +427,15 @@ All calls are `call` on the provider. Version 1 has these.
    app gives out one batch at a time: a new `export` voids the token
    of the batch before.
 5. A call starts the data app's process if it is not running. No part
-   of the data app shows on the screen.
+   of the data app shows on the screen. Android may hold an app
+   stopped until the user opens it: an app that the user force-stopped
+   in Android's settings, or one that was never opened. A call to
+   such an app may get no answer. The Sync app then leaves that app
+   for this run and goes on with the others. If the app's last
+   `status` said that sync is on in it, the Sync app says, with the
+   app's name: "Open Water once, so that it can sync again." Nothing
+   is lost: the app's changes wait in the app, and what the server
+   has for it waits on the server.
 6. All of it works while the data app is locked and while the phone
    is locked, after the first unlock since the phone started: the
    `record` keyset is under the Background key
@@ -509,6 +518,11 @@ A data app pokes after a write that leaves something to send, and
 when sync is turned on in it. A poke starts no network call by
 itself. A poke that is lost loses nothing
 ([When the Sync app runs](#when-the-sync-app-runs), point 2).
+
+A Sync app that the user force-stopped does not run until the user
+opens it ([When the Sync app runs](#when-the-sync-app-runs), point
+6). A data app whose call gets no answer says that the Sync app is
+not running, and offers to open it.
 
 ### Turning sync on in a data app
 
@@ -781,7 +795,11 @@ each device:
 
 `POST /v1/devices/remove`, with a device ID of 16 bytes, removes that
 device. `POST /v1/devices/name`, with N (2 bytes, 52 to 211) and a
-sealed name, gives the calling device a new name. Both answer `00`.
+sealed name, gives the calling device a new name. Both answer `00`
+and the account revision after the change (8 bytes), so that the
+device that made the change knows it ([`heads`](#heads), point 4).
+Removing a device that is removed already changes nothing: the
+answer is `00` and the revision as it is.
 
 ### `heads`
 
@@ -812,12 +830,20 @@ send.
 4. The account revision is a number that goes up by one, in the same
    step, whenever a device joins, is renamed or removed, a setup code
    is used, or the account key changes. Each Sync app remembers the
-   highest one it saw. A lower one means that the server was put back
-   to an earlier time. The Sync app then reads the list of devices,
-   removes again every device it knows was removed
-   ([Removing a device](#removing-a-device)), and tells the user:
-   "The server was put back to an earlier time. Check the list of
-   devices."
+   last one it saw, here or in the answer to a change it made itself
+   ([`devices`](#devices)).
+5. The Sync app reads the list of devices whenever the revision is
+   not the one it last saw, and at least once a day. The server was
+   put back to an earlier time if the revision is lower than the last
+   one, or if a device that this Sync app knows was removed is in
+   again. The Sync app then removes again every device it knows was
+   removed ([Removing a device](#removing-a-device)), and tells the
+   user: "The server was put back to an earlier time. Check the list
+   of devices."
+6. The revision alone is not enough. A server that was put back can
+   count up again to the number a device last saw. So the list is
+   also read once a day, and a removed device that is in again is
+   found by its ID.
 
 ### Fetch
 
@@ -892,6 +918,7 @@ The answer:
 | `02` | Not stored: the blob names another key ID than the current one |
 | `03` | Not stored: not a sealed record of 50 to 524,288 bytes |
 | `04` | Stored, under the number that follows. The chunks of this record's file were deleted before: the stream must be sent again. |
+| `05` | Not stored, for now: the chunks of this record's file are being deleted. The record goes again at a later run. |
 
 1. If the batch's epoch is not the server's, the answer is `0B` with
    the server's epoch, and no new epoch is made. If Known is above
@@ -911,8 +938,12 @@ The answer:
    record.
 6. The server remembers the head after the batch as the highest
    number it told this device for this app.
-7. A record that is stored over one marked "its chunks were deleted"
-   gets the result `04`, and the mark is taken off
+7. A record that would be stored over one marked "its chunks are
+   being deleted" is not stored, and gets the result `05`. A record
+   that is stored over one marked "its chunks were deleted" gets the
+   result `04`, and the mark is taken off. A mark "its chunks are
+   being deleted" that is more than 10 minutes old counts here as
+   "its chunks were deleted"
    ([`files/delete`](#fileshave-filesfetch-filesdelete)).
 
 ### `files/send`
@@ -953,17 +984,45 @@ request for more is answered `0C`.
 `POST /v1/files/delete?app=<name>`: a count of 2 bytes, 1 to 256, and
 for each file its ID (16) and the number under which the device's
 batch stored the file's deleted record (8). The answer is `00` and
-one byte for each file: `00` deleted, `01` not deleted.
+one byte for each file: `00` deleted, `01` not deleted, `02` not now.
 
 1. The server deletes a file's chunks only if its copy of the record
    with that ID still has that number. If the record changed since,
-   another device stored a newer version, and nothing is deleted.
-2. Before it deletes the chunks, and in the same step as that check,
-   the server marks the record: "its chunks were deleted". A record
-   that is later stored over a marked one gets the result `04`
-   ([Send](#send)), so that the device that sent it sends the stream
-   again.
-3. Deleting again changes nothing.
+   another device stored a newer version. Nothing is deleted, and
+   the answer is `01`.
+2. A record can carry a mark. The mark is "its chunks are being
+   deleted", with the time it was set by the server's clock, or "its
+   chunks were deleted".
+3. In the same step as the check of point 1, and before it deletes
+   any chunk, the server sets the mark "its chunks are being
+   deleted". Then it deletes the chunks. Then, in one step, it
+   changes the mark to "its chunks were deleted", but only if the
+   record still has that number and the mark is the one this request
+   set. The answer is `00`.
+4. While a record is marked "its chunks are being deleted", and the
+   mark is at most 10 minutes old, no record is stored over it: Send
+   gives the result `05` ([Send](#send)). So no device is told to
+   send a stream again while chunks of it may still go.
+5. A record that is stored over one marked "its chunks were deleted"
+   gets the result `04`, so that the device that sent it sends the
+   stream again. No deletion runs then. So `files/have` tells that
+   device truly which chunks are there, and it sends the others.
+6. A request deletes no chunk later than 5 minutes after it set its
+   mark. If it has not ended by then, it stops and answers `02`. So
+   a mark "its chunks are being deleted" that is more than 10 minutes
+   old is of a request that has ended, whatever became of it. Send
+   counts such a mark as "its chunks were deleted". So a request that
+   was cut off cannot keep a file from coming back.
+7. Asking again, for a record that still has that number:
+   - marked "its chunks were deleted": the answer is `00`, and the
+     server deletes nothing again. A device may have sent the chunks
+     again since, ahead of its record;
+   - marked "its chunks are being deleted", and the mark is at most
+     10 minutes old: the answer is `02`, and nothing changes;
+   - marked "its chunks are being deleted", and the mark is older:
+     the server sets the mark again, with the time now, in the same
+     step as these checks, and goes on as in point 3. So a deletion
+     that was cut off is finished.
 
 ### `account-key`
 
@@ -1003,7 +1062,7 @@ the signature of the account key the server has now (64 bytes).
 | D1, a row for each device | Its ID, public key, sealed name, state, when added, last day seen | On join, rename, remove, and once on each day the device calls |
 | D1, a row for each app | The app's head | With every stored batch |
 | D1, a row for each device and app | The highest number the server told it | With every page and every stored batch that moves it |
-| D1, a row for each record | The app, the record ID, its number, the blob, and the mark "its chunks were deleted". An index on app and number. | With every stored record: two row writes. One more when a file's chunks are deleted. |
+| D1, a row for each record | The app, the record ID, its number, the blob, and the mark of [`files/delete`](#fileshave-filesfetch-filesdelete) with its time. An index on app and number. | With every stored record: two row writes. Two more when a file's chunks are deleted. |
 | D1, a few rows | The device code's hash, the hashes of used setup codes, the row writes of the day | When a code is made or used, with every stored batch |
 | R2 | One object for each chunk | When a chunk is sent |
 
@@ -1075,8 +1134,9 @@ the signature of the account key the server has now (64 bytes).
    device that was removed is in again, a used setup code is good
    again, and the account key is the older one. No record's number
    moves by that. So the server also keeps an account revision
-   ([`heads`](#heads), point 4). A device that knows a higher one
-   removes the removed devices again and tells the user. A device
+   ([`heads`](#heads), point 4). A device that sees it go back, or
+   sees a device in again that it knows was removed, removes the
+   removed devices again and tells the user. A device
    whose keeper holds both recovery keys sends the new account key
    statement again ([A new recovery key](#a-new-recovery-key)).
 5. The user can also ask for a comparison of everything in the Sync
@@ -1150,15 +1210,23 @@ transaction.
 2. leaves each record that was refused with `01` in **To send**. If
    it is a file's record, its stream counts as not known to be on the
    server;
-3. takes each record that was refused with `03` out of **To send**,
+3. leaves each record that got `05` in **To send**, and changes
+   nothing else for it;
+4. takes each record that was refused with `03` out of **To send**,
    and counts it;
-4. after a `02`, stops the app: "needs the new recovery key";
-5. sets Known to the head after the batch, and moves the cursor if it
+5. after a `02`, stops the app: "needs the new recovery key";
+6. sets Known to the head after the batch, and moves the cursor if it
    may ([The cursor](#the-cursor), point 2).
 
 After a batch with a refusal `01`, the Sync app fetches to the head
 before it asks that app for the next batch. The fetch brings the
 version that was in the way, and the merge decides.
+
+After a batch with a result `05`, the Sync app asks that app for no
+further batch in this run. The record goes again at each later run
+until it is stored. That is once the deletion is over, or its mark
+is more than 10 minutes old. The record is then stored with `04`,
+and its stream is sent again.
 
 A record that changes while its batch is on the way has a change
 number above the send mark. The next `export` finds it and puts it
@@ -1413,8 +1481,9 @@ cursor still moves past it.
    own batch stored the file's deleted record there, wiped where the
    app wipes. The app then lists the file in `streams` as "to
    delete", with the number that record got. The Sync app calls
-   `files/delete`, and then `streamDeleted`, whatever the server
-   answered. Taking a version of the file's record that is not
+   `files/delete`. After the answer `00` or `01` for a file it calls
+   `streamDeleted`. After `02`, or with no answer, it asks again at
+   a later run. Taking a version of the file's record that is not
    deleted also drops the mark "to delete".
 2. The server deletes the chunks only while that deleted record is
    still its copy. So a deletion that lost against a newer version of
@@ -1422,7 +1491,9 @@ cursor still moves past it.
    comes.
 3. If another device brings the file back after the chunks were
    deleted, its batch gets the result `04`, and that device sends the
-   stream again.
+   stream again. While the chunks are being deleted, its record is
+   not stored yet (`05`). So that device never asks which chunks are
+   there while some of them may still go.
 4. Every other device removes its own copy of the stream when it
    takes the deleted record.
 5. A server that keeps the chunks keeps bytes it cannot open.
@@ -1524,7 +1595,10 @@ What that means:
 
    It asks every data app for its `status` at least once a day. So a
    poke that was lost, or work that a full day stopped, is found
-   again.
+   again. A data app that gives no answer is left for this run
+   ([What a data app answers](#what-a-data-app-answers), point 5).
+   Once a day it also reads the list of devices
+   ([`heads`](#heads), point 5).
 3. In a run, for every app in turn: the fetch and the ordinary
    batches first, then streams, then the batches of a comparison of
    everything. So a reminder does not wait behind a first upload.
@@ -1535,7 +1609,8 @@ What that means:
 6. Android decides when background work really runs. A phone that
    sleeps, or a Sync app that is rarely opened, can be hours behind.
    A reminder made on a tablet reaches a phone at the phone's next
-   run, not at once.
+   run, not at once. A Sync app that the user force-stopped does not
+   run at all until the user opens it.
 7. The Sync app keeps only state of this phone: its device key, the
    name key, the server's ID and address, the heads and the account
    revision it saw, the IDs of the devices it saw as removed, and how
@@ -1790,9 +1865,14 @@ The server:
    back and filled again to the same head is still found, through
    `heads`.
 6. `files/delete`: chunks go only while the deleted record is still
-   the server's copy, and a record stored over it gets `04`.
+   the server's copy. A record sent over it while its chunks are
+   being deleted gets `05` and is not stored. One sent after gets
+   `04`. A deletion that was cut off after its mark: a record is
+   stored over it once the mark is 10 minutes old, and asking again
+   then finishes it. Asking again after the end deletes nothing.
 7. The account revision goes up with every change of the account, in
-   the same step. An app that the database no longer knows is
+   the same step, and the answers of `devices/remove` and
+   `devices/name` carry it. An app that the database no longer knows is
    answered as head 0. One record of 524,288 bytes always fits in a
    batch and in a page, whatever `info` says.
 8. The codes: one use, the end, the wrong tries, a setup code that
@@ -1825,9 +1905,9 @@ The server:
    not the ID outside, a record that is too large, a page that is
    cut.
 8. Streams: a wrong hash, a wrong length, a fetch that stops and
-   goes on, a file that came back before and after another device
-   asked the server to delete its chunks, and a stored stream that no
-   longer fits its hash, which is not sent.
+   goes on, a file that came back before, while and after another
+   device asked the server to delete its chunks, and a stored stream
+   that no longer fits its hash, which is not sent.
 9. A new recovery key: the three key IDs in every combination. S
    never moves to an older key.
 
@@ -1835,21 +1915,30 @@ The courier interface and the Sync app, on the emulators:
 
 1. The caller check: a stranger, another certificate, a lineage, a
    preview with a real app, Catalog, a data app calling a data app.
-2. A data app that is not running, was never opened, or was
-   force-stopped. A locked phone.
+2. A data app that is not running. A locked phone. A data app that
+   was force-stopped, and one that was never opened: each either
+   answers, or the Sync app leaves it and goes on with the other
+   apps, and names the force-stopped one. Both pass.
 3. The connection: cleartext is refused, a certificate authority that
    the user added is refused, a redirect is not followed.
 4. The manifest: what the Sync app exports and which permissions it
    asks for.
 5. Waiting, halving, and the message for a wrong clock.
+6. The account revision: a lower one, another one, and the reading of
+   the list of devices once a day. A device that the Sync app knows
+   was removed and that is in again is removed again, and the user is
+   told.
 
 ## Assumptions
 
 Things this page takes as true. Each is checked when its part is
 built. If one is wrong, the fix is a change to this page first.
 
-1. A call to a data app's content provider starts the app's process,
-   also when the app was never opened or was force-stopped.
+1. A call to a data app's content provider starts the app's process
+   when it is not running. Whether that also holds for an app that
+   Android holds stopped, because the user force-stopped it or never
+   opened it, is not taken as true. The design works either way
+   ([What a data app answers](#what-a-data-app-answers), point 5).
 2. Tink 1.24.0 makes an Ed25519 key pair from 32 given bytes and
    signs as RFC 8032 says. The Worker's Web Crypto checks such a
    signature.
@@ -2001,7 +2090,9 @@ Old versions, clocks and accidents:
 | A clock that is wrong. | More than 5 minutes: no sync. A wrong stamp does not last: the next edit on a device that has that version wins over it. |
 | A device comes back after a year. | It takes what came since. Its edits compete by `updatedAt`. What was deleted stays deleted. |
 | An old backup is restored on a device that syncs. | The restore rule: the newest edit wins. Markers are there. What the restore wrote is sent like any change. |
-| The user puts the database back to an earlier day. | The first device that knows more than the server makes it start a new epoch, and every app compares everything. A device that was removed since is in again until a device that knows of the removal sees the lower account revision. It then removes that device again and tells the user. |
+| The user puts the database back to an earlier day. | The first device that knows more than the server makes it start a new epoch, and every app compares everything. A device that was removed since is in again until a device that knows of the removal sees that the account revision moved, or reads the list of devices, at the latest a day later. It then removes that device again and tells the user. |
+| A file is deleted on one device and brought back on another at the same moment. | The record that brings it back is not stored while the chunks are being deleted. Stored after that, it makes its device send the stream again. |
+| The user force-stops a data app, or the Sync app. | Android may hold it stopped until the user opens it. A stopped data app is left out, and the Sync app says which app to open. A stopped Sync app does not run, and each data app says so. Nothing is lost: the changes wait. |
 | Two devices make a new recovery key. | The server takes the first. |
 | A stop between any two steps. | Each step is one transaction, or can be done twice. |
 
