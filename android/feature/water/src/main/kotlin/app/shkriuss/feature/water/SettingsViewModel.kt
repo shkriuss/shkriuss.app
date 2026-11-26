@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -49,6 +50,9 @@ class SettingsViewModel(
 
     private val settings: WaterSettings get() = state.value.settings
 
+    /** The write this screen started last. The next one waits for it ([inOrder]). The screen calls from the main thread only. */
+    private var lastWrite: Job? = null
+
     /**
      * The daily goal dialog: [text] in the unit shown. False if it is not a
      * whole number from 500 to 10,000 ml (17 to 338 fl oz): then the field
@@ -64,7 +68,11 @@ class SettingsViewModel(
     fun setGoal(text: String, openedMl: Int): Boolean {
         val unit = settings.unit
         val amount = amountOf(text, openedMl, unit, unit.goalLimits) ?: return false
-        if (amount != openedMl) viewModelScope.launch(work) { repository.setGoal(today.date.value, amount) }
+        if (amount != openedMl) {
+            // The day of the press: the write can wait for one before it, and midnight can pass meanwhile.
+            val day = today.date.value
+            inOrder { repository.setGoal(day, amount) }
+        }
         return true
     }
 
@@ -138,6 +146,21 @@ class SettingsViewModel(
      * read them: a change that no longer fits keeps them as they are.
      */
     private fun change(change: (WaterSettings) -> WaterSettings) {
-        viewModelScope.launch(work) { repository.changeSettings(change) }
+        inOrder { repository.changeSettings(change) }
+    }
+
+    /**
+     * Starts [write] once every write this screen started before it has
+     * ended. Each write is a coroutine of its own, and nothing else keeps
+     * two of them in line: on a busy phone a change made an instant after
+     * another could reach the database first, and the older change would
+     * then be the one that stays.
+     */
+    private fun inOrder(write: suspend () -> Unit) {
+        val before = lastWrite
+        lastWrite = viewModelScope.launch(work) {
+            before?.join()
+            write()
+        }
     }
 }

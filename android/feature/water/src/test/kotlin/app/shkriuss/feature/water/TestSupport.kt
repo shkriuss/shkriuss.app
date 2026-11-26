@@ -12,6 +12,12 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.thread
+import kotlin.concurrent.withLock
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -39,6 +45,73 @@ internal val context: Context get() = InstrumentationRegistry.getInstrumentation
 
 /** A Water database in memory, on the system SQLite driver. Close it at the end of the test. */
 internal fun memoryDatabase(): WaterDatabase = inMemoryTestDatabaseBuilder<WaterDatabase>(context).build()
+
+/** A Water database in memory that does its reads and writes on [work], so that a test decides their order ([NewestFirstWork]). */
+internal fun memoryDatabaseOn(work: CoroutineDispatcher): WaterDatabase =
+    inMemoryTestDatabaseBuilder<WaterDatabase>(context).setQueryCoroutineContext(work).build()
+
+/**
+ * One thread that runs the work it is given, the newest first, and that a
+ * test can hold. A screen and its database that both work here do
+ * nothing while it is held. When the test lets go, the change that was
+ * made last gets to the database first, and it is finished before an
+ * older one starts: the order that two changes can take on a busy phone
+ * when nothing keeps them in line.
+ */
+internal class NewestFirstWork : CoroutineDispatcher(), AutoCloseable {
+    private val lock = ReentrantLock()
+    private val changed = lock.newCondition()
+    private val waiting = ArrayDeque<Runnable>()
+    private var held = false
+    private var running = false
+    private var closed = false
+
+    init {
+        thread(name = "newest-first-work", isDaemon = true) { runWhatWaits() }
+    }
+
+    override fun dispatch(context: CoroutineContext, block: Runnable) = lock.withLock {
+        waiting.addLast(block)
+        changed.signalAll()
+    }
+
+    /** From now on, the work that is given waits. */
+    fun hold() = lock.withLock { held = true }
+
+    /** The work that waited runs, the newest first. */
+    fun letGo() = lock.withLock {
+        held = false
+        changed.signalAll()
+    }
+
+    /** Waits until all the work has run, with what it gave in turn. Fails after ten seconds. */
+    fun awaitIdle() = lock.withLock {
+        var left = TimeUnit.SECONDS.toNanos(10)
+        while (held || running || waiting.isNotEmpty()) {
+            check(left > 0) { "The work did not end in ten seconds" }
+            left = changed.awaitNanos(left)
+        }
+    }
+
+    override fun close() = lock.withLock {
+        closed = true
+        changed.signalAll()
+    }
+
+    private fun runWhatWaits() {
+        while (true) {
+            val next = lock.withLock {
+                running = false
+                changed.signalAll()
+                while (!closed && (held || waiting.isEmpty())) changed.await()
+                if (closed) return
+                running = true
+                waiting.removeLast()
+            }
+            next.run()
+        }
+    }
+}
 
 /**
  * Makes every write to [table] that SQLite would do fail from now on, as

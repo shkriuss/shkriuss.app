@@ -506,7 +506,7 @@ second build must write the same mapping file, or the release stops. See
   - `AppLockGateTest` and `AppLockActivitiesTest` wait for the state
     they read
     ([Tests that wait for a background thread](#tests-that-wait-for-a-background-thread)).
-- `feature/water` has 13 test classes with 250 tests: the units, the
+- `feature/water` has 13 test classes with 253 tests: the units, the
   goal of a day, the settings in use and the next reminder as plain code
   (`UnitsTest`, `RulesTest`, `NextReminderTest`), the schema
   (`WaterDatabaseTest`), the repository, the backup content and the
@@ -523,6 +523,12 @@ second build must write the same mapping file, or the release stops. See
   - The ViewModels run their work at once, with
     `Dispatchers.Unconfined`, and each test waits up to five seconds for
     the state it expects. No coroutine test library is needed.
+  - The tests of the order of two changes in Settings decide that order
+    themselves. The screen and its database work on one thread,
+    `NewestFirstWork`, which the test holds while it makes the changes.
+    When the test lets go, that thread takes the newest work first, the
+    order two changes can take on a busy phone. The test then waits
+    until the thread has nothing left to do.
   - `WaterBackupContentTest` also writes a whole backup through `Backups`
     of `core/backup`, to a document behind `TestDocuments` of
     `core/testing`, and restores it on a second app with the same
