@@ -215,7 +215,9 @@ every rule. The code follows that page exactly.
   told from a device that is offline. Nothing on a device is lost by
   it. [sync-protocol.md](../architecture/sync-protocol.md#attacks-considered)
   lists every attack that was considered, and the ones that do not
-  fail.
+  fail. One of them: a new device can be shown a record that was
+  deleted since. The owner decided to keep that as a known limit of
+  this version.
 - [crypto-design.md](../security/crypto-design.md#sync-keys) gets the
   device key, the account key, the name key, the statements and the
   signed request. Its lines "signatures are not used", "no keys are

@@ -323,6 +323,10 @@ The steps, on the device that joins:
    stores the account public key and the current key ID. The server
    is now in use.
 7. A used setup code is remembered by its hash and never taken again.
+8. The server keeps that hash in its database, and a database that is
+   put back to an earlier time forgets it. So once a device has
+   joined with a setup code, the Sync app tells the user to delete
+   the secret `SETUP_CODE` in the dashboard.
 
 So a code alone does nothing: the statement is checked first, and only
 someone with the words can make one. A statement alone does nothing
@@ -350,6 +354,9 @@ either.
    device.
 4. Removing does not take back the keys the device holds. For that,
    see [A lost device](#a-lost-device).
+5. Each Sync app remembers the IDs of the devices it has seen as
+   removed. If the server's account revision ever goes back, it
+   removes them again ([`heads`](#heads), point 4).
 
 ## The courier interface
 
@@ -401,7 +408,7 @@ All calls are `call` on the provider. Version 1 has these.
 | `import` | One [page](#a-page) from the server, as a file descriptor | How many records it took, and its new cursor |
 | `streams` | Nothing | The streams it wants sent, fetched and deleted, as a file descriptor |
 | `readStream` | A file ID | A descriptor to read the stored stream |
-| `streamSent` | A file ID and the stream's hash | Nothing |
+| `streamSent` | A file ID, the stream's hash, and how it went: sent, or "the stream on this phone does not fit its hash" | Nothing |
 | `writeStream` | A file ID and how many bytes are there | A descriptor to write the rest |
 | `finishStream` | A file ID | Stored, or wrong, or not wanted |
 | `streamDeleted` | A file ID | Nothing |
@@ -473,7 +480,9 @@ Each record:
 
 1. The data app reads the cursor, Known and the records in one
    transaction. So the cursor is never newer than the records.
-2. The blobs of one batch are at most 524,288 bytes together.
+2. The blobs of one batch are together at most the byte limit that
+   the Sync app gave. One record alone is always allowed, up to
+   524,288 bytes.
 3. A record is in a batch at most once.
 
 ### A page
@@ -714,8 +723,13 @@ is built ([Assumptions](#assumptions)).
 | 4 | The most chunks in one file request, 1 to 256 |
 
 A device obeys the last three inside these bounds, and treats a value
-outside them as the nearest bound. A record whose blob is larger than
-the server's limit is not sent, and is counted.
+outside them as the nearest bound.
+
+The byte limit only says how many records go together. One record
+alone always fits, in a batch and in a page, whatever this limit
+says, up to the 524,288 bytes of the format. So a record that the
+server once stored can always be fetched, and a record that an app
+may seal can always be sent.
 
 ### `enrol`
 
@@ -775,6 +789,7 @@ send.
 | 1 | `00` |
 | 16 | The epoch |
 | 4 | The current key ID |
+| 8 | The account revision |
 | 1 | How many apps follow |
 | ... | For each app: A (1 byte), the app's name (A bytes), its head (8 bytes), and the highest number the server told this device for it (8 bytes) |
 
@@ -787,6 +802,18 @@ send.
    the server lost something, even when the head is the app's cursor
    again. The Sync app then fetches for that app, and the fetch makes
    the server start a new epoch ([The epoch](#the-epoch)).
+3. An app that the answer does not name has the head 0, and the
+   server told this device 0 for it. So an app that the server no
+   longer knows is found in the same way.
+4. The account revision is a number that goes up by one, in the same
+   step, whenever a device joins, is renamed or removed, a setup code
+   is used, or the account key changes. Each Sync app remembers the
+   highest one it saw. A lower one means that the server was put back
+   to an earlier time. The Sync app then reads the list of devices,
+   removes again every device it knows was removed
+   ([Removing a device](#removing-a-device)), and tells the user:
+   "The server was put back to an earlier time. Check the list of
+   devices."
 
 ### Fetch
 
@@ -814,7 +841,8 @@ Each record:
 
 1. The page holds the app's records whose number is above Since,
    lowest number first, until it holds `most` records or a limit of
-   `info` is reached.
+   `info` is reached. When a record waits, the page holds at least
+   one, also when that record alone is over the byte limit of `info`.
 2. Through is the number of the last record of a page that was cut.
    Else it is the app's head.
 3. The server reads the records and the head in one step, so no
@@ -874,7 +902,9 @@ The answer:
 4. The server looks at a blob only this far: its length, its first
    six bytes `53 48 4B 01 01 01`, and its key ID in bytes 6 to 9.
 5. A batch of a comparison of everything that would pass 70,000 row
-   writes of the day is answered `07` with `01`.
+   writes of the day is answered `07` with `01`. A batch that is over
+   a limit of `info` is answered `0C`, but never a batch of one
+   record.
 6. The server remembers the head after the batch as the highest
    number it told this device for this app.
 7. A record that is stored over one marked "its chunks were deleted"
@@ -965,7 +995,7 @@ the signature of the account key the server has now (64 bytes).
 
 | Where | What | Written |
 |---|---|---|
-| D1, one row | The server ID, the epoch, the state, the account public key, the current key ID | When it is first run, at the first join, on a new epoch, on a new account key, on closing |
+| D1, one row | The server ID, the epoch, the state, the account public key, the current key ID, the account revision | When it is first run, on a new epoch, on closing, and whenever a device joins, is renamed or removed, a setup code is used or the account key changes |
 | D1, a row for each device | Its ID, public key, sealed name, state, when added, last day seen | On join, rename, remove, and once on each day the device calls |
 | D1, a row for each app | The app's head | With every stored batch |
 | D1, a row for each device and app | The highest number the server told it | With every page and every stored batch that moves it |
@@ -1038,11 +1068,13 @@ the signature of the account key the server has now (64 bytes).
    its data apps then compares everything. So whatever the server
    lost is sent again by a device that has it.
 4. Putting the database back also brings back what changed since: a
-   device that was removed is in again, a used code is good again,
-   and the account key is the older one. The user removes the device
-   again. A device whose keeper holds both recovery keys sends the
-   new account key statement again
-   ([A new recovery key](#a-new-recovery-key)).
+   device that was removed is in again, a used setup code is good
+   again, and the account key is the older one. No record's number
+   moves by that. So the server also keeps an account revision
+   ([`heads`](#heads), point 4). A device that knows a higher one
+   removes the removed devices again and tells the user. A device
+   whose keeper holds both recovery keys sends the new account key
+   statement again ([A new recovery key](#a-new-recovery-key)).
 5. The user can also ask for a comparison of everything in the Sync
    app, on any device, at any time.
 6. A server that changes its epoch again and again only makes the
@@ -1098,8 +1130,8 @@ records it stands for can never be apart
      exists only on this phone
      ([crypto-design.md](../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key),
      point 5).
-5. A record whose blob would be over the limit is taken out of **To
-   send**, and counted.
+5. A record whose blob would be over the 524,288 bytes of the format
+   is taken out of **To send**, and counted.
 6. While the app has stopped sending, `export` gives nothing.
 7. The token names this batch. The next `export` voids it.
 
@@ -1330,11 +1362,18 @@ cursor still moves past it.
    ([`files/have`](#fileshave-filesfetch-filesdelete)). It reads each
    stream through `readStream`, cuts it, and sends the chunks the
    server lacks.
-3. When every chunk of a stream is on the server, the Sync app calls
+3. Before it sends any chunk of a stream, the Sync app hashes what
+   `readStream` gives. If the SHA-256 is not the one that `streams`
+   named, the stored file changed after its hash was taken. The Sync
+   app then sends nothing of that stream and says so in `streamSent`.
+   The data app counts the stream as not on this phone, and wants it
+   fetched ([Fetching a file](#fetching-a-file)). So damaged bytes
+   never go to the server under the name of the good stream.
+4. When every chunk of a stream is on the server, the Sync app calls
    `streamSent`. Only then does the file's record go into a batch.
    So an honest server never has a record whose file is missing.
-4. A send that stops goes on at the first chunk that is not stored.
-5. The app forgets that the server has a stream when a comparison of
+5. A send that stops goes on at the first chunk that is not stored.
+6. The app forgets that the server has a stream when a comparison of
    everything starts, when the file's record was refused, and when
    the file's record, not deleted, won over a deleted one
    ([Conflict rules](#conflict-rules)). It then lists the stream
@@ -1453,7 +1492,11 @@ What that means:
 8. **CPU time** cannot be shown in a local test. It is measured on a
    deployed Worker on the free plan when the server is built. The
    limits that `info` names are set by that measurement. They may
-   only be lower than the numbers on this page.
+   only be lower than the numbers on this page, and they only say how
+   many records go together. One request must always take one record
+   of 524,288 bytes. If the measurement shows that it cannot, the
+   largest sealed record on this page changes before any server is
+   used.
 9. Anyone who knows the server's address can use up its requests of
    a day with requests that fail. The data is safe, and sync goes on
    the next day. The self-hosting guide says how to turn on
@@ -1486,7 +1529,8 @@ What that means:
    A reminder made on a tablet reaches a phone at the phone's next
    run, not at once.
 7. The Sync app keeps only state of this phone: its device key, the
-   name key, the server's ID and address, the heads it saw, and how
+   name key, the server's ID and address, the heads and the account
+   revision it saw, the IDs of the devices it saw as removed, and how
    far each transfer got. Android's own backup is off, as in every
    app.
 
@@ -1739,14 +1783,18 @@ The server:
    `heads`.
 6. `files/delete`: chunks go only while the deleted record is still
    the server's copy, and a record stored over it gets `04`.
-7. The codes: one use, the end, the wrong tries, a setup code that
+7. The account revision goes up with every change of the account, in
+   the same step. An app that the database no longer knows is
+   answered as head 0. One record of 524,288 bytes always fits in a
+   batch and in a page, whatever `info` says.
+8. The codes: one use, the end, the wrong tries, a setup code that
    was used.
-8. The order of the checks of `enrol`: nothing is stored before the
+9. The order of the checks of `enrol`: nothing is stored before the
    check of the code, and a device that is in already gets `00`.
-9. The row writes of each call, asserted from D1's own count.
-10. Every call sent twice does no harm (rule 7).
-11. A closed server.
-12. The test vectors of
+10. The row writes of each call, asserted from D1's own count.
+11. Every call sent twice does no harm (rule 7).
+12. A closed server.
+13. The test vectors of
     [crypto-design.md](../security/crypto-design.md#sync-keys): a
     statement, a signed request, both signatures.
 
@@ -1769,8 +1817,9 @@ The server:
    not the ID outside, a record that is too large, a page that is
    cut.
 8. Streams: a wrong hash, a wrong length, a fetch that stops and
-   goes on, and a file that came back before and after another device
-   asked the server to delete its chunks.
+   goes on, a file that came back before and after another device
+   asked the server to delete its chunks, and a stored stream that no
+   longer fits its hash, which is not sent.
 9. A new recovery key: the three key IDs in every combination. S
    never moves to an older key.
 
@@ -1805,8 +1854,9 @@ built. If one is wrong, the fix is a change to this page first.
    [What the server stores](#what-the-server-stores) says.
 6. R2 checks the SHA-256 that comes with a chunk and refuses a chunk
    that does not fit.
-7. One request stays under 10 ms of CPU time with the limits of this
-   page. If not, `info` names lower ones.
+7. One request with one record of 524,288 bytes stays under 10 ms of
+   CPU time. How many records go together beyond that is what `info`
+   names.
 8. The Sync app can tell Cloudflare's answer for "the day's requests
    are used" from its answer for "out of CPU time".
 9. Android's own HTTP client can do what
@@ -1837,6 +1887,7 @@ built. If one is wrong, the fix is a change to this page first.
 | Which settings stay on one device ([ADR 0036](../adr/0036-app-settings-as-records.md), point 5) | None. Every record syncs, Water's settings record too. Every device that has the app reminds. Marks, snoozes and Done on a notification stay on one device. To silence one device, the user turns off that app's notifications there. |
 | How the list of devices names a device | A name that the server stores sealed. The Sync app holds one key for it, made from the recovery key, which opens nothing else ([The name key](#the-name-key)). |
 | A deletion and an edit with the same `updatedAt` | The edit wins, on every device ([Conflict rules](#conflict-rules)). |
+| A hostile server that shows a new device a record that was deleted since | Kept as a known limit of this version. Nothing proves to a new device that it was shown everything ([Attacks considered](#attacks-considered), [Open questions](#open-questions), question 5). |
 
 ## Attacks considered
 
@@ -1940,7 +1991,7 @@ Old versions, clocks and accidents:
 | A clock that is wrong. | More than 5 minutes: no sync. A wrong stamp does not last: the next edit on a device that has that version wins over it. |
 | A device comes back after a year. | It takes what came since. Its edits compete by `updatedAt`. What was deleted stays deleted. |
 | An old backup is restored on a device that syncs. | The restore rule: the newest edit wins. Markers are there. What the restore wrote is sent like any change. |
-| The user puts the database back to an earlier day. | The first device that knows more than the server makes it start a new epoch, and every app compares everything. A device that was removed since is in again until the user removes it again. |
+| The user puts the database back to an earlier day. | The first device that knows more than the server makes it start a new epoch, and every app compares everything. A device that was removed since is in again until a device that knows of the removal sees the lower account revision. It then removes that device again and tells the user. |
 | Two devices make a new recovery key. | The server takes the first. |
 | A stop between any two steps. | Each step is one transaction, or can be done twice. |
 
@@ -1980,7 +2031,9 @@ Not decided here. Each says what decides it.
 6. **Purging deletion markers**, in a later version
    ([Deletion markers](#deletion-markers), point 5).
 7. **A hash for each chunk.** Today a wrong stream is found at its
-   end. Fine for 25 MB. To decide before Drive and Photos.
+   end. Fine for 25 MB. To decide before Drive and Photos. Chunks
+   that are wrong on the server are found only by a device that
+   fetches them, and nothing replaces them in this version.
 8. **Records that do not fit D1.** 500 MB on the free plan, and
    524,288 bytes for a record. Larger records could go to R2.
 9. **Chunks without a record.** A device that sent a stream and was
