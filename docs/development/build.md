@@ -321,7 +321,7 @@ second build must write the same mapping file, or the release stops. See
   `core/testing` also has `MergedManifestTest`, for how the app lock
   check reads a merged manifest
   ([Shared test helpers](#shared-test-helpers)).
-- `core/crypto` has 22 test classes with 179 tests. They are the items 1
+- `core/crypto` has 24 test classes with 206 tests. They are the items 1
   to 8 and 10 to 13 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
@@ -377,7 +377,7 @@ second build must write the same mapping file, or the release stops. See
   - Most of these tests need no Robolectric. Those that build the object
     for the system prompt, read Android's log or build a key's settings
     run under it.
-- `core/backup` has 10 test classes with 80 tests. They are the items of
+- `core/backup` has 11 test classes with 84 tests. They are the items of
   "What the tests must cover" in
   [backup-format.md](../architecture/backup-format.md#what-the-tests-must-cover).
   - They use real keys: `SoftwareKeysApp` from the
@@ -421,6 +421,32 @@ second build must write the same mapping file, or the release stops. See
   - `RoundTripTest` also checks the counts of records that are not
     deleted, per type name: the same when a backup is written and when
     it is checked.
+- `core/sync-client` has 11 test classes with 63 tests. They are the
+  items for `core/sync-client` of "What the tests must cover" in
+  [sync-protocol.md](../architecture/sync-protocol.md#what-the-tests-must-cover).
+  - They use real keys: `SoftwareKeysApp` from the
+    [test fixtures](#test-fixtures) of `core/crypto`. A made-up app,
+    Lists, keeps items and files in a Room database on the system SQLite
+    under Robolectric, with the seven `sync_` tables. A server in memory
+    (`TestServer`) follows the rules of the protocol, and `TestDevice`
+    plays the Sync app's part.
+  - `ManyDevicesPropertyTest` runs 30 histories of three devices, with
+    160 random steps each: edits, deletions, wipes, files, and file keys
+    sealed again, often at the same millisecond; runs that stop after
+    any call, pages that come twice or late, batches that lose their
+    answer, comparisons, and a server put back to an earlier day. Every
+    device must end with the same records and streams, and one more run
+    must send nothing. Each history has a seed, which repeats it.
+  - `SyncOrderTest` puts every step of the order for ties against each
+    other. `LayoutsTest` checks the byte layouts, and refuses pages and
+    answers that break them.
+  - `SendRulesTest`, `ComparisonTest`, `SkipsTest`, `StreamsTest` and
+    `NewRecoveryKeyTest` take the rules one by one. `CallsTest` checks
+    the calls that are refused, and a stop inside a call's transaction,
+    made with an SQLite trigger.
+  - `SyncSqlTest` checks that the SQL of `SyncStore` writes only the
+    `sync_` tables
+    ([ADR 0044](../adr/0044-sync-tables-in-each-data-app.md)).
 - Catalog has `CatalogScreenTest`. It starts the app's activity and checks
   the title is a heading, which is what TalkBack announces, that every page
   has a button at least 48 dp tall, that each page opens and back returns,

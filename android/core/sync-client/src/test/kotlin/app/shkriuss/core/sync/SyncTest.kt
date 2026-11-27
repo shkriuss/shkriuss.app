@@ -34,18 +34,24 @@ abstract class SyncTest {
     /** A new, empty server for the devices made from now on. */
     fun newServer(): TestServer = TestServer(accountKeyId).also { currentServer = it }
 
-    /** A new device with Lists, sync on. */
+    /**
+     * A new device with Lists, sync on. Unless [join] is false, it has run
+     * once, so its first comparison of everything is over and what it
+     * writes from now on is "ordinary".
+     */
     suspend fun device(
         name: String,
         dataVersion: Int = 1,
         wipes: Boolean = true,
         key: RecoveryKey = recoveryKey,
         on: Boolean = true,
+        join: Boolean = true,
         seed: Int = devices.size + 1,
     ): TestDevice {
         val device = TestDevice(name, temporary.newFolder(name), key, server, clock, seed, dataVersion, wipes)
         devices += device
         if (on) device.client.setOn(true)
+        if (on && join) device.run()
         return device
     }
 

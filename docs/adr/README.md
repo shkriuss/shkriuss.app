@@ -133,3 +133,4 @@ How a record may be edited or replaced is in point 7 of
 | 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Accepted; "never Sync" in points 1 and 7 superseded by 0009 |
 | 0042 | [Wiping the content of deleted records](0042-wiping-the-content-of-deleted-records.md) | Accepted |
 | 0043 | [The sync server's tools, tests and deploy](0043-backend-tools-tests-and-deploy.md) | Accepted |
+| 0044 | [Sync's own tables in each data app](0044-sync-tables-in-each-data-app.md) | Accepted |

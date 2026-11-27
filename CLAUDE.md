@@ -52,8 +52,8 @@ If a task seems to need it, stop and say so in the PR description.
 - `.claude/rules/` rules that apply only to some paths. Read the ones that match
   the files you touch.
 
-`backend/` is the sync server. `core/sync-client` and `app/sync` come
-with Sync. They do not exist yet.
+`backend/` is the sync server. `core/sync-client` is sync in each data
+app. `app/sync` comes with Sync. It does not exist yet.
 
 ## Commands
 

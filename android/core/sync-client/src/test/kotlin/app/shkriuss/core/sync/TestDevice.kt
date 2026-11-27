@@ -43,6 +43,13 @@ class ManyKeys(first: ShkCrypto) : SyncKeys {
     /** The key that seals. */
     var current: KeyId = first.records.keyIds().current
 
+    /**
+     * When set, an app with no keys: every call fails as when the
+     * `record` keyset cannot be used now, for example before the first
+     * unlock since the phone started.
+     */
+    var notNow: ShkCrypto? = null
+
     /** Adds the keys of another recovery key, as the new primary. */
     fun addAndUse(crypto: ShkCrypto) {
         val id = crypto.records.keyIds().current
@@ -50,11 +57,12 @@ class ManyKeys(first: ShkCrypto) : SyncKeys {
         current = id
     }
 
-    override fun keyIds(): RecordKeyIds = RecordKeyIds(current, held.keys.toSet())
+    override fun keyIds(): RecordKeyIds = notNow?.records?.keyIds() ?: RecordKeyIds(current, held.keys.toSet())
 
-    override fun seal(recordId: String, plaintext: ByteArray): ByteArray = held.getValue(current).records.seal(recordId, plaintext)
+    override fun seal(recordId: String, plaintext: ByteArray): ByteArray = (notNow ?: held.getValue(current)).records.seal(recordId, plaintext)
 
     override fun open(recordId: String, blob: ByteArray): ByteArray {
+        notNow?.let { return it.records.open(recordId, blob) }
         val named = if (blob.size >= 10) KeyId(ByteBuffer.wrap(blob, 6, 4).int) else null
         return (held[named] ?: held.getValue(current)).records.open(recordId, blob)
     }
@@ -135,6 +143,16 @@ class TestDevice(
 
     suspend fun sealFileAgain(id: String, keyId: KeyId = keys.current) =
         attachments.sealFileKeyAgain(id) { it.copy(keyId = keyId.value, keyBytes = "key-${random.nextInt(1_000_000)}") }
+
+    /** Seals [record] as this device's Lists would, with the stream part [stream]. */
+    internal fun seal(record: SyncRecord, stream: StreamPart? = null, version: Int = content.dataVersion): ByteArray =
+        keys.seal(record.id, SealedPlaintext.encode(version, record.entry, stream))
+
+    /** The batch this device's app would give now, sent to the server with [answer] in place of the server's own. */
+    suspend fun exportAndAnswer(answer: (batch: ByteArray) -> ByteArray): ExportedResult? {
+        val batch = client.export(call(), ExportRequest(false, SyncFormat.MOST_RECORDS, server.mostBytes)) as? ExportResult.Batch ?: return null
+        return client.exported(call(), batch.token, answer(batch.bytes))
+    }
 
     /** Wipes every deleted record that is not wiped yet, as an app that wipes does once Undo has ended. */
     suspend fun wipeEveryDeletion() {
@@ -243,12 +261,17 @@ class TestDevice(
         sendAll(comparison = true)
     }
 
-    /** Runs until a run changes nothing more on this device. */
+    /**
+     * Runs until a run changes nothing more on this device, and the app's
+     * status asks for nothing more: no comparison, no last fetch, no stream.
+     */
     suspend fun runUntilQuiet() {
         repeat(MOST_RUNS) {
             val before = server.stored.size to records()
             run()
-            if (server.stored.size == before.first && records() == before.second && !status().hasStreamsToMove) return
+            val status = status()
+            val asksForMore = status.hasStreamsToMove || status.wantsFetch || status.comparison != ComparisonState.NONE
+            if (server.stored.size == before.first && records() == before.second && !asksForMore) return
         }
         error("$name did not become quiet")
     }

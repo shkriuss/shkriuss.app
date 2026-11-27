@@ -130,6 +130,9 @@ class ListsContent(
     /** How many times sync called [afterImport]. */
     var afterImports = 0
 
+    /** True to make the next [sealFileKeysAgain] stop before it writes, as when the app is stopped there. */
+    var stopNextSeal = false
+
     override suspend fun changesSince(afterChangeNumber: Long, limit: Int): List<SyncChange> {
         val both = database.items().changes(afterChangeNumber, limit) + database.attachments().changes(afterChangeNumber, limit)
         return both.sortedBy { it.changeNumber }.take(limit).map { SyncChange(it.id, it.changeNumber) }
@@ -169,6 +172,10 @@ class ListsContent(
     }
 
     override suspend fun sealFileKeysAgain() {
+        if (stopNextSeal) {
+            stopNextSeal = false
+            throw IllegalStateException("The app stopped here")
+        }
         val current = currentKeyId().value
         database.attachments().all().filter { it.keyId != null && it.keyId != current }.forEach { stored ->
             attachments.sealFileKeyAgain(stored.record.id) { it.copy(keyId = current, keyBytes = it.keyBytes + "r") }

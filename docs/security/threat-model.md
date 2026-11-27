@@ -1154,7 +1154,8 @@ Status: **Met for what is built.**
   in the Keystore, all through Tink or the Keystore. Our code never picks
   a nonce ([crypto-design.md](crypto-design.md#rules)).
 - MASWE-0008, hashing: met. SHA-256 is used only as the checksum of the
-  words and of the word list.
+  words and of the word list, and to name the stream of a file in sync,
+  which is ciphertext already.
 - MASWE-0009, MACs: met. There is no MAC of our own. The AEADs check
   every blob.
 - MASWE-0010 and 0011, signatures: nothing signs yet. The two signing

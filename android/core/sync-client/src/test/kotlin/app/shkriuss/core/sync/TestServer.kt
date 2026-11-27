@@ -136,6 +136,14 @@ class TestServer(var keyId: KeyId, private val random: Random = Random(1)) {
         return ByteWriter().u8(0).bytes(this.epoch.toBytes()).i64(before).i64(state.head).i32(count).bytes(results.toByteArray()).toByteArray()
     }
 
+    /** Stores [blob] as the newest copy of [id], as if a device had sent it. Returns its number. */
+    fun put(app: String, id: String, blob: ByteArray): Long {
+        val state = apps.getOrPut(app) { AppState() }
+        state.head++
+        state.records[id] = Copy(state.head, blob)
+        return state.head
+    }
+
     /** `files/have`, for one whole stream. */
     fun has(fileId: String, hash: String): Boolean = (fileId to hash) in streams
 

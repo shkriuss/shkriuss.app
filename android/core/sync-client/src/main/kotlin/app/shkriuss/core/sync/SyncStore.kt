@@ -56,6 +56,7 @@ internal data class SyncState(
     val refused: Long,
     val wrongStreams: Long,
     val lastToken: Long,
+    val sealFileKeys: Boolean,
 ) {
     override fun toString(): String = "SyncState(cursor $cursor, known $known, comparison $comparison, stopped $stopped)"
 }
@@ -95,16 +96,16 @@ internal object SyncSql {
 
     private const val STATE_COLUMNS =
         "isOn, serverId, epoch, deviceId, cursor, known, syncKeyId, sendMark, comparison, stopped, dataVersion, " +
-            "skippedFrom, skippedAnotherKey, skippedDamaged, skippedNewer, skippedNotValid, tooLarge, refused, wrongStreams, lastToken"
+            "skippedFrom, skippedAnotherKey, skippedDamaged, skippedNewer, skippedNotValid, tooLarge, refused, wrongStreams, lastToken, sealFileKeys"
 
     const val CREATE_STATE =
-        "INSERT INTO $STATE (id, $STATE_COLUMNS) VALUES (1, 0, NULL, NULL, NULL, 0, 0, NULL, 0, 0, 0, ?, NULL, 0, 0, 0, 0, 0, 0, 0, 0) " +
+        "INSERT INTO $STATE (id, $STATE_COLUMNS) VALUES (1, 0, NULL, NULL, NULL, 0, 0, NULL, 0, 0, 0, ?, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0) " +
             "ON CONFLICT (id) DO NOTHING"
     const val READ_STATE = "SELECT $STATE_COLUMNS FROM $STATE WHERE id = 1"
     const val WRITE_STATE =
         "UPDATE $STATE SET isOn = ?, serverId = ?, epoch = ?, deviceId = ?, cursor = ?, known = ?, syncKeyId = ?, sendMark = ?, " +
             "comparison = ?, stopped = ?, dataVersion = ?, skippedFrom = ?, skippedAnotherKey = ?, skippedDamaged = ?, " +
-            "skippedNewer = ?, skippedNotValid = ?, tooLarge = ?, refused = ?, wrongStreams = ?, lastToken = ? WHERE id = 1"
+            "skippedNewer = ?, skippedNotValid = ?, tooLarge = ?, refused = ?, wrongStreams = ?, lastToken = ?, sealFileKeys = ? WHERE id = 1"
 
     const val SEND_ORDINARY =
         "INSERT INTO $SEND (recordId, kind, position) VALUES (?, 1, ?) " +
@@ -183,6 +184,7 @@ internal class SyncStore(private val connection: PooledConnection) {
                 refused = it.getLong(17),
                 wrongStreams = it.getLong(18),
                 lastToken = it.getLong(19),
+                sealFileKeys = it.getLong(20) != 0L,
             )
         }
     }
@@ -209,6 +211,7 @@ internal class SyncStore(private val connection: PooledConnection) {
             it.bindLong(18, state.refused)
             it.bindLong(19, state.wrongStreams)
             it.bindLong(20, state.lastToken)
+            it.bindLong(21, if (state.sealFileKeys) 1 else 0)
             it.step()
         }
     }

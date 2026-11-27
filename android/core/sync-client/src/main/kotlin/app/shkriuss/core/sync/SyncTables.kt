@@ -59,6 +59,8 @@ class SyncStateRow(
     val wrongStreams: Long,
     /** The token of the last batch given out. */
     val lastToken: Long,
+    /** Whether the app still has to seal its file keys again under the key it syncs with. */
+    val sealFileKeys: Boolean,
 )
 
 /** **To send**: the records that must go to the server, "ordinary" (1) or "comparison" (2). */

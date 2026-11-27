@@ -6,6 +6,7 @@ import app.shkriuss.core.crypto.BlobAnswer
 import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.KeyId
 import app.shkriuss.core.crypto.RecordKeyIds
+import app.shkriuss.core.crypto.StreamHash
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.data.SyncTake
 import app.shkriuss.core.data.timesAreWithinLimits
@@ -16,7 +17,6 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.RandomAccessFile
-import java.security.MessageDigest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -266,18 +266,27 @@ class SyncClient(
             if (!read.more) {
                 after.lastPage = true
                 if (begun.keyState == KeyState.FOLLOW) {
-                    // The last fetch before the new key ended: from now on the app syncs with it, and compares everything.
-                    state = store.startComparison(state.copy(syncKeyId = begun.keyIds.current.value, stopped = Stop.NONE), forgetDeletions = false)
-                    after.newKey = true
+                    // The last fetch before the new key ended: from now on the app syncs with it, seals its file keys
+                    // again under it, and compares everything.
+                    val switched = state.copy(syncKeyId = begun.keyIds.current.value, stopped = Stop.NONE, sealFileKeys = true)
+                    state = store.startComparison(switched, forgetDeletions = false)
                 } else if (state.comparison == Comparison.FETCHING) {
                     state = store.finishFetching(state)
                 }
             }
             store.save(state)
+            after.sealFileKeys = state.sealFileKeys
             ImportResult.Taken(taken, state.cursor)
         }
         after.removedStreams.forEach { content.removeStream(it) }
-        if (after.newKey) content.sealFileKeysAgain()
+        if (after.sealFileKeys) {
+            // Kept in the state until it is done, so that a stop here only makes the next import do it.
+            content.sealFileKeysAgain()
+            database.withWriteTransaction {
+                val store = SyncStore(this)
+                store.save(store.state(content.dataVersion).copy(sealFileKeys = false))
+            }
+        }
         if (after.lastPage) content.afterImport()
         result
     }
@@ -602,21 +611,25 @@ class SyncClient(
      * yet in an app that wipes, every file's record while a file key is
      * sealed by a key that exists only on this phone, a file's record
      * whose wrapped key does not name [syncKeyId], and one whose stream
-     * the server is not known to have.
+     * the server is not known to have. The stream of a file's record is
+     * listed from the first look on, so that it can go up while the
+     * record waits for another reason.
      */
     private suspend fun SyncStore.sendableStream(record: SyncRecord, syncKeyId: KeyId): Sendable? {
         if (content.wipes && record.isDeleted && !record.wiped) return null
+        val part = record.streamLength?.let { length ->
+            val stream = stream(record.id)
+            if (stream == null) {
+                putStream(StreamState(record.id, length, hash = null, onServer = false, doesNotFit = false, toDelete = false, deletedNumber = null, wrongAt = null))
+                return null
+            }
+            val hash = stream.hash?.let(Hex::parse)
+            if (!stream.onServer || hash == null) return null
+            StreamPart(length, hash)
+        }
         if (record.isFile && content.fileKeysOnlyOnThisPhone()) return null
         if (record.wrappedKeyId != null && record.wrappedKeyId != syncKeyId) return null
-        val length = record.streamLength ?: return Sendable(null)
-        val stream = stream(record.id)
-        if (stream == null) {
-            putStream(StreamState(record.id, length, hash = null, onServer = false, doesNotFit = false, toDelete = false, deletedNumber = null, wrongAt = null))
-            return null
-        }
-        val hash = stream.hash?.let(Hex::parse)
-        if (!stream.onServer || hash == null) return null
-        return Sendable(StreamPart(length, hash))
+        return Sendable(part)
     }
 
     private fun seal(id: String, plaintext: ByteArray): ByteArray = try {
@@ -654,7 +667,7 @@ class SyncClient(
     private class AfterImport {
         val removedStreams = mutableListOf<String>()
         var lastPage = false
-        var newKey = false
+        var sealFileKeys = false
     }
 
     private class Step(val state: SyncState, val taken: Boolean)
@@ -871,16 +884,7 @@ class SyncClient(
         val NO_HASH = ByteArray(SyncFormat.HASH_BYTES)
 
         /** The SHA-256 of everything [input] holds, in hex. */
-        fun sha256(input: InputStream): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-            return Hex.of(digest.digest())
-        }
+        fun sha256(input: InputStream): String = Hex.of(StreamHash.of(input))
     }
 }
 
