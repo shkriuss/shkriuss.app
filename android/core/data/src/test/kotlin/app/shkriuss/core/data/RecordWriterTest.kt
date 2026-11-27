@@ -542,6 +542,85 @@ class RecordWriterTest {
         assertEquals(reserved, createReserved(reserved).record.id)
     }
 
+    @Test
+    fun takeFromSyncStoresARecordThatIsNotStoredWithItsOwnFieldsAndANewChangeNumber() = runBlocking {
+        createNote("Already here")
+        val fields = RecordFields(id = TestIdSource.idNumber(77), createdAt = 1_000, updatedAt = 2_000, deletedAt = null)
+        val came = SampleNote(fields, changeNumber = 999, title = "From another device", pinned = true)
+
+        val taken = notes.takeFromSync(came) { _, _ -> error("no tie without a stored record") }
+
+        assertEquals(SyncTake.TAKEN, taken.answer)
+        assertEquals("the change number is the next one, not the one that came along", 2L, taken.changeNumber)
+        assertEquals(came.copy(changeNumber = 2), database.notes().find(fields.id))
+    }
+
+    @Test
+    fun takeFromSyncTakesALaterUpdatedAtAndKeepsAStoredOneThatIsLater() = runBlocking {
+        val note = createNote("Milk")
+        val later = SampleNote(note.record.copy(updatedAt = note.record.updatedAt + 1), changeNumber = 0, title = "Oat milk", pinned = false)
+        val earlier = SampleNote(note.record.copy(updatedAt = note.record.updatedAt - 1), changeNumber = 0, title = "Old milk", pinned = false)
+
+        val kept = notes.takeFromSync(earlier) { _, _ -> error("no tie between two times") }
+        assertEquals(SyncTake.STORED_WINS, kept.answer)
+        assertEquals(note.changeNumber, kept.changeNumber)
+        assertEquals(listOf(note), database.notes().all())
+
+        val taken = notes.takeFromSync(later) { _, _ -> error("no tie between two times") }
+        assertEquals(SyncTake.TAKEN, taken.answer)
+        assertEquals(listOf(later.copy(changeNumber = 2)), database.notes().all())
+    }
+
+    @Test
+    fun takeFromSyncLetsTheTieDecideTheSameUpdatedAt() = runBlocking {
+        val note = createNote("Milk")
+        val other = SampleNote(note.record, changeNumber = 0, title = "Bread", pinned = false)
+        val asked = mutableListOf<Pair<String, String>>()
+
+        val stored = notes.takeFromSync(other) { s, c -> asked += s.title to c.title; -1 }
+        val same = notes.takeFromSync(other) { _, _ -> 0 }
+        assertEquals(SyncTake.STORED_WINS, stored.answer)
+        assertEquals(SyncTake.SAME, same.answer)
+        assertEquals(listOf("Milk" to "Bread"), asked)
+        assertEquals(listOf(note), database.notes().all())
+        assertEquals("no change number was taken", 2L, createNote("Tea").changeNumber)
+
+        val taken = notes.takeFromSync(other) { _, _ -> 1 }
+        assertEquals(SyncTake.TAKEN, taken.answer)
+        assertEquals(3L, taken.changeNumber)
+        assertEquals(other.copy(changeNumber = 3), database.notes().find(note.record.id))
+    }
+
+    @Test
+    fun takeFromSyncTwiceWritesNothingTheSecondTime() = runBlocking {
+        val fields = RecordFields(TestIdSource.idNumber(50), createdAt = 1_000, updatedAt = 2_000, deletedAt = 2_000)
+        val came = SampleNote(fields, changeNumber = 0, title = "Deleted elsewhere", pinned = false)
+        val byBytes: (SampleNote, SampleNote) -> Int = { s, c -> if (s.copy(changeNumber = 0) == c.copy(changeNumber = 0)) 0 else 1 }
+
+        assertEquals(SyncTake.TAKEN, notes.takeFromSync(came, byBytes).answer)
+        val stored = database.notes().all()
+        assertEquals(SyncTake.SAME, notes.takeFromSync(came, byBytes).answer)
+        assertEquals(stored, database.notes().all())
+    }
+
+    @Test
+    fun takeFromSyncRefusesATimeThatNoRecordCanHoldAndWritesNothing() = runBlocking {
+        val id = TestIdSource.idNumber(50)
+        val wrong = listOf(
+            RecordFields(id, createdAt = -1, updatedAt = 1_000, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = RecordTimes.LAST_MILLIS + 1, deletedAt = null),
+            RecordFields(id, createdAt = 1_000, updatedAt = 2_000, deletedAt = -1),
+        )
+
+        wrong.forEach { fields ->
+            assertThrows(fields.toString(), IllegalArgumentException::class.java) {
+                runBlocking { notes.takeFromSync(SampleNote(fields, changeNumber = 0, title = "Milk", pinned = false)) { _, _ -> 1 } }
+            }
+        }
+
+        assertEquals(emptyList<SampleNote>(), database.notes().all())
+    }
+
     private suspend fun createNote(title: String, pinned: Boolean = false): SampleNote =
         notes.create { fields, number -> SampleNote(fields, number, title = title, pinned = pinned) }
 

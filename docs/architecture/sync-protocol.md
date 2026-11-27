@@ -6,15 +6,17 @@ byte that leaves a phone for sync, every call, and every rule a device
 follows.
 
 - Status: the server is built, in `backend/`
-  ([backend.md](../development/backend.md)). The rest is designed, not
-  built. The points the owner decided are in
+  ([backend.md](../development/backend.md)), and what each data app
+  does, in `android/core/sync-client`. No app uses it yet. The Sync app
+  and the content provider of each data app are designed, not built.
+  The points the owner decided are in
   [Decided by the owner](#decided-by-the-owner).
-- The code is `backend/` (the server). It will be
-  `android/core/sync-client` (what each data app does),
-  `android/app/sync` (the Sync app), and new parts of
-  `android/core/crypto` and `android/core/security`. All of it must
-  follow this page exactly. If this page is wrong or unclear,
-  the fix is a change to this page first, agreed with the owner.
+- The code is `backend/` (the server) and `android/core/sync-client`
+  (what each data app does). It will be `android/app/sync` (the Sync
+  app), and new parts of `android/core/crypto` and
+  `android/core/security`. All of it must follow this page exactly. If
+  this page is wrong or unclear, the fix is a change to this page
+  first, agreed with the owner.
 - Decisions: [ADR 0009](../adr/0009-sync-protocol-and-server.md) (the
   protocol and the server) and
   [ADR 0005](../adr/0005-no-network-permission-in-data-apps.md) (the
@@ -460,9 +462,9 @@ All calls are `call` on the provider. Version 1 has these.
    ([crypto-design.md](../security/crypto-design.md#what-works-while-an-app-is-locked)).
 7. A data app trusts nothing the Sync app gives it. A page is checked
    as if the server had handed it over itself, because it has.
-8. The names of the calls' arguments, and the layout of what `status`
-   and `streams` give, are fixed on this page when `core/sync-client`
-   is built. The server sees none of them.
+8. The layouts of what `status` and `streams` give are below. The names
+   of the calls' arguments are fixed on this page when the content
+   provider is built, with the Sync app. The server sees none of them.
 
 `status` answers with:
 
@@ -478,6 +480,60 @@ All calls are `call` on the provider. Version 1 has these.
 - how many records it skipped, by reason
   ([Records that are skipped](#records-that-are-skipped)), and
   whether it has stopped sending.
+
+### What `status` gives
+
+115 bytes:
+
+| Offset | Size | Content |
+|---|---|---|
+| 0 | 7 | `SHKSYNC` |
+| 7 | 1 | Version: `01` |
+| 8 | 1 | Type: `21`, a status |
+| 9 | 1 | The version of the courier interface: `01` |
+| 10 | 4 | The app's data version |
+| 14 | 1 | `01` if sync is on in this app, else `00` |
+| 15 | 1 | `01` if the app can sync now, else `00`: it has no `record` keyset it can use now |
+| 16 | 16 | The epoch the cursor belongs to, or zeros before the first call |
+| 32 | 8 | The cursor |
+| 40 | 8 | Known |
+| 48 | 1 | `01` if a key ID follows, else `00` and four zeros |
+| 49 | 4 | P, the key ID of the app's current key |
+| 53 | 1 | The comparison of everything: `00` none, `01` fetching, `02` sending |
+| 54 | 1 | `01` if it has ordinary changes to send |
+| 55 | 1 | `01` if it has records of a comparison to send |
+| 56 | 1 | `01` if it has streams to move |
+| 57 | 1 | `01` if it needs one more fetch before it follows a [new recovery key](#a-new-recovery-key) |
+| 58 | 1 | Why it sends nothing: `00` nothing stops it, `01` a newer record came ("Update Water"), `02` the server names a key it does not hold ("Enter the new recovery key"), `03` its new key waits for the server, `04` the server names an older key |
+| 59 | 8 | Records skipped as "another recovery key" |
+| 67 | 8 | Records skipped as "damaged" |
+| 75 | 8 | Records skipped as "newer" |
+| 83 | 8 | Records skipped as "not valid" |
+| 91 | 8 | Records not sent because they would be too large |
+| 99 | 8 | Records the server refused as not a sealed record (`03`) |
+| 107 | 8 | Fetched streams that did not fit their length or hash |
+
+### What `streams` gives
+
+The first nine bytes, then one entry of 73 bytes for each stream, to
+the end.
+
+| Offset | Size | Content |
+|---|---|---|
+| 0 | 7 | `SHKSYNC` |
+| 7 | 1 | Version: `01` |
+| 8 | 1 | Type: `22`, a list of streams |
+
+Each entry:
+
+| Size | Content |
+|---|---|
+| 1 | `01` send, `02` fetch, `03` delete |
+| 16 | The file ID |
+| 32 | The stream's SHA-256. Zeros for `03`. |
+| 8 | The stream's length. 0 for `03`. |
+| 8 | For `02`, how many bytes of a fetch are here. Else 0. |
+| 8 | For `03`, the number under which this phone's batch stored the file's deleted record. Else 0. |
 
 ### A batch
 
@@ -521,7 +577,9 @@ if all of this holds:
 1. its epoch is the app's own, and its Since is the app's cursor;
 2. Through is not below Since;
 3. the numbers of its records go up, and each is above Since and not
-   above Through.
+   above Through;
+4. its blobs are together at most 524,288 bytes, the largest byte limit
+   that `info` may name, or it holds one record alone.
 
 Any other page is dropped, and nothing is written.
 
@@ -621,7 +679,9 @@ In this order. Each "skipped" is one of
    [A new recovery key](#a-new-recovery-key) has the one exception,
    its last fetch.
 3. The blob opens with the app's `record` keyset and the record ID.
-   If Tink refuses it: skipped, "damaged".
+   If Tink refuses it: skipped, "damaged". A blob whose own header
+   names a newer version is "damaged" too: that byte is read before
+   anything is checked, so a server can change it.
 4. The version byte is `01`. A higher one: skipped, "newer".
 5. The data version is not above the app's own. A higher one:
    skipped, "newer".
@@ -1182,8 +1242,10 @@ the signature of the account key the server has now (64 bytes).
 
 ### What a data app keeps for sync
 
-One small table in the data app's own database. It is not a record,
-it is never in a backup, and it is never synced.
+Seven small tables in the data app's own database, whose names start
+with `sync_` ([ADR 0044](../adr/0044-sync-tables-in-each-data-app.md)).
+They are not records, they are never in a backup, and they are never
+synced.
 
 | What | For |
 |---|---|
@@ -1198,8 +1260,8 @@ it is never in a backup, and it is never synced.
 | Streams | For each file: its stream's hash, whether the server is known to have it, whether it is to be deleted there and the number its deleted record was stored under, and how many bytes of a fetch are here |
 | Stopped | Why the app sends nothing now, if so |
 
-It is in the same database as the records, so that a cursor and the
-records it stands for can never be apart
+They are in the same database as the records, so that a cursor and
+the records it stands for can never be apart
 ([data.md](data.md#the-change-number), point 8).
 
 ### Sending
@@ -1216,18 +1278,27 @@ records it stands for can never be apart
 3. It builds the batch from **To send**: "ordinary" records, or
    "comparison" records, as asked, up to the limits the Sync app
    gave. A record stays in **To send** until the server has stored
-   it.
+   it, apart from the records that points 4 and 5 take out.
 4. It leaves out a record that is held back. Held back are:
    - in an app that wipes, a deleted record that is not wiped yet
      ([Conflict rules](#conflict-rules), point 9);
-   - a file's record whose stream the server is not known to have
-     ([Files](#files));
+   - the record of a file that is not deleted, whose stream the
+     server is not known to have ([Files](#files)). A deleted file
+     needs no stream on the server, only the hash its record names;
    - a file's record whose wrapped key does not name the key ID the
      app syncs with;
    - every file's record while a file key is sealed by a key that
      exists only on this phone
      ([crypto-design.md](../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key),
      point 5).
+
+   In an app that does not wipe, a deleted file's record cannot be
+   sealed when its stream is not on this phone and no version of it
+   that came named the hash: its plaintext needs the hash. Such a
+   record is taken out of **To send**. A version of it that comes
+   names the hash. If the stored deletion wins against it, the
+   deletion goes into **To send** again
+   ([Conflict rules](#conflict-rules)).
 5. A record whose blob would be over the 524,288 bytes of the format
    is taken out of **To send**, and counted.
 6. While the app has stopped sending, `export` gives nothing.
@@ -1248,7 +1319,10 @@ transaction.
    nothing else for it;
 4. takes each record that was refused with `03` out of **To send**,
    and counts it;
-5. after a `02`, stops the app: "needs the new recovery key";
+5. after a `02`, stops the app: "needs the new recovery key". The stop
+   ends when a later call names another current key ID of the server
+   than the call at that time, or another server ID, epoch or device
+   ID, or when the user asks for a comparison of everything;
 6. sets Known to the head after the batch, and moves the cursor if it
    may ([The cursor](#the-cursor), point 2).
 
@@ -1277,8 +1351,10 @@ and the fetch that follows finds them "the same".
 2. It hands each page to `import`. The data app checks the page
    ([A page](#a-page)). Then, in one write transaction, it puts every
    record through [What a reader checks](#what-a-reader-checks) and
-   [`takeFromSync`](#conflict-rules), and sets the cursor and Known
-   to Through. A failure rolls the whole page back.
+   [`takeFromSync`](#conflict-rules), sets the cursor to Through,
+   and raises Known to Through if Known is lower. A page never lowers
+   Known ([The cursor](#the-cursor), point 1). A failure rolls the
+   whole page back.
 3. It goes on while a page says that more wait.
 4. After the last page the app sets its alarms again, as after a
    restore, and lists the streams it wants. It changes no record
@@ -2029,6 +2105,9 @@ one is wrong, the fix is a change to this page first.
 | How the list of devices names a device | A name that the server stores sealed. The Sync app holds one key for it, made from the recovery key, which opens nothing else ([The name key](#the-name-key)). |
 | A deletion and an edit with the same `updatedAt` | The edit wins, on every device ([Conflict rules](#conflict-rules)). |
 | A hostile server that shows a new device a record that was deleted since | Kept as a known limit of this version. Nothing proves to a new device that it was shown everything ([Attacks considered](#attacks-considered), [Open questions](#open-questions), question 5). |
+| The stop after a refusal `02`, a page's bytes, a blob whose header names a newer version, a deleted file's record | The stop ends with another key ID of the server, another server, epoch or device, or a comparison the user asks for ([Sending](#sending)). A page whose blobs pass 524,288 bytes, with more than one record, is dropped ([A page](#a-page)). Such a blob is "damaged" ([What a reader checks](#what-a-reader-checks)). A deleted file's record never waits for its stream ([Sending](#sending)). |
+| A deleted file's record that cannot be sealed, and Known after a page | In an app that does not wipe, a deleted file's record whose hash this phone does not know leaves **To send**, and goes in again once a version of it names the hash ([Sending](#sending), point 4). A page never lowers Known ([Fetching](#fetching), point 2). |
+| How the tables of sync in a data app are written ([data.md](data.md#rules-for-daos), point 5) | As the change counter is: only `SyncStore` of `core/sync-client` writes them, with SQL on the connection of its transaction. No DAO reads or writes them, and `checkDaoRules` stays as it is ([ADR 0044](../adr/0044-sync-tables-in-each-data-app.md)). |
 | A server with no account, which the setup code alone protects | Kept. The setup code is not bound to the recovery key. Someone who has the code and is faster than the user gets an empty server, and the user deploys a new one ([Joining](#joining)). |
 
 ## Attacks considered
@@ -2156,8 +2235,6 @@ Not decided here. Each says what decides it.
    ([ADR 0038](../adr/0038-a-stolen-signing-key.md)). Building that
    flow is a piece of work of its own.
 3. **For the owner, when each part is built:**
-   - the table that is not a record in each data app's database
-     ([data.md](data.md#rules-for-daos), point 5);
    - the Sync app in the allow list of permissions, with `INTERNET`
      and what WorkManager needs, each with its decision record;
    - one measurement of CPU time on a deployed Worker on the free

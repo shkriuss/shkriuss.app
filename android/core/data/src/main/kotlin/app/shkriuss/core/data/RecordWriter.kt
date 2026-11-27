@@ -17,6 +17,27 @@ enum class BackupTake {
     STORED_IS_NEWER,
 }
 
+/** What [RecordWriter.takeFromSync] did with one record that came through sync. */
+enum class SyncTake {
+    /** The record that came is stored now: no record with its ID was stored, or the one that came wins. */
+    TAKEN,
+
+    /** The stored record and the one that came are the same. Nothing was written. */
+    SAME,
+
+    /** The stored record wins, so it stays. Nothing was written. */
+    STORED_WINS,
+}
+
+/**
+ * The answer of [RecordWriter.takeFromSync]: what it did, and the change
+ * number of the stored record now. After [SyncTake.TAKEN] it is the new
+ * one that the record got.
+ */
+class SyncTaken(val answer: SyncTake, val changeNumber: Long) {
+    override fun toString(): String = "SyncTaken($answer, $changeNumber)"
+}
+
 /**
  * The only way to write records of one table. Every write stamps the
  * [RecordFields] and gives the record a new change number, so no caller
@@ -28,8 +49,9 @@ enum class BackupTake {
  * - Deleting only marks: [markDeleted] sets `deletedAt`, and the row stays.
  * - Every one of them takes the next change number from [ChangeCounter],
  *   in the same write transaction as the write itself.
- * - [takeFromBackup] is the one write that keeps the [RecordFields] it is
- *   given: a record of a backup was stamped when it was first written.
+ * - [takeFromBackup] and [takeFromSync] are the writes that keep the
+ *   [RecordFields] they are given: such a record was stamped when it was
+ *   first written, on this device or another.
  * - [wipe] and [sealFileKeyAgain] are not edits by the user. They keep
  *   the four [RecordFields] as they are, `updatedAt` too, and give the
  *   record a new change number.
@@ -243,8 +265,8 @@ class RecordWriter<T : Record<T>>(
      * its own answer. Thrown inside the app's write transaction, it rolls
      * the whole restore back.
      *
-     * This is the function for backups. It is not the function for sync,
-     * where the same `updatedAt` must end the same on every device.
+     * This is the function for backups. Sync has [takeFromSync], where the
+     * same `updatedAt` must end the same on every device.
      */
     suspend fun takeFromBackup(record: T): BackupTake = database.withWriteTransaction {
         require(record.record.timesAreWithinLimits) { "A record's times are from 0 to ${RecordTimes.LAST_MILLIS}" }
@@ -260,6 +282,51 @@ class RecordWriter<T : Record<T>>(
             }
             stored.record.updatedAt == record.record.updatedAt -> BackupTake.SAME
             else -> BackupTake.STORED_IS_NEWER
+        }
+    }
+
+    /**
+     * Takes one record that came through sync, by the conflict rules of
+     * docs/architecture/sync-protocol.md ("Conflict rules"). It is the
+     * only way a record from sync is written.
+     *
+     * [record] keeps its own ID, `createdAt`, `updatedAt` and `deletedAt`,
+     * as they came. Its change number is ignored. It gets a new one here,
+     * and only when it is written.
+     *
+     * - No record with its ID is stored: it is stored.
+     * - The one with the later `updatedAt` wins.
+     * - With the same `updatedAt`, [tie] decides: it gets the stored
+     *   record and the one that came, and returns a positive number when
+     *   the one that came wins, 0 when the two are the same, and a
+     *   negative number when the stored one wins. Its order is the one of
+     *   the protocol, which every device follows, so that every device
+     *   ends with the same record whatever the order in which they came.
+     *
+     * So taking the same record twice writes nothing the second time.
+     * A record whose times are not ones a record can hold ([RecordTimes])
+     * is refused with [IllegalArgumentException], and nothing is written.
+     */
+    suspend fun takeFromSync(record: T, tie: (stored: T, came: T) -> Int): SyncTaken = database.withWriteTransaction {
+        require(record.record.timesAreWithinLimits) { "A record's times are from 0 to ${RecordTimes.LAST_MILLIS}" }
+        val stored = dao.find(record.record.id)
+        val cameWins = when {
+            stored == null -> true
+            record.record.updatedAt != stored.record.updatedAt -> record.record.updatedAt > stored.record.updatedAt
+            else -> {
+                val order = tie(stored, record)
+                if (order == 0) return@withWriteTransaction SyncTaken(SyncTake.SAME, stored.changeNumber)
+                order > 0
+            }
+        }
+        when {
+            !cameWins -> SyncTaken(SyncTake.STORED_WINS, stored!!.changeNumber)
+            stored == null -> {
+                val written = record.withRecord(record.record, nextChangeNumber())
+                dao.rawInsert(written)
+                SyncTaken(SyncTake.TAKEN, written.changeNumber)
+            }
+            else -> SyncTaken(SyncTake.TAKEN, write(record.withRecord(record.record, nextChangeNumber())).changeNumber)
         }
     }
 

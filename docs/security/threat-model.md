@@ -1154,7 +1154,8 @@ Status: **Met for what is built.**
   in the Keystore, all through Tink or the Keystore. Our code never picks
   a nonce ([crypto-design.md](crypto-design.md#rules)).
 - MASWE-0008, hashing: met. SHA-256 is used only as the checksum of the
-  words and of the word list.
+  words and of the word list, and to name the stream of a file in sync,
+  which is ciphertext already.
 - MASWE-0009, MACs: met. There is no MAC of our own. The AEADs check
   every blob.
 - MASWE-0010 and 0011, signatures: nothing signs yet. The two signing
@@ -1258,7 +1259,7 @@ Status: **Partly met.**
   `file-key` is dropped when the app locks. An app that waits with a
   timer keeps it until it comes back or locks.
 - MASWE-0025, non-repudiation: does not apply today. Nothing is sent to
-  anyone. Sync is not built yet.
+  anyone. No app syncs yet.
 - MASWE-0016 and 0019: as above.
 
 ### Network
@@ -1520,10 +1521,12 @@ Status: **Met for what is built.**
   `ProcessBuilder.start`
   ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
 - MASWE-0045: as CODE-3.
-- Not built yet: what the Sync app and a data app take in from the
-  server. A page of records is checked record by record, and a file is
-  kept only if its length and its hash are the ones its sealed record
-  names ([sync-protocol.md](../architecture/sync-protocol.md#what-a-reader-checks)).
+- What a data app takes in from the server, in `core/sync-client`: a
+  page of records is checked as a whole and then record by record, and
+  a file is kept only if its length and its hash are the ones its
+  sealed record names
+  ([sync-protocol.md](../architecture/sync-protocol.md#what-a-reader-checks)).
+  Not built yet: what the Sync app takes in.
 
 ### Privacy
 
@@ -1718,8 +1721,10 @@ The handover between apps:
 
 Sync:
 
-10. The protocol. The server is built, the apps' side is designed and
-    not built ([sync-protocol.md](../architecture/sync-protocol.md),
+10. The protocol. The server is built, and so is what each data app
+    does (`core/sync-client`). No app uses it yet. The Sync app and the
+    content provider of each data app are designed and not built
+    ([sync-protocol.md](../architecture/sync-protocol.md),
     [ADR 0009](../adr/0009-sync-protocol-and-server.md)). Open there:
     a proof that the server held nothing back, and the other points
     under its [open questions](../architecture/sync-protocol.md#open-questions).

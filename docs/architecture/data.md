@@ -149,9 +149,10 @@ the table's DAO, a `Clock` and an `IdSource` through its constructor.
    write sets it to now, or to one millisecond after the record's last
    `updatedAt` if that is later. It stops at the last time a record can
    hold ([Record fields](#record-fields)), and it never moves back.
-9. `takeFromBackup(record)` takes one record of a backup. It is the one
-   write that keeps the record fields it is given, because that record
-   was stamped when it was first written. See below.
+9. `takeFromBackup(record)` takes one record of a backup, and
+   `takeFromSync(record, tie)` one record that came through sync. They
+   are the writes that keep the record fields they are given, because
+   such a record was stamped when it was first written. See below.
 10. Two writes are not edits by the user. They keep the four record
     fields as they are, `updatedAt` too, and give the record a new
     change number: `wipe` and `sealFileKeyAgain`. See
@@ -188,10 +189,32 @@ newest edit wins.
      `takeFromBackup` throws `IllegalArgumentException`.
    - An app checks first, with `RecordFields.timesAreWithinLimits`, and
      gives the answer it gives for any record it cannot read.
-6. It is the function for backups. Sync gets its own, `takeFromSync`,
-   because there the same `updatedAt` must end the same on every device
-   ([sync-protocol.md](sync-protocol.md#conflict-rules)). It is not
-   built yet.
+6. It is the function for backups. Sync has its own, because there the
+   same `updatedAt` must end the same on every device.
+
+### Records from sync
+
+`takeFromSync` is the only way a record that came through sync is
+written ([sync-protocol.md](sync-protocol.md#conflict-rules)).
+`core/sync-client` calls it, through the app.
+
+| Answer (`SyncTake`) | When | What is written |
+|---|---|---|
+| `TAKEN` | No record with this ID is stored, or the one that came wins | The record that came |
+| `SAME` | The two are the same | Nothing |
+| `STORED_WINS` | The stored record wins | Nothing |
+
+1. The one with the later `updatedAt` wins. With the same `updatedAt`,
+   the function `tie` that the caller gives decides, by the order of the
+   protocol. It returns a positive number when the record that came
+   wins, 0 when the two are the same, and a negative number when the
+   stored one wins.
+2. As for a backup, the record keeps its four fields, gets the next
+   change number only when it is written, and is refused with
+   `IllegalArgumentException` if a time is outside the limits.
+3. The answer carries the change number of the stored record, the new
+   one after `TAKEN`. Sync keeps it in **Just taken**, so that it does
+   not send the record back.
 
 ### Writes that are not edits
 
@@ -255,14 +278,14 @@ first.
 7. It is local. It is not part of a backup or of what sync sends. A
    record restored from a backup or received by sync gets a new number
    when it is written here.
-8. A stored "last change number read", such as the one sync will keep,
+8. A stored "last change number read", such as the send mark of sync,
    belongs in the same database as the records. If the database file were
    ever made new, numbering would start again from 1.
 
 ## Reading changes ("changed since")
 
 The pattern that sync uses to find what changed
-([sync-protocol.md](sync-protocol.md#sending)). Sync is not built yet.
+([sync-protocol.md](sync-protocol.md#sending)).
 
 1. `changedSince(afterChangeNumber, limit)` returns up to `limit` records
    whose change number is above `afterChangeNumber`, lowest first.
@@ -327,11 +350,13 @@ interface IntakeDao : RecordDao<IntakeEntity> {
 5. There is no other exception. If a table that is not a record ever
    needs a write, stop and ask the owner. Restoring a backup has its own
    `RecordWriter` function, `takeFromBackup`
-   ([Records from a backup](#records-from-a-backup)). Importing from sync
-   gets its own, `takeFromSync`. Sync also needs one table that is not
-   a record in each app's database
-   ([sync-protocol.md](sync-protocol.md#what-a-data-app-keeps-for-sync)).
-   The owner is asked for it when it is built.
+   ([Records from a backup](#records-from-a-backup)), and importing from
+   sync has `takeFromSync` ([Records from sync](#records-from-sync)).
+   The tables of sync are not records. Decided by the owner, they are
+   written like the change counter: only `SyncStore` of
+   `core/sync-client` writes them, with SQL on the connection of its
+   transaction, and no DAO reads or writes them
+   ([ADR 0044](../adr/0044-sync-tables-in-each-data-app.md)).
 6. Reads that show records to the user filter out deleted ones with
    `deletedAt IS NULL`.
 
@@ -341,8 +366,10 @@ interface IntakeDao : RecordDao<IntakeEntity> {
 
 - **SQL that code runs outside a DAO**, through a connection, for example
   with `useWriterConnection` and `executeSQL`. `RecordWriter` does this
-  for the change counter, which is not a record. Review keeps every other
-  such use out.
+  for the change counter, and `SyncStore` of `core/sync-client` for the
+  `sync_` tables, which are not records. `SyncSqlTest` checks that the
+  SQL of `SyncStore` writes only tables whose names start with `sync_`.
+  Review keeps every other such use out.
 - **Calls from modules without a database.** It runs in modules with the
   `shkriuss.android.room` plugin. A call to `rawInsert` or `rawUpdate`
   from an app module would not be found.
@@ -459,7 +486,7 @@ yet ([emulator-tests.md](../development/emulator-tests.md)).
 
 ## With sync
 
-Sync is designed and not built
+Sync is in `core/sync-client`
 ([sync-protocol.md](sync-protocol.md)). Two of its rules belong on
 this page:
 

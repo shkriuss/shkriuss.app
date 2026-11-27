@@ -186,7 +186,8 @@ exist. Two checks make sure it stays so:
 A hardware key cannot leave the Keystore, so the Keystore itself must do
 every operation with it. Tink has a helper for that,
 `AndroidKeystore`. `core/crypto` uses the helper where it can, and calls
-Android directly in five places:
+Android directly in six places, and in two more for sync that are not
+built yet:
 
 | Task | How |
 |---|---|
@@ -199,7 +200,8 @@ Android directly in five places:
 | Read whether a key is in StrongBox | Direct: `SecretKeyFactory` and `KeyInfo` |
 | The checksum of the recovery words | Direct: `java.security.MessageDigest`, SHA-256. Tink has no public plain hash. It is a checksum, not a secret. |
 | For sync, not built yet: make the device key and sign with it | Direct: `KeyPairGenerator` and `Signature` on the `AndroidKeyStore` key store. Tink's helper has no signatures. |
-| For sync, not built yet: the hash of a stream, of a request and of a public key | Direct: `MessageDigest`, SHA-256, as for the words. None is a secret. |
+| For sync: the hash of a stream (`StreamHash`) | Direct: `MessageDigest`, SHA-256, as for the words. It is not a secret. |
+| For sync, not built yet: the hash of a request and of a public key | Direct: `MessageDigest`, SHA-256, as for the words. Neither is a secret. |
 
 The direct cipher call makes exactly the bytes that Tink's helper makes:
 a 12-byte IV chosen by the Keystore, the ciphertext, and a 16-byte tag.
