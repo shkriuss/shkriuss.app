@@ -133,6 +133,12 @@ class ListsContent(
     /** True to make the next [sealFileKeysAgain] stop before it writes, as when the app is stopped there. */
     var stopNextSeal = false
 
+    /** True to make the next [afterImport] stop before it sets anything, as when the app is stopped there. */
+    var stopNextAfterImport = false
+
+    /** True to make the next [removeStream] stop before it removes anything, as when the app is stopped there. */
+    var stopNextRemove = false
+
     /**
      * Called with the ID at the first [find] after sync took that record:
      * the moment after the import's transaction, when the app's own writes
@@ -178,10 +184,18 @@ class ListsContent(
     }
 
     override suspend fun removeStream(fileId: String) {
+        if (stopNextRemove) {
+            stopNextRemove = false
+            throw IllegalStateException("The app stopped here")
+        }
         if (database.attachments().find(fileId)?.record?.deletedAt != null) streamFile(fileId).delete()
     }
 
     override suspend fun afterImport() {
+        if (stopNextAfterImport) {
+            stopNextAfterImport = false
+            throw IllegalStateException("The app stopped here")
+        }
         afterImports++
     }
 

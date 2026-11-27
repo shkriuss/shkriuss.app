@@ -136,6 +136,7 @@ class SyncClient(
 
     /** `status`: where the app stands. */
     suspend fun status(call: CourierCall): SyncStatus = oneAtATime.withLock {
+        finishPending()
         database.withWriteTransaction {
             val store = SyncStore(this)
             val begun = store.begin(call)
@@ -157,7 +158,7 @@ class SyncClient(
                 },
                 hasOrdinaryChanges = on && (store.countSend(SendKind.ORDINARY) > 0 || store.lastChangeNumber() > state.sendMark),
                 hasComparisonRecords = on && store.countSend(SendKind.COMPARISON) > 0,
-                hasStreamsToMove = on && store.mayHaveStreamWork() && store.hasStreamWork(),
+                hasStreamsToMove = on && store.hasStreamWork(),
                 wantsFetch = on && begun.keyState == KeyState.FOLLOW,
                 sendBlock = sendBlock(state, begun.keyState),
                 counts = SyncCounts(
@@ -179,7 +180,9 @@ class SyncClient(
             val store = SyncStore(this)
             val state = store.begin(call).state
             if (!state.isOn) throw CourierRefused(Refusal.OFF)
-            store.save(store.startComparison(state, forgetDeletions = false))
+            // The user asks to try everything again: a stop after the server refused the app's key is lifted too.
+            val again = if (state.stopped == Stop.NEEDS_NEW_KEY) state.copy(stopped = Stop.NONE, stoppedKeyId = null) else state
+            store.save(store.startComparison(again, forgetDeletions = false))
         }
     }
 
@@ -190,6 +193,7 @@ class SyncClient(
      * export voids the token of the batch before.
      */
     suspend fun export(call: CourierCall, request: ExportRequest): ExportResult = oneAtATime.withLock {
+        finishPending()
         database.withWriteTransaction {
             val store = SyncStore(this)
             val begun = store.begin(call)
@@ -229,7 +233,7 @@ class SyncClient(
             store.clearBatch()
             val sent = SendAnswer.read(answer, batch.size)
             if (batch.isEmpty() || sent == null || sent.epoch.hex != state.epoch) return@withWriteTransaction ExportedResult.IGNORED
-            batch.zip(sent.outcomes).forEach { (entry, outcome) -> state = store.applyOutcome(state, entry, outcome) }
+            batch.zip(sent.outcomes).forEach { (entry, outcome) -> state = store.applyOutcome(state, entry, outcome, call.serverKeyId) }
             state = state.copy(
                 known = maxOf(state.known, sent.headAfter),
                 cursor = if (sent.headBefore == state.cursor) sent.headAfter else state.cursor,
@@ -245,7 +249,7 @@ class SyncClient(
      * and the cursor moves to its Through, all in one transaction.
      */
     suspend fun import(call: CourierCall, page: ByteArray): ImportResult = oneAtATime.withLock {
-        val after = AfterImport()
+        finishPending()
         val result = database.withWriteTransaction {
             val store = SyncStore(this)
             val begun = store.begin(call)
@@ -258,41 +262,65 @@ class SyncClient(
             var state = begun.state
             var taken = 0
             read.records.forEach { record ->
-                val step = store.takeOne(state, begun, record, after)
+                val step = store.takeOne(state, begun, record)
                 state = step.state
                 if (step.taken) taken++
             }
             state = state.copy(cursor = read.through, known = maxOf(state.known, read.through))
             if (!read.more) {
-                after.lastPage = true
+                state = state.copy(afterImportDue = true)
                 if (begun.keyState == KeyState.FOLLOW) {
                     // The last fetch before the new key ended: from now on the app syncs with it, seals its file keys
                     // again under it, and compares everything.
-                    val switched = state.copy(syncKeyId = begun.keyIds.current.value, stopped = Stop.NONE, sealFileKeys = true)
+                    val switched = state.copy(syncKeyId = begun.keyIds.current.value, stopped = Stop.NONE, stoppedKeyId = null, sealFileKeys = true)
                     state = store.startComparison(switched, forgetDeletions = false)
                 } else if (state.comparison == Comparison.FETCHING) {
                     state = store.finishFetching(state)
                 }
             }
             store.save(state)
-            after.sealFileKeys = state.sealFileKeys
             ImportResult.Taken(taken, state.cursor)
         }
-        after.removedStreams.forEach { fileId ->
-            // The app's own writes go on beside sync: a restore may have brought the record back since the commit.
-            val stillDeleted = database.withWriteTransaction { content.find(fileId)?.isDeleted != false }
-            if (stillDeleted) content.removeStream(fileId)
+        finishPending()
+        result
+    }
+
+    /**
+     * What an import leaves to do once its transaction has ended, each
+     * marked in the state of sync until it is done: the copies of streams
+     * whose records came deleted, the new seal of the file keys after a
+     * new recovery key, and the alarms after the last page. It runs at
+     * the start of the next calls too, so that a stop after a commit only
+     * makes a later call do it.
+     */
+    private suspend fun finishPending() {
+        val (state, toRemove) = database.withWriteTransaction {
+            val store = SyncStore(this)
+            store.state(content.dataVersion) to store.streamsToRemove()
         }
-        if (after.sealFileKeys) {
-            // Kept in the state until it is done, so that a stop here only makes the next import do it.
+        toRemove.forEach { stream ->
+            // The app's own writes go on beside sync: a restore may have brought the record back since the commit.
+            val stillDeleted = database.withWriteTransaction { content.find(stream.fileId)?.isDeleted != false }
+            if (stillDeleted) content.removeStream(stream.fileId)
+            database.withWriteTransaction {
+                val store = SyncStore(this)
+                store.stream(stream.fileId)?.let { store.putStream(it.copy(toRemove = false, here = !stillDeleted && it.here, recordDeleted = stillDeleted)) }
+            }
+        }
+        if (state.sealFileKeys) {
             content.sealFileKeysAgain()
             database.withWriteTransaction {
                 val store = SyncStore(this)
                 store.save(store.state(content.dataVersion).copy(sealFileKeys = false))
             }
         }
-        if (after.lastPage) content.afterImport()
-        result
+        if (state.afterImportDue) {
+            content.afterImport()
+            database.withWriteTransaction {
+                val store = SyncStore(this)
+                store.save(store.state(content.dataVersion).copy(afterImportDue = false))
+            }
+        }
     }
 
     /**
@@ -302,6 +330,7 @@ class SyncClient(
      * kept.
      */
     suspend fun streams(call: CourierCall, into: OutputStream) = oneAtATime.withLock {
+        finishPending()
         val on = database.withWriteTransaction { SyncStore(this).begin(call).state.isOn }
         val writer = StreamListWriter(into)
         if (!on) return@withLock
@@ -341,7 +370,7 @@ class SyncClient(
             if (!store.begin(call).state.isOn) return@withWriteTransaction
             val stream = store.stream(fileId) ?: return@withWriteTransaction
             if (stream.hash != Hex.of(hash)) return@withWriteTransaction
-            store.putStream(if (fits) stream.copy(onServer = true) else stream.copy(onServer = false, doesNotFit = true))
+            store.putStream(if (fits) stream.copy(onServer = true, here = true) else stream.copy(onServer = false, here = false, doesNotFit = true))
         }
     }
 
@@ -382,7 +411,7 @@ class SyncClient(
             val store = SyncStore(this)
             val now = store.stream(fileId) ?: return@withWriteTransaction
             if (fits) {
-                store.putStream(now.copy(onServer = true, doesNotFit = false, wrongAt = null))
+                store.putStream(now.copy(onServer = true, here = true, doesNotFit = false, wrongAt = null))
             } else {
                 store.putStream(now.copy(wrongAt = clock.nowMillis()))
                 val state = store.state(content.dataVersion)
@@ -398,8 +427,9 @@ class SyncClient(
             val store = SyncStore(this)
             if (!store.begin(call).state.isOn) return@withWriteTransaction
             val stream = store.stream(fileId) ?: return@withWriteTransaction
+            // The row stays, with the stream's hash, for a record that is brought back later.
             val record = content.find(fileId)
-            if (record == null || record.isDeleted) {
+            if (record == null) {
                 store.removeStream(fileId)
             } else {
                 store.putStream(stream.copy(toDelete = false, deletedNumber = null))
@@ -448,11 +478,12 @@ class SyncClient(
         var state = state(content.dataVersion)
         val keyIds = keyIdsNow()
         if (!state.isOn) return Begun(state, keyIds, keyStateOf(state, keyIds, call), call.serverKeyId)
-        if (content.dataVersion > state.dataVersion) {
+        if (content.dataVersion > state.dataVersion || SyncFormat.PLAINTEXT_VERSION > state.plaintextVersion) {
             // The app was updated: what was skipped as newer may open now.
             val back = state.skippedFrom?.let { minOf(state.cursor, it - 1) } ?: state.cursor
             state = state.copy(
-                dataVersion = content.dataVersion,
+                dataVersion = maxOf(state.dataVersion, content.dataVersion),
+                plaintextVersion = maxOf(state.plaintextVersion, SyncFormat.PLAINTEXT_VERSION),
                 stopped = if (state.stopped == Stop.NEWER) Stop.NONE else state.stopped,
                 cursor = back,
                 skippedFrom = null,
@@ -467,6 +498,11 @@ class SyncClient(
             // The first time the app can sync: it syncs with its current key. What it skipped before is fetched again.
             state = state.copy(syncKeyId = keyIds.current.value)
             if (state.skippedFrom != null) state = startComparison(state, forgetDeletions = false)
+        }
+        if (state.stopped == Stop.NEEDS_NEW_KEY && state.stoppedKeyId != call.serverKeyId.value) {
+            // The server refused the app's key while the Sync app named another key of the server's. It names
+            // another now: the key state below decides again.
+            state = state.copy(stopped = Stop.NONE, stoppedKeyId = null)
         }
         state = endComparisonIfDone(state)
         save(state)
@@ -624,9 +660,11 @@ class SyncClient(
         val part = record.streamLength?.let { length ->
             val stream = stream(record.id)
             if (stream == null) {
-                putStream(StreamState(record.id, length, hash = null, onServer = false, doesNotFit = false, toDelete = false, deletedNumber = null, wrongAt = null))
+                putStream(StreamState.of(record.id, length, here = content.hasStream(record.id, length)))
                 return null
             }
+            // A record that was deleted is live again: its stream may have work.
+            if (stream.recordDeleted && !record.isDeleted) putStream(stream.copy(recordDeleted = false))
             val hash = stream.hash?.let(Hex::parse)
             if (!stream.onServer || hash == null) return null
             StreamPart(length, hash)
@@ -643,21 +681,21 @@ class SyncClient(
     }
 
     /** One result of the server's answer to a batch ("`exported`", points 1 to 5). */
-    private suspend fun SyncStore.applyOutcome(state: SyncState, entry: BatchEntry, outcome: SendOutcome): SyncState {
+    private suspend fun SyncStore.applyOutcome(state: SyncState, entry: BatchEntry, outcome: SendOutcome, serverKeyId: KeyId): SyncState {
         val id = entry.recordId
         when (outcome.result) {
             SendResult.STORED, SendResult.STORED_SEND_STREAM_AGAIN -> {
                 unsend(id)
                 val stream = stream(id)
                 if (entry.deletedFile) {
-                    val known = stream ?: StreamState(id, 0, hash = null, onServer = false, doesNotFit = false, toDelete = false, deletedNumber = null, wrongAt = null)
+                    val known = stream ?: StreamState.of(id, 0, here = false)
                     putStream(known.copy(toDelete = true, deletedNumber = outcome.number))
                 } else if (outcome.result == SendResult.STORED_SEND_STREAM_AGAIN && stream != null) {
                     putStream(stream.copy(onServer = false))
                 }
             }
             SendResult.CHANGED_AFTER_CURSOR -> stream(id)?.let { putStream(it.copy(onServer = false)) }
-            SendResult.ANOTHER_KEY_ID -> return state.copy(stopped = Stop.NEEDS_NEW_KEY)
+            SendResult.ANOTHER_KEY_ID -> return state.copy(stopped = Stop.NEEDS_NEW_KEY, stoppedKeyId = serverKeyId.value)
             SendResult.NOT_A_SEALED_RECORD -> {
                 unsend(id)
                 return state.copy(refused = state.refused + 1)
@@ -667,17 +705,10 @@ class SyncClient(
         return state
     }
 
-    /** What an import leaves to do once its transaction has ended. */
-    private class AfterImport {
-        val removedStreams = mutableListOf<String>()
-        var lastPage = false
-        var sealFileKeys = false
-    }
-
     private class Step(val state: SyncState, val taken: Boolean)
 
     /** One record of a page: "What a reader checks", then the conflict rules. */
-    private suspend fun SyncStore.takeOne(state: SyncState, begun: Begun, came: PageRecord, after: AfterImport): Step {
+    private suspend fun SyncStore.takeOne(state: SyncState, begun: Begun, came: PageRecord): Step {
         val keyIds = begun.keyIds!!
         val syncKeyId = state.syncKeyId?.let(::KeyId)
         val named = keyIdOf(came.blob)
@@ -689,8 +720,10 @@ class SyncClient(
         } catch (refused: BlobException) {
             return when (refused.answer) {
                 BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW -> throw CourierRefused(Refusal.NOT_NOW)
-                BlobAnswer.MADE_BY_A_NEWER_VERSION -> Step(newer(state, came), false)
                 BlobAnswer.NEEDS_ANOTHER_RECOVERY_KEY -> Step(anotherKey(state, came, syncsWithServersKey), false)
+                // Every other blob that does not open is damaged (point 3). That holds also for a blob whose own
+                // header names a newer version: the header is read before Tink checks anything, so a server can
+                // change it. Only the version inside the plaintext says "newer" (point 4).
                 else -> Step(damaged(state, came), false)
             }
         }
@@ -719,12 +752,19 @@ class SyncClient(
             )
         }
         val fetching = state.comparison == Comparison.FETCHING
+        // Conflict rules, point 8: after a tie with a record sealed in a lower data version, the winner goes out
+        // sealed in this app's own version.
+        val tieWithOlder = whole.dataVersion < content.dataVersion && stored?.entry?.fields?.updatedAt == fields.updatedAt
         when (taken.answer) {
             SyncTake.TAKEN -> {
-                putTaken(came.id, taken.changeNumber)
-                unsend(came.id)
+                if (tieWithOlder) {
+                    sendOrdinary(came.id, taken.changeNumber)
+                } else {
+                    putTaken(came.id, taken.changeNumber)
+                    unsend(came.id)
+                }
                 if (fetching) addSeen(came.id)
-                tookFile(record, stream, after)
+                tookFile(record, stream)
             }
             SyncTake.SAME -> {
                 unsend(came.id)
@@ -741,28 +781,31 @@ class SyncClient(
     }
 
     /** What sync keeps of a file's record that it took. */
-    private suspend fun SyncStore.tookFile(record: SyncRecord, part: StreamPart?, after: AfterImport) {
+    private suspend fun SyncStore.tookFile(record: SyncRecord, part: StreamPart?) {
         if (!record.isFile) return
         val stream = stream(record.id)
         if (part != null) {
             val hash = Hex.of(part.hash)
-            val otherBytes = stream?.hash != null && stream.hash != hash
+            val doesNotFit = (stream?.hash != null && stream.hash != hash) || (stream?.doesNotFit == true && stream.hash == hash)
             putStream(
                 StreamState(
                     fileId = record.id,
                     length = part.length,
                     hash = hash,
                     onServer = true,
-                    doesNotFit = otherBytes || (stream?.doesNotFit == true && stream.hash == hash),
+                    here = !doesNotFit && content.hasStream(record.id, part.length),
+                    doesNotFit = doesNotFit,
                     toDelete = false,
                     deletedNumber = null,
                     wrongAt = stream?.wrongAt,
+                    toRemove = false,
+                    recordDeleted = false,
                 ),
             )
         } else if (record.isDeleted) {
-            // Every device removes its own copy of the stream when it takes the deleted record.
-            after.removedStreams += record.id
-            if (stream != null && !stream.toDelete) removeStream(record.id)
+            // Every device removes its own copy of the stream when it takes the deleted record: once this
+            // transaction has ended (finishPending). The row keeps the stream's hash for a record brought back later.
+            putStream((stream ?: StreamState.of(record.id, 0, here = false)).copy(toRemove = true))
         }
     }
 
@@ -814,23 +857,31 @@ class SyncClient(
         stream?.hash?.let { return Hex.parse(it) }
         if (!content.hasStream(record.id, length)) return null
         val hash = content.openStream(record.id).use(::sha256)
-        putStream(
-            (stream ?: StreamState(record.id, length, null, onServer = false, doesNotFit = false, toDelete = false, deletedNumber = null, wrongAt = null))
-                .copy(hash = hash),
-        )
+        putStream((stream ?: StreamState.of(record.id, length, here = true)).copy(hash = hash))
         return Hex.parse(hash)
     }
 
-    /** What the Sync app is to do with [stream] now, or null for nothing. A stream of a record that is gone is forgotten. */
+    /**
+     * What the Sync app is to do with [stream] now, or null for nothing. It
+     * keeps what it finds: whether the stream is here, and whether its
+     * record is deleted, which leaves the stream out of later looks until
+     * the record is live again. The row of a deleted record stays, with
+     * the stream's hash, for a record that is brought back.
+     */
     private suspend fun SyncStore.workFor(stream: StreamState): StreamWork? {
         if (stream.toDelete) return StreamWork.DELETE
         val record = content.find(stream.fileId)
-        val length = record?.streamLength
-        if (record == null || record.isDeleted || length == null) {
+        if (record == null) {
             removeStream(stream.fileId)
             return null
         }
+        val length = record.streamLength
+        if (record.isDeleted || length == null) {
+            if (!stream.recordDeleted && !stream.toRemove) putStream(stream.copy(recordDeleted = true))
+            return null
+        }
         val here = !stream.doesNotFit && content.hasStream(stream.fileId, length)
+        if (here != stream.here || stream.recordDeleted) putStream(stream.copy(here = here, recordDeleted = false))
         if (here) return if (stream.onServer) null else StreamWork.SEND
         val wrongToday = stream.wrongAt != null && clock.nowMillis() - stream.wrongAt < DAY_MILLIS
         return if (stream.hash != null && !wrongToday) StreamWork.FETCH else null

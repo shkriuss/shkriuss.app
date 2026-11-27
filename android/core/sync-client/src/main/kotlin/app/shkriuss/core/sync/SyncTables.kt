@@ -39,8 +39,12 @@ class SyncStateRow(
     val comparison: Int,
     /** Why the app sends nothing, as it learned it: 0 it sends, 1 a newer record came, 2 the server refused its key. */
     val stopped: Int,
+    /** After the server refused the app's key: C, the server's key ID that the Sync app named then. */
+    val stoppedKeyId: Int?,
     /** The app's data version when sync last looked. A higher one means the app was updated. */
     val dataVersion: Int,
+    /** The version of the plaintext this code reads, when sync last looked. A higher one also means an update. */
+    val plaintextVersion: Int,
     /** The lowest number of a record skipped as "another recovery key" or "newer", or null. */
     val skippedFrom: Long?,
     /** Records skipped as "another recovery key". */
@@ -61,6 +65,8 @@ class SyncStateRow(
     val lastToken: Long,
     /** Whether the app still has to seal its file keys again under the key it syncs with. */
     val sealFileKeys: Boolean,
+    /** Whether the app still has to set its alarms again after the last page of a fetch. */
+    val afterImportDue: Boolean,
 )
 
 /** **To send**: the records that must go to the server, "ordinary" (1) or "comparison" (2). */
@@ -110,6 +116,10 @@ class SyncStreamRow(
     val hash: String?,
     /** Whether the server is known to have every chunk of it. */
     val onServer: Boolean,
+    /** Whether the stored stream was on this phone, whole, when sync last looked. */
+    val here: Boolean,
+    /** Whether the file's record was deleted when sync last looked, with nothing left to do for it. */
+    val recordDeleted: Boolean,
     /** Whether the stored stream on this phone was found not to fit its hash. It is then fetched. */
     val doesNotFit: Boolean,
     /** Whether the server is to delete its chunks. */
@@ -118,4 +128,6 @@ class SyncStreamRow(
     val deletedNumber: Long?,
     /** When a fetched stream last did not fit, or null. It is fetched again at most once a day. */
     val wrongAt: Long?,
+    /** Whether this phone's copy of the stream is to be removed: sync took the deletion of its record. */
+    val toRemove: Boolean,
 )

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "ff64315e4b14ef0008b963d375240f7a",
+    "identityHash": "ac74042e8be606761f5d3568077a9c85",
     "entities": [
       {
         "tableName": "item",
@@ -169,7 +169,7 @@
       },
       {
         "tableName": "sync_state",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `isOn` INTEGER NOT NULL, `serverId` TEXT, `epoch` TEXT, `deviceId` TEXT, `cursor` INTEGER NOT NULL, `known` INTEGER NOT NULL, `syncKeyId` INTEGER, `sendMark` INTEGER NOT NULL, `comparison` INTEGER NOT NULL, `stopped` INTEGER NOT NULL, `dataVersion` INTEGER NOT NULL, `skippedFrom` INTEGER, `skippedAnotherKey` INTEGER NOT NULL, `skippedDamaged` INTEGER NOT NULL, `skippedNewer` INTEGER NOT NULL, `skippedNotValid` INTEGER NOT NULL, `tooLarge` INTEGER NOT NULL, `refused` INTEGER NOT NULL, `wrongStreams` INTEGER NOT NULL, `lastToken` INTEGER NOT NULL, `sealFileKeys` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `isOn` INTEGER NOT NULL, `serverId` TEXT, `epoch` TEXT, `deviceId` TEXT, `cursor` INTEGER NOT NULL, `known` INTEGER NOT NULL, `syncKeyId` INTEGER, `sendMark` INTEGER NOT NULL, `comparison` INTEGER NOT NULL, `stopped` INTEGER NOT NULL, `stoppedKeyId` INTEGER, `dataVersion` INTEGER NOT NULL, `plaintextVersion` INTEGER NOT NULL, `skippedFrom` INTEGER, `skippedAnotherKey` INTEGER NOT NULL, `skippedDamaged` INTEGER NOT NULL, `skippedNewer` INTEGER NOT NULL, `skippedNotValid` INTEGER NOT NULL, `tooLarge` INTEGER NOT NULL, `refused` INTEGER NOT NULL, `wrongStreams` INTEGER NOT NULL, `lastToken` INTEGER NOT NULL, `sealFileKeys` INTEGER NOT NULL, `afterImportDue` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -234,8 +234,19 @@
             "notNull": true
           },
           {
+            "fieldPath": "stoppedKeyId",
+            "columnName": "stoppedKeyId",
+            "affinity": "INTEGER"
+          },
+          {
             "fieldPath": "dataVersion",
             "columnName": "dataVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "plaintextVersion",
+            "columnName": "plaintextVersion",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -295,6 +306,12 @@
           {
             "fieldPath": "sealFileKeys",
             "columnName": "sealFileKeys",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "afterImportDue",
+            "columnName": "afterImportDue",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -452,7 +469,7 @@
       },
       {
         "tableName": "sync_stream",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`fileId` TEXT NOT NULL, `length` INTEGER NOT NULL, `hash` TEXT, `onServer` INTEGER NOT NULL, `doesNotFit` INTEGER NOT NULL, `toDelete` INTEGER NOT NULL, `deletedNumber` INTEGER, `wrongAt` INTEGER, PRIMARY KEY(`fileId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`fileId` TEXT NOT NULL, `length` INTEGER NOT NULL, `hash` TEXT, `onServer` INTEGER NOT NULL, `here` INTEGER NOT NULL, `recordDeleted` INTEGER NOT NULL, `doesNotFit` INTEGER NOT NULL, `toDelete` INTEGER NOT NULL, `deletedNumber` INTEGER, `wrongAt` INTEGER, `toRemove` INTEGER NOT NULL, PRIMARY KEY(`fileId`))",
         "fields": [
           {
             "fieldPath": "fileId",
@@ -478,6 +495,18 @@
             "notNull": true
           },
           {
+            "fieldPath": "here",
+            "columnName": "here",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordDeleted",
+            "columnName": "recordDeleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
             "fieldPath": "doesNotFit",
             "columnName": "doesNotFit",
             "affinity": "INTEGER",
@@ -498,6 +527,12 @@
             "fieldPath": "wrongAt",
             "columnName": "wrongAt",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "toRemove",
+            "columnName": "toRemove",
+            "affinity": "INTEGER",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -510,7 +545,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ff64315e4b14ef0008b963d375240f7a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac74042e8be606761f5d3568077a9c85')"
     ]
   }
 }

@@ -57,6 +57,9 @@ internal data class SyncState(
     val wrongStreams: Long,
     val lastToken: Long,
     val sealFileKeys: Boolean,
+    val stoppedKeyId: Int?,
+    val plaintextVersion: Int,
+    val afterImportDue: Boolean,
 ) {
     override fun toString(): String = "SyncState(cursor $cursor, known $known, comparison $comparison, stopped $stopped)"
 }
@@ -67,12 +70,32 @@ internal data class StreamState(
     val length: Long,
     val hash: String?,
     val onServer: Boolean,
+    val here: Boolean,
     val doesNotFit: Boolean,
     val toDelete: Boolean,
     val deletedNumber: Long?,
     val wrongAt: Long?,
+    val toRemove: Boolean,
+    val recordDeleted: Boolean,
 ) {
-    override fun toString(): String = "StreamState($length, on the server $onServer, to delete $toDelete)"
+    override fun toString(): String = "StreamState($length, on the server $onServer, here $here, to delete $toDelete)"
+
+    /** A stream sync knows nothing more of. */
+    companion object {
+        fun of(fileId: String, length: Long, here: Boolean) = StreamState(
+            fileId = fileId,
+            length = length,
+            hash = null,
+            onServer = false,
+            here = here,
+            doesNotFit = false,
+            toDelete = false,
+            deletedNumber = null,
+            wrongAt = null,
+            toRemove = false,
+            recordDeleted = false,
+        )
+    }
 }
 
 /** One record of the batch given out last. */
@@ -96,16 +119,18 @@ internal object SyncSql {
 
     private const val STATE_COLUMNS =
         "isOn, serverId, epoch, deviceId, cursor, known, syncKeyId, sendMark, comparison, stopped, dataVersion, " +
-            "skippedFrom, skippedAnotherKey, skippedDamaged, skippedNewer, skippedNotValid, tooLarge, refused, wrongStreams, lastToken, sealFileKeys"
+            "skippedFrom, skippedAnotherKey, skippedDamaged, skippedNewer, skippedNotValid, tooLarge, refused, wrongStreams, lastToken, sealFileKeys, " +
+            "stoppedKeyId, plaintextVersion, afterImportDue"
 
     const val CREATE_STATE =
-        "INSERT INTO $STATE (id, $STATE_COLUMNS) VALUES (1, 0, NULL, NULL, NULL, 0, 0, NULL, 0, 0, 0, ?, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0) " +
+        "INSERT INTO $STATE (id, $STATE_COLUMNS) VALUES (1, 0, NULL, NULL, NULL, 0, 0, NULL, 0, 0, 0, ?1, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, ?2, 0) " +
             "ON CONFLICT (id) DO NOTHING"
     const val READ_STATE = "SELECT $STATE_COLUMNS FROM $STATE WHERE id = 1"
     const val WRITE_STATE =
         "UPDATE $STATE SET isOn = ?, serverId = ?, epoch = ?, deviceId = ?, cursor = ?, known = ?, syncKeyId = ?, sendMark = ?, " +
             "comparison = ?, stopped = ?, dataVersion = ?, skippedFrom = ?, skippedAnotherKey = ?, skippedDamaged = ?, " +
-            "skippedNewer = ?, skippedNotValid = ?, tooLarge = ?, refused = ?, wrongStreams = ?, lastToken = ?, sealFileKeys = ? WHERE id = 1"
+            "skippedNewer = ?, skippedNotValid = ?, tooLarge = ?, refused = ?, wrongStreams = ?, lastToken = ?, sealFileKeys = ?, " +
+            "stoppedKeyId = ?, plaintextVersion = ?, afterImportDue = ? WHERE id = 1"
 
     const val SEND_ORDINARY =
         "INSERT INTO $SEND (recordId, kind, position) VALUES (?, 1, ?) " +
@@ -135,17 +160,20 @@ internal object SyncSql {
     const val ADD_BATCH = "INSERT INTO $BATCH (position, recordId, deletedFile) VALUES (?, ?, ?)"
     const val READ_BATCH = "SELECT recordId, deletedFile FROM $BATCH ORDER BY position"
 
-    private const val STREAM_COLUMNS = "fileId, length, hash, onServer, doesNotFit, toDelete, deletedNumber, wrongAt"
+    private const val STREAM_COLUMNS = "fileId, length, hash, onServer, here, doesNotFit, toDelete, deletedNumber, wrongAt, toRemove, recordDeleted"
     const val PUT_STREAM =
-        "INSERT INTO $STREAM ($STREAM_COLUMNS) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (fileId) DO UPDATE SET " +
-            "length = excluded.length, hash = excluded.hash, onServer = excluded.onServer, doesNotFit = excluded.doesNotFit, " +
-            "toDelete = excluded.toDelete, deletedNumber = excluded.deletedNumber, wrongAt = excluded.wrongAt"
+        "INSERT INTO $STREAM ($STREAM_COLUMNS) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (fileId) DO UPDATE SET " +
+            "length = excluded.length, hash = excluded.hash, onServer = excluded.onServer, here = excluded.here, " +
+            "doesNotFit = excluded.doesNotFit, toDelete = excluded.toDelete, deletedNumber = excluded.deletedNumber, " +
+            "wrongAt = excluded.wrongAt, toRemove = excluded.toRemove, recordDeleted = excluded.recordDeleted"
     const val READ_STREAM = "SELECT $STREAM_COLUMNS FROM $STREAM WHERE fileId = ?"
-    const val STREAM_PAGE = "SELECT $STREAM_COLUMNS FROM $STREAM WHERE fileId > ? ORDER BY fileId LIMIT ?"
+    /** The streams that may have work: to delete on the server, or of a live record and not known to be both here and there. */
+    private const val MAY_HAVE_WORK = "(toDelete = 1 OR (recordDeleted = 0 AND (onServer = 0 OR here = 0 OR doesNotFit = 1)))"
+    const val STREAM_PAGE = "SELECT $STREAM_COLUMNS FROM $STREAM WHERE $MAY_HAVE_WORK AND fileId > ? ORDER BY fileId LIMIT ?"
+    const val STREAMS_TO_REMOVE = "SELECT $STREAM_COLUMNS FROM $STREAM WHERE toRemove = 1 ORDER BY fileId"
     const val REMOVE_STREAM = "DELETE FROM $STREAM WHERE fileId = ?"
     const val FORGET_STREAMS_ON_SERVER = "UPDATE $STREAM SET onServer = 0"
     const val FORGET_DELETIONS = "UPDATE $STREAM SET toDelete = 0, deletedNumber = NULL"
-    const val COUNT_STREAM_WORK = "SELECT count(*) FROM $STREAM WHERE onServer = 0 OR doesNotFit = 1 OR toDelete = 1"
 
     /** Reads, never writes, the change counter of `core/data`. */
     const val LAST_CHANGE = ChangeCounter.READ_SQL
@@ -159,6 +187,7 @@ internal class SyncStore(private val connection: PooledConnection) {
     suspend fun state(dataVersion: Int): SyncState {
         connection.usePrepared(SyncSql.CREATE_STATE) {
             it.bindLong(1, dataVersion.toLong())
+            it.bindLong(2, SyncFormat.PLAINTEXT_VERSION.toLong())
             it.step()
         }
         return connection.usePrepared(SyncSql.READ_STATE) {
@@ -185,6 +214,9 @@ internal class SyncStore(private val connection: PooledConnection) {
                 wrongStreams = it.getLong(18),
                 lastToken = it.getLong(19),
                 sealFileKeys = it.getLong(20) != 0L,
+                stoppedKeyId = it.longOrNull(21)?.toInt(),
+                plaintextVersion = it.getLong(22).toInt(),
+                afterImportDue = it.getLong(23) != 0L,
             )
         }
     }
@@ -212,6 +244,9 @@ internal class SyncStore(private val connection: PooledConnection) {
             it.bindLong(19, state.wrongStreams)
             it.bindLong(20, state.lastToken)
             it.bindLong(21, if (state.sealFileKeys) 1 else 0)
+            it.bindLongOrNull(22, state.stoppedKeyId?.toLong())
+            it.bindLong(23, state.plaintextVersion.toLong())
+            it.bindLong(24, if (state.afterImportDue) 1 else 0)
             it.step()
         }
     }
@@ -291,7 +326,7 @@ internal class SyncStore(private val connection: PooledConnection) {
         if (it.step()) it.streamState() else null
     }
 
-    /** Up to [limit] streams in the order of their file IDs, after [afterId]. */
+    /** Up to [limit] streams that may have work, in the order of their file IDs, after [afterId]. */
     suspend fun streamPage(afterId: String, limit: Int): List<StreamState> = connection.usePrepared(SyncSql.STREAM_PAGE) {
         it.bindText(1, afterId)
         it.bindLong(2, limit.toLong())
@@ -303,10 +338,18 @@ internal class SyncStore(private val connection: PooledConnection) {
         it.bindLong(2, stream.length)
         it.bindTextOrNull(3, stream.hash)
         it.bindLong(4, if (stream.onServer) 1 else 0)
-        it.bindLong(5, if (stream.doesNotFit) 1 else 0)
-        it.bindLong(6, if (stream.toDelete) 1 else 0)
-        it.bindLongOrNull(7, stream.deletedNumber)
-        it.bindLongOrNull(8, stream.wrongAt)
+        it.bindLong(5, if (stream.here) 1 else 0)
+        it.bindLong(6, if (stream.doesNotFit) 1 else 0)
+        it.bindLong(7, if (stream.toDelete) 1 else 0)
+        it.bindLongOrNull(8, stream.deletedNumber)
+        it.bindLongOrNull(9, stream.wrongAt)
+        it.bindLong(10, if (stream.toRemove) 1 else 0)
+        it.bindLong(11, if (stream.recordDeleted) 1 else 0)
+    }
+
+    /** The streams whose copy on this phone is to be removed: sync took the deletion of their records. */
+    suspend fun streamsToRemove(): List<StreamState> = connection.usePrepared(SyncSql.STREAMS_TO_REMOVE) {
+        buildList { while (it.step()) add(it.streamState()) }
     }
 
     suspend fun removeStream(fileId: String) = run(SyncSql.REMOVE_STREAM) { it.bindText(1, fileId) }
@@ -314,12 +357,6 @@ internal class SyncStore(private val connection: PooledConnection) {
     suspend fun forgetStreamsOnServer() = run(SyncSql.FORGET_STREAMS_ON_SERVER) {}
 
     suspend fun forgetDeletions() = run(SyncSql.FORGET_DELETIONS) {}
-
-    /** True if a stream may have work: one not known to be on the server, one that does not fit, or one to delete. */
-    suspend fun mayHaveStreamWork(): Boolean = connection.usePrepared(SyncSql.COUNT_STREAM_WORK) {
-        it.step()
-        it.getLong(0) > 0
-    }
 
     private suspend fun run(sql: String, bind: (SQLiteStatement) -> Unit) {
         connection.usePrepared(sql) {
@@ -338,10 +375,13 @@ internal class SyncStore(private val connection: PooledConnection) {
         length = getLong(1),
         hash = textOrNull(2),
         onServer = getLong(3) != 0L,
-        doesNotFit = getLong(4) != 0L,
-        toDelete = getLong(5) != 0L,
-        deletedNumber = longOrNull(6),
-        wrongAt = longOrNull(7),
+        here = getLong(4) != 0L,
+        doesNotFit = getLong(5) != 0L,
+        toDelete = getLong(6) != 0L,
+        deletedNumber = longOrNull(7),
+        wrongAt = longOrNull(8),
+        toRemove = getLong(9) != 0L,
+        recordDeleted = getLong(10) != 0L,
     )
 
     private fun SQLiteStatement.textOrNull(column: Int): String? = if (isNull(column)) null else getText(column)

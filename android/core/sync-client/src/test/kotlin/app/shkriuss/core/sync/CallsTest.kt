@@ -151,6 +151,27 @@ class CallsTest : SyncTest() {
         assertEquals("once, after the last", before + 1, phone.content.afterImports)
     }
 
+    @Test
+    fun aStopBeforeTheAlarmsAreSetAgainIsFinishedByTheNextCall() = runBlocking {
+        val tablet = device("tablet")
+        val phone = device("phone")
+        tablet.addItem("Milk")
+        tablet.runUntilQuiet()
+        val before = phone.content.afterImports
+
+        phone.content.stopNextAfterImport = true
+        try {
+            phone.fetchAll()
+        } catch (_: IllegalStateException) {
+            // Expected: the app stopped after the import's commit, before it set its alarms again.
+        }
+        assertEquals(before, phone.content.afterImports)
+        phone.status()
+        assertEquals(before + 1, phone.content.afterImports)
+        phone.status()
+        assertEquals("once", before + 1, phone.content.afterImports)
+    }
+
     private suspend fun refuseWrites(device: TestDevice, table: String) {
         device.database.useWriterConnection { connection ->
             listOf("INSERT", "UPDATE", "DELETE").forEach {

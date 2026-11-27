@@ -679,7 +679,9 @@ In this order. Each "skipped" is one of
    [A new recovery key](#a-new-recovery-key) has the one exception,
    its last fetch.
 3. The blob opens with the app's `record` keyset and the record ID.
-   If Tink refuses it: skipped, "damaged".
+   If Tink refuses it: skipped, "damaged". A blob whose own header
+   names a newer version is "damaged" too: that byte is read before
+   anything is checked, so a server can change it.
 4. The version byte is `01`. A higher one: skipped, "newer".
 5. The data version is not above the app's own. A higher one:
    skipped, "newer".
@@ -1308,7 +1310,10 @@ transaction.
    nothing else for it;
 4. takes each record that was refused with `03` out of **To send**,
    and counts it;
-5. after a `02`, stops the app: "needs the new recovery key";
+5. after a `02`, stops the app: "needs the new recovery key". The stop
+   ends when a later call names another current key ID of the server
+   than the call at that time, or when the user asks for a comparison
+   of everything;
 6. sets Known to the head after the batch, and moves the cursor if it
    may ([The cursor](#the-cursor), point 2).
 

@@ -421,7 +421,7 @@ second build must write the same mapping file, or the release stops. See
   - `RoundTripTest` also checks the counts of records that are not
     deleted, per type name: the same when a backup is written and when
     it is checked.
-- `core/sync-client` has 11 test classes with 64 tests. They are the
+- `core/sync-client` has 11 test classes with 71 tests. They are the
   items for `core/sync-client` of "What the tests must cover" in
   [sync-protocol.md](../architecture/sync-protocol.md#what-the-tests-must-cover).
   - They use real keys: `SoftwareKeysApp` from the

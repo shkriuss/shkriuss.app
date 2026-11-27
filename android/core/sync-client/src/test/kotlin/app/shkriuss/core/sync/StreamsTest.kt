@@ -68,6 +68,55 @@ class StreamsTest : SyncTest() {
     }
 
     @Test
+    fun statusSaysThatAStreamWaitsToBeFetchedAlsoAfterAFetchStoppedOrDidNotFit() = runBlocking {
+        val (_, tablet, id) = fileOnTheServer()
+        assertTrue(tablet.status().hasStreamsToMove)
+
+        tablet.client.writeStream(tablet.call(), id, 0)!!.use { it.write(bytes, 0, 4_000) }
+        assertTrue("the fetch stopped half way", tablet.status().hasStreamsToMove)
+
+        tablet.client.writeStream(tablet.call(), id, 0)!!.use { it.write(ByteArray(bytes.size)) }
+        assertEquals(StreamFinish.WRONG, tablet.client.finishStream(tablet.call(), id))
+        assertFalse("not again today", tablet.status().hasStreamsToMove)
+        clock.advanceBy(24L * 60 * 60 * 1000)
+        assertTrue("again a day later", tablet.status().hasStreamsToMove)
+    }
+
+    @Test
+    fun aFileRecordBroughtBackBeforeItsStreamCameIsSentAndItsStreamFetched() = runBlocking {
+        val (_, tablet, id) = fileOnTheServer()
+        // The user deletes the file before its stream came, the Sync app looks at the streams, and Undo brings it back.
+        clock.advanceBy(10)
+        tablet.deleteFile(id)
+        tablet.moveStreams()
+        tablet.attachments.restore(id)
+
+        tablet.runUntilQuiet()
+        assertEquals(TestDevice.sha256(bytes), tablet.storedStreams()[id])
+        assertEquals("its restore went to the server", 2, server.stored.count { it == id })
+    }
+
+    @Test
+    fun aStopBeforeTheStreamOfADeletedFileIsRemovedIsFinishedByTheNextCall() = runBlocking {
+        val (phone, tablet, id) = fileOnTheServer()
+        tablet.moveStreams()
+        clock.advanceBy(10)
+        phone.deleteFile(id)
+        phone.wipeFile(id)
+        phone.runUntilQuiet()
+
+        tablet.content.stopNextRemove = true
+        try {
+            tablet.fetchAll()
+        } catch (_: IllegalStateException) {
+            // Expected: the app stopped after the import's commit, before it removed the stream.
+        }
+        assertTrue("still here", id in tablet.storedStreams())
+        tablet.status()
+        assertFalse(id in tablet.storedStreams())
+    }
+
+    @Test
     fun aFetchThatStopsGoesOnWhereTheBytesEnd() = runBlocking {
         val (_, tablet, id) = fileOnTheServer()
         tablet.client.writeStream(tablet.call(), id, 0)!!.use { it.write(bytes, 0, 4_000) }

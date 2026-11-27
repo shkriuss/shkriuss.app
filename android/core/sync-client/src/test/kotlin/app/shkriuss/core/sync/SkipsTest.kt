@@ -73,6 +73,45 @@ class SkipsTest : SyncTest() {
     }
 
     @Test
+    fun aBlobWhoseOwnHeaderNamesANewerVersionIsDamagedAndStopsNothing() = runBlocking {
+        val phone = device("phone")
+        val own = phone.addItem("Milk")
+        phone.runUntilQuiet()
+        // Byte 3 is read before Tink checks anything, so a server can change it.
+        val changed = phone.seal(phone.content.syncRecordOf(own)).also { it[3] = 2 }
+        server.put(LISTS.value, own.record.id, changed)
+
+        phone.fetchAll()
+        val status = phone.status()
+        assertEquals(1L, status.counts.damaged)
+        assertEquals(0L, status.counts.newer)
+        assertEquals(SendBlock.NONE, status.sendBlock)
+        assertEquals("answered with its own version", listOf(0x00), phone.sendAll(comparison = false))
+    }
+
+    @Test
+    fun aTieWithARecordOfALowerDataVersionGoesOutSealedInTheAppsOwnVersion() = runBlocking {
+        val older = device("older", dataVersion = 1)
+        val newer = device("newer", dataVersion = 2)
+        val milk = older.addItem("Milk")
+        older.runUntilQuiet()
+        newer.runUntilQuiet()
+
+        // Both change the item at the same millisecond. The older app's text is the larger one, so it wins the tie.
+        clock.advanceBy(10)
+        older.editItem(milk.record.id, "B")
+        newer.editItem(milk.record.id, "A")
+        older.runUntilQuiet()
+        newer.fetchAll()
+        assertEquals("B", newer.database.items().find(milk.record.id)?.title)
+        assertTrue("the winner goes into To send", newer.status().hasOrdinaryChanges)
+
+        newer.sendAll(comparison = false)
+        val plaintext = newer.keys.open(milk.record.id, server.copyOf(LISTS.value, milk.record.id)!!.blob)
+        assertEquals("sealed in data version 2", 2, ByteReader(plaintext, 1).i32())
+    }
+
+    @Test
     fun aNewerRecordStopsSendingUntilTheAppIsUpdatedAndIsThenFetchedAgain() = runBlocking {
         val newer = device("newer", dataVersion = 2)
         val older = device("older", dataVersion = 1)

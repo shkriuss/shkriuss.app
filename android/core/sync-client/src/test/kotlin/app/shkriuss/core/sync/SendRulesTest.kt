@@ -217,6 +217,32 @@ class SendRulesTest : SyncTest() {
         assertEquals(ExportResult.NothingToSend, phone.client.export(phone.call(), ExportRequest(false, 100, server.mostBytes)))
     }
 
+    @Test
+    fun aStopAfterTheServerRefusedTheKeyEndsWhenTheServerNamesAnotherKeyOrTheUserAsksAgain() = runBlocking {
+        val phone = device("phone")
+        val ours = server.keyId
+        phone.addItem("Milk")
+        phone.exportAndAnswer { answer(it, 0x02) }
+        assertEquals(SendBlock.ENTER_THE_NEW_RECOVERY_KEY, phone.status().sendBlock)
+
+        // The database was put back: the server names an older key for a while, then its own again.
+        server.keyId = KeyId(0x01020304)
+        assertEquals("the key state decides now", SendBlock.ENTER_THE_NEW_RECOVERY_KEY, phone.status().sendBlock)
+        server.keyId = ours
+        assertEquals(SendBlock.NONE, phone.status().sendBlock)
+        assertEquals(listOf(0x00), phone.sendAll(comparison = false))
+
+        // The Sync app never learned another key: the user asks for a comparison, and the app tries again.
+        clock.advanceBy(10)
+        phone.addItem("Bread")
+        phone.exportAndAnswer { answer(it, 0x02) }
+        assertEquals(SendBlock.ENTER_THE_NEW_RECOVERY_KEY, phone.status().sendBlock)
+        phone.client.compare(phone.call())
+        assertEquals(SendBlock.NONE, phone.status().sendBlock)
+        phone.runUntilQuiet()
+        assertEquals(2, server.ids(LISTS.value).size)
+    }
+
     /** The server's answer `00` to [batch], with [code] for each record and no new number. */
     private fun answer(batch: ByteArray, code: Int): ByteArray {
         val count = ByteReader(batch, 50).u32().toInt()
