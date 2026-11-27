@@ -62,7 +62,11 @@ only what that server cannot read, and holds no data of its own.
 ### The join steps
 
 Sync opens here until the phone has joined. Each step has a top bar and
-Back to the step before. Back from the first leaves the app.
+Back to the step before. Back from the first leaves the app. Back to
+step 1 cancels the join: one write sets `stage` 0 and drops the values
+of the join and `setupCode`, then the device key and the name key are
+deleted. A join left unfinished for a day is cancelled in the same way
+at the next start of Sync.
 
 1. **Sync.** "Sync keeps your apps the same on your phones and tablets,
    through a server in your own Cloudflare account. The server gets only
@@ -185,7 +189,9 @@ A long transfer: the file step of a run takes the total from the
 lengths in `streams`, and what is done from `files/have` for sending and
 from `streams` for fetching. The row moves after each chunk request.
 When Android ends the run, the row says "Has files to move.", and the
-next run goes on. None of it is stored.
+next run goes on. None of it is stored: how far a transfer got, which
+the protocol counts as state of this phone, is what `files/have` and the
+data app's `streams` say at the next run.
 
 ### Devices
 
@@ -206,7 +212,10 @@ next run goes on. None of it is stored.
    device", shows the code in two groups of four: "On the new device,
    open Sync, tap Join a server, and type this code. It works once,
    until 14:15." **Done** closes it. After its end: "This code has
-   ended.", with **New code**. The dialog blocks screenshots.
+   ended.", with **New code**. The dialog blocks screenshots. When
+   `enrol-code` gets no answer: "Could not get a code. Try again.", with
+   **Try again** and **Cancel**. Any other answer closes the dialog, and
+   Apps shows its [problem](#problems).
 4. A tap on a row: a dialog with the row's text. For this phone,
    **Rename** and **Leave the server**. For another, **Remove**, which
    asks "Remove Pixel 6a?", "It can no longer sync with this server.
@@ -232,7 +241,8 @@ next run goes on. None of it is stored.
 | Server | Close the server | | "Close the server?", "Every device stops syncing with it, for good. Nothing on any phone is deleted. To sync again, you deploy a new server.", with **Close the server** and **Cancel** |
 | About | Version, Licences | As in Water | As in Water |
 
-When `account/delete` answers `00`: "The server is closed. Now delete
+Sync sets `closing` before it sends `account/delete`. The answer `00`,
+or a later `06` while `closing` is set, ends the close: "The server is closed. Now delete
 the Worker, its database and its bucket in the Cloudflare dashboard.
 That removes your data from the server.", with **OK**.
 
@@ -251,7 +261,7 @@ The device line on Apps shows the first that applies, as the protocol's
 | Removed (`03`). The device key is deleted. | "This phone was removed from the server. Its apps keep everything." | **Join again** | The same |
 | Not a device (`02`) | "The server does not know this phone." | **Join again** | The same |
 | The device key is gone, or Sync's state cannot be read | "Sync lost this phone's key for the server. Join again, then remove the old entry of this phone on another device." | **Join again** | The same |
-| Version (`01`) | "Update the Sync app." or "Update your server." | **Try again**, for the server | Sync is updated, or `info` names version 1 |
+| Version (`01`): the server's lowest version is above 1 (`stop` 4), or its highest below 1 (`stop` 6) | "Update the Sync app." or "Update your server." | **Try again**, for the server | Sync is updated, or `info` names version 1 |
 | The clock (`05`) | "This phone's clock is off by 7 minutes. Set the time in Android's settings." | **Try again** | A request passes. Each run tries once. |
 | A fault (`04` twice, or an answer that breaks its layout or a limit, except `info`'s three limits) | "Sync has a fault: the server refused a request." | **Try again** | A request passes. The next run tries. |
 | The day's limit (`07 02`, or Cloudflare's) | "The server's limit for today is used. Sync goes on at 04:00." | | 00:00 UTC |
@@ -280,7 +290,9 @@ unmetered network. Each data app's specification words them.
 fixes what a run does, in which order. Here is the rest.
 
 1. One periodic work, every 15 minutes, with a connected network. It is
-   made when the phone joins and cancelled when it leaves or stops.
+   made when the phone joins, and asked for again at every start of
+   Sync while `stage` is 3, which changes nothing when it exists. It is
+   cancelled when the phone leaves or stops.
 2. One one-time work, for a poke and for **Sync now**, with a connected
    network. A new request while one waits keeps the one that waits.
 3. One run at a time. A poke during a run marks that app, and the run
@@ -317,7 +329,9 @@ fixes what a run does, in which order. Here is the rest.
 | Key | What it holds | Limits |
 |---|---|---|
 | `stage` | 0 not joined, 1 joining, 2 `enrol` sent, 3 joined, 4 stopped | 0 to 4 |
-| `stop` | 1 not a device, 2 removed, 3 closed, 4 version, 5 the key is gone | 1 to 5, exactly when `stage` is 4 |
+| `stop` | 1 not a device, 2 removed, 3 closed, 4 update Sync, 5 the key is gone, 6 update the server | 1 to 6, exactly when `stage` is 4 |
+| `closing` | **Close the server** was sent and has not ended | True or false |
+| `joinedAt` | When the join began, at step 2 | A time, from `stage` 1 until the join ends |
 | `address` | The server's address | As [Limits](#limits-and-defaults), from `stage` 1 on |
 | `serverId`, `epoch` | The server ID from `info`; the epoch from `enrol` or `heads` | 32 hex digits. From `stage` 1 and 3 on. |
 | `keyId` | The server's current key ID | 8 hex digits, from `stage` 3 on |
@@ -345,7 +359,7 @@ fixes what a run does, in which order. Here is the rest.
    step of Sync is one write of the file.
 2. A value that cannot be read, or is outside its limits, counts as
    missing: 0, false or "never" for an app, off for the setting. At
-   `stage` 3, and at `stage` 4 with `stop` 4, a missing `address`,
+   `stage` 3, and at `stage` 4 with `stop` 4 or 6, a missing `address`,
    `serverId`, `epoch`, `deviceAlias` or `deviceId`, a device key that
    is gone, or one whose public key does not give `deviceId`, counts as
    a lost key: `stop` 5. A removed or closed phone needs no key.
@@ -405,15 +419,16 @@ so after a stop Sync does the step again.
 
 | Action | Writes, in order | If Sync stops in between |
 |---|---|---|
-| Server address | `stage` 1, `address`, `serverId`, `limits` | The join opens at step 2, filled in. Another server ID drops the old key and setup code. |
+| Server address | `stage` 1, `joinedAt`, `address`, `serverId`, `limits` | The join opens at step 2, filled in. Another server ID drops the old key and setup code. |
+| Cancel a join | `stage` 0 and the join's values gone; then the device key and the name key | At the next start, a `stage` 0 with a device key or name key left deletes them. |
 | Setup code | `setupCode`, before it shows | The same code shows again. |
 | The device key | `deviceAlias`, then the key, then `deviceId` | An alias with no key: the key is made then. |
 | The keeper's answer | The name key; `stage` 2 and `name`; `enrol` | Before `stage` 2: a setup code goes back to step 6, a device code to step 4, to be typed again. At `stage` 2 Sync asks `heads` with that key: `00` is joined, with its epoch and key ID; `02` goes back to the same step as before `stage` 2. |
-| `enrol` gives `00` | `stage` 3, `epoch`, `keyId`, `setupCode` gone, `deleteSetupCode`; the periodic work | As `stage` 2 above. |
+| `enrol` gives `00` | `stage` 3, `epoch`, `keyId`, `setupCode` gone, `deleteSetupCode`; the periodic work | As `stage` 2 above. At `stage` 3, the next start asks for the periodic work again. |
 | Rename | `devices/name`; `name`, `revision` | The next list takes the name from the server. |
 | Remove a device | `devices/remove`; `revision`, the ID into `removed` | The next `heads` shows another revision, and the list is read. |
 | Leave | `devices/remove` of this phone; the keys and the server's values go, `stage` 0 | The next request gets `03`. |
-| Close | `account/delete`; `stage` 4, `stop` 3 | The next request gets `06`. |
+| Close | `closing`; `account/delete`; `stage` 4, `stop` 3, `closing` gone; the dialog of a close | The next request gets `06`. With `closing` set, that ends the close, with its dialog. |
 | A run, for one app | The protocol's steps; `head`, `good`, `on`, `work` of the app, `poked` cleared | The next run serves it again. |
 | The list of devices | `devices/remove` for each removed ID that is in again; `removed`, `revision`, `devicesAt`, `putBack` | The next read does it again. |
 
@@ -425,7 +440,7 @@ so after a stop Sync does the step again.
 | Making the device key | "Sync could not make a key for this phone. Try again." StrongBox first, then without ([Hardware keys](../../security/crypto-design.md#hardware-keys)). |
 | A courier call fails or gets no answer | That app is left for this run ([sync-protocol.md](../../architecture/sync-protocol.md#what-a-data-app-answers), point 5). Its row says so. |
 | A data app refuses a page | Nothing is written there, its cursor stays, and the next run fetches again. |
-| A request to the server | [Problems](#problems). Rename, Remove and Close say "Could not reach the server. Try again." and change nothing. |
+| A request to the server | [Problems](#problems). Rename, Remove and Close say "Could not reach the server. Try again." and change nothing. **Show the code** as in [Devices](#devices), point 3. |
 | Asking WorkManager for a run | "Could not start a run. Try again." under **Sync now** |
 
 ### A press twice or late
@@ -436,7 +451,7 @@ so after a stop Sync does the step again.
 | **Next**, **Continue**, a keeper's button, **Save** of Rename, twice | One call at a time. The button does nothing while its call goes. |
 | **Show the code** or **New code** twice | One request at a time. A new code voids the one before; the dialog shows the last. |
 | A device code typed after its end, or used | `09`: "The code is wrong, used or too old." |
-| The keeper's answer after Android ended Sync | The step's saved state holds only which app was asked, and the answer reaches the new screen, as `KeeperCall` does. |
+| The keeper's answer after Android ended Sync | The step's saved state holds only which app was asked, and the answer reaches the new screen, as `KeeperCall` does. A setup-code join goes on to step 7. A device-code join, whose code is never stored, goes back to step 4. |
 | **Try again** at step 7, 10 minutes after the keeper signed | Back to step 6. |
 | **Remove** twice, or on a device removed meanwhile | One remove: the dialog closes at the first press, and the server answers `00` for a removed device too. |
 | **Leave** or **Close the server** twice | The dialog closes at the first press. Both calls can be sent twice. |
@@ -587,7 +602,9 @@ Choices this page made without a decision by the owner on that point.
 12. A full server: sending tried once a day and on **Try again**.
 13. WorkManager's `DiagnosticsReceiver` removed, as Water removes the
     receiver of `androidx.profileinstaller`.
-14. The words of every screen, step and dialog.
+14. A join left unfinished for a day is cancelled at the next start,
+    so no setup code stays behind.
+15. The words of every screen, step and dialog.
 
 ## Open
 

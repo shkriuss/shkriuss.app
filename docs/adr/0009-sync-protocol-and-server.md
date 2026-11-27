@@ -239,5 +239,6 @@ every rule. The code follows that page exactly.
   which settings sync, and how a wipe is carried.
 - Open: the points under "Open questions" in
   [sync-protocol.md](../architecture/sync-protocol.md#open-questions).
-  The largest are the Sync app's specification, the screens of a new
-  recovery key, and a proof that nothing is held back.
+  The largest are the screens of a new recovery key and a proof that
+  nothing is held back. The Sync app's specification is
+  [docs/apps/sync/spec.md](../apps/sync/spec.md).
