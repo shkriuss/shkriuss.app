@@ -45,6 +45,10 @@ a step open while it decides. So:
 3. A rule of the protocol that a write must keep, such as "only if the
    copy's number is at or below the cursor", is in the SQL of the write
    itself. The code checks afterwards that D1 did what the rule says.
+4. The cap of 70,000 row writes of the day for a comparison of
+   everything is a second view, `day_cap`, in the same write batch, after
+   the day's count took the records that the batch stored. A batch over
+   the cap stops whole and is answered `07 01`.
 
 Blobs and IDs go into D1 as hex, through `unhex(?)`, and come out as
 hex, through `hex(column)`. D1 hands a blob to a Worker as an array of

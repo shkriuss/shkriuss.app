@@ -11,7 +11,7 @@
 //    out. D1 hands a blob to a Worker as an array of numbers, one for each
 //    byte, which costs far more CPU time than one string of hex.
 
-import { Refusal, FULL, WRITES_USED, WRITES_USED_FOR_ALL } from "./answers";
+import { Refusal, FULL, WRITES_USED, WRITES_USED_FOR_ALL, WRITES_USED_FOR_COMPARISON } from "./answers";
 import { fromD1Hex } from "./bytes";
 
 /** The part of D1 the server uses. The tests wrap it to count row writes. */
@@ -110,6 +110,12 @@ const TABLES = [
   `CREATE TRIGGER IF NOT EXISTS guard_holds INSTEAD OF INSERT ON guard
      WHEN NEW.ok IS NOT 1
      BEGIN SELECT RAISE(ABORT, 'shk-guard'); END`,
+  // The same for the day's row writes of a comparison of everything. Its
+  // own message turns into the answer 07 01, not into a new start.
+  `CREATE VIEW IF NOT EXISTS day_cap AS SELECT 1 AS ok`,
+  `CREATE TRIGGER IF NOT EXISTS day_cap_holds INSTEAD OF INSERT ON day_cap
+     WHEN NEW.ok IS NOT 1
+     BEGIN SELECT RAISE(ABORT, 'shk-day-cap'); END`,
 ];
 
 /** A write batch whose guard did not hold. The call starts again from its first read. */
@@ -138,6 +144,7 @@ export async function run<T = Record<string, unknown>>(
 function translate(error: unknown): unknown {
   const message = error instanceof Error ? error.message : "";
   if (message.includes("shk-guard")) return new GuardFailed();
+  if (message.includes("shk-day-cap")) return new Refusal(WRITES_USED, Uint8Array.of(WRITES_USED_FOR_COMPARISON));
   // The texts of D1's own list of errors, for the free plan's daily
   // limits and for a database or an account that is full.
   if (/free tier daily row (write|read) limit/.test(message)) {

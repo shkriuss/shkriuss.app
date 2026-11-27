@@ -1,7 +1,7 @@
 // Fetching a page and sending a batch (sync-protocol.md: "Fetch",
 // "Send", "Numbers, cursors and the epoch").
 
-import { DONE, OTHER_EPOCH, Refusal, TOO_MUCH, WRITES_USED, WRITES_USED_FOR_COMPARISON } from "../answers";
+import { DONE, OTHER_EPOCH, Refusal, TOO_MUCH } from "../answers";
 import { LayoutError, Reader, Writer, fromD1Hex, fromHex, sameBytes } from "../bytes";
 import type { SignedCall } from "../call";
 import {
@@ -202,6 +202,20 @@ const COUNT_DAY_WRITES = `
                   ELSE excluded.writes END,
     day = excluded.day`;
 
+/**
+ * A batch of a comparison of everything that would pass 70,000 row writes
+ * of the day stops, with all of its writes, and is answered 07 01. It
+ * counts the records this batch stored, after the day's count took them,
+ * in the same step. A batch that stored nothing writes nothing, and passes.
+ */
+const COMPARISON_CAP = `
+  INSERT INTO day_cap (ok) SELECT
+    NOT EXISTS (
+      SELECT 1 FROM record
+      WHERE app = ?1 AND number > coalesce((SELECT head FROM app WHERE name = ?1), 0)
+    )
+    OR coalesce((SELECT writes FROM day_writes WHERE one = 1 AND day = ?2), 0) <= ?3`;
+
 const MOVE_HEAD = `
   INSERT INTO app (name, head)
   SELECT ?1, m FROM (SELECT max(number) AS m FROM record WHERE app = ?1) WHERE m IS NOT NULL
@@ -234,16 +248,11 @@ export async function sendChanges(call: SignedCall): Promise<Uint8Array> {
   const db = context.db;
   const now = context.now();
   const today = Math.floor(now / DAY_MS);
-  const [toldResult, dayResult] = await run(db, [
+  const [toldResult] = await run(db, [
     db.prepare("SELECT number FROM told WHERE device = unhex(?1) AND app = ?2").bind(device.id.toHex(), app),
-    db.prepare("SELECT writes FROM day_writes WHERE one = 1 AND day = ?1").bind(today),
   ]);
   const told = Number(toldResult?.results[0]?.["number"] ?? 0);
   if (batch.known > told) throw await newEpoch(context, server);
-  const dayWrites = Number(dayResult?.results[0]?.["writes"] ?? 0);
-  if (batch.comparison && dayWrites + 2 * count + 3 > COMPARISON_DAY_WRITES) {
-    throw new Refusal(WRITES_USED, Uint8Array.of(WRITES_USED_FOR_COMPARISON));
-  }
 
   const results: number[] = [];
   const toStore: number[] = [];
@@ -270,6 +279,7 @@ export async function sendChanges(call: SignedCall): Promise<Uint8Array> {
       return db.prepare(STORE_RECORD).bind(app, record.id.toHex(), record.blob.toHex(), batch.cursor, staleBefore);
     }),
     db.prepare(COUNT_DAY_WRITES).bind(today, app),
+    ...(batch.comparison ? [db.prepare(COMPARISON_CAP).bind(app, today, COMPARISON_DAY_WRITES)] : []),
     db.prepare(MOVE_HEAD).bind(app),
     db.prepare(MOVE_TOLD).bind(device.id.toHex(), app),
   ]);

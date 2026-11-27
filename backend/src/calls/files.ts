@@ -142,30 +142,33 @@ export async function filesFetch(call: SignedCall): Promise<Uint8Array> {
     keys.push(chunkKey(app, reader.take(16), reader.take(32), reader.u32()));
   }
   reader.end();
-  const objects: (R2ObjectBody | null)[] = [];
+  // Each chunk is read whole before the next is asked for. A Worker keeps
+  // only six connections open at once, R2's among them, so open bodies
+  // must not pile up.
+  const chunks: (Uint8Array | null)[] = [];
   let total = 0;
-  try {
-    for (const key of keys) {
-      const object = await context.files.get(key);
-      objects.push(object);
-      if (object !== null) total += object.size;
-      if (total > CHUNK_BYTES) throw new Refusal(TOO_MUCH);
+  for (const key of keys) {
+    const object = await context.files.get(key);
+    if (object === null) {
+      chunks.push(null);
+      continue;
     }
-    const writer = new Writer().u8(DONE);
-    for (const object of objects) {
-      if (object === null) writer.u8(0x01);
-      else writer.u8(0x00).u32(object.size);
+    total += object.size;
+    if (total > CHUNK_BYTES) {
+      await object.body.cancel();
+      throw new Refusal(TOO_MUCH);
     }
-    for (const object of objects) {
-      if (object !== null) writer.bytes(new Uint8Array(await object.arrayBuffer()));
-    }
-    return writer.finish();
-  } catch (error) {
-    for (const object of objects) {
-      if (object !== null && !object.bodyUsed) await object.body.cancel();
-    }
-    throw error;
+    chunks.push(new Uint8Array(await object.arrayBuffer()));
   }
+  const writer = new Writer().u8(DONE);
+  for (const chunk of chunks) {
+    if (chunk === null) writer.u8(0x01);
+    else writer.u8(0x00).u32(chunk.byteLength);
+  }
+  for (const chunk of chunks) {
+    if (chunk !== null) writer.bytes(chunk);
+  }
+  return writer.finish();
 }
 
 /** One file of a `files/delete`, and what became of it. */

@@ -312,3 +312,16 @@ test("files/have counts 128 files of Notes' largest size, 6 chunks each, in one 
     assert.equal(answer.answer, DONE);
     assert.deepEqual(answer.counts, Array(128).fill(6));
   }));
+
+test("files/fetch gives many chunks of one request, each read before the next is asked for", () =>
+  withServer(async (server) => {
+    const setup = await serverInUse(server);
+    const files = Array.from({ length: 12 }, () => stream(1000));
+    await sendChunks(server, setup, setup.device, "notes", files.map((file) => chunkItems(file)[0]));
+    const fetched = await fetchChunks(server, setup, setup.device, "notes", files.map((file) => chunkItems(file)[0]));
+    assert.equal(fetched.answer, DONE);
+    assert.deepEqual(
+      fetched.chunks.map((c) => hex(c)),
+      files.map((file) => hex(file.chunks[0])),
+    );
+  }));

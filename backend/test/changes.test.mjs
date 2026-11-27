@@ -419,3 +419,49 @@ test("the same record twice in one batch: the first is stored, the second finds 
     assert.deepEqual(answer.results, [{ result: STORED, number: 1 }, { result: CHANGED }]);
     assert.equal(answer.headAfter, 1);
   }));
+
+test("the cap of a comparison counts the records the batch stores, in the same step", () =>
+  withServer(async (server) => {
+    const setup = await serverInUse(server);
+    const other = await joinAnother(server, setup);
+    const old = Array.from({ length: 3 }, () => record(setup));
+    await send(server, setup, setup.device, "water", { records: old });
+    const today = Math.floor(server.now / DAY);
+    await server.sql("UPDATE day_writes SET writes = 69990");
+    // Three of four are refused: their copies changed after the cursor 0.
+    // The one that is stored writes 2 + 3 rows, so the day ends at 69,995.
+    const mixed = await send(server, setup, other, "water", {
+      comparison: true,
+      records: [...old.map((r) => ({ id: r.id, blob: sealedRecord(setup.account.keyId) })), record(setup)],
+    });
+    assert.equal(mixed.answer, DONE);
+    assert.deepEqual(
+      mixed.results.map((r) => r.result),
+      [CHANGED, CHANGED, CHANGED, STORED],
+    );
+    assert.deepEqual(await server.sql("SELECT day, writes FROM day_writes"), [{ day: today, writes: 69995 }]);
+    const toTheCap = await send(server, setup, other, "water", {
+      cursor: 4,
+      known: 4,
+      comparison: true,
+      records: [record(setup)],
+    });
+    assert.equal(toTheCap.answer, DONE, "70,000 is not past the cap");
+    const past = await send(server, setup, other, "water", {
+      cursor: 5,
+      known: 5,
+      comparison: true,
+      records: [record(setup)],
+    });
+    assert.deepEqual([...past.bytes], [WRITES_USED, 0x01]);
+    assert.equal(past.rowWrites, 0, "nothing of it was written");
+    assert.deepEqual(await server.sql("SELECT day, writes FROM day_writes"), [{ day: today, writes: 70000 }]);
+    const refusedOnly = await send(server, setup, other, "water", {
+      cursor: 0,
+      known: 5,
+      comparison: true,
+      records: [{ id: old[0].id, blob: sealedRecord(setup.account.keyId) }],
+    });
+    assert.equal(refusedOnly.answer, DONE, "a comparison that stores nothing writes nothing, and is answered");
+    assert.deepEqual(refusedOnly.results, [{ result: CHANGED }]);
+  }));
