@@ -3,7 +3,8 @@
 # hand on main, also deploy it to the Cloudflare Worker shkriuss-sync with
 # the cloudflare environment, once the owner has set that up.
 # How it works, and how to set it up from a phone:
-# docs/development/backend.md. Why it works this way:
+# docs/development/backend.md. The Worker's configuration is
+# .github/backend-tools/wrangler.jsonc. Why it works this way:
 # docs/adr/0043-backend-tools-tests-and-deploy.md.
 
 name: Backend
@@ -144,8 +145,11 @@ jobs:
           fi
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
-      # Only the pinned tools, and the server's source and configuration.
-      # Wrangler builds the Worker from them. No project code runs here.
+      # Only the pinned tools with the Worker's configuration, which are
+      # owner-only, and the server's source. Wrangler reads no other
+      # configuration here: it runs what a configuration asks for, such as
+      # a build command. It builds the Worker from the source, and no
+      # project code runs here.
       - name: Check out the tools and the server
         if: steps.settings.outputs.ready == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -154,7 +158,6 @@ jobs:
           sparse-checkout: |
             .github/backend-tools
             backend/src
-            backend/wrangler.jsonc
           sparse-checkout-cone-mode: false
 
       - name: Install the pinned tools
@@ -170,7 +173,7 @@ jobs:
         run: |
           set -u
           "$RUNNER_TEMP/tools/node_modules/.bin/wrangler" deploy --dry-run \
-            --outdir "$RUNNER_TEMP/worker" --config backend/wrangler.jsonc > /dev/null
+            --outdir "$RUNNER_TEMP/worker" --config .github/backend-tools/wrangler.jsonc > /dev/null
           actual="$(sha256sum "$RUNNER_TEMP/worker/index.js" | cut -d ' ' -f 1)"
           if ! [[ "$WORKER_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$actual" != "$WORKER_SHA256" ]; then
             echo "::error::The Worker built here is not the one the job Check the server tested."
@@ -187,7 +190,7 @@ jobs:
         run: |
           set -u
           placeholder='      "database_id": "00000000-0000-0000-0000-000000000000"'
-          config=backend/wrangler.jsonc
+          config=.github/backend-tools/wrangler.jsonc
           deploy="$RUNNER_TEMP/worker/wrangler.jsonc"
           if [ "$(grep -cxF -- "$placeholder" "$config")" != 1 ]; then
             echo "::error file=$config::Expected exactly one line: $placeholder"
@@ -226,7 +229,7 @@ jobs:
           # The Worker's name, from wrangler.jsonc. Exactly one such line.
           mapfile -t names < <(sed -n 's/^  "name": "\([a-z0-9-]*\)",$/\1/p' wrangler.jsonc)
           if [ "${#names[@]}" -ne 1 ] || ! [[ "${names[0]}" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
-            echo "::error file=backend/wrangler.jsonc::Expected exactly one line of the form:   \"name\": \"worker-name\","
+            echo "::error file=.github/backend-tools/wrangler.jsonc::Expected exactly one line of the form:   \"name\": \"worker-name\","
             exit 1
           fi
           worker="${names[0]}"

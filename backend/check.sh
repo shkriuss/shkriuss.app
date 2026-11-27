@@ -12,7 +12,8 @@ echo "Type check"
 
 echo "Build the Worker, as it is deployed"
 rm -rf build
-./node_modules/.bin/wrangler deploy --dry-run --outdir "$PWD/build/worker" --config wrangler.jsonc > /dev/null
+./node_modules/.bin/wrangler deploy --dry-run --outdir "$PWD/build/worker" \
+  --config ../.github/backend-tools/wrangler.jsonc > /dev/null
 
 echo "Build the Worker the tests start"
 ./node_modules/.bin/wrangler deploy --dry-run --outdir "$PWD/build/test" --config test/wrangler.jsonc > /dev/null

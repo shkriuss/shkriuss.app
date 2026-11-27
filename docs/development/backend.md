@@ -9,6 +9,9 @@ is in [sync-protocol.md](../architecture/sync-protocol.md).
   is AGPL-3.0, in [`backend/LICENSE`](../../backend/LICENSE).
 - The workflow is [`backend.yml`](../../.github/workflows/backend.yml).
 - The tools are pinned in `.github/backend-tools/`, which is owner-only.
+  The Worker's configuration, `wrangler.jsonc`, is there too: Wrangler
+  runs whatever a configuration asks for, such as a build command, also
+  in the step of the deploy that holds the token.
 - Why it is built, tested and deployed this way:
   [ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md). The
   protocol and the server: [ADR 0009](../adr/0009-sync-protocol-and-server.md).
@@ -24,7 +27,6 @@ is in [sync-protocol.md](../architecture/sync-protocol.md).
 | `src/store.ts` | The D1 tables, the guard, and how D1's refusals become answers |
 | `src/signatures.ts` | The bytes that are signed, and the two signature checks |
 | `src/limits.ts` | Every number of the protocol that the server keeps to |
-| `wrangler.jsonc` | The Worker's configuration, for the build, the tests and the deploy |
 | `test/` | The tests, and `entry.ts`, the Worker the tests start |
 | `check.sh` | The type check, both builds and every test |
 
@@ -90,10 +92,11 @@ Deploy the server:
 1. stops unless its commit is still the newest on `main`;
 2. ends with a notice, and deploys nothing, until the `cloudflare`
    environment has the token and the database ID;
-3. checks out only the tools, `backend/src` and `backend/wrangler.jsonc`;
+3. checks out only `.github/backend-tools/`, with the tools and the
+   Worker's configuration, and `backend/src`;
 4. builds the Worker again, and stops unless it is byte for byte the one
    that Check the server tested;
-5. puts the database ID in place of the zero ID in `wrangler.jsonc`;
+5. puts the database ID in place of the zero ID of the configuration;
 6. checks that the Worker exists;
 7. uploads that Worker unchanged, as a new version, and deploys it;
 8. checks what Wrangler reports, then asks the live server for `info`

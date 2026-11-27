@@ -8,8 +8,12 @@
   ask you to add the workflow .github/workflows/backend.yml, which
   checks backend/ on pull requests and deploys it from main with the
   cloudflare environment, and the folder .github/backend-tools/ that
-  pins its tools, and nothing else in .github/." The details are
-  Claude's, in the pull request of that step.
+  pins its tools, and nothing else in .github/." And, after the review
+  found that Wrangler runs a build command of its configuration: "I am
+  the owner and I ask you to add .github/backend-tools/wrangler.jsonc,
+  the sync server's Worker configuration, and nothing else in
+  .github/." The details are Claude's, in the pull request of that
+  step.
 
 ## Context
 
@@ -35,6 +39,9 @@
   dependencies.
 - Wrangler 4.156.2 asks for `@cloudflare/workers-types` 5.20261102.1 or
   newer, the version of its workerd. That version was 25 days old.
+- Wrangler runs the `build.command` of its configuration before it
+  deploys, also with `--no-bundle`. Tried with Wrangler 4.156.2: such a
+  command could read the token of the step that deploys.
 - Claude has no Cloudflare access.
 
 ## Decision
@@ -61,6 +68,9 @@
      all from `https://registry.npmjs.org/`. `install.sh` checks both,
      then installs with `npm ci --ignore-scripts --engine-strict`, as the
      site's does.
+   - Decided by the owner: the Worker's configuration, `wrangler.jsonc`,
+     is in the same folder, owner-only, as the site's is in
+     `.github/site-deploy/`. The checks and the deploy use only it.
 4. Decided by the owner: the deploy token reaches one Worker only, as
    for the site.
    - The user makes the Worker `shkriuss-sync`, the D1 database
@@ -85,12 +95,13 @@
    1. stops unless its commit is still the newest on `main`;
    2. ends with a notice, and deploys nothing, while the `cloudflare`
       environment has neither the token nor the database ID;
-   3. checks out only the tools, `backend/src` and
-      `backend/wrangler.jsonc`;
+   3. checks out only `.github/backend-tools/`, with the tools and the
+      configuration, and `backend/src`, so that Wrangler reads no
+      configuration that is not owner-only;
    4. builds the Worker again, and stops unless it is byte for byte the
       one that Check the server tested;
-   5. puts the database ID in place of the zero ID of
-      `wrangler.jsonc`, and checks that only that line changed;
+   5. puts the database ID in place of the zero ID of the
+      configuration, and checks that only that line changed;
    6. checks that the Worker exists, as the site's Deploy does;
    7. uploads that Worker unchanged (`wrangler deploy --no-bundle`), with
       no routes and no custom domains;
@@ -127,6 +138,11 @@
 - **Types that Wrangler writes (`wrangler types`).** A generated file of
   its own to keep or to make before each check. The owner chose the
   package.
+- **The Worker's configuration in `backend/`.** It is not owner-only,
+  and a build command in it would run with the token. The owner chose
+  the owner-only folder.
+- **The workflow writing the deploy's configuration itself.** Two
+  copies that must stay the same. The owner chose one owner-only file.
 - **Deploying a build that the job Check the server uploads.** That job
   runs the tests, which are project code, on the same runner. Building
   again from `main` with the pinned tools, and comparing, deploys what

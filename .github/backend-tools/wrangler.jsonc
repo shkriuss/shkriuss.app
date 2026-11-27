@@ -1,12 +1,15 @@
-// The sync server's Worker. The build, the tests and the deploy all use
-// this file. The deploy job of .github/workflows/backend.yml puts the
-// ID of the user's own D1 database in place of the zero ID below.
+// The sync server's Worker. backend/check.sh builds it with this file,
+// and the deploy job of .github/workflows/backend.yml builds and deploys
+// it with this file only. That job puts the ID of the user's own D1
+// database in place of the zero ID below.
+// It is owner-only, because Wrangler runs whatever this file asks for,
+// such as a build command, also in the step that holds the token.
 // Why it is set up this way: docs/adr/0043-backend-tools-tests-and-deploy.md.
 {
   // The Worker the user creates by hand. The deploy token may edit only
   // this Worker and cannot create one.
   "name": "shkriuss-sync",
-  "main": "src/index.ts",
+  "main": "../../backend/src/index.ts",
   "compatibility_date": "2026-10-01",
   "d1_databases": [
     {

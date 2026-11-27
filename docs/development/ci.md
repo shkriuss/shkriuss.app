@@ -83,8 +83,10 @@ Backend has two more:
   owner-only. They run only in the job "Check the server", which has no
   secrets. The job "Deploy the server" builds the Worker again from
   `main` and runs none of them.
-- The pins of its tools and their install script, in
-  `.github/backend-tools/`. They are owner-only, like the workflow.
+- The pins of its tools, their install script and the Worker's
+  configuration, in `.github/backend-tools/`. They are owner-only, like
+  the workflow. Wrangler would run a build command that a configuration
+  names, so the deploy reads no other.
 
 Dependency graph has one, for the same reason as the site generator:
 
