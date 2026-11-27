@@ -340,6 +340,29 @@ class StreamsTest : SyncTest() {
         assertEquals(phone.records(), tablet.records())
     }
 
+    @Test
+    fun inAnAppThatDoesNotWipeADeletionWithTheFileOnNoPhoneGoesOnceAVersionOfItComes() = runBlocking {
+        val phone = device("phone", wipes = false, on = false)
+        val file = phone.addFile("photo.jpg", bytes)
+
+        // The tablet has the record from a backup that left the file out, deletes it, and turns sync on first.
+        val tablet = device("tablet", wipes = false, on = false)
+        tablet.attachments.takeFromBackup(phone.database.attachments().find(file.record.id)!!.copy(changeNumber = 0))
+        clock.advanceBy(10)
+        tablet.deleteFile(file.record.id)
+        tablet.client.setOn(true)
+        tablet.runUntilQuiet()
+        assertEquals("nothing could be sealed, and the comparison ended", ComparisonState.NONE, tablet.status().comparison)
+
+        // The phone then sends the file. The tablet answers with its deletion.
+        phone.client.setOn(true)
+        phone.runUntilQuiet()
+        tablet.runUntilQuiet()
+        phone.runUntilQuiet()
+        assertTrue(phone.database.attachments().find(file.record.id)?.record?.deletedAt != null)
+        assertEquals(phone.records(), tablet.records())
+    }
+
     /** The tablet deletes the file; the phone brings it back, with a later edit. */
     private suspend fun bringBack(beforeTheDeletion: Boolean, whileItRuns: Boolean) {
         val (phone, tablet, id) = fileOnTheServer()

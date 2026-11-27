@@ -653,6 +653,13 @@ class SyncClient(
                     unsend(id)
                     continue
                 }
+                if (record.isDeleted && record.streamLength != null && storedStreamHash(record) == null) {
+                    // A deleted file's record whose stream is on no phone and whose hash nobody told this one cannot be
+                    // sealed. No device needs it until one sends a version of it, and then the hash comes with that
+                    // version and the record goes into To send again.
+                    unsend(id)
+                    continue
+                }
                 val stream = sendableStream(record, syncKeyId) ?: continue
                 val plaintext = SealedPlaintext.encode(content.dataVersion, record.entry, stream.part)
                 val size = plaintext.size.toLong() + SyncFormat.SEALED_OVERHEAD

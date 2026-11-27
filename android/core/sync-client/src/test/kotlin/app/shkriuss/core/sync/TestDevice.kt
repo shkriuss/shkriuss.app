@@ -272,7 +272,8 @@ class TestDevice(
             val before = server.stored.size to records()
             run()
             val status = status()
-            val asksForMore = status.hasStreamsToMove || status.wantsFetch || status.comparison != ComparisonState.NONE
+            val asksForMore = status.hasStreamsToMove || status.wantsFetch || status.comparison != ComparisonState.NONE ||
+                status.hasOrdinaryChanges || status.hasComparisonRecords
             if (server.stored.size == before.first && records() == before.second && !asksForMore) return
         }
         error("$name did not become quiet")
