@@ -28,4 +28,28 @@ class RecordSealer internal constructor(private val vault: KeyVault) {
         val associatedData = AssociatedData.forId(BlobKind.SEALED_RECORD, recordId)
         return SealedBlobs.open(BlobKind.SEALED_RECORD, vault.recordKeyset(), associatedData, blob)
     }
+
+    /**
+     * The key IDs of the `record` keyset now. Sync compares them with the
+     * key ID it syncs with and the server's, to follow a new recovery key
+     * (sync-protocol.md, "A new recovery key"). Throws [BlobException] if
+     * the app has no keys from a recovery key yet, or cannot read them now.
+     */
+    fun keyIds(): RecordKeyIds {
+        val keyset = vault.recordKeyset()
+        return RecordKeyIds(KeysetCodec.primaryId(keyset), KeysetCodec.keyIds(keyset).toSet())
+    }
+}
+
+/**
+ * The key IDs of an app's `record` keyset: [current], the key of the
+ * current recovery key, which seals, and [all], every key it opens,
+ * older recovery keys too. They are public, as every key ID is.
+ */
+class RecordKeyIds(val current: KeyId, val all: Set<KeyId>) {
+    override fun equals(other: Any?): Boolean = other is RecordKeyIds && other.current == current && other.all == all
+
+    override fun hashCode(): Int = 31 * current.hashCode() + all.hashCode()
+
+    override fun toString(): String = "RecordKeyIds($current of ${all.map { it.toString() }.sorted()})"
 }

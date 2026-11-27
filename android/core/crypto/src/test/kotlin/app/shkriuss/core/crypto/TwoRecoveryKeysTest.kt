@@ -88,6 +88,10 @@ class TwoRecoveryKeysTest {
         assertEquals(newKey.keyId, crypto.status().keyId)
         assertArrayEquals("a new record".toByteArray(), crypto.records.open(recordId, newRecord))
 
+        // Sync reads which keys the record keyset holds, and which one seals.
+        assertEquals(RecordKeyIds(newKey.keyId, setOf(oldKey.keyId, newKey.keyId)), crypto.records.keyIds())
+        assertEquals(RecordKeyIds(oldKey.keyId, setOf(oldKey.keyId)), oldCrypto.records.keyIds())
+
         // An old wrapped file key is not sealed by the current key. Sealing it again moves it to the new one.
         assertTrue(!crypto.files.isSealedByCurrentKey(oldWrapped))
         assertTrue(crypto.files.isSealedByCurrentKey(crypto.files.sealAgain(fileId, oldWrapped)))
@@ -99,6 +103,17 @@ class TwoRecoveryKeysTest {
         } catch (refused: BlobException) {
             assertEquals(BlobAnswer.NEEDS_ANOTHER_RECOVERY_KEY, refused.answer)
             assertEquals(newKey.keyId, refused.keyId)
+        }
+    }
+
+    @Test
+    fun anAppWithoutKeysHasNoRecordKeyIds() {
+        val crypto = TestApp(temporary.newFolder()).open()
+        try {
+            crypto.records.keyIds()
+            fail("named key IDs without keys")
+        } catch (refused: BlobException) {
+            assertEquals(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW, refused.answer)
         }
     }
 
