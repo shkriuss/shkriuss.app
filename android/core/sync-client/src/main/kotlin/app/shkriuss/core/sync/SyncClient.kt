@@ -301,7 +301,11 @@ class SyncClient(
         toRemove.forEach { stream ->
             // The app's own writes go on beside sync: a restore may have brought the record back since the commit.
             val stillDeleted = database.withWriteTransaction { content.find(stream.fileId)?.isDeleted != false }
-            if (stillDeleted) content.removeStream(stream.fileId)
+            if (stillDeleted) {
+                content.removeStream(stream.fileId)
+                // A fetch that stopped part way leaves its bytes in the folder of fetches: they go too.
+                partFile(stream.fileId).delete()
+            }
             database.withWriteTransaction {
                 val store = SyncStore(this)
                 store.stream(stream.fileId)?.let { store.putStream(it.copy(toRemove = false, here = !stillDeleted && it.here, recordDeleted = stillDeleted)) }
@@ -406,7 +410,17 @@ class SyncClient(
             return@withLock StreamFinish.NOT_WANTED
         }
         val fits = part.isFile && part.length() == stream.length && FileInputStream(part).use(::sha256) == stream.hash
-        if (fits) content.moveStreamIn(fileId, part) else part.delete()
+        if (fits) {
+            // The app's own writes go on beside sync: the record may have been deleted since the check above.
+            val stillWanted = database.withWriteTransaction { content.find(fileId)?.let { !it.isDeleted && it.streamLength != null } == true }
+            if (!stillWanted) {
+                part.delete()
+                return@withLock StreamFinish.NOT_WANTED
+            }
+            content.moveStreamIn(fileId, part)
+        } else {
+            part.delete()
+        }
         database.withWriteTransaction {
             val store = SyncStore(this)
             val now = store.stream(fileId) ?: return@withWriteTransaction
@@ -783,6 +797,12 @@ class SyncClient(
             SyncTake.SAME -> {
                 unsend(came.id)
                 if (fetching) addSeen(came.id)
+                // A file this phone had before sync was on, for example from a backup, gets its stream listed: it may
+                // be missing here, or on the server.
+                if (record.isFile && stream != null && stream(came.id) == null) {
+                    val length = stream.length
+                    putStream(StreamState.of(came.id, length, here = content.hasStream(came.id, length)).copy(hash = Hex.of(stream.hash)))
+                }
             }
             SyncTake.STORED_WINS -> {
                 sendOrdinary(came.id, taken.changeNumber)

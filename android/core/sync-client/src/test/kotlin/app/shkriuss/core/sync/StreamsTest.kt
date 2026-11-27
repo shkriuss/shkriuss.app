@@ -236,6 +236,76 @@ class StreamsTest : SyncTest() {
         assertEquals(phone.records(), tablet.records())
     }
 
+    @Test
+    fun aFileThisPhoneHadBeforeSyncWasOnGetsItsStreamFetched() = runBlocking {
+        val phone = device("phone")
+        val file = phone.addFile("photo.jpg", bytes)
+        phone.runUntilQuiet()
+
+        // The tablet has the same record from a backup, without the file's stream, and then turns sync on.
+        val tablet = device("tablet", on = false)
+        tablet.attachments.takeFromBackup(phone.database.attachments().find(file.record.id)!!.copy(changeNumber = 0))
+        tablet.client.setOn(true)
+        tablet.runUntilQuiet()
+
+        assertEquals(phone.records(), tablet.records())
+        assertEquals(TestDevice.sha256(bytes), tablet.storedStreams()[file.record.id])
+    }
+
+    @Test
+    fun aFileThisPhoneHadBeforeSyncWasOnSendsTheChunksTheServerLacks() = runBlocking {
+        val phone = device("phone")
+        val file = phone.addFile("photo.jpg", bytes)
+        phone.runUntilQuiet()
+        server.streams.clear()
+
+        // The tablet has the same record and its stream from a backup, and then turns sync on.
+        val tablet = device("tablet", on = false)
+        tablet.attachments.takeFromBackup(phone.database.attachments().find(file.record.id)!!.copy(changeNumber = 0))
+        tablet.streamFolder.mkdirs()
+        tablet.content.streamFile(file.record.id).writeBytes(bytes)
+        tablet.client.setOn(true)
+        tablet.runUntilQuiet()
+
+        assertEquals("the same record: nothing sent", 1, server.stored.size)
+        assertEquals(TestDevice.sha256(bytes), server.streams.values.single().let(TestDevice::sha256))
+    }
+
+    @Test
+    fun aFetchedStreamIsNotMovedInForARecordDeletedJustBefore() = runBlocking {
+        val (_, tablet, id) = fileOnTheServer()
+        tablet.client.writeStream(tablet.call(), id, 0)!!.use { it.write(bytes) }
+
+        // The user deletes the file while sync checks the fetched bytes: after the check of the stream, before it moves in.
+        var finds = 0
+        tablet.content.onFind = { fileId ->
+            if (fileId == id && ++finds == 2) {
+                tablet.content.onFind = null
+                clock.advanceBy(10)
+                tablet.deleteFile(id)
+                tablet.wipeFile(id)
+            }
+        }
+        assertEquals(StreamFinish.NOT_WANTED, tablet.client.finishStream(tablet.call(), id))
+
+        assertTrue(tablet.database.attachments().find(id)?.record?.deletedAt != null)
+        assertFalse("not moved in", id in tablet.storedStreams())
+        assertFalse("and its bytes are gone", tablet.fetchFolder.resolve(id).exists())
+    }
+
+    @Test
+    fun theBytesOfAFetchThatStoppedGoWhenTheDeletionOfTheFileComes() = runBlocking {
+        val (phone, tablet, id) = fileOnTheServer()
+        tablet.client.writeStream(tablet.call(), id, 0)!!.use { it.write(bytes, 0, 4_000) }
+        clock.advanceBy(10)
+        phone.deleteFile(id)
+        phone.wipeFile(id)
+        phone.runUntilQuiet()
+
+        tablet.fetchAll()
+        assertFalse(tablet.fetchFolder.resolve(id).exists())
+    }
+
     /** The tablet deletes the file; the phone brings it back, with a later edit. */
     private suspend fun bringBack(beforeTheDeletion: Boolean, whileItRuns: Boolean) {
         val (phone, tablet, id) = fileOnTheServer()

@@ -152,7 +152,11 @@ class ListsContent(
         return both.sortedBy { it.changeNumber }.take(limit).map { SyncChange(it.id, it.changeNumber) }
     }
 
+    /** Called at every [find], with the ID, before the record is read. */
+    var onFind: (suspend (String) -> Unit)? = null
+
     override suspend fun find(id: String): SyncRecord? {
+        onFind?.invoke(id)
         if (taken.remove(id)) afterTake?.invoke(id)
         return database.items().find(id)?.let(::syncRecordOf) ?: database.attachments().find(id)?.let(::syncRecordOf)
     }
@@ -179,6 +183,10 @@ class ListsContent(
     override fun openStream(fileId: String): InputStream = FileInputStream(streamFile(fileId))
 
     override suspend fun moveStreamIn(fileId: String, fetched: File) {
+        if (database.attachments().find(fileId)?.record?.deletedAt != null) {
+            fetched.delete()
+            return
+        }
         streams.mkdirs()
         check(fetched.renameTo(streamFile(fileId))) { "The stream did not move in" }
     }

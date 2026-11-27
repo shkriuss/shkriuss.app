@@ -75,7 +75,11 @@ interface SyncContent {
     /**
      * Moves a stream that sync fetched and checked into the app's file
      * store, as a restore does. [fetched] is in the folder that sync was
-     * given, and is gone afterwards.
+     * given, and is gone afterwards. Sync calls it once it found the
+     * record still live. The app's own writes go on beside sync, so the
+     * app moves the stream in only if its record is still live when it
+     * holds the lock that its own writes of streams take, and else
+     * deletes [fetched].
      */
     suspend fun moveStreamIn(fileId: String, fetched: File)
 
