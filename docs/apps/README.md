@@ -16,6 +16,8 @@ Folders:
   specification.
 - [notes/](notes/README.md): Notes, the fourth app, with its
   specification.
+- [sync/](sync/README.md): Sync, the one app with a network, with its
+  specification.
 
 What else belongs here:
 

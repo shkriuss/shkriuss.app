@@ -1751,7 +1751,9 @@ Sync:
     [The sealed record](../architecture/sync-protocol.md#the-sealed-record)).
 16. A notification that is not a reminder, for example in the Sync app
     ([notifications.md](../architecture/notifications.md#open),
-    question 3). Open, with the Sync app's specification.
+    question 3). Decided for the Sync app's first version: none
+    ([its specification](../apps/sync/spec.md#decided-by-the-owner),
+    point 2).
 17. The QR code for the words. Decided again with sync: words only
     ([crypto-design.md](crypto-design.md#the-qr-code)).
 
