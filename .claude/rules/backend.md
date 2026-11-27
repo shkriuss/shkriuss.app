@@ -24,6 +24,8 @@ These add to CLAUDE.md. They never replace it.
   an ADR.
 - Tests run locally.
 - The backend is licensed AGPL-3.0.
-- Claude has no Cloudflare access. `CLOUDFLARE_API_TOKEN` lives only in the
-  `cloudflare` GitHub environment. Never ask for it in a session.
+- Claude has no Cloudflare access. The sync server's deploy token,
+  `CLOUDFLARE_SYNC_API_TOKEN`, lives only in the `cloudflare` GitHub
+  environment, beside the site's `CLOUDFLARE_API_TOKEN`. Never ask for
+  either in a session.
 - Never log user content.

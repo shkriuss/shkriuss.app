@@ -52,8 +52,8 @@ If a task seems to need it, stop and say so in the PR description.
 - `.claude/rules/` rules that apply only to some paths. Read the ones that match
   the files you touch.
 
-`core/sync-client`, `app/sync` and `backend/` come with Sync. They do not
-exist yet.
+`backend/` is the sync server. `core/sync-client` and `app/sync` come
+with Sync. They do not exist yet.
 
 ## Commands
 
@@ -76,6 +76,8 @@ Run from the repository root:
 
 - `python3 -B -m unittest discover -s tools/site -t tools/site` tests the hub site generator.
 - `python3 -B tools/site/build.py <new or empty folder>` builds the hub site. See `docs/development/site.md`.
+- `bash .github/backend-tools/install.sh backend` installs the sync server's pinned tools into `backend/`, once a session.
+- `backend/check.sh` the sync server's type check, both builds and every test in Miniflare. See `docs/development/backend.md`.
 
 Emulator tests, signing and releases run only in GitHub Actions.
 
