@@ -25,8 +25,15 @@
     }
   ],
   // The server logs nothing about a request (sync-protocol.md, "What the
-  // server stores", point 4).
-  "observability": { "enabled": false },
+  // server stores", point 4). Each switch is off by name, so that a
+  // Worker made in the dashboard keeps none of its logs, invocation logs
+  // or traces on. Those would hold request addresses and the names of
+  // chunks, with record and file IDs.
+  "observability": {
+    "enabled": false,
+    "logs": { "enabled": false, "invocation_logs": false },
+    "traces": { "enabled": false }
+  },
   "logpush": false,
   // The address <name>.<account subdomain>.workers.dev stays on: it is
   // the server's address until the user attaches a domain. Preview
