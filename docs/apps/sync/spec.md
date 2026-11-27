@@ -29,7 +29,7 @@ only what that server cannot read, and holds no data of its own.
 | Screens | Apps, Devices and Settings. Before the phone has joined, the join steps. |
 | Stored | No records. State of this phone: a preferences file, the device key, the name key. |
 | Backup | None. No record types, no data version. |
-| Networks | Records on any network. File chunks only on an unmetered network, unless **Files on mobile data** is on. Off at first. |
+| Networks | Records on any network. File chunks only on an unmetered network, unless **Files on mobile data** is on. Off at first. A file's own record waits with its file. |
 | Runs | WorkManager: every 15 minutes with a network, soon after a poke, and on **Sync now** |
 | Long transfers | Shown on Apps while a run goes. They go on over as many runs as they need. |
 | Notifications, reminders, app lock | None. Sync never holds the recovery key. |
@@ -143,10 +143,8 @@ start first asks `heads` ([Stopped between two writes](#stopped-between-two-writ
 ### Apps
 
 1. Top bar: "Sync". The device line: "Synced today at 14:05." (from
-   `syncedAt`), "Not
-   synced yet.", or "Syncing" with an indeterminate `ShkProgressBar`
-   while a run goes. A [problem](#problems) takes its place, with its
-   button.
+   `syncedAt`), "Not synced yet.", or "Syncing" while a run goes. A
+   [problem](#problems) takes its place, with its button.
 2. **Sync now**. While a run goes it reads "Syncing" and does nothing.
 3. The line of join step 8, while it waits for **Done**.
 4. Section **Apps**: a row for each data app that passes the courier
@@ -238,7 +236,7 @@ data app's `streams` say at the next run.
 
 | Section | Item | Shows | Opens |
 |---|---|---|---|
-| Network | Files on mobile data | A switch, off at first. Under it: "Off: files move only on Wi-Fi and other networks that are not metered. Changes always go on any network." | Nothing |
+| Network | Files on mobile data | A switch, off at first. Under it: "Off: files, and the changes that add or change a file, move only on Wi-Fi and other networks that are not metered. Other changes always go on any network." | Nothing |
 | Server | Server | `sync.example.workers.dev` | Nothing |
 | Server | Close the server | | "Close the server?", "Every device stops syncing with it, for good. Nothing on any phone is deleted. To sync again, you deploy a new server.", with **Close the server** and **Cancel** |
 | About | Version, Licences | As in Water | As in Water |
@@ -274,9 +272,9 @@ The device line on Apps shows the first that applies, as the protocol's
 1. Another epoch (`0B`) is no problem: every data app compares
    everything, and its row says so. After `0C`, Sync reads `info` again
    and asks for less. A lack of CPU time halves the request.
-2. **Join again** and **Join another server** delete the device key,
-   the name key and the server's values, and open the join steps.
-   **Join again** fills in the address.
+2. **Join again** and **Join another server** write `stage` 0 and drop
+   the server's values first, then delete the device key and the name
+   key, and open the join steps. **Join again** fills in the address.
 
 A data app shows Sync's [`state`](../../architecture/sync-protocol.md#what-the-sync-app-answers)
 in its own **Sync** row: whether this phone has joined, when a run
@@ -297,19 +295,24 @@ fixes what a run does, in which order. Here is the rest.
    cancelled when the phone leaves or stops.
 2. One one-time work, for a poke and for **Sync now**, with a connected
    network. A new request while one waits keeps the one that waits.
-3. One run at a time. A poke during a run marks that app, and the run
-   serves it again before it ends.
+3. One run at a time. The run clears `poked.<app>` when it starts on
+   that app, before `status`. A poke that comes later marks the app
+   again, and the run serves it again before it ends.
 4. Only `files/send` and `files/fetch` wait for an unmetered network,
    unless **Files on mobile data** is on. Sync checks before each. If
    the network turns metered during a run, the run moves no more chunks
-   and does the rest.
+   and does the rest. A file's record waits with its file: the data app
+   holds it back until its stream is on the server
+   ([Sending](../../architecture/sync-protocol.md#sending), point 4).
 5. After `07 02` and Cloudflare's day limit, no request until 00:00
    UTC. After `07 01`, only batches of a comparison wait until then;
    ordinary batches still go.
    After three failed runs, one every 4 hours. **Sync now** skips the
    4-hour wait, not 00:00 UTC, and follows **Files on mobile data**.
-6. `info` is read when the phone joins, after `0C`, on **Try again**
-   after `01`, and in the first run of a day. A request uses its three
+6. `info` is read when the phone joins, after `0C`, in the first run of
+   a day, and at `stop` 4 or 6 at every start of Sync (also the first
+   after an update) and on **Try again**. When it names version 1, the
+   stop ends and the periodic work is asked for again. A request uses its three
    limits, halved after each lack of CPU time, down to one record.
 7. In the first run of a day, also the `status` of every data app and
    the list of devices.
@@ -428,13 +431,13 @@ so after a stop Sync does the step again.
 | Cancel a join | `stage` 0 and the join's values gone; then the device key and the name key | At the next start, a `stage` 0 with a device key or name key left deletes them. |
 | Setup code | `setupCode`, before it shows | The same code shows again. |
 | The device key | `deviceAlias`, then the key, then `deviceId` | An alias with no key: the key is made then. |
-| The keeper's answer | The name key; `stage` 2 and `name`; `enrol` | Before `stage` 2: a setup code goes back to step 6, a device code to step 4, to be typed again. At `stage` 2 Sync asks `heads` with that key: `00` is joined, with its epoch and key ID; `02` goes back to the same step as before `stage` 2. |
+| The keeper's answer | The name key; `stage` 2 and `name`; `enrol` | Before `stage` 2: a setup code goes back to step 6, a device code to step 4, to be typed again. At `stage` 2 Sync asks `heads` with that key. `00`: the writes of "`enrol` gives `00`", with the epoch and key ID of `heads`. `02`: back to the same step as before `stage` 2. `03`: the key is deleted, back to step 6. `05`, `06`: the lines of step 2, and the join stays at `stage` 2. |
 | `enrol` gives `00` | `stage` 3, `epoch`, `keyId`, `setupCode` gone, `deleteSetupCode`; the periodic work | As `stage` 2 above. At `stage` 3, the next start asks for the periodic work again. |
 | Rename | `devices/name`; `name`, `revision` | The next list takes the name from the server. |
 | Remove a device | `devices/remove`; `revision`, the ID into `removed` | The next `heads` shows another revision, and the list is read. |
-| Leave | `devices/remove` of this phone; the keys and the server's values go, `stage` 0 | The next request gets `03`. |
+| Leave | `devices/remove` of this phone; `stage` 0 and the server's values gone; then the keys | Before `stage` 0, the next request gets `03`. After it, the next start deletes the keys that no state names. |
 | Close | `closing`; `account/delete`; `stage` 4, `stop` 3, `closing` gone; the dialog of a close | The next request gets `06`. With `closing` set, that ends the close, with its dialog. |
-| A run, for one app | The protocol's steps; `head`, `good`, `on`, `work` of the app, `poked` cleared; at the end of a run that worked, `syncedAt` | The next run serves it again. |
+| A run, for one app | `poked` cleared; the protocol's steps; `head`, `good`, `on`, `work` of the app; at the end of a run that worked, `syncedAt` | The next run serves it again. |
 | The list of devices | `devices/remove` for each removed ID that is in again; `removed`, `revision`, `devicesAt`, `putBack` | The next read does it again. |
 
 ### A write fails
@@ -507,8 +510,9 @@ new phone joins as a new device.
 2. Removed in the manifest: `FOREGROUND_SERVICE` and WorkManager's
    `SystemForegroundService`; WorkManager's `DiagnosticsReceiver` and
    the receiver of `androidx.profileinstaller`, both open to callers
-   with `android.permission.DUMP`; `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`,
-   as in Water; the eight screens, the status provider and the two
+   with `android.permission.DUMP`; `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
+   and the emoji font loader of `androidx.emoji2`, as in every app; the
+   eight screens, the status provider and the two
    permissions of `core/security`. Kept: its `<queries>` for the
    handover ([permissions.md](../../security/permissions.md#the-handover-between-apps),
    point 7).
@@ -543,7 +547,7 @@ As in Water, and:
 
 | Module | Change |
 |---|---|
-| `core/crypto` | The device key, the name key and a sealed name ([Sync keys](../../security/crypto-design.md#sync-keys)). Random setup codes. |
+| `core/crypto` | The device key, the name key and a sealed name ([Sync keys](../../security/crypto-design.md#sync-keys)). Random setup codes. The cleanup at start ([Hardware keys](../../security/crypto-design.md#hardware-keys), rule 8) keeps the `shk.device.*` key that Sync's state names, though no keyset file names it, and deletes any other. crypto-design.md says so with the code. |
 | `core/security` | Handover format version 2, mode "Sign a device", with Sync the only caller that passes for it. The asking side (`SuiteApps`, `keepers`, `KeeperCall`) works for Sync. |
 | `core/sync-client` | Each data app's courier provider, and its calls to `poke` and `state`, when that app syncs |
 | `core/design`, `core/notify` | Nothing |
@@ -570,7 +574,9 @@ and the clock or the time zone changes
 ([When things go wrong](#when-things-go-wrong)). And five answers:
 
 1. Records go on any network. File chunks only on an unmetered network,
-   unless **Files on mobile data** is on. It is off at first.
+   unless **Files on mobile data** is on. It is off at first. So a
+   file's own record waits with its file, as the protocol holds it back
+   until its stream is on the server.
 2. No notification in version 1. A long transfer and a problem show on
    Apps and in each data app's **Sync** row. No `POST_NOTIFICATIONS`, no
    foreground service, and `core/notify` stays as it is
