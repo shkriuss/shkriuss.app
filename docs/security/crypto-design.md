@@ -15,8 +15,10 @@ follows this page.
 - Sealing file keys again in the database is built with Notes, the
   first app that stores files
   ([Notes' spec](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)).
-- Not built yet: the keys of sync ([Sync keys](#sync-keys)) and a new
-  recovery key ([A new recovery key](#a-new-recovery-key)).
+- Not built yet on the phones: the keys of sync
+  ([Sync keys](#sync-keys)) and a new recovery key
+  ([A new recovery key](#a-new-recovery-key)). The sync server checks
+  both signatures of sync, in `backend/`.
 - The code is `android/core/crypto`. It must follow this page exactly.
   If this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
@@ -702,8 +704,9 @@ When the app gets its recovery-key-derived keys:
 
 ## Sync keys
 
-Not built yet. What each key is for, how a device joins and what the
-server checks are in
+Not built yet on the phones. The server checks both signatures
+(`backend/src/signatures.ts`). What each key is for, how a device joins
+and what the server checks are in
 [sync-protocol.md](../architecture/sync-protocol.md#keys-and-identity).
 This section fixes the keys themselves. Decision:
 [ADR 0009](../adr/0009-sync-protocol-and-server.md), points 14 to 18.
@@ -812,10 +815,11 @@ stay as they are, with the changes below.
 5. The names of the request and of the result are fixed when the code
    is written, on this page first.
 
-Test vectors for the device ID, the account key, a statement, a
-signed request and a sealed name come with the code. They are computed
-twice, as the vectors below, and the server's tests check the same
-ones.
+Test vectors for the device ID, the account key, a statement and a
+signed request are in
+[Test vectors](#sync-the-account-key-a-statement-and-a-signed-request).
+The server's tests check them. The vector of a sealed name, and Tink's
+computation of the others, come with the code of `core/crypto`.
 
 ## Nonces and key IDs
 
@@ -2046,6 +2050,59 @@ blob, 157 bytes
 fc1c20c4584b5ea7f0ce51eb96e825c29ab93e3d2a16247d912331ec1ab09468
 3f263e4f8d759739b98b501e3f969f646a5d75b426ddefcf8c17facaf120d099
 de01854b108f58a9ff8768fca193f7fce8d937f5dc0b2efa4402b2edb7
+```
+
+### Sync: the account key, a statement and a signed request
+
+Computed with Python's `cryptography` package, 50.0.1, and again by the
+server's tests in Node.js
+([`backend/test/vectors.test.mjs`](../../backend/test/vectors.test.mjs)).
+The Worker's Web Crypto checks both signatures, and refuses the request
+signature with one changed byte. Tink's computation comes with
+`core/crypto`.
+
+The recovery key and its key ID are the ones of
+[Recovery key, words, key ID](#recovery-key-words-key-id). The device
+key is the P-256 key of RFC 6979, appendix A.2.5. Its signature below
+is the deterministic one of RFC 6979. A device's own signatures are
+random, so a test checks a signature, it does not compare it.
+
+```text
+account key      HKDF-SHA256(recovery key, salt empty,
+                 "shkriuss.app/v1/sync/account", 32)
+private          09a1f1161f66bb9f5b2222bd59305e2dc520b760cd602c035eb5bbbf9ead0ed4
+public           59f0ee643d495c2d326a58558728cb7a28536daa950bc8be80cff2e3eef0d3b2
+
+device key       c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721
+public, 65 bytes 0460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29f
+                 b67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d44622
+                 99
+device ID        b18b86ce1389e46de87aa4a5131ce83c
+
+server ID        0f0e0d0c0b0a09080706050403020100
+address          https://sync.example.workers.dev
+time             1767225600000 (2026-01-01T00:00:00Z)
+
+join statement, 135 bytes
+53484b53594e4301010f0e0d0c0b0a09080706050403020100b19d376f000001
+9b76daa8002068747470733a2f2f73796e632e6578616d706c652e776f726b65
+72732e6465760460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce6
+69622e60f29fb67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177
+a3c294d4462299
+
+its Ed25519 signature
+42f7cfec0f61f657951108eb309a24cd6b1f7af049cea9951dbfe232c7a0cf2d
+5fd7f6fc42cc00eb6bced8a54c0d139a9b5121953259cf55574844ec076e5907
+
+signed request   GET /v1/heads, no body, time 1767225660000
+bytes, 93 bytes
+53484b53594e4301100f0e0d0c0b0a09080706050403020100b18b86ce1389e4
+6de87aa4a5131ce83c0000019b76db92600100092f76312f6865616473e3b0c4
+4298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+its ECDSA signature, r then s
+2d55454e770f3f27f5cb83e3869fcb76acb563a7f86e0dbcecf2cef843825bf9
+b75946bff6aebbcb477595a46515b46e56580bf4b60b8ad9fdb5d31550b58f72
 ```
 
 ## What the tests must cover

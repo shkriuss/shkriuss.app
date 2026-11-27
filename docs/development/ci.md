@@ -1,8 +1,8 @@
 # Continuous integration
 
 The GitHub Actions workflows that check every pull request, the one that
-makes releases, the one that deploys the hub site, and the one that sends
-the apps' libraries to GitHub's dependency graph. GitHub Actions is
+makes releases, the ones that deploy the hub site and the sync server,
+and the one that sends the apps' libraries to GitHub's dependency graph. GitHub Actions is
 the authoritative build (section 13 of the [plan](../plan/PLAN.md),
 [ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)).
 
@@ -13,6 +13,7 @@ the authoritative build (section 13 of the [plan](../plan/PLAN.md),
 | Protected paths | [`protected-paths.yml`](../../.github/workflows/protected-paths.yml) | Every pull request, as `pull_request_target` | Labels a pull request `protected-paths` and keeps one comment listing its owner-only files, by CODEOWNERS on `main`. Never blocks a merge. |
 | Release | [`release.yml`](../../.github/workflows/release.yml) | By hand, on `main` | Builds an app twice and compares the builds. Signs it after the owner's approval, attests it and creates a draft release. See [release.md](release.md). |
 | Site | [`site.yml`](../../.github/workflows/site.yml) | Pull requests that change the site, every push to `main`, and by hand | Builds the hub site from `docs/` and `site/` and checks it. On `main` only, deploys it to the Cloudflare Worker `shkriuss-hub`, which serves static files only, and checks the live site and its security headers. See [site.md](site.md). |
+| Backend | [`backend.yml`](../../.github/workflows/backend.yml) | Pull requests that change the sync server, every push to `main`, and by hand | Type-checks and builds the sync server, and runs its tests in Miniflare. On `main` only, once the owner has set up Cloudflare, deploys it to the Cloudflare Worker `shkriuss-sync` and asks the live server for `info`. See [backend.md](backend.md). |
 | Dependency graph | [`dependency-graph.yml`](../../.github/workflows/dependency-graph.yml) | Every push to `main` that changes `android/`, and by hand. Never on pull requests | Lists the release runtime class path of every app, with dependency verification on, and sends it to GitHub's dependency graph, so that Dependabot alerts can name a library with a known vulnerability. See [Dependency graph](#dependency-graph). |
 
 How to install a preview on a phone is in
@@ -20,8 +21,6 @@ How to install a preview on a phone is in
 are and what they found is in [emulator-tests.md](emulator-tests.md). What
 the protected-paths flag protects against, and what it does not, is in
 [protected-paths.md](../security/protected-paths.md).
-
-Still to come (plan section 13): `backend`.
 
 ## Rules every workflow follows
 
@@ -42,15 +41,18 @@ The full list is in `.claude/rules/workflows.md`. In short:
    graph, "Submit" has `contents: write`, only to send the list to the
    dependency graph. It checks out nothing and runs no code of the
    build.
-4. No secrets, except in two steps. In Release, one step of the job "Sign"
-   gets the three secrets of the `release` environment. In Site, one step
-   of the job "Deploy" gets `CLOUDFLARE_API_TOKEN` of the `cloudflare`
-   environment. No `pull_request_target`, except
+4. No secrets, except in three steps. In Release, one step of the job
+   "Sign" gets the three secrets of the `release` environment. In Site,
+   one step of the job "Deploy" gets `CLOUDFLARE_API_TOKEN` of the
+   `cloudflare` environment. In Backend, one step of the job "Deploy the
+   server" gets `CLOUDFLARE_SYNC_API_TOKEN` of the same environment. No
+   `pull_request_target`, except
    in Protected paths, which never checks out, builds or runs anything from
    the pull request.
 5. Every job has a timeout and a concurrency group. A new push to a pull
    request cancels the older run. Protected paths, Release, Site's job
-   "Deploy" and Dependency graph's job "Submit" are the exceptions: their
+   "Deploy", Backend's job "Deploy the server" and Dependency graph's job
+   "Submit" are the exceptions: their
    runs wait for each other, so a run never stops half-way through
    writing.
 6. Values from the event, from files and from earlier steps reach a shell
@@ -74,6 +76,17 @@ Site has two more files outside its workflow file:
 - The deploy tool's pin, its install script and the Worker's
   configuration, in `.github/site-deploy/`. They are owner-only, like the
   workflow.
+
+Backend has two more:
+
+- The server, its tests and `check.sh`, in `backend/`. They are not
+  owner-only. They run only in the job "Check the server", which has no
+  secrets. The job "Deploy the server" builds the Worker again from
+  `main` and runs none of them.
+- The pins of its tools, their install script and the Worker's
+  configuration, in `.github/backend-tools/`. They are owner-only, like
+  the workflow. Wrangler would run a build command that a configuration
+  names, so the deploy reads no other.
 
 Dependency graph has one, for the same reason as the site generator:
 
@@ -469,6 +482,22 @@ in [site.md](site.md). Why it works this way is in
 [ADR 0022](../adr/0022-hub-site-generator.md) and
 [ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md).
 
+## Backend
+
+Two jobs: "Check the server" and "Deploy the server". Pull requests that
+change the server run only "Check the server", with no secrets.
+"Deploy the server" runs only on `main`, in the `cloudflare`
+environment, and runs no project code. Its token may only edit the one
+Worker of the sync server. It deploys nothing until the owner has set
+up Cloudflare. What each job does, and how to set up Cloudflare from a
+phone, are in [backend.md](backend.md). Why it works this way is in
+[ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md).
+
+"Check the server" is not a required check: it runs only on pull
+requests that change the server, so a required one would block every
+other pull request. It is not named "Check", which is CI's required
+check.
+
 ## Dependency graph
 
 The owner's decision on threat model point 4
@@ -498,9 +527,10 @@ What it does not hold, so no alert comes for it:
 - the actions of the workflows. GitHub reads them itself, but gives no
   alert for an action pinned to a commit, and every action here is.
 
-GitHub reads the lockfile of the site's deploy tool, Wrangler
-(`.github/site-deploy/package-lock.json`), by itself, so its alerts come
-without this workflow.
+GitHub reads the lockfiles of the site's deploy tool, Wrangler
+(`.github/site-deploy/package-lock.json`), and of the sync server's
+tools (`.github/backend-tools/package-lock.json`), by itself, so their
+alerts come without this workflow.
 
 Not used, and why:
 
@@ -572,9 +602,11 @@ allowed in the repository settings. Protected paths uses no action at all.
 Release uses the same commits of `checkout`, `upload-artifact` and
 `download-artifact`, plus `attest`. Site and Dependency graph use the same
 commits of `checkout`, `upload-artifact` and `download-artifact`, and no
-other action.
-Its deploy tool, Wrangler, is not an action: it is an npm package, pinned
-with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
+other action. Backend uses the same commit of `checkout`, and no other
+action.
+The deploy tool, Wrangler, is not an action: it is an npm package, pinned
+with a lockfile ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md),
+[ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md)).
 
 | Action | Version | Commit | Used for |
 |---|---|---|---|
@@ -628,12 +660,16 @@ Not used, and why:
    tool", which have no secrets. The `cloudflare` environment lets only `main` use its token. So
    a change to `site.yml`, to the generator or to the deploy tool reaches
    the token only after the owner merges it.
-5. In CI and PR preview, pull requests from forks get a read-only token
+5. Backend deploys only from `main`, in the same way. A pull request runs
+   its own copy of `backend.yml`, but only the job "Check the server",
+   which has no secrets. So a change to `backend.yml`, to the server or
+   to its tools reaches the token only after the owner merges it.
+6. In CI and PR preview, pull requests from forks get a read-only token
    from GitHub anyway. The repository settings decide whether a first-time
    contributor's run needs the owner's approval. Protected paths gets a
    token that can write the label and the comment, also for forks. That is
    why it never runs anything from the pull request.
-6. Dependency graph has no pull request trigger, and its job "List"
+7. Dependency graph has no pull request trigger, and its job "List"
    stops unless the branch is `main`. A pull request that changes the
    workflow or the snapshot script runs nothing. The change runs only
    after the owner merges it.

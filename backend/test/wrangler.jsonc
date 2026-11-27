@@ -1,0 +1,9 @@
+// Builds test/entry.ts, the Worker that the tests start in Miniflare. It
+// is the server of src/ with two things only tests need: a clock that
+// the test sets, and the count of D1's row writes. Never deployed.
+{
+  "name": "shkriuss-sync-test",
+  "main": "entry.ts",
+  "compatibility_date": "2026-10-01",
+  "send_metrics": false
+}

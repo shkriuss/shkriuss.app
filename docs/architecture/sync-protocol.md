@@ -5,12 +5,15 @@ through a server that the user runs and that is never trusted. Every
 byte that leaves a phone for sync, every call, and every rule a device
 follows.
 
-- Status: designed, not built. The points the owner decided are in
+- Status: the server is built, in `backend/`
+  ([backend.md](../development/backend.md)). The rest is designed, not
+  built. The points the owner decided are in
   [Decided by the owner](#decided-by-the-owner).
-- The code will be `backend/` (the server), `android/core/sync-client`
-  (what each data app does), `android/app/sync` (the Sync app), and new
-  parts of `android/core/crypto` and `android/core/security`. All of
-  it must follow this page exactly. If this page is wrong or unclear,
+- The code is `backend/` (the server). It will be
+  `android/core/sync-client` (what each data app does),
+  `android/app/sync` (the Sync app), and new parts of
+  `android/core/crypto` and `android/core/security`. All of it must
+  follow this page exactly. If this page is wrong or unclear,
   the fix is a change to this page first, agreed with the owner.
 - Decisions: [ADR 0009](../adr/0009-sync-protocol-and-server.md) (the
   protocol and the server) and
@@ -228,8 +231,9 @@ The body of a **new account key** statement:
    typed into the Sync app, in lower case.
 2. A statement names one server by its ID and its address. It is
    worth nothing at another server.
-3. A join statement is good for 10 minutes from its time. A new
-   account key statement has no end.
+3. A join statement is good for 10 minutes from its time. Its time
+   may also be up to 5 minutes ahead of the server's clock, as a
+   request's may. A new account key statement has no end.
 4. The same letters `SHKSYNC`, the version and a type byte also start
    what a device key signs ([Signed requests](#signed-requests)). The
    type byte keeps the three apart: the account key signs only types
@@ -286,7 +290,8 @@ The code is one of two kinds.
 
 Both use the letters `A` to `Z` without `I` and `O`, and the digits
 `2` to `9`. A setup code is for the first device of a new server, and
-for a user who has no device left.
+for a user who has no device left. The server ignores spaces and line
+breaks around the saved `SETUP_CODE`.
 
 The steps, on the device that joins:
 
@@ -685,7 +690,8 @@ The bytes that are signed:
 
 1. The signed part of the body is the whole body. The one exception
    is [`files/send`](#filessend), where it ends before the chunks.
-   With no body it is the SHA-256 of nothing.
+   With no body it is the SHA-256 of nothing. A GET has no body: one
+   with a body is answered `04`.
 2. The server checks, in this order: that it is not closed; that the
    device is one of its own and not removed; that the time is within
    5 minutes of its own clock; and the signature. For the signature
@@ -717,6 +723,12 @@ with one answer byte.
 | `0B` | Another epoch | The epoch, 16 bytes | Drops what it was doing. Every app starts a [comparison of everything](#comparing-everything). |
 | `0C` | Too much in one request | Nothing | Reads `info` again and asks for less |
 
+1. A path that does not start with `/v1/` is answered `01`. A call or
+   a method under `/v1/` that this page does not name is answered
+   `04`, or `06` on a closed server.
+2. The server answers `07 02` also when D1's row reads of the day are
+   used. Then too the device waits until 00:00 UTC.
+
 An answer with another status, or without a known answer byte, did
 not come from the Worker. Cloudflare sends such answers when the
 day's requests are used, when a request ran out of CPU time, and when
@@ -730,8 +742,8 @@ something is down.
    failed runs in a row, the Sync app tries only every 4 hours until
    one works. The user can always ask for a run.
 
-How the Sync app tells the first two apart is checked when the server
-is built ([Assumptions](#assumptions)).
+How the Sync app tells the first two apart is checked on the first
+deployed server ([Assumptions](#assumptions)).
 
 ### `info`
 
@@ -811,8 +823,9 @@ device. `POST /v1/devices/name`, with N (2 bytes, 52 to 211) and a
 sealed name, gives the calling device a new name. Both answer `00`
 and the account revision after the change (8 bytes), so that the
 device that made the change knows it ([`heads`](#heads), point 4).
-Removing a device that is removed already changes nothing: the
-answer is `00` and the revision as it is.
+Removing a device that is removed already, or that the server does
+not know, changes nothing: the answer is `00` and the revision as it
+is.
 
 ### `heads`
 
@@ -958,6 +971,9 @@ The answer:
    being deleted" that is more than 10 minutes old counts here as
    "its chunks were deleted"
    ([`files/delete`](#fileshave-filesfetch-filesdelete)).
+8. A batch that holds the same record twice is done in its order. If
+   the first is stored, the second finds a copy whose number is above
+   the batch's cursor, and gets `01`.
 
 ### `files/send`
 
@@ -984,7 +1000,12 @@ The answer:
 `POST /v1/files/have?app=<name>`: a count of 2 bytes, 1 to 256, and
 for each stream its file ID (16) and its hash (32). The answer is
 `00` and, for each stream, 4 bytes: how many of its chunks the server
-has, counted from chunk 0 without a gap.
+has, counted from chunk 0 without a gap. Counting costs one call to R2
+for each chunk the server has, and one more. One request may make at
+most 1,000 calls to Cloudflare's own services, so the server stops at
+900 calls to R2 and answers `0C`. The limit that `info` names keeps the
+files of today's apps below that
+([ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md), point 8).
 
 `POST /v1/files/fetch?app=<name>`: a count of 2 bytes, 1 to 256, and
 for each chunk its file ID (16), the stream's hash (32) and the
@@ -1581,9 +1602,10 @@ What that means:
    size, or millions of small records. The server answers "full"
    when D1 refuses a write. What the user can do then is in the
    self-hosting guide.
-8. **CPU time** cannot be shown in a local test. It is measured on a
-   deployed Worker on the free plan when the server is built. The
-   limits that `info` names are set by that measurement. They may
+8. **CPU time** cannot be shown in a local test. It is measured on
+   the first deployed Worker on the free plan, after the server is
+   built ([ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md),
+   point 7). The limits that `info` names are set by that measurement. They may
    only be lower than the numbers on this page, and they only say how
    many records go together. One request must always take one record
    of 524,288 bytes. If the measurement shows that it cannot, the
@@ -1831,7 +1853,12 @@ recovery key; any private key.
    would otherwise name the phone's model in it, which is also a
    device's first name.
 2. Anyone who knows the address can ask for `info`. They learn that
-   a sync server is there, its ID, and whether it is in use.
+   a sync server is there, its ID, and whether it is in use. With a
+   key of their own and a join statement under another key ID, they
+   also get `0A` from `enrol`, which names the current key ID
+   ([Joining](#joining), step 5.4). Decided by the owner: it stays so.
+   A device that joins with an old recovery key needs that answer, and
+   the key ID opens nothing.
 3. Someone who only watches the network sees that the Sync app talks
    to the server, when, and how much. Hiding sizes and timing is out
    of scope
@@ -1945,7 +1972,9 @@ The courier interface and the Sync app, on the emulators:
 ## Assumptions
 
 Things this page takes as true. Each is checked when its part is
-built. If one is wrong, the fix is a change to this page first.
+built, and those that need Cloudflare itself on the first deployed
+server ([ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md)). If
+one is wrong, the fix is a change to this page first.
 
 1. A call to a data app's content provider starts the app's process
    when it is not running. Whether that also holds for an app that
@@ -2048,6 +2077,7 @@ A stranger on the internet:
 | Attempt | How it fails |
 |---|---|
 | Asks for `info`. | **Does not fail.** They learn that a sync server is there, its ID, and whether it is in use. |
+| Sends `enrol` with a statement of a key of their own. | **Does not fail.** The answer `0A` names the current key ID: four public bytes that open nothing, but tie the user's data together. Nothing is stored. |
 | Finds the address and joins. | Needs a statement, so the words, and a code. |
 | Claims a new, empty server before the user does. | Needs the setup code, which is in the user's own dashboard. With the code: **does not fully fail.** They get an empty server. The user's own join is refused and says why, and the user deploys a new server. No data is there. |
 | Guesses a device code. | The statement is checked first. Then 5 tries in 10 minutes. |

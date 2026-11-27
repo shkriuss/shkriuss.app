@@ -80,6 +80,10 @@ detail is in [sync-protocol.md](../architecture/sync-protocol.md). 0005
 now says how the courier interface is protected, with no permission of
 the suite's own, as 0041 found for the handover. 0009 supersedes "never
 Sync" in points 1 and 7 of 0041.
+Record 0043 comes from Phase 5, step 2, the build of the sync server:
+its tools, its tests and its deploy. The owner made its choices and
+asked for its workflow on 2026-11-27. Claude proposed the details
+in the pull request of that step.
 
 How a record may be edited or replaced is in point 7 of
 [0001](0001-record-architecture-decisions.md).
@@ -128,3 +132,4 @@ How a record may be edited or replaced is in point 7 of
 | 0040 | [Minimum Android 15](0040-minimum-android-15.md) | Accepted |
 | 0041 | [The handover between apps](0041-the-handover-between-apps.md) | Accepted; "never Sync" in points 1 and 7 superseded by 0009 |
 | 0042 | [Wiping the content of deleted records](0042-wiping-the-content-of-deleted-records.md) | Accepted |
+| 0043 | [The sync server's tools, tests and deploy](0043-backend-tools-tests-and-deploy.md) | Accepted |

@@ -21,7 +21,8 @@ These add to CLAUDE.md. They never replace it.
 - No `pull_request_target`, except in `protected-paths`, which never checks
   out, builds or runs code from the pull request.
 - There are no repository-level secrets. Use only the environment secrets
-  that `docs/development/release.md` and `docs/development/site.md` name.
+  that `docs/development/release.md`, `docs/development/site.md` and
+  `docs/development/backend.md` name.
   Never print a secret.
 - Emulator tests, signing and releases run only here, never in the cloud
   environment.

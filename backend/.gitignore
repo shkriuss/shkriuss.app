@@ -1,0 +1,7 @@
+# Copies that .github/backend-tools/install.sh makes, and what it installs.
+/package.json
+/package-lock.json
+/node_modules/
+# What Wrangler builds and keeps locally.
+/build/
+/.wrangler/
