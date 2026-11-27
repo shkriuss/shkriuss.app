@@ -201,6 +201,41 @@ class StreamsTest : SyncTest() {
         assertTrue("the stream stays", id in tablet.storedStreams())
     }
 
+    @Test
+    fun inAnAppThatDoesNotWipeADeletedFileIsRemovedOnTheOtherDevicesToo() = runBlocking {
+        val phone = device("phone", wipes = false)
+        val tablet = device("tablet", wipes = false)
+        val file = phone.addFile("photo.jpg", bytes)
+        phone.runUntilQuiet()
+        tablet.runUntilQuiet()
+        assertTrue(file.record.id in tablet.storedStreams())
+
+        clock.advanceBy(10)
+        phone.deleteFile(file.record.id)
+        phone.runUntilQuiet()
+        tablet.runUntilQuiet()
+        assertEquals(phone.records(), tablet.records())
+        assertFalse("the deleted record kept its stream part, and the copy went all the same", file.record.id in tablet.storedStreams())
+    }
+
+    @Test
+    fun inAnAppThatDoesNotWipeADeletedFilesRecordNeverWaitsForItsStream() = runBlocking {
+        val phone = device("phone", wipes = false)
+        val tablet = device("tablet", wipes = false)
+        val file = phone.addFile("photo.jpg", bytes)
+        phone.runUntilQuiet()
+        tablet.runUntilQuiet()
+
+        // After a comparison no stream is known to be on the server. The deletion goes all the same.
+        phone.client.compare(phone.call())
+        clock.advanceBy(10)
+        phone.deleteFile(file.record.id)
+        phone.runUntilQuiet()
+        tablet.runUntilQuiet()
+        assertTrue(tablet.database.attachments().find(file.record.id)?.record?.deletedAt != null)
+        assertEquals(phone.records(), tablet.records())
+    }
+
     /** The tablet deletes the file; the phone brings it back, with a later edit. */
     private suspend fun bringBack(beforeTheDeletion: Boolean, whileItRuns: Boolean) {
         val (phone, tablet, id) = fileOnTheServer()

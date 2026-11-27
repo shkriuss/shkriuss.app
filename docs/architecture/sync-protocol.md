@@ -1282,8 +1282,9 @@ the records it stands for can never be apart
 4. It leaves out a record that is held back. Held back are:
    - in an app that wipes, a deleted record that is not wiped yet
      ([Conflict rules](#conflict-rules), point 9);
-   - a file's record whose stream the server is not known to have
-     ([Files](#files));
+   - the record of a file that is not deleted, whose stream the
+     server is not known to have ([Files](#files)). A deleted file
+     needs no stream on the server, only the hash its record names;
    - a file's record whose wrapped key does not name the key ID the
      app syncs with;
    - every file's record while a file key is sealed by a key that
@@ -2094,6 +2095,7 @@ one is wrong, the fix is a change to this page first.
 | How the list of devices names a device | A name that the server stores sealed. The Sync app holds one key for it, made from the recovery key, which opens nothing else ([The name key](#the-name-key)). |
 | A deletion and an edit with the same `updatedAt` | The edit wins, on every device ([Conflict rules](#conflict-rules)). |
 | A hostile server that shows a new device a record that was deleted since | Kept as a known limit of this version. Nothing proves to a new device that it was shown everything ([Attacks considered](#attacks-considered), [Open questions](#open-questions), question 5). |
+| The stop after a refusal `02`, a page's bytes, a blob whose header names a newer version, a deleted file's record | The stop ends with another key ID of the server, another server, epoch or device, or a comparison the user asks for ([Sending](#sending)). A page whose blobs pass 524,288 bytes, with more than one record, is dropped ([A page](#a-page)). Such a blob is "damaged" ([What a reader checks](#what-a-reader-checks)). A deleted file's record never waits for its stream ([Sending](#sending)). |
 | How the tables of sync in a data app are written ([data.md](data.md#rules-for-daos), point 5) | As the change counter is: only `SyncStore` of `core/sync-client` writes them, with SQL on the connection of its transaction. No DAO reads or writes them, and `checkDaoRules` stays as it is ([ADR 0044](../adr/0044-sync-tables-in-each-data-app.md)). |
 | A server with no account, which the setup code alone protects | Kept. The setup code is not bound to the recovery key. Someone who has the code and is faster than the user gets an empty server, and the user deploys a new one ([Joining](#joining)). |
 

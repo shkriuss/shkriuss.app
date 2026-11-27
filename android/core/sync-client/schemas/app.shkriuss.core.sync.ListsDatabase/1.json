@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "ac74042e8be606761f5d3568077a9c85",
+    "identityHash": "5d687145bae49986a0a81568eb1e16a9",
     "entities": [
       {
         "tableName": "item",
@@ -169,7 +169,7 @@
       },
       {
         "tableName": "sync_state",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `isOn` INTEGER NOT NULL, `serverId` TEXT, `epoch` TEXT, `deviceId` TEXT, `cursor` INTEGER NOT NULL, `known` INTEGER NOT NULL, `syncKeyId` INTEGER, `sendMark` INTEGER NOT NULL, `comparison` INTEGER NOT NULL, `stopped` INTEGER NOT NULL, `stoppedKeyId` INTEGER, `dataVersion` INTEGER NOT NULL, `plaintextVersion` INTEGER NOT NULL, `skippedFrom` INTEGER, `skippedAnotherKey` INTEGER NOT NULL, `skippedDamaged` INTEGER NOT NULL, `skippedNewer` INTEGER NOT NULL, `skippedNotValid` INTEGER NOT NULL, `tooLarge` INTEGER NOT NULL, `refused` INTEGER NOT NULL, `wrongStreams` INTEGER NOT NULL, `lastToken` INTEGER NOT NULL, `sealFileKeys` INTEGER NOT NULL, `afterImportDue` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `isOn` INTEGER NOT NULL, `serverId` TEXT, `epoch` TEXT, `deviceId` TEXT, `cursor` INTEGER NOT NULL, `known` INTEGER NOT NULL, `syncKeyId` INTEGER, `sendMark` INTEGER NOT NULL, `comparison` INTEGER NOT NULL, `stopped` INTEGER NOT NULL, `stoppedKeyId` INTEGER, `dataVersion` INTEGER NOT NULL, `plaintextVersion` INTEGER NOT NULL, `skippedFrom` INTEGER, `skippedAnotherKey` INTEGER NOT NULL, `skippedDamaged` INTEGER NOT NULL, `skippedNewer` INTEGER NOT NULL, `skippedNotValid` INTEGER NOT NULL, `tooLarge` INTEGER NOT NULL, `refused` INTEGER NOT NULL, `wrongStreams` INTEGER NOT NULL, `lastToken` INTEGER NOT NULL, `sealFileKeys` INTEGER NOT NULL, `afterImportDue` INTEGER NOT NULL, `countedThrough` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -312,6 +312,12 @@
           {
             "fieldPath": "afterImportDue",
             "columnName": "afterImportDue",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "countedThrough",
+            "columnName": "countedThrough",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -545,7 +551,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac74042e8be606761f5d3568077a9c85')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5d687145bae49986a0a81568eb1e16a9')"
     ]
   }
 }

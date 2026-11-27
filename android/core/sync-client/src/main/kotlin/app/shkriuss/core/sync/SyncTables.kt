@@ -67,6 +67,8 @@ class SyncStateRow(
     val sealFileKeys: Boolean,
     /** Whether the app still has to set its alarms again after the last page of a fetch. */
     val afterImportDue: Boolean,
+    /** The cursor before an update moved it back: a record at or below it was counted when it was skipped first. */
+    val countedThrough: Long,
 )
 
 /** **To send**: the records that must go to the server, "ordinary" (1) or "comparison" (2). */

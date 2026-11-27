@@ -1521,10 +1521,12 @@ Status: **Met for what is built.**
   `ProcessBuilder.start`
   ([build.md](../development/build.md#the-webview-and-code-loading-rules)).
 - MASWE-0045: as CODE-3.
-- Not built yet: what the Sync app and a data app take in from the
-  server. A page of records is checked record by record, and a file is
-  kept only if its length and its hash are the ones its sealed record
-  names ([sync-protocol.md](../architecture/sync-protocol.md#what-a-reader-checks)).
+- What a data app takes in from the server, in `core/sync-client`: a
+  page of records is checked as a whole and then record by record, and
+  a file is kept only if its length and its hash are the ones its
+  sealed record names
+  ([sync-protocol.md](../architecture/sync-protocol.md#what-a-reader-checks)).
+  Not built yet: what the Sync app takes in.
 
 ### Privacy
 

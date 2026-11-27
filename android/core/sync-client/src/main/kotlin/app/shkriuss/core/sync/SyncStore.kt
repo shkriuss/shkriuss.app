@@ -60,6 +60,7 @@ internal data class SyncState(
     val stoppedKeyId: Int?,
     val plaintextVersion: Int,
     val afterImportDue: Boolean,
+    val countedThrough: Long,
 ) {
     override fun toString(): String = "SyncState(cursor $cursor, known $known, comparison $comparison, stopped $stopped)"
 }
@@ -120,17 +121,17 @@ internal object SyncSql {
     private const val STATE_COLUMNS =
         "isOn, serverId, epoch, deviceId, cursor, known, syncKeyId, sendMark, comparison, stopped, dataVersion, " +
             "skippedFrom, skippedAnotherKey, skippedDamaged, skippedNewer, skippedNotValid, tooLarge, refused, wrongStreams, lastToken, sealFileKeys, " +
-            "stoppedKeyId, plaintextVersion, afterImportDue"
+            "stoppedKeyId, plaintextVersion, afterImportDue, countedThrough"
 
     const val CREATE_STATE =
-        "INSERT INTO $STATE (id, $STATE_COLUMNS) VALUES (1, 0, NULL, NULL, NULL, 0, 0, NULL, 0, 0, 0, ?1, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, ?2, 0) " +
+        "INSERT INTO $STATE (id, $STATE_COLUMNS) VALUES (1, 0, NULL, NULL, NULL, 0, 0, NULL, 0, 0, 0, ?1, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, ?2, 0, 0) " +
             "ON CONFLICT (id) DO NOTHING"
     const val READ_STATE = "SELECT $STATE_COLUMNS FROM $STATE WHERE id = 1"
     const val WRITE_STATE =
         "UPDATE $STATE SET isOn = ?, serverId = ?, epoch = ?, deviceId = ?, cursor = ?, known = ?, syncKeyId = ?, sendMark = ?, " +
             "comparison = ?, stopped = ?, dataVersion = ?, skippedFrom = ?, skippedAnotherKey = ?, skippedDamaged = ?, " +
             "skippedNewer = ?, skippedNotValid = ?, tooLarge = ?, refused = ?, wrongStreams = ?, lastToken = ?, sealFileKeys = ?, " +
-            "stoppedKeyId = ?, plaintextVersion = ?, afterImportDue = ? WHERE id = 1"
+            "stoppedKeyId = ?, plaintextVersion = ?, afterImportDue = ?, countedThrough = ? WHERE id = 1"
 
     const val SEND_ORDINARY =
         "INSERT INTO $SEND (recordId, kind, position) VALUES (?, 1, ?) " +
@@ -217,6 +218,7 @@ internal class SyncStore(private val connection: PooledConnection) {
                 stoppedKeyId = it.longOrNull(21)?.toInt(),
                 plaintextVersion = it.getLong(22).toInt(),
                 afterImportDue = it.getLong(23) != 0L,
+                countedThrough = it.getLong(24),
             )
         }
     }
@@ -247,6 +249,7 @@ internal class SyncStore(private val connection: PooledConnection) {
             it.bindLongOrNull(22, state.stoppedKeyId?.toLong())
             it.bindLong(23, state.plaintextVersion.toLong())
             it.bindLong(24, if (state.afterImportDue) 1 else 0)
+            it.bindLong(25, state.countedThrough)
             it.step()
         }
     }

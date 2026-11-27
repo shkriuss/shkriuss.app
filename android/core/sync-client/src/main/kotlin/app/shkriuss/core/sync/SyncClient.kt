@@ -482,6 +482,7 @@ class SyncClient(
             // The app was updated: what was skipped as newer may open now.
             val back = state.skippedFrom?.let { minOf(state.cursor, it - 1) } ?: state.cursor
             state = state.copy(
+                countedThrough = maxOf(state.countedThrough, state.cursor),
                 dataVersion = maxOf(state.dataVersion, content.dataVersion),
                 plaintextVersion = maxOf(state.plaintextVersion, SyncFormat.PLAINTEXT_VERSION),
                 stopped = if (state.stopped == Stop.NEWER) Stop.NONE else state.stopped,
@@ -565,6 +566,7 @@ class SyncClient(
         return state.copy(
             cursor = 0,
             known = 0,
+            countedThrough = 0,
             sendMark = mark,
             comparison = Comparison.FETCHING,
             skippedFrom = null,
@@ -659,14 +661,17 @@ class SyncClient(
      * plaintext needs. Held back are a deleted record that is not wiped
      * yet in an app that wipes, every file's record while a file key is
      * sealed by a key that exists only on this phone, a file's record
-     * whose wrapped key does not name [syncKeyId], and one whose stream
-     * the server is not known to have. The stream of a file's record is
+     * whose wrapped key does not name [syncKeyId], and the record of a
+     * file that is not deleted whose stream the server is not known to
+     * have. The stream of a file's record is
      * listed from the first look on, so that it can go up while the
      * record waits for another reason.
      */
     private suspend fun SyncStore.sendableStream(record: SyncRecord, syncKeyId: KeyId): Sendable? {
         if (content.wipes && record.isDeleted && !record.wiped) return null
         val part = record.streamLength?.let { length ->
+            // A deleted file needs no stream on the server, only the hash that its plaintext names.
+            if (record.isDeleted) return@let StreamPart(length, storedStreamHash(record) ?: return null)
             val stream = stream(record.id)
             if (stream == null) {
                 putStream(StreamState.of(record.id, length, here = content.hasStream(record.id, length)))
@@ -738,15 +743,15 @@ class SyncClient(
         }
         val whole = when (val decoded = SealedPlaintext.decode(plaintext, content.dataVersion)) {
             SealedPlaintext.Decoded.Newer -> return Step(newer(state, came), false)
-            SealedPlaintext.Decoded.NotValid -> return Step(notValid(state), false)
+            SealedPlaintext.Decoded.NotValid -> return Step(notValid(state, came), false)
             is SealedPlaintext.Decoded.Whole -> decoded
         }
         val fields = whole.entry.fields
-        if (fields.id != came.id || !fields.timesAreWithinLimits) return Step(notValid(state), false)
-        val record = content.read(whole.dataVersion, whole.entry) ?: return Step(notValid(state), false)
+        if (fields.id != came.id || !fields.timesAreWithinLimits) return Step(notValid(state, came), false)
+        val record = content.read(whole.dataVersion, whole.entry) ?: return Step(notValid(state, came), false)
         val stream = whole.stream
         val streamFits = if (stream == null) record.streamLength == null else record.streamLength == stream.length
-        if (record.entry.fields != fields || !streamFits) return Step(notValid(state), false)
+        if (record.entry.fields != fields || !streamFits) return Step(notValid(state, came), false)
 
         removeDamaged(came.id)
         val stored = content.find(came.id)
@@ -793,6 +798,13 @@ class SyncClient(
     private suspend fun SyncStore.tookFile(record: SyncRecord, part: StreamPart?) {
         if (!record.isFile) return
         val stream = stream(record.id)
+        if (record.isDeleted) {
+            // Every device removes its own copy of the stream when it takes the deleted record, wiped or not: once
+            // this transaction has ended (finishPending). The row keeps the stream's hash for a record brought back.
+            val known = stream ?: StreamState.of(record.id, part?.length ?: 0, here = false)
+            putStream(known.copy(hash = part?.let { Hex.of(it.hash) } ?: known.hash, toRemove = true))
+            return
+        }
         if (part != null) {
             val hash = Hex.of(part.hash)
             val doesNotFit = (stream?.hash != null && stream.hash != hash) || (stream?.doesNotFit == true && stream.hash == hash)
@@ -811,17 +823,13 @@ class SyncClient(
                     recordDeleted = false,
                 ),
             )
-        } else if (record.isDeleted) {
-            // Every device removes its own copy of the stream when it takes the deleted record: once this
-            // transaction has ended (finishPending). The row keeps the stream's hash for a record brought back later.
-            putStream((stream ?: StreamState.of(record.id, 0, here = false)).copy(toRemove = true))
         }
     }
 
     private suspend fun SyncStore.anotherKey(state: SyncState, came: PageRecord, syncsWithServersKey: Boolean): SyncState {
         // An app that syncs with the server's current key answers with its own version, sealed with that key.
         if (syncsWithServersKey) content.find(came.id)?.let { sendOrdinary(came.id, it.changeNumber) }
-        return state.copy(skippedAnotherKey = state.skippedAnotherKey + 1, skippedFrom = lowest(state.skippedFrom, came.number))
+        return state.copy(skippedAnotherKey = state.skippedAnotherKey + counted(state, came), skippedFrom = lowest(state.skippedFrom, came.number))
     }
 
     private suspend fun SyncStore.damaged(state: SyncState, came: PageRecord): SyncState {
@@ -831,7 +839,7 @@ class SyncClient(
             sendOrdinary(came.id, stored.changeNumber)
             addDamaged(came.id)
         }
-        return state.copy(skippedDamaged = state.skippedDamaged + 1)
+        return state.copy(skippedDamaged = state.skippedDamaged + counted(state, came))
     }
 
     private fun newer(state: SyncState, came: PageRecord): SyncState = state.copy(
@@ -840,7 +848,15 @@ class SyncClient(
         stopped = Stop.NEWER,
     )
 
-    private fun notValid(state: SyncState): SyncState = state.copy(skippedNotValid = state.skippedNotValid + 1)
+    private fun notValid(state: SyncState, came: PageRecord): SyncState = state.copy(skippedNotValid = state.skippedNotValid + counted(state, came))
+
+    /**
+     * 1 for a skipped record that was not counted before, else 0. An update
+     * moves the cursor back, and a record at or below the cursor of before
+     * was counted when it was first skipped. The count of "newer" starts
+     * again at the update, so it counts every such record once more.
+     */
+    private fun counted(state: SyncState, came: PageRecord): Long = if (came.number > state.countedThrough) 1 else 0
 
     private fun lowest(first: Long?, second: Long): Long = if (first == null) second else minOf(first, second)
 

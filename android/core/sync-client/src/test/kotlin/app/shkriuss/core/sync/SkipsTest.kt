@@ -206,6 +206,24 @@ class SkipsTest : SyncTest() {
     }
 
     @Test
+    fun aSkippedRecordIsCountedOnceAlsoWhenAnUpdateFetchesItAgain() = runBlocking {
+        val newer = device("newer", dataVersion = 2)
+        val phone = device("phone", dataVersion = 1)
+        newer.addItem("Pinned").also { newer.pinItem(it.record.id) }
+        newer.runUntilQuiet()
+        val damaged = phone.seal(phone.content.syncRecordOf(ItemEntity(TestDevice.fields("0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0ff", 1_000), 0, "Milk", false)))
+            .also { it[it.size - 1] = (it[it.size - 1] + 1).toByte() }
+        server.put(LISTS.value, "0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0ff", damaged)
+        phone.fetchAll()
+        assertEquals(1L, phone.status().counts.damaged)
+
+        // The update fetches again from just below the newer record, and meets the damaged one again.
+        val updated = updated(phone, dataVersion = 2)
+        updated.fetchAll()
+        assertEquals("counted once", 1L, updated.status().counts.damaged)
+    }
+
+    @Test
     fun hostilePagesAreDroppedAndNothingIsWritten() = runBlocking {
         val phone = device("phone")
         val tablet = device("tablet")
