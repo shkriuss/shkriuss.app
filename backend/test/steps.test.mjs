@@ -110,3 +110,26 @@ test("a join between a call's read and its write: the guard stops the write, and
     assert.equal(answer.answer, DONE);
     assert.deepEqual(answer.results, [{ result: 0x00, number: 1 }], "stored once, at the second try");
   }));
+
+test("a new epoch between a fetch's page and its write of Told: nothing is told, and the fetch gets 0B", () =>
+  withServer(async (server) => {
+    const setup = await serverInUse(server);
+    const other = await joinAnother(server, setup);
+    await send(server, setup, setup.device, "water", {
+      records: [{ id: random(16), blob: sealedRecord(setup.account.keyId) }],
+    });
+    const epoch = random(16);
+    // Fetch: 1 the server's row, 2 the page, 3 the write of Told. Another
+    // device makes a new epoch just before 3.
+    const query = `/v1/changes?app=water&since=0&known=0&epoch=${hex(setup.epoch)}&most=100`;
+    const answer = await signed(server, setup.serverId, other, "GET", query, {
+      headers: between(3, `UPDATE server SET epoch = unhex('${hex(epoch)}')`, "DELETE FROM told"),
+    });
+    assert.equal(answer.answer, OTHER_EPOCH);
+    assert.deepEqual(answer.reader.take(16), epoch);
+    assert.deepEqual(
+      await server.sql("SELECT count(*) AS n FROM told WHERE device = unhex(?1)", hex(other.id)),
+      [{ n: 0 }],
+      "the new epoch remembers nothing told from the old one",
+    );
+  }));

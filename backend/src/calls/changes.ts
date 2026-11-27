@@ -20,6 +20,7 @@ import {
   MARK_DELETING,
   MARK_NONE,
   deviceStillIn,
+  guard,
   run,
   serverUnchanged,
   type Context,
@@ -92,7 +93,12 @@ export async function fetchChanges(call: SignedCall): Promise<Uint8Array> {
   const cut = page.length < candidates.length;
   const through = cut ? Number(page[page.length - 1]?.["number"]) : head;
   if (through > told) {
+    // A new epoch made since the page was read forgot what the server told
+    // every device. Then nothing is remembered from this page: the call
+    // starts again, and answers 0B.
     await run(db, [
+      guard(db, "(SELECT hex(epoch) FROM server WHERE one = 1) = upper(?1)", serverEpoch.toHex()),
+      deviceStillIn(db, device.id),
       db
         .prepare(
           `INSERT INTO told (device, app, number) VALUES (unhex(?1), ?2, ?3)
