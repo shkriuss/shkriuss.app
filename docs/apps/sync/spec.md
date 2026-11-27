@@ -69,6 +69,14 @@ deleted. A join left at `stage` 1 for a day is cancelled in the same
 way at the next start of Sync. A join at `stage` 2 never is: the next
 start first asks `heads` ([Stopped between two writes](#stopped-between-two-writes)).
 
+The secret in the Worker outlives a cancel. So from the moment a setup
+code first shows, `deleteSetupCode` holds that server's address, and no
+cancel, no one-day rule and no other server takes it out. For each
+address a line shows with **Done**: on step 1 before the phone joins,
+and on Apps after it. "Delete the secret SETUP_CODE of the Worker at
+sync.example.workers.dev in the Cloudflare dashboard, so that no one can
+use it." Only its **Done** takes the address out.
+
 1. **Sync.** "Sync keeps your apps the same on your phones and tablets,
    through a server in your own Cloudflare account. The server gets only
    what it cannot read. Set up the server first: the self-hosting guide
@@ -137,8 +145,9 @@ start first asks `heads` ([Stopped between two writes](#stopped-between-two-writ
 
 8. **Delete the setup code.** "This phone has joined. Now delete the
    secret SETUP_CODE of your Worker in the Cloudflare dashboard, so that
-   no one can use it again." **Done** goes to Apps. Until **Done**, Apps
-   shows this line with **Done**.
+   no one can use it again." **Done** takes this server's address out of
+   `deleteSetupCode` and goes to Apps. Back goes to Apps and keeps the
+   line there.
 
 ### Apps
 
@@ -146,7 +155,8 @@ start first asks `heads` ([Stopped between two writes](#stopped-between-two-writ
    `syncedAt`), "Not synced yet.", or "Syncing" while a run goes. A
    [problem](#problems) takes its place, with its button.
 2. **Sync now**. While a run goes it reads "Syncing" and does nothing.
-3. The line of join step 8, while it waits for **Done**.
+3. A line to delete the setup code for each address in
+   `deleteSetupCode`.
 4. Section **Apps**: a row for each data app that passes the courier
    check ([sync-protocol.md](../../architecture/sync-protocol.md#no-permission-of-our-own)),
    by name in the phone's language order, ties by package name. An app
@@ -349,7 +359,7 @@ fixes what a run does, in which order. Here is the rest.
 | `name` | This phone's name, as last sealed | 1 to 40 code points, at most 160 bytes in UTF-8, one line, no space at either end |
 | `codeKind` | 1 a device code, 2 a setup code, as chosen at step 3 | 1 or 2, from step 3 until the join ends. A device code itself is never stored. |
 | `setupCode` | The setup code of this join | 26 characters of the code alphabet. From join step 5 until the join ends or is cancelled. |
-| `deleteSetupCode` | The line of step 8 waits | True or false |
+| `deleteSetupCode` | The addresses of the servers whose Workers hold a setup code this phone showed, each until its **Done** | 0 to 8 addresses, each as `address` and each once. One is added when a setup code first shows for it. Neither a value of the join nor of the server: a cancel, the one-day rule, another server, Leave and Join again leave them. With 8 waiting, step 5 makes no code: "Delete the setup codes that Sync lists first." |
 | `removed` | IDs of devices seen as removed | 0 to 10,000 IDs, each once, never this phone's. None is ever dropped. |
 | `filesOnMobile` | The setting | True or false. False at first. |
 | `head.<app>`, `good.<app>` | The head `heads` last named, and when a run last ended well | `<app>` an app name. 0 to 9,223,372,036,854,775,807. A time. |
@@ -430,11 +440,11 @@ so after a stop Sync does the step again.
 | Action | Writes, in order | If Sync stops in between |
 |---|---|---|
 | Server address | `stage` 1, `joinedAt`, `address`, `serverId`, `limits` | The join opens at step 2, filled in. Another server ID drops the old key and setup code. |
-| Cancel a join | `stage` 0 and the join's values gone; then the device key and the name key | At the next start, a `stage` 0 with a device key or name key left deletes them. |
-| Setup code | `setupCode`, before it shows | The same code shows again. |
+| Cancel a join | `stage` 0 and the join's values gone, `deleteSetupCode` kept; then the device key and the name key | At the next start, a `stage` 0 with a device key or name key left deletes them. |
+| Setup code | `setupCode` and `deleteSetupCode` in one write, before it shows | The same code shows again. |
 | The device key | `deviceAlias`, then the key, then `deviceId` | An alias with no key: the key is made then. |
 | The keeper's answer | The name key; `stage` 2 and `name`; `enrol` | Before `stage` 2: a setup code goes back to step 6, a device code to step 4, to be typed again. At `stage` 2 Sync asks `heads` with that key. `00`: the writes of "`enrol` gives `00`", with the epoch and key ID of `heads`. `02`: back to the same step as before `stage` 2. `03`: the key is deleted, back to step 6. `05`: the clock line of step 2, and the join stays at `stage` 2. `06`: the join is cancelled, and step 2 says the server was closed; no more requests go to it. |
-| `enrol` gives `00` | `stage` 3, `epoch`, `keyId`, `setupCode` gone, `deleteSetupCode` if this join showed a setup code; the periodic work | As `stage` 2 above. At `stage` 3, the next start asks for the periodic work again. |
+| `enrol` gives `00` | `stage` 3, `epoch`, `keyId`, `setupCode` gone; the periodic work | As `stage` 2 above. At `stage` 3, the next start asks for the periodic work again. |
 | Rename | `devices/name`; `name`, `revision` | The next list takes the name from the server. |
 | Remove a device | The ID into `removed`, before the request; `devices/remove`; `revision` | The ID is kept either way. If the request did not reach the server, the next read of the list finds the device in and removes it again. |
 | Leave | `devices/remove` of this phone; `stage` 0 and the server's values gone; then the keys | Before `stage` 0, the next request gets `03`. After it, the next start deletes the keys that no state names. |
@@ -616,7 +626,8 @@ Choices this page made without a decision by the owner on that point.
 13. WorkManager's `DiagnosticsReceiver` removed, as Water removes the
     receiver of `androidx.profileinstaller`.
 14. A join left at `stage` 1 for a day is cancelled at the next start,
-    so no setup code stays behind.
+    so no setup code stays on the phone. The line to delete it from the
+    Worker stays until **Done**, for at most 8 servers.
 15. The words of every screen, step and dialog.
 
 ## Open
