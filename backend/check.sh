@@ -1,8 +1,11 @@
 #!/bin/bash
 # Checks the sync server: the type check, the two builds, and every
-# test in Miniflare. Run it from backend/, after the tools are installed
-# with: bash ../.github/backend-tools/install.sh .
-# CI runs the same in the job "Check" of .github/workflows/backend.yml.
+# test in Miniflare. It runs from its own folder, wherever it is started.
+# From the repository root, install the tools once, then run it:
+#   bash .github/backend-tools/install.sh backend
+#   backend/check.sh
+# CI runs the same in the job "Check the server" of
+# .github/workflows/backend.yml.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 export WRANGLER_SEND_METRICS=false

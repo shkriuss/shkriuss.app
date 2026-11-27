@@ -65,4 +65,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 - Apps: GPL-3.0. The full text is in [LICENSE](LICENSE).
 - Sync backend: AGPL-3.0. The full text is in [backend/LICENSE](backend/LICENSE).
 
-Open: whether the apps use "GPL-3.0-only" or "GPL-3.0-or-later".
+Open: whether the apps use "GPL-3.0-only" or "GPL-3.0-or-later", and
+whether the sync backend uses "AGPL-3.0-only" or "AGPL-3.0-or-later".

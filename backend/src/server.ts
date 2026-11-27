@@ -57,7 +57,7 @@ const CALLS = new Map<string, Call>([
   ["POST /v1/account/delete", { run: accountDelete }],
 ]);
 
-/** How often a call starts again when its guard finds that the state changed. */
+/** How many times a call runs at most, while its guard keeps finding that the state changed. */
 const ATTEMPTS = 3;
 
 /**
@@ -79,10 +79,9 @@ export async function handle(request: Request, context: Context): Promise<Respon
 async function answer(request: Request, context: Context): Promise<Uint8Array> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/v1/")) throw notThisVersion();
-  if (url.pathname === "/v1/info") {
-    if (request.method !== "GET") throw new LayoutError("method");
-    return info(context);
-  }
+  // Any other method on info goes on below, like any call the page does
+  // not name: `06` on a closed server, else `04`.
+  if (url.pathname === "/v1/info" && request.method === "GET") return info(context);
   const isEnrol = request.method === "POST" && url.pathname === "/v1/enrol";
   const call = CALLS.get(`${request.method} ${url.pathname}`) ?? null;
   const headers = readSignedHeaders(request);

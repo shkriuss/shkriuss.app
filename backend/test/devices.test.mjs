@@ -142,6 +142,7 @@ test("a new account key, signed by the current one, replaces it; the devices sta
     const body = newKeyStatement(setup, next);
     const answer = await signed(server, setup.serverId, setup.device, "POST", "/v1/account-key", { body });
     assert.equal(answer.answer, DONE);
+    assert.equal(answer.rowWrites, 1, "the server's row");
     const heads = await readHeads(server, setup, setup.device);
     assert.deepEqual(heads.keyId, next.keyId);
     assert.equal(heads.revision, 2);

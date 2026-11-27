@@ -313,6 +313,29 @@ test("files/have counts 128 files of Notes' largest size, 6 chunks each, in one 
     assert.deepEqual(answer.counts, Array(128).fill(6));
   }));
 
+test("files/have stops at 900 calls to R2 with 0C, below Cloudflare's 1,000 for one request", () =>
+  withServer(async (server) => {
+    const setup = await serverInUse(server);
+    const bucket = await server.files();
+    const withChunks = async (count) => {
+      const file = { fileId: random(16), hash: random(32) };
+      const names = Array.from({ length: count }, (_, chunk) => `notes/${hex(file.fileId)}/${hex(file.hash)}/${chunk}`);
+      for (let i = 0; i < names.length; i += 100) {
+        await Promise.all(names.slice(i, i + 100).map((name) => bucket.put(name, "x")));
+      }
+      return file;
+    };
+    // 899 chunks take 900 calls: one for each chunk, and one more that finds none.
+    const fits = await withChunks(899);
+    const counted = await have(server, setup, setup.device, "notes", [fits]);
+    assert.equal(counted.answer, DONE);
+    assert.deepEqual(counted.counts, [899]);
+    // 900 chunks would take 901.
+    const over = await withChunks(900);
+    const refused = await have(server, setup, setup.device, "notes", [over]);
+    assert.deepEqual([...refused.bytes], [TOO_MUCH]);
+  }));
+
 test("files/fetch gives many chunks of one request, each read before the next is asked for", () =>
   withServer(async (server) => {
     const setup = await serverInUse(server);

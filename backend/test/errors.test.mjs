@@ -55,7 +55,7 @@ test("any other fault is HTTP 500 with no body, which a device takes as not from
     assert.equal(answer.bytes.length, 0);
   }));
 
-test("a write whose guard did not hold starts again from its first read, at most three times", () =>
+test("a write whose guard did not hold starts again from its first read, and the call runs at most three times", () =>
   withServer(async (server) => {
     const setup = await serverInUse(server);
     const guard = "D1_ERROR: shk-guard: SQLITE_CONSTRAINT";
