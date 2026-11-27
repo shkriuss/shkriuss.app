@@ -126,7 +126,8 @@ Back to the step before. Back from the first leaves the app.
    | `0A`, naming an older key that the keeper holds | Sync asks the keeper again ([point 8](../../architecture/sync-protocol.md#how-the-sync-app-gets-its-statement-and-its-name-key)). |
    | `0A`, any other key | "This server belongs to another recovery key, with the short name 1a2b3c4d. Join with an app that keeps that key, or deploy a new server." |
    | `05`, `06`, `01` | The lines of step 2 |
-   | `03`, or `04` twice | "The server refused this phone. Try again later." |
+   | `03` | The key was removed: Sync deletes it, and the join goes back to step 6 with a new key. |
+   | `04` twice | "The server refused this phone. Try again later." |
    | No answer | "Could not reach the server." **Try again** sends the same `enrol`, or goes back to step 6 when the statement is older than 10 minutes. |
 
 8. **Delete the setup code.** "This phone has joined. Now delete the
@@ -164,9 +165,11 @@ Back to the step before. Back from the first leaves the app.
    | It has changes or files to move | "Has changes to send." or "Has files to move." |
    | Otherwise | "Up to date." |
 
-   A second line while the seven counts of
-   [`status`](../../architecture/sync-protocol.md#what-status-gives)
-   add up to more than 0: "12 records skipped."
+   A second line from the counts of
+   [`status`](../../architecture/sync-protocol.md#what-status-gives),
+   each part only when above 0: "12 records skipped" (the four reasons
+   of skipping), "3 records not sent" (too large, or refused with `03`)
+   and "1 file did not match" (fetched streams), joined by " · ".
 6. A tap opens a dialog with the app's name, its lines, "Last synced
    today at 14:05." or "Not synced yet.", and **Compare everything**,
    **Open Water** and **Close**. **Compare everything** shows only while
@@ -250,7 +253,7 @@ The device line on Apps shows the first that applies, as the protocol's
 | The device key is gone, or Sync's state cannot be read | "Sync lost this phone's key for the server. Join again, then remove the old entry of this phone on another device." | **Join again** | The same |
 | Version (`01`) | "Update the Sync app." or "Update your server." | **Try again**, for the server | Sync is updated, or `info` names version 1 |
 | The clock (`05`) | "This phone's clock is off by 7 minutes. Set the time in Android's settings." | **Try again** | A request passes. Each run tries once. |
-| A fault (`04` twice, or an answer that breaks a layout or a limit) | "Sync has a fault: the server refused a request." | **Try again** | A request passes. The next run tries. |
+| A fault (`04` twice, or an answer that breaks its layout or a limit, except `info`'s three limits) | "Sync has a fault: the server refused a request." | **Try again** | A request passes. The next run tries. |
 | The day's limit (`07 02`, or Cloudflare's) | "The server's limit for today is used. Sync goes on at 04:00." | | 00:00 UTC |
 | Full (`08`) | "The server is full. Changes wait on this phone. The self-hosting guide says what to do." | **Try again** | A batch is stored. Fetching goes on. Sending is tried once a day and on **Try again**. |
 | Three failed runs in a row | "Could not reach the server since 14:05. Sync tries every 4 hours." | **Try again** | A run works |
@@ -286,7 +289,9 @@ fixes what a run does, in which order. Here is the rest.
    unless **Files on mobile data** is on. Sync checks before each. If
    the network turns metered during a run, the run moves no more chunks
    and does the rest.
-5. After `07` and Cloudflare's day limit, no request until 00:00 UTC.
+5. After `07 02` and Cloudflare's day limit, no request until 00:00
+   UTC. After `07 01`, only batches of a comparison wait until then;
+   ordinary batches still go.
    After three failed runs, one every 4 hours. **Sync now** skips the
    4-hour wait, not 00:00 UTC, and follows **Files on mobile data**.
 6. `info` is read when the phone joins, after `0C`, on **Try again**
@@ -317,10 +322,11 @@ fixes what a run does, in which order. Here is the rest.
 | `serverId`, `epoch` | The server ID from `info`; the epoch from `enrol` or `heads` | 32 hex digits. From `stage` 1 and 3 on. |
 | `keyId` | The server's current key ID | 8 hex digits, from `stage` 3 on |
 | `revision` | The account revision last seen | 0 to 9,223,372,036,854,775,807 |
-| `limits` | The three limits of the last `info` | Records 1 to 100, bytes 65,536 to 524,288, file items 1 to 256 |
+| `limits` | The three limits of the last `info` | Records 1 to 100, bytes 65,536 to 524,288, file items 1 to 256. Stored as the nearest bound. |
 | `halved`, `halvedAt` | How often requests were halved for CPU time, and when | 0 to 7. A time. |
 | `deviceAlias`, `deviceId` | The alias's number, and the device ID | 1 to 2,147,483,647. 32 hex digits: always the first 16 bytes of the SHA-256 of the public key under that alias. |
 | `name` | This phone's name, as last sealed | 1 to 40 code points, at most 160 bytes in UTF-8, one line, no space at either end |
+| `codeKind` | 1 a device code, 2 a setup code, as chosen at step 3 | 1 or 2, from step 3 until the join ends. A device code itself is never stored. |
 | `setupCode` | The setup code of this join | 26 characters of the code alphabet. From join step 5 until the join ends or is cancelled. |
 | `deleteSetupCode` | The line of step 8 waits | True or false |
 | `removed` | IDs of devices seen as removed | 0 to 1,000 IDs, each once, never this phone's |
@@ -339,9 +345,10 @@ fixes what a run does, in which order. Here is the rest.
    step of Sync is one write of the file.
 2. A value that cannot be read, or is outside its limits, counts as
    missing: 0, false or "never" for an app, off for the setting. At
-   `stage` 3 or 4, a missing `address`, `serverId`, `epoch`,
-   `deviceAlias` or `deviceId`, a device key that is gone, or one whose
-   public key does not give `deviceId`, counts as a lost key: `stop` 5.
+   `stage` 3, and at `stage` 4 with `stop` 4, a missing `address`,
+   `serverId`, `epoch`, `deviceAlias` or `deviceId`, a device key that
+   is gone, or one whose public key does not give `deviceId`, counts as
+   a lost key: `stop` 5. A removed or closed phone needs no key.
 3. Never stored: the recovery words, a key that opens data, plaintext,
    a record ID. Batches, pages and chunks pass through memory and
    pipes, never Sync's storage. Android's backup is off.
@@ -385,7 +392,9 @@ rules that join two values. Sync never writes one outside them. Sync
 has no backup and so no restore, and Android's backup is off: nothing
 brings a value in. What the server and the data apps give is checked
 against the same limits and the protocol's layouts, and refused: an
-answer of the server as a fault, a page by the data app.
+answer of the server as a fault, a page by the data app. The one
+exception: a limit of `info` outside its bounds counts as the nearest
+bound ([`info`](../../architecture/sync-protocol.md#info)).
 
 ### Stopped between two writes
 
@@ -399,7 +408,7 @@ so after a stop Sync does the step again.
 | Server address | `stage` 1, `address`, `serverId`, `limits` | The join opens at step 2, filled in. Another server ID drops the old key and setup code. |
 | Setup code | `setupCode`, before it shows | The same code shows again. |
 | The device key | `deviceAlias`, then the key, then `deviceId` | An alias with no key: the key is made then. |
-| The keeper's answer | The name key; `stage` 2 and `name`; `enrol` | Before `stage` 2: the keeper is asked again. At `stage` 2 Sync asks `heads` with that key: `00` is joined, with its epoch and key ID; `02` goes back to step 6. |
+| The keeper's answer | The name key; `stage` 2 and `name`; `enrol` | Before `stage` 2: a setup code goes back to step 6, a device code to step 4, to be typed again. At `stage` 2 Sync asks `heads` with that key: `00` is joined, with its epoch and key ID; `02` goes back to the same step as before `stage` 2. |
 | `enrol` gives `00` | `stage` 3, `epoch`, `keyId`, `setupCode` gone, `deleteSetupCode`; the periodic work | As `stage` 2 above. |
 | Rename | `devices/name`; `name`, `revision` | The next list takes the name from the server. |
 | Remove a device | `devices/remove`; `revision`, the ID into `removed` | The next `heads` shows another revision, and the list is read. |
@@ -567,7 +576,8 @@ Choices this page made without a decision by the owner on that point.
 3. **Copy** for the setup code, marked sensitive. Code screens block
    screenshots.
 4. **Compare everything** per app, after a question.
-5. Skipped records as one sum. What to do comes from `status` byte 58.
+5. The counts of `status` as three sums: skipped, not sent, files that
+   did not match. What to do comes from `status` byte 58.
 6. Removed devices are not listed. Last seen is the server's UTC date.
 7. The address rules: `/` and `:443` dropped, no IP address.
 8. At most 1,000 devices from a list and 1,000 removed IDs.
