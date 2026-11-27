@@ -204,10 +204,16 @@ test("closing the server deletes its devices, codes and account key, and it stay
       body: random(16),
     });
     assert.deepEqual([...wrongId.bytes], [DOES_NOT_CHECK]);
+    await signed(server, setup.serverId, setup.device, "POST", "/v1/enrol-code");
+    const [{ rows }] = await server.sql(
+      `SELECT (SELECT count(*) FROM device) + (SELECT count(*) FROM told) + (SELECT count(*) FROM device_code)
+         + (SELECT count(*) FROM used_setup_code) + 1 AS rows`,
+    );
     const closed = await signed(server, setup.serverId, setup.device, "POST", "/v1/account/delete", {
       body: setup.serverId,
     });
     assert.equal(closed.answer, DONE);
+    assert.equal(closed.rowWrites, rows, "one for each row deleted, and the server's row");
     assert.deepEqual(await server.sql("SELECT count(*) AS n FROM device"), [{ n: 0 }]);
     assert.deepEqual(await server.sql("SELECT count(*) AS n FROM device_code"), [{ n: 0 }]);
     assert.deepEqual(await server.sql("SELECT account_key, key_id FROM server"), [{ account_key: null, key_id: null }]);

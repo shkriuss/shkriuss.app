@@ -362,3 +362,10 @@ test("a user with no device left joins again with a new setup code", () =>
     const stranger = await join(server, setup.serverId, newAccount(), await newDevice(), { code: ascii(fresh) });
     assert.equal(stranger.answer, OTHER_ACCOUNT, "a server with an account checks the statement before the code");
   }));
+
+test("an enrol body over the length any enrol has is 04, not 0C", () =>
+  withServer(async (server) => {
+    const { id } = await server.info();
+    const answer = await signed(server, id, await newDevice(), "POST", "/v1/enrol", { body: new Uint8Array(1_100_001) });
+    assert.deepEqual([...answer.bytes], [DOES_NOT_CHECK]);
+  }));

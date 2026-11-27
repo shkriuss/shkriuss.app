@@ -6,12 +6,19 @@ export const LOWEST_VERSION = 1;
 export const HIGHEST_VERSION = 1;
 
 /**
- * What `info` names. The protocol's largest values. The measurement of CPU
- * time on a deployed Worker may lower them ("The free plan", point 8).
+ * What `info` names. The measurement of CPU time on a deployed Worker may
+ * lower them ("The free plan", point 8). Records and bytes are the
+ * protocol's largest values.
  */
 export const MOST_RECORDS = 100;
 export const MOST_BYTES = 524_288;
-export const MOST_FILE_ITEMS = 256;
+
+/**
+ * File items are 128, not the format's 256, decided by the owner: `files/have`
+ * reads each chunk a stream has and one more. Notes' largest file, 25 MB,
+ * has 6 chunks, so 128 such files take 896 calls to R2, inside `R2_CALLS`.
+ */
+export const MOST_FILE_ITEMS = 128;
 
 /** A sealed record is 50 to 524,288 bytes ("Send", result 03). */
 export const SEALED_RECORD_MIN = 50;

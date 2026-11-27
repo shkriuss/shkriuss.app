@@ -16,7 +16,7 @@ test("info names the versions, the server ID, the clock, the state and the limit
     assert.equal(info.state, 0x00, "no account yet");
     assert.equal(info.mostRecords, 100);
     assert.equal(info.mostBytes, 524288);
-    assert.equal(info.mostFileItems, 256);
+    assert.equal(info.mostFileItems, 128, "the owner's choice: 128 Notes files of 25 MB fit the R2 calls of one request");
     assert.equal(info.reader.remaining, 0);
   }));
 

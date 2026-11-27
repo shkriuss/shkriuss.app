@@ -6,6 +6,9 @@
 // - `shk-test-d1-error` with `shk-test-d1-error-at`: the D1 batches of
 //   those numbers, counted from 1 and parted by commas, fail with that
 //   message.
+// - `shk-test-sql` with `shk-test-sql-at`: a JSON list of SQL statements
+//   that run, as one batch, just before the server's D1 batch of that
+//   number, as another request would between two of its steps.
 // The answer carries `shk-test-row-writes`: D1's own count of the rows
 // that the request wrote.
 
@@ -24,10 +27,13 @@ export default {
     let batches = 0;
     const failAt = (request.headers.get("shk-test-d1-error-at") ?? "").split(",").map(Number);
     const failWith = request.headers.get("shk-test-d1-error") ?? "";
+    const sqlAt = Number(request.headers.get("shk-test-sql-at") ?? "0");
+    const sql = JSON.parse(request.headers.get("shk-test-sql") ?? "[]") as string[];
     const db: Db = {
       prepare: (query) => env.DB.prepare(query),
       batch: async <T>(statements: D1PreparedStatement[]) => {
         batches += 1;
+        if (batches === sqlAt) await env.DB.batch(sql.map((query) => env.DB.prepare(query)));
         if (failAt.includes(batches)) throw new Error(failWith);
         const results = await env.DB.batch<T>(statements);
         for (const result of results) rowWrites += result.meta.rows_written ?? 0;

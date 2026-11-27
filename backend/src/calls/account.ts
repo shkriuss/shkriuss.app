@@ -2,7 +2,7 @@
 // (sync-protocol.md: "Joining", `enrol`, `enrol-code`, `account-key`,
 // `account/delete`).
 
-import { DONE, OTHER_ACCOUNT, REMOVED, Refusal, TOO_MUCH, WRONG_CODE } from "../answers";
+import { DONE, OTHER_ACCOUNT, REMOVED, Refusal, WRONG_CODE } from "../answers";
 import { LayoutError, Reader, Writer, ascii, fromD1Hex, sameBytes, sha256 } from "../bytes";
 import {
   CODE_ALPHABET,
@@ -80,7 +80,8 @@ export async function enrol(call: EnrolCall): Promise<Uint8Array> {
   const now = context.now();
   // 1. The server is not closed (the router), and the time.
   checkClock(headers.time, now);
-  if (call.body === TOO_LONG) throw new Refusal(TOO_MUCH);
+  // No enrol body is near the limit, and 0C is not among enrol's answers.
+  if (call.body === TOO_LONG) throw new LayoutError("enrol body too long");
   readQuery(url, []);
   const body = readEnrolBody(call.body);
   const statement = readStatement(body.statement);

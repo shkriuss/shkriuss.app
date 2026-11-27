@@ -280,3 +280,35 @@ test("a request deletes no chunk later than 5 minutes after it set its mark", ()
     assert.equal(second.mark, 1, "its mark stays, and is good for nothing after 10 minutes");
     assert.deepEqual((await have(server, setup, setup.device, "notes", [files[1]])).counts, [1]);
   }));
+
+test("a file request of more items than info names, 128, is 0C", () =>
+  withServer(async (server) => {
+    const setup = await serverInUse(server);
+    for (const [path, size] of [
+      ["have", 48],
+      ["fetch", 52],
+      ["delete", 24],
+    ]) {
+      const body = new Writer().u16(129).bytes(random(129 * size)).finish();
+      const answer = await signed(server, setup.serverId, setup.device, "POST", `/v1/files/${path}?app=notes`, { body });
+      assert.deepEqual([...answer.bytes], [TOO_MUCH], path);
+    }
+    const files = Array.from({ length: 129 }, () => stream(1));
+    const send = await sendChunks(server, setup, setup.device, "notes", files.map((file) => chunkItems(file)[0]));
+    assert.deepEqual([...send.bytes], [TOO_MUCH], "send");
+  }));
+
+test("files/have counts 128 files of Notes' largest size, 6 chunks each, in one request", () =>
+  withServer(async (server) => {
+    const setup = await serverInUse(server);
+    const bucket = await server.files();
+    const files = Array.from({ length: 128 }, () => ({ fileId: random(16), hash: random(32) }));
+    for (const file of files) {
+      for (let chunk = 0; chunk < 6; chunk++) {
+        await bucket.put(`notes/${hex(file.fileId)}/${hex(file.hash)}/${chunk}`, "x");
+      }
+    }
+    const answer = await have(server, setup, setup.device, "notes", files);
+    assert.equal(answer.answer, DONE);
+    assert.deepEqual(answer.counts, Array(128).fill(6));
+  }));

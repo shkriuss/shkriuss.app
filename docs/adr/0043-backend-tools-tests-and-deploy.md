@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-11-27
-- Source: the owner's four choices for Phase 5, step 2, the build of
+- Source: the owner's choices for Phase 5, step 2, the build of
   `backend/` ([PROMPTS.md](../development/PROMPTS.md)), on 2026-11-27,
   and the owner's sentence in the same session: "I am the owner and I
   ask you to add the workflow .github/workflows/backend.yml, which
@@ -101,9 +101,15 @@
 7. Decided by the owner: the measurement of CPU time on a deployed
    Worker ([sync-protocol.md](../architecture/sync-protocol.md#the-free-plan),
    point 8) comes in a pull request of its own, after the first deploy.
-   Until then `info` names the protocol's own limits. No device can use
-   a server before the Sync app exists.
-8. The Worker logs nothing: Cloudflare's Workers Logs and Logpush are off
+   Until then `info` names the protocol's own limits for records and
+   bytes. No device can use a server before the Sync app exists.
+8. Decided by the owner: `info` names 128 file items, not 256.
+   `files/have` reads each chunk that a stream has, and one more, and
+   one request may make 1,000 calls to Cloudflare's own services. Notes'
+   largest file, 25 MB, has 6 chunks, so 128 such files take 896 calls
+   to R2. The server stops at 900 calls to R2 in one request and answers
+   `0C`, which today no request within the limit reaches.
+9. The Worker logs nothing: Cloudflare's Workers Logs and Logpush are off
    in `wrangler.jsonc`, and the code writes no log.
 
 ## Options rejected
@@ -127,6 +133,13 @@
   `main` holds, whatever a test did.
 - **Measuring CPU time in this pull request.** The owner chose a pull
   request of its own.
+- **One R2 list for each stream in `files/have`.** One call for each
+  stream, but a list is one of R2's writing operations, of the
+  1,000,000 a month, and the protocol counts a reading operation for
+  each chunk asked. The owner chose 128 items.
+- **Keeping 256 items, with `0C` meaning "ask for fewer streams".** A
+  change to the protocol page and to the Sync app. The owner chose 128
+  items.
 
 ## Consequences
 
@@ -145,6 +158,9 @@
   reads the lockfile for security alerts by itself.
 - The tests do not measure CPU time. The measurement sets the limits of
   `info` ([sync-protocol.md](../architecture/sync-protocol.md#the-free-plan)).
+- An app whose files have more than 6 chunks, such as Drive or Photos,
+  needs the number of file items, or the way `files/have` counts, decided
+  again before it syncs.
 - A user who forks the repository to run a server of their own sets up
   the same names in their own Cloudflare account and their own
   `cloudflare` environment. The self-hosting guide, `docs/self-hosting/`,

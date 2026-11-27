@@ -81,8 +81,8 @@ now says how the courier interface is protected, with no permission of
 the suite's own, as 0041 found for the handover. 0009 supersedes "never
 Sync" in points 1 and 7 of 0041.
 Record 0043 comes from Phase 5, step 2, the build of the sync server:
-its tools, its tests and its deploy. The owner made its four choices
-and asked for its workflow on 2026-11-27. Claude proposed the details
+its tools, its tests and its deploy. The owner made its choices and
+asked for its workflow on 2026-11-27. Claude proposed the details
 in the pull request of that step.
 
 How a record may be edited or replaced is in point 7 of
