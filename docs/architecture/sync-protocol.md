@@ -1152,7 +1152,7 @@ the signature of the account key the server has now (64 bytes).
 
 | Where | What | Written |
 |---|---|---|
-| D1, one row | The server ID, the epoch, the state, the account public key, the current key ID, the account revision | When it is first run, on a new epoch, on closing, and whenever a device joins, is renamed or removed, a setup code is used or the account key changes |
+| D1, one row | The server ID, the epoch, the state, the account public key, the current key ID, the account revision, the version of its tables | When it is first run, on a new epoch, on closing, and whenever a device joins, is renamed or removed, a setup code is used or the account key changes |
 | D1, a row for each device | Its ID, public key, sealed name, state, when added, last day seen | On join, rename, remove, and once on each day the device calls |
 | D1, a row for each app | The app's head | With every stored batch |
 | D1, a row for each device and app | The highest number the server told it | With every page and every stored batch that moves it |

@@ -191,7 +191,8 @@ title.
 
 ## Sync, later
 
-Sync is decided, but not built yet. This is what is decided:
+The sync server is built. The Sync app is not, so nothing syncs yet.
+This is what is decided:
 
 1. Only the Sync app will use the network. The data apps will hand it
    their data already locked, and it cannot open it.

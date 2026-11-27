@@ -308,6 +308,7 @@ test("a device that knows more than the server told it makes a new epoch", () =>
     await server.sql("UPDATE told SET number = 1");
     const after = await fetchPage(server, setup, other, "water", { since: 3, known: 3 });
     assert.equal(after.answer, OTHER_EPOCH);
+    assert.equal(after.rowWrites, 3, "the server's row, and the two rows of what it told the devices");
     const epoch = after.reader.take(16);
     assert.notDeepEqual(epoch, setup.epoch);
     const heads = await readHeads(server, { ...setup, epoch }, setup.device);

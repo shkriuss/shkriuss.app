@@ -14,10 +14,11 @@ does not. It ends with the OWASP MASVS controls and every open question.
 - What exists today: Catalog, Water, Reminders, Tasks, Notes, and the
   core modules ([modules.md](../architecture/modules.md)). Water is the
   first data app, Reminders the second, Tasks the third and Notes the
-  fourth. There is no Sync
-  app and no sync server yet. Where this page speaks of sync, it
-  describes what is decided for it, not what is built. The handover
-  between apps is built. What each app stores is in the
+  fourth. The sync server is built, in `backend/`, and so is what each
+  data app does for sync, in `core/sync-client`. There is no Sync app
+  yet, so no app syncs. Where this page speaks of the Sync app and the
+  content provider of each data app, it describes what is decided for
+  them, not what is built. The handover between apps is built. What each app stores is in the
   [data inventory](data-inventory.md).
 
 ## At a glance
@@ -420,8 +421,8 @@ under MASVS.
 Each user runs the sync server in their own Cloudflare account (plan
 section 7). Whoever controls that server or that account, Cloudflare
 included, is this attacker
-([ADR 0009](../adr/0009-sync-protocol-and-server.md)). Nothing of sync is
-built yet.
+([ADR 0009](../adr/0009-sync-protocol-and-server.md)). The server is
+built, in `backend/`. No app syncs yet.
 
 What stops it:
 
@@ -979,7 +980,7 @@ How this fits with an unlocked phone in an attacker's hands:
 
 ## What the sync server and the network can still learn
 
-Nothing of sync is built. This section says what follows from the
+No app syncs yet. This section says what follows from the
 design ([sync-protocol.md](../architecture/sync-protocol.md#what-the-server-can-still-learn) has
 the whole table).
 

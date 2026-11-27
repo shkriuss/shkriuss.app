@@ -24,6 +24,10 @@ is in [sync-protocol.md](../architecture/sync-protocol.md).
 | `src/index.ts` | The Worker. It passes the bindings and the clock to the server. |
 | `src/server.ts` | The router, and the checks of a signed request in their order |
 | `src/calls/` | One file for each group of calls: `info`, joining and the account, the devices, the records, the files |
+| `src/call.ts` | What a call gets from the router, and the check of a request's time |
+| `src/request.ts` | The three headers of a signed request, the query and the body, each read strictly |
+| `src/bytes.ts` | The byte layouts: reading and writing a body, and hex |
+| `src/answers.ts` | The answer bytes, and how a refusal becomes an answer |
 | `src/store.ts` | The D1 tables, the guard, and how D1's refusals become answers |
 | `src/signatures.ts` | The bytes that are signed, and the two signature checks |
 | `src/limits.ts` | Every number of the protocol that the server keeps to |
@@ -40,8 +44,8 @@ a step open while it decides. So:
    write batch. The guard is an insert into the view `guard`, whose
    trigger stops the batch unless the condition holds: for example, that
    the server's row is still the one that was read. Then D1 rolls the
-   whole batch back, and the call starts again from its first read, at
-   most three times.
+   whole batch back, and the call starts again from its first read. A
+   call runs at most three times.
 3. A rule of the protocol that a write must keep, such as "only if the
    copy's number is at or below the cursor", is in the SQL of the write
    itself. The code checks afterwards that D1 did what the rule says.
@@ -214,6 +218,13 @@ set-up.
    workflow**.
 2. Wait for **Deploy the server** to finish. Its summary names the
    address, the version, and "The server answers info: no account yet."
+   On this first deploy, the log of the step **Deploy to the Cloudflare
+   Worker** may warn: "Skipping automatic provisioning for the following
+   bindings because Wrangler does not have permission to check whether
+   the resource exists", naming R2. That is expected: the token may not
+   read R2, so Wrangler cannot check that the bucket is there. Check in
+   the dashboard that the bucket `shkriuss-sync` exists
+   ([The bucket](#3-the-bucket)).
 3. Write down anything that did not match these steps, so Claude can fix
    this page.
 

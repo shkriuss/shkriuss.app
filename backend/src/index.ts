@@ -3,7 +3,7 @@
 // ciphertext and is never trusted. What it does, byte by byte:
 // docs/architecture/sync-protocol.md.
 //
-// Licensed AGPL-3.0, see LICENSE in this folder.
+// Licensed AGPL-3.0, see backend/LICENSE.
 
 import { handle } from "./server";
 

@@ -120,8 +120,9 @@
    largest file, 25 MB, has 6 chunks, so 128 such files take 896 calls
    to R2. The server stops at 900 calls to R2 in one request and answers
    `0C`, which today no request within the limit reaches.
-9. The Worker logs nothing: Cloudflare's Workers Logs and Logpush are off
-   in `wrangler.jsonc`, and the code writes no log.
+9. The Worker logs nothing: Cloudflare's Workers Logs, its invocation
+   logs, its traces and Logpush are each off by name in `wrangler.jsonc`,
+   and the code writes no log.
 10. Decided by the owner: eight points that sync-protocol.md left open
     are written on that page as the server answers them, under their
     calls. Among them: a GET with a body, a path outside `/v1/`, D1's

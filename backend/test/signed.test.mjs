@@ -160,6 +160,8 @@ test("a closed server is 06 to every request but info, without checking who asks
       ["GET", "/v1/heads"],
       ["POST", "/v1/enrol"],
       ["GET", "/v1/nothing"],
+      // A method under /v1/ that the page does not name, here on info.
+      ["POST", "/v1/info"],
     ]) {
       assert.deepEqual([...(await server.send(method, path)).bytes], [CLOSED], path);
       const answer = await signed(server, setup.serverId, stranger, method, path);
