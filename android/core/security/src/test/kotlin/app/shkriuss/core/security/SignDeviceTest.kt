@@ -92,7 +92,7 @@ class SignDeviceTest {
             "Catalog" to signed("app.shkriuss.catalog", certificate),
         ).forEach { (what, other) -> assertFalse(what, SuitePeers.isSyncApp(water, other)) }
         assertFalse("a real Sync for a preview", SuitePeers.isSyncApp(signed("app.shkriuss.water.preview", certificate), signed("app.shkriuss.sync", certificate)))
-        assertFalse("Sync asks only data apps", SuitePeers.isSyncApp(signed("app.shkriuss.sync", certificate), signed("app.shkriuss.sync", certificate)))
+        assertFalse("not the app itself", SuitePeers.isSyncApp(signed("app.shkriuss.sync", certificate), signed("app.shkriuss.sync", certificate)))
         assertNull("Sync never gets keys", SuitePeers.peerName(water, signed("app.shkriuss.sync", certificate)))
     }
 

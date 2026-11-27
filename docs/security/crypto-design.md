@@ -911,10 +911,12 @@ How a data app signs:
 
 The status provider of ADR 0041, point 13, also answers the Sync app.
 Its answer is still version 1. It names the key ID of the app's keys
-whenever it has them, and says separately whether it keeps the key. An
-app of an older version names the key ID only when it keeps the key.
-So the Sync app lists keepers, and, with none, the apps that have keys,
-for the words.
+whenever it has them, and says separately whether it keeps the key. So
+the Sync app lists keepers, and, with none, the apps that have keys, for
+the words. A data app of an older version does not know the Sync app as
+a caller: its status provider gives Sync no answer, and its handover
+screen answers `REFUSED`. Sync's join screens say what Sync shows for
+such an app ([Sync's specification](../apps/sync/spec.md#the-join-steps)).
 
 Test vectors for the device ID, the account key, a statement, a signed
 request, the name key and a sealed name are in

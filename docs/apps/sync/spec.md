@@ -569,7 +569,7 @@ As in Water, and:
 
 | Module | Change |
 |---|---|
-| `core/crypto` | The device key, the name key and a sealed name ([Sync keys](../../security/crypto-design.md#sync-keys)). Random setup codes. The cleanup at start ([Hardware keys](../../security/crypto-design.md#hardware-keys), rule 8) keeps the `shk.device.*` key that Sync's state names, though no keyset file names it, and deletes any other. crypto-design.md says so with the code. |
+| `core/crypto` | The device key, the name key and a sealed name ([Sync keys](../../security/crypto-design.md#sync-keys)). Random setup codes. The cleanup at start ([Hardware keys](../../security/crypto-design.md#hardware-keys), rule 8) leaves every `shk.device.*` key alone. At each start, after it, Sync calls `deleteOtherDeviceKeys` with the number `deviceAlias` holds, which deletes every other device key. |
 | `core/security` | Handover format version 2, mode "Sign a device", with Sync the only caller that passes for it. The asking side (`SuiteApps`, `keepers`, `KeeperCall`) works for Sync. |
 | `core/sync-client` | Each data app's courier provider, and its calls to `poke` and `state`, when that app syncs |
 | `core/design`, `core/notify` | Nothing |

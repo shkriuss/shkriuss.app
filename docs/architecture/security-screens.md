@@ -815,7 +815,9 @@ file says that.
   with the caller that Android names, not one that the call names.
   Which apps are listed as keepers. The result callback gets an answer
   while the screen is stopped and leaves nothing of it in the saved
-  state.
+  state. For the Sync app: the screen, the status provider and the list
+  of apps with keys as Android answers them, every Sync that is refused,
+  and a signed join read after Android made Sync's screen anew.
 - `HandoverRulesTest`: who may take part in a handover, every refused
   app, how a keeper reads a request, how an asking app reads every
   answer and checks the keeper again, and what the status provider says

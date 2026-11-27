@@ -102,8 +102,9 @@ same: "Whoever has the words can read your backups and your synced data"
 2. They wrap the app's keysets, which are stored as files in the app's
    no-backup folder ([crypto-design.md](crypto-design.md#where-keys-are-stored)).
 3. For sync, each device gets a signing key that cannot leave it, in
-   the Sync app ([crypto-design.md](crypto-design.md#sync-keys)). It is
-   not built yet.
+   the Sync app ([crypto-design.md](crypto-design.md#sync-keys)).
+   `core/crypto` makes and uses it; the Sync app itself is not built
+   yet.
 
 ### The signing key
 

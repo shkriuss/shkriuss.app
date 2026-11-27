@@ -212,15 +212,16 @@ internal object SuitePeers {
     }
 
     /**
-     * True if [other] is the Sync app for [own]: exactly `app.shkriuss.sync`,
-     * with `.preview` exactly when [own] is a preview, and exactly one
-     * signer on each side, with the same certificate bytes. [own] must be a
-     * data app: the Sync app asks only data apps to sign.
+     * True if [other] is the Sync app for [own]: not [own] itself, exactly
+     * `app.shkriuss.sync`, with `.preview` exactly when [own] is a preview,
+     * and exactly one signer on each side, with the same certificate bytes.
+     * The current certificate is compared, never the lineage, as in
+     * [peerName].
      */
     fun isSyncApp(own: SignedApp, other: SignedApp): Boolean {
+        if (other.packageName == own.packageName) return false
         val preview = own.packageName.endsWith(PREVIEW_SUFFIX)
-        val ownName = nameOf(own.packageName, preview) ?: return false
-        if (!ownName.holdsDataKeys || nameOf(other.packageName, preview)?.value != SYNC) return false
+        if (nameOf(other.packageName, preview)?.value != SYNC) return false
         if (own.multipleSigners || other.multipleSigners) return false
         val ownCertificate = own.signers.singleOrNull() ?: return false
         val otherCertificate = other.signers.singleOrNull() ?: return false
