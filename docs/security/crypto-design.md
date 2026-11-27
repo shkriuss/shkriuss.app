@@ -915,8 +915,10 @@ whenever it has them, and says separately whether it keeps the key. So
 the Sync app lists keepers, and, with none, the apps that have keys, for
 the words. A data app of an older version does not know the Sync app as
 a caller: its status provider gives Sync no answer, and its handover
-screen answers `REFUSED`. Sync's join screens say what Sync shows for
-such an app ([Sync's specification](../apps/sync/spec.md#the-join-steps)).
+screen answers `REFUSED`. Sync lists such an app, and one that Android
+holds stopped, as one that gave no answer, with "Update Water, or open
+it once" ([Sync's specification](../apps/sync/spec.md#the-join-steps),
+decided by the owner).
 
 Test vectors for the device ID, the account key, a statement, a signed
 request, the name key and a sealed name are in

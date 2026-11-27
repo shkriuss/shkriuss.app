@@ -129,8 +129,8 @@ internal class FakeSuiteApps(
     var peers: Map<String, AppName> = keepers.associate { it.packageName to AppName.fromApplicationId(it.packageName) },
     /** The package that passes as the Sync app, if any. */
     var syncApp: String? = null,
-    /** What [appsWithKeys] lists. */
-    var withKeys: List<KeyApp> = emptyList(),
+    /** What [signingApps] lists. */
+    var signing: SigningApps = SigningApps(emptyList(), emptyList()),
 ) : SuiteApps {
     /** How often [keepers] was asked. */
     var asked = 0
@@ -141,7 +141,7 @@ internal class FakeSuiteApps(
 
     override fun isSyncApp(packageName: String): Boolean = packageName == syncApp
 
-    override fun appsWithKeys(): List<KeyApp> = withKeys
+    override fun signingApps(): SigningApps = signing
 
     override fun labelOf(packageName: String): String = keepers.firstOrNull { it.packageName == packageName }?.label ?: packageName
 

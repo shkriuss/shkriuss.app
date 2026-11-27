@@ -561,7 +561,7 @@ class HandoverGateTest {
     }
 
     @Test
-    fun theSyncAppListsOnlyCheckedAppsThatHaveKeys() {
+    fun theSyncAppListsCheckedAppsThatHaveKeysAndThoseThatGaveNoAnswer() {
         val id = KeyId(0x0a0b0c0d)
         listOf("app.shkriuss.reminders", "app.shkriuss.notes", "app.shkriuss.tasks", "app.shkriuss.water").forEach {
             install(it, current = listOf(suiteCertificate))
@@ -576,8 +576,10 @@ class HandoverGateTest {
         answerStatus("app.shkriuss.water", null)
         answerStatus("app.shkriuss.thief", KeeperStatus.bundleOf(keeps = true, keyId = id))
 
-        val apps = AndroidSuiteApps(app).appsWithKeys().sortedBy { it.packageName }
+        val signing = AndroidSuiteApps(app).signingApps()
+        val apps = signing.withKeys.sortedBy { it.packageName }
         assertEquals(listOf("app.shkriuss.notes", "app.shkriuss.reminders"), apps.map { it.packageName })
+        assertEquals("the older app, not the thief", listOf("app.shkriuss.water"), signing.silent.map { it.packageName })
         assertEquals(listOf(false, true), apps.map { it.keeps })
         assertTrue(apps.all { it.keyId == "0a0b0c0d" })
         val join = joinRequest()

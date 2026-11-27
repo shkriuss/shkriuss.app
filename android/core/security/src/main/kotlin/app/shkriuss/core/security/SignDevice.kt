@@ -76,10 +76,11 @@ class SignDeviceCall internal constructor(
 }
 
 /**
- * The data apps of the suite on this phone that have their keys from a
- * recovery key, for the Sync app's join step 6: each one that keeps the
- * key signs after the system prompt, each other one with all 24 words.
+ * The data apps of the suite on this phone for the Sync app's join step 6:
+ * those that have their keys from a recovery key (each one that keeps the
+ * key signs after the system prompt, each other one with all 24 words),
+ * and those that gave no answer, for "Update Water, or open it once".
  * Each passed the check of ADR 0041, point 9. Slow: it asks each app, so
  * call it on a background thread.
  */
-fun signingApps(context: Context): List<KeyApp> = AndroidSuiteApps(context).appsWithKeys()
+fun signingApps(context: Context): SigningApps = AndroidSuiteApps(context).signingApps()

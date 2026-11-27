@@ -264,7 +264,9 @@ The Sync app's side is `SignDeviceCall` and `signingApps`, made for
 Sync's join step 6:
 
 1. `signingApps` lists the data apps that pass the check and have keys,
-   each with its key ID and whether it keeps the key.
+   each with its key ID and whether it keeps the key, and apart from
+   them the ones that gave no answer: an older version, which does not
+   know the Sync app, or an app that Android holds stopped.
 2. `SignDeviceCall` opens one data app's handover screen with a
    `DeviceJoinRequest`, through `KeeperCall`, and reads the answer as a
    `SignDeviceAnswer`: the signed join, or why there is none. The saved

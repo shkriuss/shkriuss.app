@@ -358,7 +358,7 @@ class FirstNeedScreen : ComponentActivity() {
 
             override fun isSyncApp(packageName: String) = now.isSyncApp(packageName)
 
-            override fun appsWithKeys() = now.appsWithKeys()
+            override fun signingApps() = now.signingApps()
 
             override fun labelOf(packageName: String) = now.labelOf(packageName)
 

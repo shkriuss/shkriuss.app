@@ -111,6 +111,29 @@ data class KeyApp(
     val keeps: Boolean,
 )
 
+/** Another data app of the suite on this phone that passed the check but gave no answer to the status call. */
+data class SilentApp(
+    /** Its application ID, for example `app.shkriuss.water`. */
+    val packageName: String,
+    /** Its name, as Android shows it. */
+    val label: String,
+)
+
+/**
+ * The data apps that the Sync app may ask to sign a join (Sync's
+ * specification, join step 6), as their status providers answered.
+ */
+data class SigningApps(
+    /** The apps that have keys, each with its key ID and whether it keeps the key. */
+    val withKeys: List<KeyApp>,
+    /**
+     * The apps with a handover screen that gave no answer: a version older
+     * than "Sign a device", which does not know the Sync app as a caller,
+     * or an app that Android holds stopped until it is opened once.
+     */
+    val silent: List<SilentApp>,
+)
+
 /**
  * The other apps of the suite on this phone, as this app may see them
  * (ADR 0041, points 9 to 14). Screens take it through their constructor;
@@ -135,8 +158,12 @@ internal interface SuiteApps {
      */
     fun isSyncApp(packageName: String): Boolean
 
-    /** Every other app of the suite on this phone that passes [peerName] and has its keys from a recovery key. Slow: it asks each one. */
-    fun appsWithKeys(): List<KeyApp>
+    /**
+     * Every other app of the suite on this phone that passes [peerName] and
+     * has its keys from a recovery key, and every one that gave no answer.
+     * Slow: it asks each one.
+     */
+    fun signingApps(): SigningApps
 
     /** The name Android shows for [packageName], or the package name itself. */
     fun labelOf(packageName: String): String
@@ -159,7 +186,7 @@ internal interface SuiteApps {
 
         override fun isSyncApp(packageName: String): Boolean = false
 
-        override fun appsWithKeys(): List<KeyApp> = emptyList()
+        override fun signingApps(): SigningApps = SigningApps(emptyList(), emptyList())
 
         override fun labelOf(packageName: String): String = packageName
 
@@ -308,8 +335,17 @@ internal class AndroidSuiteApps(private val context: Context) : SuiteApps {
         return SuitePeers.isSyncApp(own, other)
     }
 
-    override fun appsWithKeys(): List<KeyApp> = candidates().mapNotNull { packageName ->
-        statusOf(packageName)?.let { (keeps, keyId) -> KeyApp(packageName, labelOf(packageName), keyId, keeps) }
+    override fun signingApps(): SigningApps {
+        val withKeys = mutableListOf<KeyApp>()
+        val silent = mutableListOf<SilentApp>()
+        candidates().forEach { packageName ->
+            val answer = askStatus(packageName)
+            when {
+                answer == null -> silent += SilentApp(packageName, labelOf(packageName))
+                else -> KeeperStatus.of(answer)?.let { (keeps, keyId) -> withKeys += KeyApp(packageName, labelOf(packageName), keyId, keeps) }
+            }
+        }
+        return SigningApps(withKeys, silent)
     }
 
     override fun labelOf(packageName: String): String = try {
@@ -334,9 +370,11 @@ internal class AndroidSuiteApps(private val context: Context) : SuiteApps {
     private fun handoverScreens(intent: Intent) = packages.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
 
     /** What the status provider of [packageName] says. Null for any failure: then it counts as an app with no keys. */
-    private fun statusOf(packageName: String): Pair<Boolean, String>? = try {
+    private fun statusOf(packageName: String): Pair<Boolean, String>? = askStatus(packageName)?.let(KeeperStatus::of)
+
+    /** The answer of the status provider of [packageName], or null when it gave none or the call failed. */
+    private fun askStatus(packageName: String): Bundle? = try {
         context.contentResolver.call(Handover.statusAuthority(packageName), Handover.METHOD_STATUS, null, null)
-            ?.let(KeeperStatus::of)
     } catch (_: RuntimeException) {
         null
     }

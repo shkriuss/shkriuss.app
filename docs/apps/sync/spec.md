@@ -121,8 +121,11 @@ use it." Only its **Done** takes the address out.
    words in one of your apps.", and **Enter the words in Water** for each
    data app that has its keys from a recovery key. That app takes only
    the 24 words of its own key: "These words are for another recovery
-   key." With no such data app: "Install an app of shkriuss.app and set
-   up its recovery key first."
+   key." For each data app that gave no answer, a version older than
+   this step or one that Android holds stopped, a line with no button:
+   "Water did not answer. Update Water, or open it once, then try
+   again." With no data app that has keys: "Install an app of
+   shkriuss.app and set up its recovery key first."
 
    A button opens that app's handover screen in the mode "Sign a device"
    ([crypto-design.md](../../security/crypto-design.md#the-handover-format-version-2)).
@@ -593,7 +596,7 @@ networks, long transfers and notification. The owner asked this page to
 say, for every value and action, its limits and what happens when Sync
 stops between two writes, a write fails, a press comes twice or late,
 and the clock or the time zone changes
-([When things go wrong](#when-things-go-wrong)). And six answers:
+([When things go wrong](#when-things-go-wrong)). And seven answers:
 
 1. Records go on any network. File chunks only on an unmetered network,
    unless **Files on mobile data** is on. It is off at first. So a
@@ -613,6 +616,8 @@ and the clock or the time zone changes
 6. A data app that does not keep the recovery key signs a join only
    with the 24 words of its own keys, and Sync offers only the data
    apps that have keys.
+7. A data app that gives Sync no answer is listed at join step 6 with
+   "Update Water, or open it once, then try again."
 
 The rest is in
 [sync-protocol.md](../../architecture/sync-protocol.md#decided-by-the-owner).
