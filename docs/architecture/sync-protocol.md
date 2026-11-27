@@ -733,8 +733,8 @@ something is down.
    failed runs in a row, the Sync app tries only every 4 hours until
    one works. The user can always ask for a run.
 
-How the Sync app tells the first two apart is checked when the server
-is built ([Assumptions](#assumptions)).
+How the Sync app tells the first two apart is checked on the first
+deployed server ([Assumptions](#assumptions)).
 
 ### `info`
 
@@ -1584,9 +1584,10 @@ What that means:
    size, or millions of small records. The server answers "full"
    when D1 refuses a write. What the user can do then is in the
    self-hosting guide.
-8. **CPU time** cannot be shown in a local test. It is measured on a
-   deployed Worker on the free plan when the server is built. The
-   limits that `info` names are set by that measurement. They may
+8. **CPU time** cannot be shown in a local test. It is measured on
+   the first deployed Worker on the free plan, after the server is
+   built ([ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md),
+   point 7). The limits that `info` names are set by that measurement. They may
    only be lower than the numbers on this page, and they only say how
    many records go together. One request must always take one record
    of 524,288 bytes. If the measurement shows that it cannot, the
@@ -1948,7 +1949,9 @@ The courier interface and the Sync app, on the emulators:
 ## Assumptions
 
 Things this page takes as true. Each is checked when its part is
-built. If one is wrong, the fix is a change to this page first.
+built, and those that need Cloudflare itself on the first deployed
+server ([ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md)). If
+one is wrong, the fix is a change to this page first.
 
 1. A call to a data app's content provider starts the app's process
    when it is not running. Whether that also holds for an app that

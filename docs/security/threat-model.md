@@ -514,7 +514,11 @@ What stops it:
    ([ADR 0014](../adr/0014-release-flow-and-reproducible-builds.md)).
 7. Wrangler, which deploys the site, is pinned with a lockfile and
    SHA-512 values, and installed without its install scripts
-   ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
+   ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)). The sync
+   server's tools, Wrangler with Miniflare, TypeScript and the types of
+   the Workers runtime, are pinned the same way in
+   `.github/backend-tools/`, with the Worker's configuration
+   ([ADR 0043](../adr/0043-backend-tools-tests-and-deploy.md)).
 8. The verification files, the wrapper, the workflows and the build
    checks are owner-only paths
    ([CODEOWNERS](../../.github/CODEOWNERS)).
@@ -1456,8 +1460,9 @@ Status: **Partly met.**
     not use. Read in the source of `actions/gradle-build-tools-actions`,
     which runs it.
   - Gaps: the build tools, the test libraries and the Gradle wrapper are
-    not in the list, and actions pinned to a commit get no alerts. Wrangler's
-    lockfile is read by GitHub itself. Before every release,
+    not in the list, and actions pinned to a commit get no alerts. The
+    lockfiles of the site's Wrangler and of the sync server's tools are
+    read by GitHub itself. Before every release,
     [Before and after a release](../development/release.md#before-and-after-a-release)
     asks that no alert is open.
   - Code scanning of our own code stays Open (open question 22).
