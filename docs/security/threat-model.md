@@ -14,10 +14,11 @@ does not. It ends with the OWASP MASVS controls and every open question.
 - What exists today: Catalog, Water, Reminders, Tasks, Notes, and the
   core modules ([modules.md](../architecture/modules.md)). Water is the
   first data app, Reminders the second, Tasks the third and Notes the
-  fourth. The sync server is built, in `backend/`. There is no Sync
-  app yet, so no app syncs. Where this page speaks of the phones' side
-  of sync, it describes what is decided for it, not what is built. The
-  handover between apps is built. What each app stores is in the
+  fourth. The sync server is built, in `backend/`, and so is what each
+  data app does for sync, in `core/sync-client`. There is no Sync app
+  yet, so no app syncs. Where this page speaks of the Sync app and the
+  content provider of each data app, it describes what is decided for
+  them, not what is built. The handover between apps is built. What each app stores is in the
   [data inventory](data-inventory.md).
 
 ## At a glance
