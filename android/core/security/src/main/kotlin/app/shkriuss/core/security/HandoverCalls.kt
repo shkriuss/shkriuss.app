@@ -77,7 +77,7 @@ internal fun refusalResult(refusal: HandoverRefusal?): Intent? = refusal?.let { 
  * nothing.
  */
 internal fun closingRefusal(screen: HandoverScreen): HandoverRefusal? = when (screen) {
-    HandoverNotKept -> HandoverRefusal.NOT_KEEPER
+    HandoverNotKept, HandoverNoKeys -> HandoverRefusal.NOT_KEEPER
     is HandoverOtherKey -> HandoverRefusal.OTHER_KEY
     is HandoverFailed -> if (screen.damaged) HandoverRefusal.NOT_KEEPER else null
     else -> null

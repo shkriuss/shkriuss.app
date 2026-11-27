@@ -41,6 +41,9 @@ data class HandoverFourWords(val positions: List<Int>, val answers: List<String>
 /** This app does not keep the recovery key now. Nothing can be handed over. */
 data object HandoverNotKept : HandoverScreen
 
+/** In [HandoverMode.SIGN_DEVICE]: this app has no keys of any recovery key, so it cannot sign. */
+data object HandoverNoKeys : HandoverScreen
+
 /** The keys or the signed join are made. The screen hands them over and closes. */
 data object HandoverReady : HandoverScreen
 

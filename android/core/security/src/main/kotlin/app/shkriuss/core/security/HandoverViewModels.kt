@@ -93,9 +93,13 @@ class HandoverViewModel internal constructor(
         }
     }
 
-    /** The first screen of [HandoverMode.SIGN_DEVICE]: no keys, keys of another recovery key, or what to sign. */
+    /**
+     * The first screen of [HandoverMode.SIGN_DEVICE]: no keys, keys that
+     * cannot be read now or are damaged, keys of another recovery key, or
+     * what to sign.
+     */
     private fun signingScreen(status: KeyStatus, join: DeviceJoinRequest): HandoverScreen {
-        val own = status.keyId ?: return HandoverNotKept
+        val own = status.keyId ?: return if (status.hasDerivedKeys) HandoverFailed(damaged = status.needsRepair) else HandoverNoKeys
         val signer = join.keyId ?: own
         if (!crypto.setup.hasKeysOf(signer)) return HandoverOtherKey(signer.toString())
         return HandoverAsk(mode, signer.toString(), server = join.host, withWords = !status.keepsRecoveryKey)

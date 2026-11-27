@@ -256,7 +256,8 @@ class SignedJoin internal constructor(
          * recovery key [signer], at the time [now]: the join statement, its
          * signature, the account public key and the name key
          * (sync-protocol.md, "How the Sync app gets its statement and its
-         * name key", point 4). The account key leaves memory at once.
+         * name key", point 4). The account key's private bytes are wiped at
+         * once, and nothing keeps the key.
          */
         internal fun sign(signer: RecoveryKey, request: DeviceJoinRequest, now: Long): SignedJoin {
             val statement = JoinStatement.bytes(request, signer.keyId, now)

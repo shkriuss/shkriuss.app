@@ -266,9 +266,10 @@ What stops it:
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
 4. There is one content provider of our own, the status provider of the
    handover. It answers one call, whether the app keeps the recovery key
-   now and its short name, and only to a caller that passes the keeper's
-   check (point 8). It holds no data, opens no file and answers no query.
-   There is no file provider and no deep link.
+   now and the short name of the key its keys come from, and only to a
+   caller that passes the keeper's check, or to the Sync app (point 8).
+   It holds no data, opens no file and answers no query. There is no
+   file provider and no deep link.
 5. Files enter and leave only through the system pickers. No app of the
    suite has a storage permission
    ([permissions.md](permissions.md#rules)).
@@ -296,6 +297,11 @@ What stops it:
      with exactly one signer whose certificate is the same as its own
      current one. Not the lineage, so an app on an old signing key fails.
      This check is the only gate.
+   - One exception: the Sync app, `app.shkriuss.sync`, of the same build
+     kind and signed in the same way, passes for the status provider and
+     for the mode "Sign a device", and for nothing else. No other app may
+     ask in that mode
+     ([crypto-design.md](crypto-design.md#the-handover-format-version-2)).
    - A refused caller gets a cancelled result that says `REFUSED`, and
      no screen: the screen closes at once. The status provider gives it
      no answer.
@@ -304,6 +310,12 @@ What stops it:
    - The keys come only after the user allows it on the keeper's screen
      and answers the system prompt of the Recovery guard. The screen
      hides other apps' windows and drops a tap under them.
+   - A signed join for the Sync app comes only after the user allows it
+     on that screen, which names the server: in a keeper after the system
+     prompt, in an app that does not keep the key after all 24 words of
+     that app's own key. Sync gets the statement, its signature, the
+     account public key and the name key, which seals only the names of
+     devices. Never a key that opens data, and never the words.
    - The asking app checks the keeper in the same way before and after,
      so an app that took a keeper's name on a phone without that keeper
      cannot plant keys it knows.

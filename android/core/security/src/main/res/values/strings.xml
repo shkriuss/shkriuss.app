@@ -250,6 +250,9 @@
     <string name="sec_sign_not_this_key">These words are for another recovery key.</string>
     <string name="sec_sign_other_key">%1$s has no keys of the recovery key %2$s, which your sync server uses. Allow it in an app that has them.</string>
     <string name="sec_sign_no_keys">%1$s has no recovery key yet, so it cannot add this phone to your sync server. Set up the recovery key in %1$s first.</string>
+    <string name="sec_sign_not_kept">%1$s does not keep the recovery key on this phone now. Maybe the screen lock was removed. Go back to Sync and enter the words in %1$s instead.</string>
+    <string name="sec_sign_damaged">A key file of %1$s is damaged. Open %1$s and enter your 24 words there to repair it, then try again.</string>
+    <string name="sec_sign_failed">%1$s could not sign now. Try again in a moment.</string>
 
     <!-- The asking app's "Get the keys" screen (ADR 0041). -->
     <string name="sec_get_keys_title">Get the keys</string>

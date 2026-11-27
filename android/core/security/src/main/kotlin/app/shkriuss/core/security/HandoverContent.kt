@@ -90,10 +90,15 @@ fun HandoverContent(
                 body = stringResource(R.string.sec_sign_other_key, keeper, screen.keyId),
                 action = ShkStateAction(stringResource(R.string.sec_handover_close), actions.onClose),
             )
+            HandoverNoKeys -> ShkErrorState(
+                title = stringResource(R.string.sec_failed_title),
+                body = stringResource(R.string.sec_sign_no_keys, keeper),
+                action = ShkStateAction(stringResource(R.string.sec_handover_close), actions.onClose),
+            )
             HandoverNotKept -> ShkErrorState(
                 title = stringResource(R.string.sec_failed_title),
                 body = if (signing) {
-                    stringResource(R.string.sec_sign_no_keys, keeper)
+                    stringResource(R.string.sec_sign_not_kept, keeper)
                 } else {
                     stringResource(R.string.sec_handover_not_kept, keeper, asker)
                 },
@@ -101,10 +106,11 @@ fun HandoverContent(
             )
             is HandoverFailed -> ShkErrorState(
                 title = stringResource(R.string.sec_failed_title),
-                body = if (screen.damaged) {
-                    stringResource(R.string.sec_handover_damaged, keeper)
-                } else {
-                    stringResource(R.string.sec_handover_failed)
+                body = when {
+                    signing && screen.damaged -> stringResource(R.string.sec_sign_damaged, keeper)
+                    signing -> stringResource(R.string.sec_sign_failed, keeper)
+                    screen.damaged -> stringResource(R.string.sec_handover_damaged, keeper)
+                    else -> stringResource(R.string.sec_handover_failed)
                 },
                 action = ShkStateAction(stringResource(R.string.sec_handover_close), actions.onClose),
             )

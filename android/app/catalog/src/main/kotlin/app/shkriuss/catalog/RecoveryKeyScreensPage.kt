@@ -43,6 +43,7 @@ import app.shkriuss.core.security.HandoverContent
 import app.shkriuss.core.security.HandoverFailed
 import app.shkriuss.core.security.HandoverFourWords
 import app.shkriuss.core.security.HandoverMode
+import app.shkriuss.core.security.HandoverNoKeys
 import app.shkriuss.core.security.HandoverNotKept
 import app.shkriuss.core.security.HandoverOtherKey
 import app.shkriuss.core.security.KeeperApp
@@ -94,6 +95,8 @@ enum class SecuritySample(@param:StringRes val title: Int) {
     SignDeviceWithWords(R.string.sample_sign_device_words),
     SignDeviceOtherWords(R.string.sample_sign_device_other_words),
     SignDeviceOtherKey(R.string.sample_sign_device_other_key),
+    SignDeviceNoKeys(R.string.sample_sign_device_no_keys),
+    SignDeviceNotKept(R.string.sample_sign_device_not_kept),
 }
 
 /**
@@ -332,6 +335,24 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
         )
         SecuritySample.SignDeviceOtherKey -> HandoverContent(
             HandoverOtherKey("5e6f7a8b"),
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+            mode = HandoverMode.SIGN_DEVICE,
+        )
+        SecuritySample.SignDeviceNoKeys -> HandoverContent(
+            HandoverNoKeys,
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+            mode = HandoverMode.SIGN_DEVICE,
+        )
+        SecuritySample.SignDeviceNotKept -> HandoverContent(
+            HandoverNotKept,
             SAMPLE_SYNC,
             SAMPLE_KEEPER,
             false,

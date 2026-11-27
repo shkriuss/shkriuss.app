@@ -241,8 +241,28 @@ class SignDeviceTest {
     fun anAppWithNoKeysSignsNothing() {
         val app = SoftwareKeysApp(File(temporary.newFolder(), "shk-keys"), testAppName)
         val model = signing(app)
-        assertEquals(HandoverNotKept, model.state.value)
+        assertEquals(HandoverNoKeys, model.state.value)
         assertEquals(HandoverRefusal.NOT_KEEPER, closingRefusal(model.state.value))
+    }
+
+    @Test
+    fun aKeeperWhoseKeptKeyWentBeforeAllowSaysSoAndClosesWithNotKeeper() {
+        val (water, _) = water(keeps = true)
+        val model = signing(water)
+        // The screen lock is removed while the screen shows: the Recovery guard goes with it.
+        water.screenLock = false
+        model.onAllow()
+        assertEquals(HandoverNotKept, model.state.value)
+        assertEquals("Sync then offers the words", HandoverRefusal.NOT_KEEPER, closingRefusal(model.state.value))
+    }
+
+    @Test
+    fun keysThatCannotBeReadNowAskToTryAgainAndGiveNoReason() {
+        val (water, _) = water(keeps = false)
+        water.keystoreFails = true
+        val model = signing(water)
+        assertEquals(HandoverFailed(damaged = false), model.state.value)
+        assertNull(closingRefusal(model.state.value))
     }
 
     @Test

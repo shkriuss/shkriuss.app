@@ -885,9 +885,9 @@ both apps"; anything else is "unreadable".
 
 Without keys, the result is cancelled, and `app.shkriuss.handover.REFUSAL`
 says why, as in version 1: `REFUSED`, `UPDATE`, `NOT_KEEPER` (the app
-has no keys, or its kept copy is damaged), or, new in version 2,
-`OTHER_KEY`: the request named a key ID that this app has no keys of.
-The app says so before it shows anything else.
+has no keys, or its kept copy is gone or damaged), or, in version 2
+only, `OTHER_KEY`: the request named a key ID that this app has no keys
+of. The app says so before it shows anything else.
 
 How a data app signs:
 
@@ -897,7 +897,8 @@ How a data app signs:
    the recovery key that the request names or the current one, makes
    the account key, signs the join statement with the time of that
    moment, derives the name key, and drops the recovery key and the
-   account key.
+   account key. The account key's private bytes are wiped; the copies
+   that Tink's objects hold go with them, as for every key in memory.
 2. **An app that has its keys but does not keep the recovery key.** It
    shows the same question. **Allow** opens the screen of all 24 words,
    as when the words are entered. It takes the words only if their key
@@ -909,7 +910,7 @@ How a data app signs:
 3. **An app with no keys** signs nothing: `NOT_KEEPER`.
 
 The status provider of ADR 0041, point 13, also answers the Sync app.
-Its answer keeps version 1. It now names the key ID of the app's keys
+Its answer is still version 1. It names the key ID of the app's keys
 whenever it has them, and says separately whether it keeps the key. An
 app of an older version names the key ID only when it keeps the key.
 So the Sync app lists keepers, and, with none, the apps that have keys,

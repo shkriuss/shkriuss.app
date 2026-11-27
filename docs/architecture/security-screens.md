@@ -199,8 +199,8 @@ The same screen in the mode "Sign a device", for the Sync app only
 1. `HandoverRequest.of` takes the Sync app as the caller only in this
    mode (`SuiteApps.isSyncApp`), and this mode from no other caller. The
    request must carry a `DeviceJoinRequest` that passes its checks.
-   Then it is read in version 2; the other modes are still read in
-   version 1.
+   Then it is read in version 2; the other modes are read in version 1
+   or 2.
 2. The screen's title is "Add this phone to sync". It asks "Add this
    phone to your sync server at sync.example.workers.dev?", names the
    Sync app and this app, and shows the short name of the recovery key
@@ -212,9 +212,12 @@ The same screen in the mode "Sign a device", for the Sync app only
    entered (`HandoverAllWords`). Words of another recovery key: "These
    words are for another recovery key." Words being typed stay when the
    screen stops.
-5. An app with no keys says so and gives `NOT_KEEPER`. When the request
-   names a key ID that the app has no keys of, the screen says so at
-   once (`HandoverOtherKey`) and gives `OTHER_KEY`.
+5. An app with no keys says so (`HandoverNoKeys`) and gives
+   `NOT_KEEPER`. So does a keeper whose kept key is gone when **Allow**
+   is tapped, with the advice to enter the words in that app. When the
+   request names a key ID that the app has no keys of, the screen says
+   so at once (`HandoverOtherKey`) and gives `OTHER_KEY`. Keys that
+   cannot be read now: "try again in a moment", and no reason.
 6. The signed join waits in the model until the screen takes it, and
    leaves memory when the screen stops, as the keys do. The screen
    checks the caller once more (`handoverResult`): it must still be the
@@ -257,8 +260,8 @@ The asking app's side, `GetKeysActivity`, `GetKeysViewModel` and
    in Water**, which it offers only for keepers of its own key ID, and
    takes the keys as its proof with `checkWordsAtKeeper`.
 
-The Sync app's side, `SignDeviceCall` and `signingApps`, are the only
-public parts of the handover. Sync's join step 6 uses them:
+The Sync app's side is `SignDeviceCall` and `signingApps`, made for
+Sync's join step 6:
 
 1. `signingApps` lists the data apps that pass the check and have keys,
    each with its key ID and whether it keeps the key.
