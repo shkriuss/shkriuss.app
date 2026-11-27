@@ -77,7 +77,8 @@ class TestDevice(
     val name: String,
     root: File,
     recoveryKey: RecoveryKey,
-    val server: TestServer,
+    /** The server this device has joined. A test may move it to another one. */
+    var server: TestServer,
     val clock: TestClock,
     seed: Int,
     dataVersion: Int = 1,

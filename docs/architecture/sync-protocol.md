@@ -1312,8 +1312,8 @@ transaction.
    and counts it;
 5. after a `02`, stops the app: "needs the new recovery key". The stop
    ends when a later call names another current key ID of the server
-   than the call at that time, or when the user asks for a comparison
-   of everything;
+   than the call at that time, or another server ID, epoch or device
+   ID, or when the user asks for a comparison of everything;
 6. sets Known to the head after the batch, and moves the cursor if it
    may ([The cursor](#the-cursor), point 2).
 

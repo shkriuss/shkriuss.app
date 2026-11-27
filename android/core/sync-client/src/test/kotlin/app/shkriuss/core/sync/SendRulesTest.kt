@@ -243,6 +243,22 @@ class SendRulesTest : SyncTest() {
         assertEquals(2, server.ids(LISTS.value).size)
     }
 
+    @Test
+    fun aRefusalOfTheKeyBelongsToTheServerAndEndsOnAnotherOne() = runBlocking {
+        val phone = device("phone")
+        phone.addItem("Milk")
+        phone.exportAndAnswer { answer(it, 0x02) }
+        assertEquals(SendBlock.ENTER_THE_NEW_RECOVERY_KEY, phone.status().sendBlock)
+
+        // The user moves to a new server, whose current key is the same recovery key's.
+        newServer()
+        phone.server = server
+        phone.epoch = server.epoch
+        assertEquals(SendBlock.NONE, phone.status().sendBlock)
+        phone.runUntilQuiet()
+        assertEquals(1, server.ids(LISTS.value).size)
+    }
+
     /** The server's answer `00` to [batch], with [code] for each record and no new number. */
     private fun answer(batch: ByteArray, code: Int): ByteArray {
         val count = ByteReader(batch, 50).u32().toInt()

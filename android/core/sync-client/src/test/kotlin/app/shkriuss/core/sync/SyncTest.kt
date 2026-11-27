@@ -4,6 +4,7 @@ import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.RecoveryKey
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.testing.TestClock
+import kotlin.random.Random
 import org.junit.After
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
@@ -31,8 +32,10 @@ abstract class SyncTest {
     /** The server that new devices join. */
     val server: TestServer get() = currentServer ?: newServer()
 
-    /** A new, empty server for the devices made from now on. */
-    fun newServer(): TestServer = TestServer(accountKeyId).also { currentServer = it }
+    private var servers = 0
+
+    /** A new, empty server for the devices made from now on, with an ID and an epoch of its own. */
+    fun newServer(): TestServer = TestServer(accountKeyId, Random(++servers)).also { currentServer = it }
 
     /**
      * A new device with Lists, sync on. Unless [join] is false, it has run

@@ -491,7 +491,16 @@ class SyncClient(
             )
         }
         if (state.serverId != call.serverId.hex || state.epoch != call.epoch.hex || state.deviceId != call.deviceId.hex) {
-            val moved = state.copy(serverId = call.serverId.hex, epoch = call.epoch.hex, deviceId = call.deviceId.hex)
+            // Another server, another life of its database, or another device: a refusal of the app's key belonged to
+            // the one before.
+            val stopped = if (state.stopped == Stop.NEEDS_NEW_KEY) Stop.NONE else state.stopped
+            val moved = state.copy(
+                serverId = call.serverId.hex,
+                epoch = call.epoch.hex,
+                deviceId = call.deviceId.hex,
+                stopped = stopped,
+                stoppedKeyId = if (stopped == Stop.NONE) null else state.stoppedKeyId,
+            )
             state = startComparison(moved, forgetDeletions = true)
         }
         if (keyIds != null && state.syncKeyId == null && call.serverKeyId == keyIds.current) {
