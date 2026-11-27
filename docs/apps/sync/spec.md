@@ -65,8 +65,9 @@ Sync opens here until the phone has joined. Each step has a top bar and
 Back to the step before. Back from the first leaves the app. Back to
 step 1 cancels the join: one write sets `stage` 0 and drops the values
 of the join and `setupCode`, then the device key and the name key are
-deleted. A join left unfinished for a day is cancelled in the same way
-at the next start of Sync.
+deleted. A join left at `stage` 1 for a day is cancelled in the same
+way at the next start of Sync. A join at `stage` 2 never is: the next
+start first asks `heads` ([Stopped between two writes](#stopped-between-two-writes)).
 
 1. **Sync.** "Sync keeps your apps the same on your phones and tablets,
    through a server in your own Cloudflare account. The server gets only
@@ -141,7 +142,8 @@ at the next start of Sync.
 
 ### Apps
 
-1. Top bar: "Sync". The device line: "Synced today at 14:05.", "Not
+1. Top bar: "Sync". The device line: "Synced today at 14:05." (from
+   `syncedAt`), "Not
    synced yet.", or "Syncing" with an indeterminate `ShkProgressBar`
    while a run goes. A [problem](#problems) takes its place, with its
    button.
@@ -260,10 +262,10 @@ The device line on Apps shows the first that applies, as the protocol's
 | Closed (`06`) | "This server was closed. Nothing on this phone changed." | **Join another server** | The phone joins again |
 | Removed (`03`). The device key is deleted. | "This phone was removed from the server. Its apps keep everything." | **Join again** | The same |
 | Not a device (`02`) | "The server does not know this phone." | **Join again** | The same |
-| The device key is gone, or Sync's state cannot be read | "Sync lost this phone's key for the server. Join again, then remove the old entry of this phone on another device." | **Join again** | The same |
+| The device key or the name key is gone, or Sync's state cannot be read | "Sync lost this phone's keys for the server. Join again, then remove the old entry of this phone on another device." | **Join again** | The same |
 | Version (`01`): the server's lowest version is above 1 (`stop` 4), or its highest below 1 (`stop` 6) | "Update the Sync app." or "Update your server." | **Try again**, for the server | Sync is updated, or `info` names version 1 |
 | The clock (`05`) | "This phone's clock is off by 7 minutes. Set the time in Android's settings." | **Try again** | A request passes. Each run tries once. |
-| A fault (`04` twice, or an answer that breaks its layout or a limit, except `info`'s three limits) | "Sync has a fault: the server refused a request." | **Try again** | A request passes. The next run tries. |
+| A fault (`04` twice, an answer that breaks its layout or a limit, except `info`'s three limits, or more removed devices than Sync keeps). `fault` is set. | "Sync has a fault: the server refused a request." | **Try again** | A request passes, which clears `fault`. The next run tries. |
 | The day's limit (`07 02`, or Cloudflare's) | "The server's limit for today is used. Sync goes on at 04:00." | | 00:00 UTC |
 | Full (`08`) | "The server is full. Changes wait on this phone. The self-hosting guide says what to do." | **Try again** | A batch is stored. Fetching goes on. Sending is tried once a day and on **Try again**. |
 | Three failed runs in a row | "Could not reach the server since 14:05. Sync tries every 4 hours." | **Try again** | A run works |
@@ -343,7 +345,7 @@ fixes what a run does, in which order. Here is the rest.
 | `codeKind` | 1 a device code, 2 a setup code, as chosen at step 3 | 1 or 2, from step 3 until the join ends. A device code itself is never stored. |
 | `setupCode` | The setup code of this join | 26 characters of the code alphabet. From join step 5 until the join ends or is cancelled. |
 | `deleteSetupCode` | The line of step 8 waits | True or false |
-| `removed` | IDs of devices seen as removed | 0 to 1,000 IDs, each once, never this phone's |
+| `removed` | IDs of devices seen as removed | 0 to 10,000 IDs, each once, never this phone's. None is ever dropped. |
 | `filesOnMobile` | The setting | True or false. False at first. |
 | `head.<app>`, `good.<app>` | The head `heads` last named, and when a run last ended well | `<app>` an app name. 0 to 9,223,372,036,854,775,807. A time. |
 | `on.<app>`, `work.<app>`, `poked.<app>` | Its last `status`: sync on, work to do. A poke waits. | True or false |
@@ -353,6 +355,8 @@ fixes what a run does, in which order. Here is the rest.
 | `full`, `fullAt` | The server said full; when sending was last tried | True or false. A time. |
 | `clockOff` | The offset of the last `05`, while it holds | A signed 64-bit number of milliseconds |
 | `putBack` | The put-back line waits | True or false |
+| `fault` | The fault problem holds | True or false |
+| `syncedAt` | When a run last ended well, for the device line | A time |
 
 1. A time is milliseconds since 1970 UTC, 0 to 253,402,300,799,999, as
    the [record times](../../architecture/data.md#record-fields). One
@@ -361,8 +365,9 @@ fixes what a run does, in which order. Here is the rest.
    missing: 0, false or "never" for an app, off for the setting. At
    `stage` 3, and at `stage` 4 with `stop` 4 or 6, a missing `address`,
    `serverId`, `epoch`, `deviceAlias` or `deviceId`, a device key that
-   is gone, or one whose public key does not give `deviceId`, counts as
-   a lost key: `stop` 5. A removed or closed phone needs no key.
+   is gone, one whose public key does not give `deviceId`, or a name key
+   that is gone or cannot be opened, counts as lost keys: `stop` 5. A
+   removed or closed phone needs no key.
 3. Never stored: the recovery words, a key that opens data, plaintext,
    a record ID. Batches, pages and chunks pass through memory and
    pipes, never Sync's storage. Android's backup is off.
@@ -376,7 +381,7 @@ fixes what a run does, in which order. Here is the rest.
 | Setup code | 26 characters of the same letters and digits |
 | Device name | 1 to 40 code points, one line, no space at either end. At first Android's model name, cut to 40 code points, or "Android device". |
 | The list of devices | At most 1,000. A longer answer is a fault. |
-| Removed devices remembered | 1,000. Past that, the one seen first is dropped. |
+| Removed devices remembered | Every one, up to 10,000. A server that shows more counts as a fault, so no removed device is ever forgotten. |
 | Records and bytes in one request | `info`'s limits, halved for each lack of CPU time, down to one record. One halving is undone a day later. |
 | Retries | After three failed runs, every 4 hours |
 | Files on mobile data | Off |
@@ -429,7 +434,7 @@ so after a stop Sync does the step again.
 | Remove a device | `devices/remove`; `revision`, the ID into `removed` | The next `heads` shows another revision, and the list is read. |
 | Leave | `devices/remove` of this phone; the keys and the server's values go, `stage` 0 | The next request gets `03`. |
 | Close | `closing`; `account/delete`; `stage` 4, `stop` 3, `closing` gone; the dialog of a close | The next request gets `06`. With `closing` set, that ends the close, with its dialog. |
-| A run, for one app | The protocol's steps; `head`, `good`, `on`, `work` of the app, `poked` cleared | The next run serves it again. |
+| A run, for one app | The protocol's steps; `head`, `good`, `on`, `work` of the app, `poked` cleared; at the end of a run that worked, `syncedAt` | The next run serves it again. |
 | The list of devices | `devices/remove` for each removed ID that is in again; `removed`, `revision`, `devicesAt`, `putBack` | The next read does it again. |
 
 ### A write fails
@@ -595,14 +600,14 @@ Choices this page made without a decision by the owner on that point.
    did not match. What to do comes from `status` byte 58.
 6. Removed devices are not listed. Last seen is the server's UTC date.
 7. The address rules: `/` and `:443` dropped, no IP address.
-8. At most 1,000 devices from a list and 1,000 removed IDs.
+8. At most 1,000 devices from a list and 10,000 removed IDs.
 9. The first name, and "Android device".
 10. The `User-Agent` `shkriuss-sync/1`.
 11. **Leave anyway** when the server cannot be reached.
 12. A full server: sending tried once a day and on **Try again**.
 13. WorkManager's `DiagnosticsReceiver` removed, as Water removes the
     receiver of `androidx.profileinstaller`.
-14. A join left unfinished for a day is cancelled at the next start,
+14. A join left at `stage` 1 for a day is cancelled at the next start,
     so no setup code stays behind.
 15. The words of every screen, step and dialog.
 
