@@ -12,19 +12,22 @@ import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTextStyle
 import app.shkriuss.core.design.ShkTonalButton
 
-/** What the user can do on a keeper's handover screen. */
+/** What the user can do on a keeper's handover screen. [words] serves the 24 words of [HandoverMode.SIGN_DEVICE]. */
 class HandoverActions(
     val onAllow: () -> Unit = {},
     val onDeny: () -> Unit = {},
     val onAnswerChange: (index: Int, text: String) -> Unit = { _, _ -> },
     val onCheck: () -> Unit = {},
     val onClose: () -> Unit = {},
+    val words: EnterActions = EnterActions(),
 )
 
 /**
  * A keeper's handover screen (ADR 0041, point 5): [asker] asks this app,
- * [keeper], for its own keys, or to check four words first. It names both
- * apps and the short name of the kept key, and says what the asker gets.
+ * [keeper], for its own keys, or to check four words first, or, in
+ * [HandoverMode.SIGN_DEVICE], the Sync app asks it to sign that this phone
+ * may join a sync server. It names both apps and the short name of the
+ * recovery key, and says what the asker gets. [mode] is what was asked.
  */
 @SecurityScreenSamples
 @Composable
@@ -35,17 +38,30 @@ fun HandoverContent(
     previewBuild: Boolean,
     actions: HandoverActions,
     modifier: Modifier = Modifier,
+    mode: HandoverMode = (screen as? HandoverAsk)?.mode ?: HandoverMode.KEYS,
 ) {
-    FlowScaffold(stringResource(R.string.sec_handover_title, asker), actions.onDeny, previewBuild, modifier) {
+    val signing = mode == HandoverMode.SIGN_DEVICE
+    val title = if (signing) stringResource(R.string.sec_sign_title) else stringResource(R.string.sec_handover_title, asker)
+    FlowScaffold(title, actions.onDeny, previewBuild, modifier) {
         when (screen) {
-            HandoverWorking, HandoverReady -> ShkLoadingState(stringResource(R.string.sec_handover_working))
+            HandoverWorking, HandoverReady ->
+                ShkLoadingState(stringResource(if (signing) R.string.sec_sign_working else R.string.sec_handover_working))
             is HandoverAsk -> {
-                if (screen.mode == HandoverMode.KEYS) {
-                    Paragraph(stringResource(R.string.sec_handover_keys_ask, asker, keeper))
-                    Paragraph(stringResource(R.string.sec_handover_keys_then, asker))
-                } else {
-                    Paragraph(stringResource(R.string.sec_handover_check_ask, asker, keeper))
-                    Paragraph(stringResource(R.string.sec_handover_check_then, keeper, asker))
+                when (screen.mode) {
+                    HandoverMode.KEYS -> {
+                        Paragraph(stringResource(R.string.sec_handover_keys_ask, asker, keeper))
+                        Paragraph(stringResource(R.string.sec_handover_keys_then, asker))
+                    }
+                    HandoverMode.CHECK_WORDS -> {
+                        Paragraph(stringResource(R.string.sec_handover_check_ask, asker, keeper))
+                        Paragraph(stringResource(R.string.sec_handover_check_then, keeper, asker))
+                    }
+                    HandoverMode.SIGN_DEVICE -> {
+                        StepTitle(stringResource(R.string.sec_sign_ask, screen.server.orEmpty()))
+                        Paragraph(
+                            stringResource(if (screen.withWords) R.string.sec_sign_words_then else R.string.sec_sign_then, asker, keeper),
+                        )
+                    }
                 }
                 Paragraph(stringResource(R.string.sec_handover_short_name, screen.keyId))
                 when (screen.note) {
@@ -65,9 +81,22 @@ fun HandoverContent(
                 Paragraph(stringResource(R.string.sec_confirm_intro))
                 ConfirmWordsFields(screen.positions, screen.answers, actions.onAnswerChange, actions.onCheck)
             }
+            is HandoverAllWords -> {
+                if (screen.notThisApp) Paragraph(stringResource(R.string.sec_sign_not_this_key), error = true)
+                EnterWordsContent(screen.entry, actions.words)
+            }
+            is HandoverOtherKey -> ShkErrorState(
+                title = stringResource(R.string.sec_failed_title),
+                body = stringResource(R.string.sec_sign_other_key, keeper, screen.keyId),
+                action = ShkStateAction(stringResource(R.string.sec_handover_close), actions.onClose),
+            )
             HandoverNotKept -> ShkErrorState(
                 title = stringResource(R.string.sec_failed_title),
-                body = stringResource(R.string.sec_handover_not_kept, keeper, asker),
+                body = if (signing) {
+                    stringResource(R.string.sec_sign_no_keys, keeper)
+                } else {
+                    stringResource(R.string.sec_handover_not_kept, keeper, asker)
+                },
                 action = ShkStateAction(stringResource(R.string.sec_handover_close), actions.onClose),
             )
             is HandoverFailed -> ShkErrorState(

@@ -8,15 +8,32 @@ data object HandoverWorking : HandoverScreen
 
 /**
  * What the asking app wants, and **Allow** and **Do not allow**. [keyId]
- * is the short name of the kept recovery key. [prompt] is set while the
- * system prompt is open; [note] says how the last one ended.
+ * is the short name of the kept recovery key, or in
+ * [HandoverMode.SIGN_DEVICE] of the key that signs. [prompt] is set while
+ * the system prompt is open; [note] says how the last one ended.
+ *
+ * In [HandoverMode.SIGN_DEVICE], [server] is the host of the sync server,
+ * and [withWords] is true in an app that does not keep the recovery key:
+ * **Allow** then asks for all 24 words instead of the system prompt.
  */
 data class HandoverAsk(
     val mode: HandoverMode,
     val keyId: String,
     val prompt: PromptRequest? = null,
     val note: KeepNote? = null,
+    val server: String? = null,
+    val withWords: Boolean = false,
 ) : HandoverScreen
+
+/**
+ * All 24 words, on the screen of "Enter your recovery key", to sign a join
+ * in an app that does not keep the recovery key. [notThisApp] is true when
+ * they are the words of another recovery key.
+ */
+data class HandoverAllWords(val entry: EnterWords, val notThisApp: Boolean = false) : HandoverScreen
+
+/** The Sync app named the recovery key [keyId], and this app has no keys of it. Nothing can be signed. */
+data class HandoverOtherKey(val keyId: String) : HandoverScreen
 
 /** Four of the words, at [positions] (from 1), for [HandoverMode.CHECK_WORDS]. [mismatch] after a wrong answer. */
 data class HandoverFourWords(val positions: List<Int>, val answers: List<String>, val mismatch: Boolean = false) : HandoverScreen
@@ -24,7 +41,7 @@ data class HandoverFourWords(val positions: List<Int>, val answers: List<String>
 /** This app does not keep the recovery key now. Nothing can be handed over. */
 data object HandoverNotKept : HandoverScreen
 
-/** The keys are made. The screen hands them over and closes. */
+/** The keys or the signed join are made. The screen hands them over and closes. */
 data object HandoverReady : HandoverScreen
 
 /** The keys could not be read now, or the kept key is damaged ([damaged]). Nothing was handed over. */

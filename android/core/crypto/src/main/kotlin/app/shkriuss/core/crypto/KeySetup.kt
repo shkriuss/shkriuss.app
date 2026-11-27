@@ -455,6 +455,87 @@ class KeySetup internal constructor(private val vault: KeyVault) {
         }
     }
 
+    /**
+     * True if this app has keys of the recovery key [keyId]: its `record`
+     * keyset holds a key under that ID. A keeper signs a join only with
+     * such a key, and says so before it shows anything when the Sync app
+     * names another ([beginSignDevice]). Throws [BlobException] if
+     * `record` cannot be judged now or is damaged.
+     */
+    fun hasKeysOf(keyId: KeyId): Boolean = vault.locked {
+        when (val record = judged(KeysetName.RECORD)) {
+            is Stored.Open -> keyId in KeysetCodec.keyIds(record.keyset)
+            is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
+            else -> false
+        }
+    }
+
+    /**
+     * Starts signing that a device may join a sync server, for the Sync
+     * app, from the recovery key this app keeps (the mode "Sign a device"
+     * of crypto-design.md, "The handover format, version 2"). One prompt
+     * of the Recovery guard, one signature. `finish()` makes the account
+     * key of the recovery key that [request] names, or of the current one,
+     * signs the join statement with the time [clock] gives at that moment,
+     * derives the name key, and drops the recovery key and the account key
+     * at once. The screen code never sees either.
+     *
+     * Throws [BlobException] as [beginShowRecoveryKey] does when this app
+     * does not keep the key now. `finish()` throws [BlobException] "damaged
+     * or changed" if the kept keys do not hold the key that [request]
+     * names: check with [hasKeysOf] first.
+     */
+    fun beginSignDevice(request: DeviceJoinRequest, clock: () -> Long = System::currentTimeMillis): PromptStep<SignedJoin> =
+        vault.locked {
+            check(vault.app.holdsDataKeys) { "Only a data app signs a join" }
+            val stored = keptRecoveryKeyset()
+            val cipher = PromptCipher(vault.startCipher(stored.key, WrappedKeyset.iv(stored.blob)), encrypts = false)
+            PromptStep(
+                cryptoObject = cipher.cryptoObject,
+                onFinish = {
+                    vault.locked {
+                        val keys = RecoveryKeyDeriver.recoveryKeys(vault.openWithPrompt(KeysetName.RECOVERY, stored, cipher))
+                        val signer = request.keyId?.let { wanted -> keys.firstOrNull { it.keyId == wanted } } ?: keys.first()
+                        if (request.keyId != null && signer.keyId != request.keyId) throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
+                        SignedJoin.sign(signer, request, clock())
+                    }
+                },
+                onCancel = {},
+            )
+        }
+
+    /**
+     * Signs that a device may join a sync server, for the Sync app, with
+     * all 24 words that the user just entered, in an app that does not
+     * keep the recovery key (crypto-design.md, "The handover format,
+     * version 2", the words in an app that is not a keeper). Only the
+     * words of this app's own keys are taken: [entered] must be the
+     * recovery key that [request] names, or this app's current one, and
+     * this app's `record` must hold the key it derives.
+     *
+     * Returns the signed statement, with the time [clock] gives, or null
+     * for words of another recovery key. Nothing is stored. Throws
+     * [BlobException] if `record` cannot be judged now or is damaged.
+     */
+    fun signDeviceWithWords(
+        entered: RecoveryKey,
+        request: DeviceJoinRequest,
+        clock: () -> Long = System::currentTimeMillis,
+    ): SignedJoin? = vault.locked {
+        check(vault.app.holdsDataKeys) { "Only a data app signs a join" }
+        val record = when (val stored = judged(KeysetName.RECORD)) {
+            is Stored.Open -> stored.keyset
+            is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
+            else -> return@locked null
+        }
+        val wanted = request.keyId ?: KeysetCodec.primaryId(record)
+        val derived = RecoveryKeyDeriver.derive(RecoveryKeyDeriver.recoveryKeyset(listOf(entered), entered), vault.app).record
+        val own = entered.keyId == wanted && (0 until record.size()).any { index ->
+            record.getAt(index).id == entered.keyId.value && record.getAt(index).key.equalsKey(derived.primary.key)
+        }
+        if (own) SignedJoin.sign(entered, request, clock()) else null
+    }
+
     private fun requireAnotherDataApp(asker: AppName) {
         require(asker.holdsDataKeys && asker != vault.app) { "Keys are handed over only to another data app" }
     }

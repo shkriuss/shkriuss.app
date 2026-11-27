@@ -184,7 +184,7 @@ class HandoverGateTest {
             assertTrue("$why: no screen", showsNothing(screen))
         }
 
-        val newer = startHandover("app.shkriuss.reminders", request(version = Handover.VERSION + 1))
+        val newer = startHandover("app.shkriuss.reminders", request(version = Handover.NEWEST_VERSION + 1))
         assertEquals("a newer version", HandoverRefusal.UPDATE.name, refusalOf(newer))
         assertTrue(showsNothing(newer))
     }
@@ -208,12 +208,12 @@ class HandoverGateTest {
         val valid = HandoverRequest.Valid(reminders, "app.shkriuss.reminders", HandoverMode.KEYS)
         val suite = AndroidSuiteApps(app)
 
-        val (code, data) = handoverResult("app.shkriuss.reminders", valid, suite, keys)
+        val (code, data) = handoverResult("app.shkriuss.reminders", valid, suite, HandoverGift.Keys(keys))
         assertEquals(Activity.RESULT_OK, code)
         assertNotNull(data!!.getByteArrayExtra("app.shkriuss.handover.RECORD"))
 
         fun refused(caller: String?, why: String) {
-            val (refusedCode, refusedData) = handoverResult(caller, valid, suite, keys)
+            val (refusedCode, refusedData) = handoverResult(caller, valid, suite, HandoverGift.Keys(keys))
             assertEquals(why, Activity.RESULT_CANCELED, refusedCode)
             assertEquals(why, HandoverRefusal.REFUSED.name, refusedData?.getStringExtra(Handover.EXTRA_REFUSAL))
             assertNull("$why: no keys", refusedData?.getByteArrayExtra("app.shkriuss.handover.RECORD"))
@@ -305,9 +305,9 @@ class HandoverGateTest {
         install("app.shkriuss.notes", current = listOf(suiteCertificate))
         install("app.shkriuss.thief", current = listOf(otherCertificate))
         listOf("app.shkriuss.reminders", "app.shkriuss.notes", "app.shkriuss.thief").forEach(::offerHandoverScreen)
-        answerStatus("app.shkriuss.reminders", KeeperStatus.bundleOf(id))
-        answerStatus("app.shkriuss.notes", KeeperStatus.bundleOf(null))
-        answerStatus("app.shkriuss.thief", KeeperStatus.bundleOf(id))
+        answerStatus("app.shkriuss.reminders", KeeperStatus.bundleOf(keeps = true, keyId = id))
+        answerStatus("app.shkriuss.notes", KeeperStatus.bundleOf(keeps = false, keyId = null))
+        answerStatus("app.shkriuss.thief", KeeperStatus.bundleOf(keeps = true, keyId = id))
 
         val keepers = AndroidSuiteApps(app).keepers()
         assertEquals(listOf("app.shkriuss.reminders"), keepers.map { it.packageName })

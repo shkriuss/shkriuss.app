@@ -1,5 +1,7 @@
 package app.shkriuss.core.crypto
 
+import android.os.Bundle
+import app.shkriuss.core.crypto.fixtures.SoftwareHardwareKeys
 import com.google.crypto.tink.InsecureSecretKeyAccess
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -247,6 +249,36 @@ class NoSecretsTest {
         failing { RecoveryKeyDeriver.derive(TestKeys.recoveryKeyset(key), AppName.of("sync")) }
         failing { RecoveryKey.ofBytes(ByteArray(16) { it.toByte() }) }
 
+        // Sync: a join signed by a keeper and with the words, the name key, a sealed name, the account key.
+        val nameKey = RecoveryKeyDeriver.nameKey(key)
+        secrets["the name key"] = TestKeys.keyBytes(nameKey).flatMap { forms(hex(it)) }
+        secrets["the name keyset"] = forms(KeysetCodec.serialize(nameKey))
+        secrets["the account key"] = forms(AccountKey.privateBytes(key))
+        val sync = TestApp(temporary.newFolder(), SoftwareHardwareKeys(), RecoveryKeyDeriver.SYNC).open()
+        val device = sync.sync.makeDeviceKey(sync.sync.newDeviceKeyNumber())
+        show(device)
+        show(device.deviceId)
+        val join = DeviceJoinRequest.of(ByteArray(16), "https://sync.example.workers.dev", device.publicKey)!!
+        show(join)
+        val keeper = TestApp(temporary.newFolder())
+        keeper.open().setup.storeDerivedKeys(key)
+        keeper.open().setup.beginKeepRecoveryKey(key)!!.finish()
+        val signStep = keeper.open().setup.beginSignDevice(join)
+        show(signStep)
+        val signed = signStep.finish()
+        show(signed)
+        show(signed.nameKey)
+        show(Bundle().also { signed.writeTo(it) }.keySet())
+        show(app.open().setup.signDeviceWithWords(key, join))
+        show(app.open().setup.signDeviceWithWords(RecoveryKey.newRandom(), join))
+        sync.sync.storeNameKey(signed)
+        show(sync.sync.nameKeyState())
+        show(sync.sync.openName(device.deviceId, sync.sync.sealName(device.deviceId, "Pixel 9 Pro")))
+        failing { sync.sync.openName(device.deviceId, ByteArray(60)) }
+        failing { sync.sync.sealName(device.deviceId, " ") }
+        failing { SignedJoin.readFrom(Bundle().also { signed.writeTo(it) }.apply { putByteArray("app.shkriuss.handover.SIGNATURE", ByteArray(64)) }) }
+        failing { app.open().sync.storeNameKey(signed) }
+
         // The raw key of the recovery key, read the way the module reads it.
         show(key.prfKey)
         show(key.prfKey.parameters)
@@ -260,7 +292,8 @@ class NoSecretsTest {
         // A data class writes its fields into its toString. Nothing that holds a key may be one.
         val sources = File("src/main/kotlin").walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
         val dataClasses = sources.flatMap { Regex("""data class (\w+)""").findAll(it.readText()).map { match -> match.groupValues[1] } }
-        assertEquals(listOf("HardwareKeyRef"), dataClasses)
+        assertEquals(listOf("DeviceKeyRef", "HardwareKeyRef"), dataClasses.sorted())
+        assertEquals("DeviceKeyRef(number=3)", DeviceKeyRef(3).toString())
         assertEquals("HardwareKeyRef(kind=LOCK, number=3)", HardwareKeyRef(HardwareKeyKind.LOCK, 3).toString())
     }
 
@@ -275,5 +308,8 @@ class NoSecretsTest {
         assertEquals("DoNotBelongTogether", RecoveryWords.parse("abandon").toString())
         assertEquals("WordsProof", WordsProof(key.keyId).toString())
         assertEquals("HandedOverKeys", HandedOverKeys(TestKeys.derived(key), wordsChecked = true).toString())
+        val device = TestKeys.syncApp().sync.makeDeviceKey(1)
+        val join = DeviceJoinRequest.of(ByteArray(16), "https://sync.example.workers.dev", device.publicKey)!!
+        assertEquals("SignedJoin", SignedJoin.sign(key, join, 0).toString())
     }
 }

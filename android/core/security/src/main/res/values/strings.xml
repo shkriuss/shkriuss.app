@@ -241,6 +241,15 @@
     <string name="sec_handover_close">Close</string>
     <string name="sec_prompt_handover">Give %1$s its keys</string>
     <string name="sec_prompt_handover_check">Check your recovery words for %1$s</string>
+    <string name="sec_prompt_sign_device">Add this phone to your sync server</string>
+    <string name="sec_sign_title">Add this phone to sync</string>
+    <string name="sec_sign_working">Signing</string>
+    <string name="sec_sign_ask">Add this phone to your sync server at %1$s?</string>
+    <string name="sec_sign_then">%1$s asks for this. %2$s signs it with your recovery key after you confirm that it is you. %1$s gets only the key that seals the names of your devices, never the 24 words or the keys of %2$s.</string>
+    <string name="sec_sign_words_then">%1$s asks for this. %2$s does not keep your recovery key on this phone, so you enter all 24 words next. %2$s uses them once to sign and keeps nothing. %1$s gets only the key that seals the names of your devices, never the 24 words or the keys of %2$s.</string>
+    <string name="sec_sign_not_this_key">These words are for another recovery key.</string>
+    <string name="sec_sign_other_key">%1$s has no keys of the recovery key %2$s, which your sync server uses. Allow it in an app that has them.</string>
+    <string name="sec_sign_no_keys">%1$s has no recovery key yet, so it cannot add this phone to your sync server. Set up the recovery key in %1$s first.</string>
 
     <!-- The asking app's "Get the keys" screen (ADR 0041). -->
     <string name="sec_get_keys_title">Get the keys</string>

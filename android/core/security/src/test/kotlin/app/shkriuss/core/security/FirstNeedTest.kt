@@ -21,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
+import app.shkriuss.core.crypto.DeviceJoinRequest
 import app.shkriuss.core.design.ShkFilledButton
 import app.shkriuss.core.design.ShkText
 import app.shkriuss.core.design.ShkTheme
@@ -355,9 +356,14 @@ class FirstNeedScreen : ComponentActivity() {
 
             override fun keepers() = now.keepers()
 
+            override fun isSyncApp(packageName: String) = now.isSyncApp(packageName)
+
+            override fun appsWithKeys() = now.appsWithKeys()
+
             override fun labelOf(packageName: String) = now.labelOf(packageName)
 
-            override fun handoverIntent(packageName: String, mode: HandoverMode) = now.handoverIntent(packageName, mode)
+            override fun handoverIntent(packageName: String, mode: HandoverMode, join: DeviceJoinRequest?) =
+                now.handoverIntent(packageName, mode, join)
 
             override fun launchIntent(packageName: String) = now.launchIntent(packageName)
         }

@@ -101,7 +101,7 @@ class HandoverRulesTest {
         assertEquals("another mode", HandoverRequest.Refused, request("app.shkriuss.reminders", extras(mode = "RECOVERY_KEY")))
         val wrongType = Bundle().apply { putString(Handover.EXTRA_VERSION, "1") }
         assertEquals("a version of another type", HandoverRequest.Refused, request("app.shkriuss.reminders", wrongType))
-        assertEquals("a newer version", HandoverRequest.Newer, request("app.shkriuss.reminders", extras(version = 2)))
+        assertEquals("a newer version", HandoverRequest.Newer, request("app.shkriuss.reminders", extras(version = Handover.NEWEST_VERSION + 1)))
     }
 
     private fun keeperKeys(): Pair<Intent, KeyId> {
@@ -116,21 +116,21 @@ class HandoverRulesTest {
     fun theAskingAppReadsTheKeysAndChecksTheKeeperAgain() {
         val (data, keyId) = keeperKeys()
         val suite = FakeSuiteApps(peers = mapOf("app.shkriuss.water" to AppName.of("water")))
-        val answer = KeeperAnswer.of("app.shkriuss.water", ActivityResult(Activity.RESULT_OK, data), suite)
+        val answer = KeeperAnswer.of("app.shkriuss.water", ActivityResult(Activity.RESULT_OK, data), suite, HandoverMode.KEYS)
         assertEquals(keyId, (answer as KeeperAnswer.Keys).keys.keyId)
 
         suite.peers = emptyMap()
         assertEquals(
             "a keeper that no longer passes the checks",
             KeeperAnswer.NotASuiteApp,
-            KeeperAnswer.of("app.shkriuss.water", ActivityResult(Activity.RESULT_OK, data), suite),
+            KeeperAnswer.of("app.shkriuss.water", ActivityResult(Activity.RESULT_OK, data), suite, HandoverMode.KEYS),
         )
     }
 
     @Test
     fun theAskingAppReadsEveryOtherAnswerAsWhatItIs() {
         val suite = FakeSuiteApps(peers = mapOf("app.shkriuss.water" to AppName.of("water")))
-        fun answer(code: Int, data: Intent?) = KeeperAnswer.of("app.shkriuss.water", ActivityResult(code, data), suite)
+        fun answer(code: Int, data: Intent?) = KeeperAnswer.of("app.shkriuss.water", ActivityResult(code, data), suite, HandoverMode.KEYS)
 
         assertEquals(KeeperAnswer.Declined, answer(Activity.RESULT_CANCELED, null))
         assertEquals(KeeperAnswer.Declined, answer(Activity.RESULT_CANCELED, refusalResult(null)))
@@ -193,15 +193,15 @@ class HandoverRulesTest {
     @Test
     fun aStatusAnswerIsReadOnlyInItsOwnForm() {
         val id = KeyId(0x0a0b0c0d)
-        assertEquals("0a0b0c0d", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id)))
-        assertNull(KeeperStatus.keyIdOf(KeeperStatus.bundleOf(null)))
+        assertEquals("0a0b0c0d", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(keeps = true, keyId = id)))
+        assertNull(KeeperStatus.keyIdOf(KeeperStatus.bundleOf(keeps = false, keyId = null)))
         assertNull(KeeperStatus.keyIdOf(Bundle()))
-        assertNull("a newer version", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { putInt("app.shkriuss.keeper.VERSION", 2) }))
-        assertNull("no key ID", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { remove("app.shkriuss.keeper.KEY_ID") }))
-        assertNull("a key ID of another type", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { putString("app.shkriuss.keeper.KEY_ID", "0a0b0c0d") }))
-        assertNull("a key ID of another number type", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(id).apply { putLong("app.shkriuss.keeper.KEY_ID", 1L) }))
+        assertNull("a newer version", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(keeps = true, keyId = id).apply { putInt("app.shkriuss.keeper.VERSION", 2) }))
+        assertNull("no key ID", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(keeps = true, keyId = id).apply { remove("app.shkriuss.keeper.KEY_ID") }))
+        assertNull("a key ID of another type", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(keeps = true, keyId = id).apply { putString("app.shkriuss.keeper.KEY_ID", "0a0b0c0d") }))
+        assertNull("a key ID of another number type", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(keeps = true, keyId = id).apply { putLong("app.shkriuss.keeper.KEY_ID", 1L) }))
         // A key ID is four bytes of PRF output, so 0 is one of them.
-        assertEquals("00000000", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(KeyId(0))))
+        assertEquals("00000000", KeeperStatus.keyIdOf(KeeperStatus.bundleOf(keeps = true, keyId = KeyId(0))))
         assertTrue(Handover.statusAuthority("app.shkriuss.water") == "app.shkriuss.water.keeper")
     }
 }

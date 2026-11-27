@@ -158,7 +158,8 @@ class HandoverViewModelsTest {
 
     @Test
     fun aStopWhileThePromptIsMadeMakesItsAnswerCountForNothing() {
-        for (mode in HandoverMode.entries) {
+        // The modes another data app asks in. SignDeviceTest has the same for the Sync app's mode.
+        for (mode in HandoverMode.entries - HandoverMode.SIGN_DEVICE) {
             val (keeper, _) = keeper()
             val background = QueuedDispatcher()
             val model = HandoverViewModel(keeper.crypto, reminders, mode, background, Random(7), inline)

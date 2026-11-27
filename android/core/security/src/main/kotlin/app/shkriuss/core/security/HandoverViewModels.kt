@@ -7,10 +7,14 @@ import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.BlobAnswer
 import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.CannotMakeHardwareKeyException
+import app.shkriuss.core.crypto.DeviceJoinRequest
 import app.shkriuss.core.crypto.HandedOverKeys
 import app.shkriuss.core.crypto.KeySetupResult
+import app.shkriuss.core.crypto.KeyStatus
 import app.shkriuss.core.crypto.RecoveryKey
+import app.shkriuss.core.crypto.RecoveryWordsResult
 import app.shkriuss.core.crypto.ShkCrypto
+import app.shkriuss.core.crypto.SignedJoin
 import kotlin.random.Random
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -26,11 +30,18 @@ import kotlinx.coroutines.withContext
  * checked first. The user allows it, the system prompt of the Recovery
  * guard opens the kept key, and `core/crypto` makes the asker's keys.
  *
- * In [HandoverMode.KEYS] the recovery key never reaches this object: the
- * prompt step makes the keys. In [HandoverMode.CHECK_WORDS] the kept key
- * is held from the prompt until the four words are checked, as when the
- * keeper turns its own app lock on, and leaves memory when the screen
- * stops. The keys wait here until the screen takes them ([takeKeys]).
+ * In [HandoverMode.SIGN_DEVICE] the asker is the Sync app, and [join] is
+ * what it asks to be signed (crypto-design.md, "The handover format,
+ * version 2"). A keeper signs after the system prompt. An app that does
+ * not keep the key, but has keys of the one to sign with, asks for all 24
+ * words instead and takes only the words of its own keys.
+ *
+ * In [HandoverMode.KEYS] and [HandoverMode.SIGN_DEVICE] the recovery key
+ * never reaches this object: the prompt step makes the keys or the
+ * signature. In [HandoverMode.CHECK_WORDS] the kept key is held from the
+ * prompt until the four words are checked, as when the keeper turns its
+ * own app lock on, and leaves memory when the screen stops. What is
+ * handed over waits here until the screen takes it ([takeGift]).
  *
  * [main] is the main thread. Tests hold its work back.
  */
@@ -41,6 +52,7 @@ class HandoverViewModel internal constructor(
     private val background: CoroutineDispatcher = Dispatchers.IO,
     private val random: Random = Random.Default,
     private val main: CoroutineDispatcher = Dispatchers.Main.immediate,
+    private val join: DeviceJoinRequest? = null,
 ) : ViewModel() {
     private val screen = MutableStateFlow<HandoverScreen>(HandoverWorking)
 
@@ -50,42 +62,64 @@ class HandoverViewModel internal constructor(
     @Volatile
     private var requests = 0
 
-    /** The short name of the kept key, for the screen that asks. */
+    /** The first screen that asks, to show again after a stop dropped what was held. */
     @Volatile
-    private var keyId: String? = null
+    private var asking: HandoverAsk? = null
 
     /** The kept recovery key, in [HandoverMode.CHECK_WORDS] only, from the prompt until the words are checked. */
     @Volatile
     private var kept: RecoveryKey? = null
 
-    /** The keys, from when they are made until the screen takes them. */
+    /** The keys or the signed join, from when they are made until the screen takes them. */
     @Volatile
-    private var keys: HandedOverKeys? = null
+    private var gift: HandoverGift? = null
 
     /** Counts the stops that dropped the kept key. Work that began before one keeps nothing. */
     @Volatile
     private var stops = 0
 
     init {
+        require((mode == HandoverMode.SIGN_DEVICE) == (join != null)) { "Only Sign a device signs a join" }
         work {
             val status = crypto.status()
-            val id = status.keyId?.toString()
-            keyId = id
-            screen.value = if (status.keepsRecoveryKey && id != null) HandoverAsk(mode, id) else HandoverNotKept
+            val first = if (join == null) {
+                val id = status.keyId?.toString()
+                if (status.keepsRecoveryKey && id != null) HandoverAsk(mode, id) else HandoverNotKept
+            } else {
+                signingScreen(status, join)
+            }
+            asking = first as? HandoverAsk
+            screen.value = first
         }
     }
 
-    /** The user allows it: the system prompt of the Recovery guard. */
+    /** The first screen of [HandoverMode.SIGN_DEVICE]: no keys, keys of another recovery key, or what to sign. */
+    private fun signingScreen(status: KeyStatus, join: DeviceJoinRequest): HandoverScreen {
+        val own = status.keyId ?: return HandoverNotKept
+        val signer = join.keyId ?: own
+        if (!crypto.setup.hasKeysOf(signer)) return HandoverOtherKey(signer.toString())
+        return HandoverAsk(mode, signer.toString(), server = join.host, withWords = !status.keepsRecoveryKey)
+    }
+
+    /** The user allows it: the system prompt of the Recovery guard, or all 24 words in an app that does not keep the key. */
     fun onAllow() {
         val ask = screen.value as? HandoverAsk ?: return
         if (ask.prompt != null) return
+        if (ask.withWords) {
+            screen.value = HandoverAllWords(WordEntry.empty())
+            return
+        }
         // Taken now, on the main thread, as on the screen that shows the words: a stop while the prompt is made makes
         // its answer count for nothing.
         val asked = stops
         screen.value = HandoverWorking
         work {
             val step = try {
-                if (mode == HandoverMode.KEYS) crypto.setup.beginHandOver(asker) else crypto.setup.beginShowRecoveryKey()
+                when (mode) {
+                    HandoverMode.KEYS -> crypto.setup.beginHandOver(asker)
+                    HandoverMode.CHECK_WORDS -> crypto.setup.beginShowRecoveryKey()
+                    HandoverMode.SIGN_DEVICE -> crypto.setup.beginSignDevice(checkNotNull(join))
+                }
             } catch (failed: BlobException) {
                 screen.value = if (failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) HandoverFailed(damaged = true) else HandoverNotKept
                 return@work
@@ -123,7 +157,11 @@ class HandoverViewModel internal constructor(
                 }
                 when (result) {
                     is HandedOverKeys -> {
-                        keys = result
+                        gift = HandoverGift.Keys(result)
+                        screen.value = HandoverReady
+                    }
+                    is SignedJoin -> {
+                        gift = HandoverGift.Signed(result)
                         screen.value = HandoverReady
                     }
                     is RecoveryKey -> {
@@ -156,32 +194,77 @@ class HandoverViewModel internal constructor(
                     screen.value = four.copy(mismatch = true)
                 } else {
                     kept = null
-                    keys = checked
+                    gift = HandoverGift.Keys(checked)
                     screen.value = HandoverReady
                 }
             }
         }
     }
 
+    /** The user typed [text] for the current one of the 24 words. */
+    fun onTyped(text: String) = onWords { WordEntry.typed(it, text) }
+
+    /** The user picked [word] for the current one of the 24 words. */
+    fun onWord(word: String) = onWords { WordEntry.picked(it, word) }
+
+    /** The user wants to change the word at [index]. */
+    fun onEditWord(index: Int) = onWords { WordEntry.edit(it, index) }
+
+    private fun onWords(change: (EnterWords) -> EnterWords) {
+        val all = screen.value as? HandoverAllWords ?: return
+        screen.value = all.copy(entry = change(all.entry), notThisApp = false)
+    }
+
     /**
-     * Hands the keys to the screen once, which gives them to the asking app
-     * and closes. Null if there are none, or they were taken already.
+     * Checks the 24 words: each in the list, the checksum, and then that
+     * they are the words of this app's own keys. Right ones sign the join.
      */
-    internal fun takeKeys(): HandedOverKeys? = keys.also { keys = null }
+    fun onCheckAll() {
+        val all = screen.value as? HandoverAllWords ?: return
+        val request = join ?: return
+        when (val result = WordEntry.check(all.entry)) {
+            is RecoveryWordsResult.Accepted -> {
+                screen.value = HandoverWorking
+                val asked = stops
+                work {
+                    val signed = crypto.setup.signDeviceWithWords(result.recoveryKey, request)
+                    withContext(main) {
+                        when {
+                            asked != stops -> screen.value = all
+                            signed == null -> screen.value = all.copy(notThisApp = true)
+                            else -> {
+                                gift = HandoverGift.Signed(signed)
+                                screen.value = HandoverReady
+                            }
+                        }
+                    }
+                }
+            }
+            else -> screen.value = all.copy(entry = WordEntry.problem(all.entry, result), notThisApp = false)
+        }
+    }
+
+    /**
+     * Hands the keys or the signed join to the screen once, which gives
+     * them to the asking app and closes. Null if there are none, or they
+     * were taken already.
+     */
+    internal fun takeGift(): HandoverGift? = gift.also { gift = null }
 
     /**
      * The screen stopped. Unless the phone is only turning
-     * ([changingConfigurations]), the kept key and any keys not handed over
-     * yet leave memory, and the screen asks again.
+     * ([changingConfigurations]), the kept key and anything not handed over
+     * yet leave memory, and the screen asks again. Words being typed stay,
+     * as on the screen that enters them.
      */
     fun onStop(changingConfigurations: Boolean) {
         if (changingConfigurations) return
         stops++
-        val held = kept != null || keys != null || screen.value is HandoverFourWords || screen.value is HandoverReady
+        val held = kept != null || gift != null || screen.value is HandoverFourWords || screen.value is HandoverReady
         kept = null
-        keys = null
-        val id = keyId
-        if (held && id != null) screen.value = HandoverAsk(mode, id)
+        gift = null
+        val first = asking
+        if (held && first != null) screen.value = first
     }
 
     private fun work(work: suspend () -> Unit) {
@@ -197,7 +280,7 @@ class HandoverViewModel internal constructor(
 
     override fun onCleared() {
         kept = null
-        keys = null
+        gift = null
         cancelQuietly((screen.value as? HandoverAsk)?.prompt)
     }
 }
@@ -237,6 +320,8 @@ class GetKeysViewModel internal constructor(
             KeeperAnswer.Update -> screen.value = GetKeysFailed(GetKeysProblem.UPDATE)
             KeeperAnswer.Unreadable -> screen.value = GetKeysFailed(GetKeysProblem.UNREADABLE)
             KeeperAnswer.NotASuiteApp -> screen.value = GetKeysFailed(GetKeysProblem.NOT_A_SUITE_APP)
+            // Answers of Sign a device, which this screen never asks for.
+            is KeeperAnswer.Signed, KeeperAnswer.OtherKey -> screen.value = GetKeysFailed(GetKeysProblem.UNREADABLE)
         }
     }
 

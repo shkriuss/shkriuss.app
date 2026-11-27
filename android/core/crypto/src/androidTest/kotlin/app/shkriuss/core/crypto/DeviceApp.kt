@@ -38,6 +38,7 @@ internal class DeviceApp {
     fun reset() {
         ScreenLock.reset()
         hardware.aliases().mapNotNull { HardwareKeyRef.ofAlias(it) }.forEach { hardware.delete(it) }
+        hardware.aliases().mapNotNull { DeviceKeyRef.ofAlias(it) }.forEach { hardware.delete(it) }
         folder.deleteRecursively()
     }
 }

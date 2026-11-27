@@ -2,6 +2,10 @@ package app.shkriuss.core.crypto
 
 import android.content.pm.PackageManager
 import app.shkriuss.core.testing.TestDevice
+import com.google.crypto.tink.subtle.EcdsaVerifyJce
+import com.google.crypto.tink.subtle.EllipticCurves
+import com.google.crypto.tink.subtle.Enums
+import java.security.GeneralSecurityException
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -17,7 +21,8 @@ import org.junit.Test
  * [AndroidHardwareKeys] on the real Android Keystore, on an emulator with
  * no screen lock: making, asking for, listing, using and deleting a key
  * that needs no prompt, and which failure is which ("Rules for making,
- * replacing and losing a hardware key" in crypto-design.md).
+ * replacing and losing a hardware key" in crypto-design.md). Also the
+ * Sync app's device key, which signs ("The device key").
  */
 class HardwareKeysTest {
     private val app = DeviceApp()
@@ -162,5 +167,53 @@ class HardwareKeysTest {
         assertFalse(hardware.exists(stray))
         assertTrue(hardware.exists(named))
         assertEquals(TestKeys.vectorRecoveryKey().keyId, restarted.status().keyId)
+    }
+
+    @Test
+    fun theDeviceKeySignsAndItsSignatureFitsItsPublicKey() {
+        val device = DeviceKeyRef(1)
+        assertFalse(hardware.exists(device))
+
+        hardware.make(device)
+        assertTrue(hardware.exists(device))
+        assertTrue(device.alias in hardware.aliases())
+        val publicKey = hardware.publicKey(device)
+        assertEquals(65, publicKey.size)
+        assertTrue(P256.isPublicKey(publicKey))
+
+        val data = "the bytes of a request".toByteArray()
+        val signature = P256.derToRaw(hardware.sign(device, data))
+        val verifier = EcdsaVerifyJce(
+            EllipticCurves.getEcPublicKey(EllipticCurves.CurveType.NIST_P256, EllipticCurves.PointFormatType.UNCOMPRESSED, publicKey),
+            Enums.HashType.SHA256,
+            EllipticCurves.EcdsaEncoding.IEEE_P1363,
+        )
+        verifier.verify(signature, data)
+        assertThrows(GeneralSecurityException::class.java) { verifier.verify(signature, "other bytes".toByteArray()) }
+
+        hardware.delete(device)
+        assertFalse(hardware.exists(device))
+    }
+
+    @Test
+    fun aDeviceKeyThatDoesNotExistIsGone() {
+        val device = DeviceKeyRef(1)
+        assertThrows(HardwareKeyGone::class.java) { hardware.publicKey(device) }
+        assertThrows(HardwareKeyGone::class.java) { hardware.sign(device, ByteArray(1)) }
+        hardware.delete(device)
+    }
+
+    @Test
+    fun theCleanupAtStartLeavesTheDeviceKeyToTheSyncApp() {
+        hardware.make(DeviceKeyRef(1))
+        hardware.make(DeviceKeyRef(2))
+
+        val sync = ShkCrypto.create(TestDevice.context, RecoveryKeyDeriver.SYNC).also { it.start() }
+        assertTrue(hardware.exists(DeviceKeyRef(1)))
+        assertEquals(3, sync.sync.newDeviceKeyNumber())
+
+        sync.sync.deleteOtherDeviceKeys(keep = 2)
+        assertFalse(hardware.exists(DeviceKeyRef(1)))
+        assertTrue(hardware.exists(DeviceKeyRef(2)))
     }
 }

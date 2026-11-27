@@ -328,7 +328,11 @@ second build must write the same mapping file, or the release stops. See
   (`BackupExampleFileTest`, see `core/backup` below). `StartOverTest` and
   `RepairTest` check starting over after a setup that stopped, a damaged
   keyset file, and giving file keys up. `WordsProofTest` checks the
-  recovery words before the app lock is turned on.
+  recovery words before the app lock is turned on. `SyncKeysTest` checks
+  the Sync app's device key and its numbers, signed requests, the name
+  key, sealed names and setup codes. `SignDeviceTest` checks a join
+  signed by a keeper and with the 24 words, and the request and the
+  result as they travel between the apps.
   - No Android Keystore exists on the JVM. So the tests pass a software
     stand-in for the hardware keys, `SoftwareHardwareKeys`, with the same
     byte layout. It can act like a phone that is locked, a Keystore that
@@ -337,8 +341,8 @@ second build must write the same mapping file, or the release stops. See
     to a keyset file, and start it again. The stand-in is in the
     module's [test fixtures](#test-fixtures), so that the tests of other
     modules can have real keys too.
-  - `DesignVectorsTest` and `PublishedVectorsTest` run every vector of
-    the page and the published ones. Tink cannot be told which salt and
+  - `DesignVectorsTest`, `SyncVectorsTest` and `PublishedVectorsTest`
+    run every vector of the page and the published ones. Tink cannot be told which salt and
     nonce to use, so `ReferenceStream` builds the stream blobs a second
     time from HMAC and AES-GCM alone, and the module must open them.
   - `LargeStreamTest` encrypts and decrypts one stream that is longer
@@ -369,9 +373,9 @@ second build must write the same mapping file, or the release stops. See
     made, stored or deleted, and no key counts as lost. The Keystore
     itself is tested on an emulator
     ([emulator-tests.md](emulator-tests.md#the-tests-of-the-hardware-keys)).
-  - Four of the classes are in `src/sharedTest/`, with the helpers they
-    use: `DesignVectorsTest`, `PublishedVectorsTest`, `RecoveryWordsTest`
-    and `KeysetFilesTest`. They run here on the JVM, and a second time on
+  - Five of the classes are in `src/sharedTest/`, with the helpers they
+    use: `DesignVectorsTest`, `PublishedVectorsTest`, `RecoveryWordsTest`,
+    `KeysetFilesTest` and `SyncVectorsTest`. They run here on the JVM, and a second time on
     the emulator, where Tink takes its Android path. The stand-in they
     use comes from the test fixtures on both.
   - Most of these tests need no Robolectric. Those that build the object

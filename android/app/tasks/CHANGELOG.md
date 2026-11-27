@@ -15,6 +15,12 @@ specification is
   Tasks changes.
 - **Licences** on a tablet: a notice opened beside the list starts at
   its top, also after another notice was read to its end.
+- Ready for the Sync app, which is not released yet: when Sync asks,
+  Tasks can sign that this phone may join your sync server. Tasks shows
+  the server and asks you to allow it. If Tasks keeps your recovery key,
+  you confirm with your fingerprint or screen lock; if not, you enter
+  the 24 words of its own key. Sync gets no keys of Tasks and never the
+  words.
 
 ## 1.0.0 (2026-11-24)
 

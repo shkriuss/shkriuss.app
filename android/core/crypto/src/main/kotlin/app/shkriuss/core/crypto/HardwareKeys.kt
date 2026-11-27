@@ -79,6 +79,26 @@ internal interface HardwareKeys {
      * yet: the Keystore refuses it before the user has answered the prompt.
      */
     fun startCipher(key: HardwareKeyRef, iv: ByteArray?): Cipher
+
+    /** As [exists], for the Sync app's device key [key]. */
+    fun exists(key: DeviceKeyRef): Boolean
+
+    /**
+     * Makes the device key [key], an ECDSA key of the curve P-256 that only
+     * signs, in StrongBox where the phone has it, else once more without.
+     * Throws [CannotMakeHardwareKeyException]. The caller has checked with
+     * [exists] that the alias is free.
+     */
+    fun make(key: DeviceKeyRef)
+
+    /** The public key of the device key [key], as 65 bytes: `04`, X, Y. */
+    fun publicKey(key: DeviceKeyRef): ByteArray
+
+    /** Signs [data] with the device key [key], with SHA-256, and gives the signature in its DER form. */
+    fun sign(key: DeviceKeyRef, data: ByteArray): ByteArray
+
+    /** Deletes the device key [key]. */
+    fun delete(key: DeviceKeyRef)
 }
 
 /** Why an operation with a hardware key failed. The three cases are handled differently, never mixed up. */

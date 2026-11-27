@@ -37,12 +37,14 @@ import app.shkriuss.core.security.GetKeysDone
 import app.shkriuss.core.security.GetKeysFailed
 import app.shkriuss.core.security.GetKeysProblem
 import app.shkriuss.core.security.HandoverActions
+import app.shkriuss.core.security.HandoverAllWords
 import app.shkriuss.core.security.HandoverAsk
 import app.shkriuss.core.security.HandoverContent
 import app.shkriuss.core.security.HandoverFailed
 import app.shkriuss.core.security.HandoverFourWords
 import app.shkriuss.core.security.HandoverMode
 import app.shkriuss.core.security.HandoverNotKept
+import app.shkriuss.core.security.HandoverOtherKey
 import app.shkriuss.core.security.KeeperApp
 import app.shkriuss.core.security.KeepNote
 import app.shkriuss.core.security.Kept
@@ -88,6 +90,10 @@ enum class SecuritySample(@param:StringRes val title: Int) {
     GetKeysHasThemAppLockOff(R.string.sample_get_keys_done_app_lock_off),
     HandoverDamaged(R.string.sample_handover_damaged),
     HandoverAskAfterCancel(R.string.sample_handover_cancelled),
+    SignDeviceKeeper(R.string.sample_sign_device_keeper),
+    SignDeviceWithWords(R.string.sample_sign_device_words),
+    SignDeviceOtherWords(R.string.sample_sign_device_other_words),
+    SignDeviceOtherKey(R.string.sample_sign_device_other_key),
 }
 
 /**
@@ -299,6 +305,40 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
             HandoverActions(onDeny = onBack),
             modifier,
         )
+        SecuritySample.SignDeviceKeeper -> HandoverContent(
+            HandoverAsk(HandoverMode.SIGN_DEVICE, SAMPLE_KEY_ID, server = SAMPLE_SERVER),
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+        )
+        SecuritySample.SignDeviceWithWords -> HandoverContent(
+            HandoverAsk(HandoverMode.SIGN_DEVICE, SAMPLE_KEY_ID, server = SAMPLE_SERVER, withWords = true),
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+        )
+        SecuritySample.SignDeviceOtherWords -> HandoverContent(
+            HandoverAllWords(EnterWords(sampleWords, current = 23, typed = sampleWords.last()), notThisApp = true),
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack, words = EnterActions(onBack = onBack)),
+            modifier,
+            mode = HandoverMode.SIGN_DEVICE,
+        )
+        SecuritySample.SignDeviceOtherKey -> HandoverContent(
+            HandoverOtherKey("5e6f7a8b"),
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+            mode = HandoverMode.SIGN_DEVICE,
+        )
     }
 }
 
@@ -372,6 +412,8 @@ private const val SAMPLE_KEY_ID = "1a2b3c4d"
 /** The names of the sample apps of the handover. No app is asked: Catalog holds no keys. */
 private const val SAMPLE_KEEPER = "Water"
 private const val SAMPLE_ASKER = "Reminders"
+private const val SAMPLE_SYNC = "Sync"
+private const val SAMPLE_SERVER = "sync.example.workers.dev"
 private const val SAMPLE_OTHER_KEEPER = "Meals"
 
 /** A keeper of the sample key, for the samples of the handover. */

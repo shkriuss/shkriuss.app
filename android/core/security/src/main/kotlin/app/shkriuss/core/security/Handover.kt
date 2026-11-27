@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.crypto.DeviceJoinRequest
 import app.shkriuss.core.crypto.KeyId
 
 /**
@@ -25,8 +26,18 @@ internal object Handover {
     /** Why a keeper gave no keys, the name of a [HandoverRefusal]. Missing: the user did not allow it. */
     const val EXTRA_REFUSAL = "app.shkriuss.handover.REFUSAL"
 
-    /** The version of the request that this code writes and reads. */
+    /**
+     * The version of a request in the modes of version 1, which this code
+     * still writes for them, so that a keeper of an older version answers
+     * them.
+     */
     const val VERSION = 1
+
+    /** The newest version of the request that this code reads: version 2 adds [HandoverMode.SIGN_DEVICE]. */
+    const val NEWEST_VERSION = 2
+
+    /** The version of the answer of a keeper's status provider. It did not change with version 2 of the request. */
+    const val STATUS_VERSION = 1
 
     /** The one call of a keeper's status provider. */
     const val METHOD_STATUS = "status"
@@ -35,13 +46,21 @@ internal object Handover {
     fun statusAuthority(packageName: String): String = "$packageName.keeper"
 }
 
-/** What an asking app wants from a keeper. */
-enum class HandoverMode {
+/** What an asking app wants from a keeper. [version] is the first version of the request that has the mode. */
+enum class HandoverMode(internal val version: Int) {
     /** Its own keys, after the user allows it and the system prompt. */
-    KEYS,
+    KEYS(1),
 
     /** Its own keys, marked "words checked", after the keeper checked four of the recovery words (ADR 0041, point 19). */
-    CHECK_WORDS,
+    CHECK_WORDS(1),
+
+    /**
+     * Only for the Sync app: a signed statement that this phone may join a
+     * sync server, and the name key (crypto-design.md, "The handover
+     * format, version 2"). A keeper signs after the system prompt; a data
+     * app that does not keep the key signs with all 24 words of its own key.
+     */
+    SIGN_DEVICE(2),
 }
 
 /** Why a keeper gave no keys, besides the user saying no. */
@@ -51,6 +70,9 @@ internal enum class HandoverRefusal {
 
     /** The request is of a newer version than the keeper knows. */
     UPDATE,
+
+    /** The Sync app named a recovery key that this app has no keys of ([HandoverMode.SIGN_DEVICE] only). */
+    OTHER_KEY,
 
     /**
      * The caller fails the keeper's check (ADR 0041, point 9), or the
@@ -74,6 +96,22 @@ data class KeeperApp(
 )
 
 /**
+ * Another data app of the suite on this phone that has its keys from a
+ * recovery key, as its status provider says. [keeps] is true when it also
+ * keeps that key. Nothing here is secret.
+ */
+data class KeyApp(
+    /** Its application ID, for example `app.shkriuss.water`. */
+    val packageName: String,
+    /** Its name, as Android shows it. */
+    val label: String,
+    /** The short name of the recovery key its keys come from, eight hex digits. */
+    val keyId: String,
+    /** True when it keeps the recovery key now, so it signs after the system prompt and not with the words. */
+    val keeps: Boolean,
+)
+
+/**
  * The other apps of the suite on this phone, as this app may see them
  * (ADR 0041, points 9 to 14). Screens take it through their constructor;
  * [AndroidSuiteApps] asks Android, tests pass their own.
@@ -90,11 +128,25 @@ internal interface SuiteApps {
     /** Every other app of the suite on this phone that passes [peerName] and keeps the recovery key now. Slow: it asks each one. */
     fun keepers(): List<KeeperApp>
 
+    /**
+     * True if [packageName] is the Sync app of the same build kind, signed
+     * with exactly this app's current certificate. Only the Sync app passes,
+     * and only for [HandoverMode.SIGN_DEVICE].
+     */
+    fun isSyncApp(packageName: String): Boolean
+
+    /** Every other app of the suite on this phone that passes [peerName] and has its keys from a recovery key. Slow: it asks each one. */
+    fun appsWithKeys(): List<KeyApp>
+
     /** The name Android shows for [packageName], or the package name itself. */
     fun labelOf(packageName: String): String
 
-    /** The request that opens the handover screen of [packageName], or null if it has none. */
-    fun handoverIntent(packageName: String, mode: HandoverMode): Intent?
+    /**
+     * The request that opens the handover screen of [packageName] in
+     * [mode], or null if it has none. [join] is what the Sync app asks to
+     * be signed, for [HandoverMode.SIGN_DEVICE] only.
+     */
+    fun handoverIntent(packageName: String, mode: HandoverMode, join: DeviceJoinRequest? = null): Intent?
 
     /** The intent that opens [packageName] from the launcher, or null. */
     fun launchIntent(packageName: String): Intent?
@@ -105,12 +157,32 @@ internal interface SuiteApps {
 
         override fun keepers(): List<KeeperApp> = emptyList()
 
+        override fun isSyncApp(packageName: String): Boolean = false
+
+        override fun appsWithKeys(): List<KeyApp> = emptyList()
+
         override fun labelOf(packageName: String): String = packageName
 
-        override fun handoverIntent(packageName: String, mode: HandoverMode): Intent? = null
+        override fun handoverIntent(packageName: String, mode: HandoverMode, join: DeviceJoinRequest?): Intent? = null
 
         override fun launchIntent(packageName: String): Intent? = null
     }
+}
+
+/**
+ * The intent that opens the handover screen [screen] of [packageName] in
+ * [mode]: the version that first has the mode, so that a keeper of an
+ * older version still answers the modes it knows, and for
+ * [HandoverMode.SIGN_DEVICE] what is to be signed.
+ */
+internal fun handoverRequest(packageName: String, screen: String, mode: HandoverMode, join: DeviceJoinRequest?): Intent {
+    require((mode == HandoverMode.SIGN_DEVICE) == (join != null)) { "Only Sign a device carries what is to be signed" }
+    val extras = Bundle().apply {
+        putInt(Handover.EXTRA_VERSION, mode.version)
+        putString(Handover.EXTRA_MODE, mode.name)
+        join?.writeTo(this)
+    }
+    return Intent().setClassName(packageName, screen).putExtras(extras)
 }
 
 /** One installed app as Android describes it: its package name and the certificates it is signed with now. */
@@ -139,6 +211,24 @@ internal object SuitePeers {
         return if (ownCertificate.contentEquals(otherCertificate)) name else null
     }
 
+    /**
+     * True if [other] is the Sync app for [own]: exactly `app.shkriuss.sync`,
+     * with `.preview` exactly when [own] is a preview, and exactly one
+     * signer on each side, with the same certificate bytes. [own] must be a
+     * data app: the Sync app asks only data apps to sign.
+     */
+    fun isSyncApp(own: SignedApp, other: SignedApp): Boolean {
+        val preview = own.packageName.endsWith(PREVIEW_SUFFIX)
+        val ownName = nameOf(own.packageName, preview) ?: return false
+        if (!ownName.holdsDataKeys || nameOf(other.packageName, preview)?.value != SYNC) return false
+        if (own.multipleSigners || other.multipleSigners) return false
+        val ownCertificate = own.signers.singleOrNull() ?: return false
+        val otherCertificate = other.signers.singleOrNull() ?: return false
+        return ownCertificate.contentEquals(otherCertificate)
+    }
+
+    private const val SYNC = "sync"
+
     /** The app name of [packageName] if it is exactly `app.shkriuss.<name>`, plus `.preview` when [preview]. */
     private fun nameOf(packageName: String, preview: Boolean): AppName? {
         val rest = packageName.removePrefix(ID_PREFIX).takeIf { packageName.startsWith(ID_PREFIX) } ?: return null
@@ -151,33 +241,46 @@ internal object SuitePeers {
     }
 }
 
-/** What a keeper's status provider answers: whether it keeps the recovery key, and the short name of that key. */
+/**
+ * What a data app's status provider answers: whether it keeps the recovery
+ * key, and the short name of the key its keys come from. An app with no
+ * keys gives no key ID. An app of an older version gives the key ID only
+ * when it keeps the key, so it then counts as an app with no keys.
+ */
 internal object KeeperStatus {
     private const val VERSION_KEY = "app.shkriuss.keeper.VERSION"
     private const val KEEPS_KEY = "app.shkriuss.keeper.KEEPS"
     private const val KEY_ID_KEY = "app.shkriuss.keeper.KEY_ID"
 
-    /** The answer of an app that keeps the key with the ID [keyId], or of one that does not, when [keyId] is null. */
-    fun bundleOf(keyId: KeyId?): Bundle = Bundle().apply {
-        putInt(VERSION_KEY, Handover.VERSION)
-        putBoolean(KEEPS_KEY, keyId != null)
+    /** The answer of an app whose keys come from the recovery key [keyId], or that has none, when it is null. [keeps] is true for a keeper. */
+    fun bundleOf(keeps: Boolean, keyId: KeyId?): Bundle = Bundle().apply {
+        putInt(VERSION_KEY, Handover.STATUS_VERSION)
+        putBoolean(KEEPS_KEY, keeps && keyId != null)
         if (keyId != null) putInt(KEY_ID_KEY, keyId.value)
     }
 
+    /** The short name of the key a keeper keeps, from its answer, or null if it keeps none or the answer is not one of ours. */
+    fun keyIdOf(answer: Bundle): String? = of(answer)?.takeIf { it.first }?.second
+
     /**
-     * The short name of the key a keeper keeps, from its answer, or null if
-     * it keeps none or the answer is not one of ours. A key ID of another
-     * type makes a bundle return each default it is given, so two reads
-     * with two defaults tell it apart from the int it must be.
+     * Whether the app keeps the key, and the short name of the key its keys
+     * come from, from its answer. Null if it has no keys or the answer is
+     * not one of ours. A key ID of another type makes a bundle return each
+     * default it is given, so two reads with two defaults tell it apart
+     * from the int it must be.
      */
-    fun keyIdOf(answer: Bundle): String? = try {
-        if (answer.getInt(VERSION_KEY, 0) != Handover.VERSION || !answer.getBoolean(KEEPS_KEY, false)) {
-            null
-        } else if (!answer.containsKey(KEY_ID_KEY)) {
+    fun of(answer: Bundle): Pair<Boolean, String>? = try {
+        if (answer.getInt(VERSION_KEY, 0) != Handover.STATUS_VERSION || !answer.containsKey(KEY_ID_KEY)) {
             null
         } else {
             val withZero = answer.getInt(KEY_ID_KEY, 0)
-            if (withZero != answer.getInt(KEY_ID_KEY, 1)) null else KeyId(withZero).toString()
+            val keeps = answer.getBoolean(KEEPS_KEY, false)
+            val keepsOfAnotherType = answer.containsKey(KEEPS_KEY) && keeps != answer.getBoolean(KEEPS_KEY, true)
+            if (withZero != answer.getInt(KEY_ID_KEY, 1) || keepsOfAnotherType) {
+                null
+            } else {
+                keeps to KeyId(withZero).toString()
+            }
         }
     } catch (_: RuntimeException) {
         null
@@ -195,7 +298,17 @@ internal class AndroidSuiteApps(private val context: Context) : SuiteApps {
     }
 
     override fun keepers(): List<KeeperApp> = candidates().mapNotNull { packageName ->
-        keyIdOf(packageName)?.let { KeeperApp(packageName, labelOf(packageName), it) }
+        statusOf(packageName)?.takeIf { it.first }?.let { KeeperApp(packageName, labelOf(packageName), it.second) }
+    }
+
+    override fun isSyncApp(packageName: String): Boolean {
+        val own = signedApp(context.packageName) ?: return false
+        val other = signedApp(packageName) ?: return false
+        return SuitePeers.isSyncApp(own, other)
+    }
+
+    override fun appsWithKeys(): List<KeyApp> = candidates().mapNotNull { packageName ->
+        statusOf(packageName)?.let { (keeps, keyId) -> KeyApp(packageName, labelOf(packageName), keyId, keeps) }
     }
 
     override fun labelOf(packageName: String): String = try {
@@ -204,12 +317,9 @@ internal class AndroidSuiteApps(private val context: Context) : SuiteApps {
         packageName
     }
 
-    override fun handoverIntent(packageName: String, mode: HandoverMode): Intent? {
+    override fun handoverIntent(packageName: String, mode: HandoverMode, join: DeviceJoinRequest?): Intent? {
         val screen = handoverScreens(Intent(Handover.ACTION).setPackage(packageName)).firstOrNull() ?: return null
-        return Intent()
-            .setClassName(packageName, screen.activityInfo.name)
-            .putExtra(Handover.EXTRA_VERSION, Handover.VERSION)
-            .putExtra(Handover.EXTRA_MODE, mode.name)
+        return handoverRequest(packageName, screen.activityInfo.name, mode, join)
     }
 
     override fun launchIntent(packageName: String): Intent? = packages.getLaunchIntentForPackage(packageName)
@@ -222,10 +332,10 @@ internal class AndroidSuiteApps(private val context: Context) : SuiteApps {
 
     private fun handoverScreens(intent: Intent) = packages.queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(0))
 
-    /** What the status provider of [packageName] says. Null for any failure: then it counts as no keeper. */
-    private fun keyIdOf(packageName: String): String? = try {
+    /** What the status provider of [packageName] says. Null for any failure: then it counts as an app with no keys. */
+    private fun statusOf(packageName: String): Pair<Boolean, String>? = try {
         context.contentResolver.call(Handover.statusAuthority(packageName), Handover.METHOD_STATUS, null, null)
-            ?.let(KeeperStatus::keyIdOf)
+            ?.let(KeeperStatus::of)
     } catch (_: RuntimeException) {
         null
     }

@@ -344,7 +344,7 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
             finish()
             return
         }
-        val model = flowViewModel { HandoverViewModel(it, request.asker, request.mode) }.also { this.model = it }
+        val model = flowViewModel { HandoverViewModel(it, request.asker, request.mode, join = request.join) }.also { this.model = it }
         // Whichever way the screen closes, Back too, it says why it gave no keys (ADR 0041, point 16). When the keys
         // are ready, it checks the caller again and hands them over. Both from the screen's state on the main thread,
         // not from a frame of the UI. The keys' RESULT_OK is set only by handOver.
@@ -368,17 +368,25 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
                 setResult(Activity.RESULT_CANCELED, refusalResult(closingRefusal(model.state.value)))
                 finish()
             },
+            words = EnterActions(
+                onBack = ::finish,
+                onTyped = model::onTyped,
+                onWord = model::onWord,
+                onEditWord = model::onEditWord,
+                onCheck = model::onCheckAll,
+            ),
         )
         setContent {
             ShkTheme {
                 val screen by model.state.collectAsState()
-                HandoverContent(screen, asker, keeper, isPreviewBuild, actions)
+                HandoverContent(screen, asker, keeper, isPreviewBuild, actions, mode = request.mode)
                 SystemPrompt(
                     request = (screen as? HandoverAsk)?.prompt,
-                    title = stringResource(
-                        if (request.mode == HandoverMode.KEYS) R.string.sec_prompt_handover else R.string.sec_prompt_handover_check,
-                        asker,
-                    ),
+                    title = when (request.mode) {
+                        HandoverMode.KEYS -> stringResource(R.string.sec_prompt_handover, asker)
+                        HandoverMode.CHECK_WORDS -> stringResource(R.string.sec_prompt_handover_check, asker)
+                        HandoverMode.SIGN_DEVICE -> stringResource(R.string.sec_prompt_sign_device)
+                    },
                     subtitle = stringResource(R.string.sec_prompt_subtitle),
                     onResult = model::onPromptResult,
                 )
@@ -386,10 +394,10 @@ class HandoverActivity : ComponentActivity(), WordsScreen {
         }
     }
 
-    /** Checks the caller once more, then gives it the keys and closes. The keys are never kept here after that. */
+    /** Checks the caller once more, then gives it the keys or the signed join and closes. Nothing is kept here after that. */
     private fun handOver(model: HandoverViewModel, request: HandoverRequest.Valid, suite: SuiteApps) {
-        val keys = model.takeKeys() ?: return
-        val (code, data) = handoverResult(callingPackage, request, suite, keys)
+        val gift = model.takeGift() ?: return
+        val (code, data) = handoverResult(callingPackage, request, suite, gift)
         setResult(code, data)
         finish()
     }

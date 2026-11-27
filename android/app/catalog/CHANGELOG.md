@@ -5,6 +5,10 @@ development.
 
 ## Unreleased
 
+- **Recovery key screens** show the screen a data app shows when the
+  Sync app asks it to sign that this phone may join a sync server: in a
+  keeper, in an app that takes the 24 words, with the words of another
+  recovery key, and when the server uses another recovery key.
 - **Recovery key screens** show the handover between apps, with the
   sample names Water and Reminders: a keeper's screen when another app
   asks for its keys or to check four words, after the prompt was

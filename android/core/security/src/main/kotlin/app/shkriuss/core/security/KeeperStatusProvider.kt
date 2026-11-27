@@ -9,11 +9,12 @@ import app.shkriuss.core.crypto.BlobException
 
 /**
  * Answers other apps of the suite one question: does this app keep the
- * recovery key now, and with which short name (ADR 0041, point 13)? It is
- * exported with no permission, so any app may call it. It checks the
- * caller first, as the handover screen does (point 9), and answers a
- * refused caller nothing. It holds no data and answers nothing else: no
- * query, no file, no change.
+ * recovery key now, and the short name of the key its keys come from
+ * (ADR 0041, point 13)? It is exported with no permission, so any app may
+ * call it. It checks the caller first, as the handover screen does (point
+ * 9): another data app of the suite, or the Sync app, which asks to know
+ * where a join can be signed. A refused caller gets nothing. It holds no
+ * data and answers nothing else: no query, no file, no change.
  */
 class KeeperStatusProvider : ContentProvider() {
     /** Nothing to set up. The app's keys are read on each call, so the answer is always live. */
@@ -35,17 +36,18 @@ class KeeperStatusProvider : ContentProvider() {
     internal companion object {
         /**
          * The answer to [caller]: nothing unless it passes the checks of
-         * ADR 0041, point 9. A key that cannot be read now counts as not
-         * kept.
+         * ADR 0041, point 9, or is the Sync app. Keys that cannot be read now
+         * count as no keys, and a key that cannot be read now as not kept.
          */
         fun statusFor(caller: String?, suite: SuiteApps, host: SecurityHost?): Bundle? {
-            if (caller == null || host == null || suite.peerName(caller) == null) return null
+            if (caller == null || host == null) return null
+            if (suite.peerName(caller) == null && !suite.isSyncApp(caller)) return null
             val status = try {
                 host.crypto.status()
             } catch (_: BlobException) {
                 null
             }
-            return KeeperStatus.bundleOf(status?.keyId?.takeIf { status.keepsRecoveryKey })
+            return KeeperStatus.bundleOf(keeps = status?.keepsRecoveryKey == true, keyId = status?.keyId)
         }
     }
 
