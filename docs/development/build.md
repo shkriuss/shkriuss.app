@@ -421,7 +421,7 @@ second build must write the same mapping file, or the release stops. See
   - `RoundTripTest` also checks the counts of records that are not
     deleted, per type name: the same when a backup is written and when
     it is checked.
-- `core/sync-client` has 11 test classes with 82 tests. They are the
+- `core/sync-client` has 11 test classes with 88 tests. They are the
   items for `core/sync-client` of "What the tests must cover" in
   [sync-protocol.md](../architecture/sync-protocol.md#what-the-tests-must-cover).
   - They use real keys: `SoftwareKeysApp` from the
@@ -436,7 +436,9 @@ second build must write the same mapping file, or the release stops. See
     any call, pages that come twice or late, batches that lose their
     answer, comparisons, and a server put back to an earlier day. Every
     device must end with the same records and streams, and one more run
-    must send nothing. Each history has a seed, which repeats it.
+    must send nothing. The 30 histories run twice: in an app that wipes
+    deleted records, and in one that does not. Each history has a seed,
+    which repeats it.
   - `SyncOrderTest` puts every step of the order for ties against each
     other. `LayoutsTest` checks the byte layouts, and refuses pages and
     answers that break them.

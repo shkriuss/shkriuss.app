@@ -15,8 +15,10 @@ Pages:
   devices through a server that is never trusted: the keys, how a
   device joins, the courier interface between a data app and the Sync
   app, every call of the server, the rules for conflicts, and the
-  attacks that were considered. The server is built. The rest is
-  designed, not built.
+  attacks that were considered. The server is built, and so is what
+  each data app does (`core/sync-client`). No app uses it yet. The Sync
+  app and the content provider of each data app are designed, not
+  built.
 
 - [Notifications and alarms](notifications.md): how `core/notify` sets
   exact alarms, keeps them right after a reboot, an update and a change

@@ -2,6 +2,7 @@ package app.shkriuss.core.sync
 
 import app.shkriuss.core.backup.BackupRecord
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.crypto.StreamHash
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.data.RecordFields
 import kotlinx.coroutines.runBlocking
@@ -26,6 +27,21 @@ class SkipsTest : SyncTest() {
 
     private fun item(title: String, at: Long, deletedAt: Long? = null) =
         SyncRecord(BackupRecord(ListsContent.ITEM, RecordFields(id, createdAt = at, updatedAt = at, deletedAt = deletedAt), title.toByteArray()))
+
+    /**
+     * Records of live files, sealed by another device of the account, whose
+     * stream part does not fit ("What a reader checks", point 6): one has
+     * none, and one names a stream longer than the file's own size.
+     */
+    private suspend fun filesWhoseStreamPartDoesNotFit(): List<Pair<String, ByteArray>> {
+        val tablet = device("tablet", on = false)
+        val withoutPart = tablet.content.syncRecordOf(tablet.addFile("a.jpg", ByteArray(100) { 1 }))
+        val longer = tablet.content.syncRecordOf(tablet.addFile("b.jpg", ByteArray(100) { 2 }))
+        return listOf(
+            withoutPart.id to tablet.seal(withoutPart),
+            longer.id to tablet.seal(longer, StreamPart(longer.streamLength!! + 1, ByteArray(StreamHash.BYTES))),
+        )
+    }
 
     @Test
     fun aRecordOfAnotherRecoveryKeyIsSkippedAndAnsweredWithTheAppsOwnVersion() = runBlocking {
@@ -70,6 +86,27 @@ class SkipsTest : SyncTest() {
         server.put(LISTS.value, own.record.id, damaged)
         phone.fetchAll()
         assertTrue(phone.status().hasOrdinaryChanges)
+    }
+
+    @Test
+    fun aVersionThatOpensButIsNotValidAlsoEndsTheWaitOfADamagedOne() = runBlocking {
+        val phone = device("phone")
+        val own = phone.addItem("Milk")
+        phone.runUntilQuiet()
+        val damaged = phone.seal(phone.content.syncRecordOf(own)).also { it[it.size - 1] = (it[it.size - 1] + 1).toByte() }
+        server.put(LISTS.value, own.record.id, damaged)
+        phone.fetchAll()
+        assertEquals("answered with its own version", listOf(0x00), phone.sendAll(comparison = false))
+
+        // A version opens, but the ID inside is not the ID outside.
+        val other = phone.content.syncRecordOf(own.copy(record = own.record.copy(id = id)))
+        server.put(LISTS.value, own.record.id, phone.keys.seal(own.record.id, SealedPlaintext.encode(1, other.entry, null)))
+        phone.fetchAll()
+        assertEquals(1L, phone.status().counts.notValid)
+
+        server.put(LISTS.value, own.record.id, damaged)
+        phone.fetchAll()
+        assertTrue("the next damaged version is answered again", phone.status().hasOrdinaryChanges)
     }
 
     @Test
@@ -178,12 +215,13 @@ class SkipsTest : SyncTest() {
             ids[4] to phone.seal(item(4), StreamPart(10, ByteArray(32))),
             // Something after the stream part.
             ids[5] to phone.keys.seal(ids[5], SealedPlaintext.encode(1, item(5).entry, null) + 0),
-        )
+        ) + filesWhoseStreamPartDoesNotFit()
         notValid.forEach { (id, blob) -> server.put(LISTS.value, id, blob) }
 
         phone.fetchAll()
         assertEquals(notValid.size.toLong(), phone.status().counts.notValid)
         assertEquals(emptyList<ItemEntity>(), phone.database.items().all())
+        assertEquals(emptyList<AttachmentEntity>(), phone.database.attachments().all())
         assertEquals(server.head(LISTS.value), phone.status().cursor)
     }
 

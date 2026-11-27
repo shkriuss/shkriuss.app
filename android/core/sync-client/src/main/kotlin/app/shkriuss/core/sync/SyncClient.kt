@@ -765,6 +765,8 @@ class SyncClient(
                 else -> Step(damaged(state, came), false)
             }
         }
+        // A version of the record opened: a later damaged one is answered again, whatever the checks below find.
+        removeDamaged(came.id)
         val whole = when (val decoded = SealedPlaintext.decode(plaintext, content.dataVersion)) {
             SealedPlaintext.Decoded.Newer -> return Step(newer(state, came), false)
             SealedPlaintext.Decoded.NotValid -> return Step(notValid(state, came), false)
@@ -777,7 +779,6 @@ class SyncClient(
         val streamFits = if (stream == null) record.streamLength == null else record.streamLength == stream.length
         if (record.entry.fields != fields || !streamFits) return Step(notValid(state, came), false)
 
-        removeDamaged(came.id)
         val stored = content.find(came.id)
         val storedHash = stored?.let { storedStreamHash(it) }
         val taken = content.take(record) { kept, arrived ->

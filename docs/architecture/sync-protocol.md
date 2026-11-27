@@ -1278,7 +1278,7 @@ the records it stands for can never be apart
 3. It builds the batch from **To send**: "ordinary" records, or
    "comparison" records, as asked, up to the limits the Sync app
    gave. A record stays in **To send** until the server has stored
-   it.
+   it, apart from the records that points 4 and 5 take out.
 4. It leaves out a record that is held back. Held back are:
    - in an app that wipes, a deleted record that is not wiped yet
      ([Conflict rules](#conflict-rules), point 9);
@@ -1291,6 +1291,14 @@ the records it stands for can never be apart
      exists only on this phone
      ([crypto-design.md](../security/crypto-design.md#the-file-key-keyset-without-a-recovery-key),
      point 5).
+
+   In an app that does not wipe, a deleted file's record cannot be
+   sealed when its stream is not on this phone and no version of it
+   that came named the hash: its plaintext needs the hash. Such a
+   record is taken out of **To send**. A version of it that comes
+   names the hash. If the stored deletion wins against it, the
+   deletion goes into **To send** again
+   ([Conflict rules](#conflict-rules)).
 5. A record whose blob would be over the 524,288 bytes of the format
    is taken out of **To send**, and counted.
 6. While the app has stopped sending, `export` gives nothing.
@@ -1343,8 +1351,10 @@ and the fetch that follows finds them "the same".
 2. It hands each page to `import`. The data app checks the page
    ([A page](#a-page)). Then, in one write transaction, it puts every
    record through [What a reader checks](#what-a-reader-checks) and
-   [`takeFromSync`](#conflict-rules), and sets the cursor and Known
-   to Through. A failure rolls the whole page back.
+   [`takeFromSync`](#conflict-rules), sets the cursor to Through,
+   and raises Known to Through if Known is lower. A page never lowers
+   Known ([The cursor](#the-cursor), point 1). A failure rolls the
+   whole page back.
 3. It goes on while a page says that more wait.
 4. After the last page the app sets its alarms again, as after a
    restore, and lists the streams it wants. It changes no record
@@ -2096,6 +2106,7 @@ one is wrong, the fix is a change to this page first.
 | A deletion and an edit with the same `updatedAt` | The edit wins, on every device ([Conflict rules](#conflict-rules)). |
 | A hostile server that shows a new device a record that was deleted since | Kept as a known limit of this version. Nothing proves to a new device that it was shown everything ([Attacks considered](#attacks-considered), [Open questions](#open-questions), question 5). |
 | The stop after a refusal `02`, a page's bytes, a blob whose header names a newer version, a deleted file's record | The stop ends with another key ID of the server, another server, epoch or device, or a comparison the user asks for ([Sending](#sending)). A page whose blobs pass 524,288 bytes, with more than one record, is dropped ([A page](#a-page)). Such a blob is "damaged" ([What a reader checks](#what-a-reader-checks)). A deleted file's record never waits for its stream ([Sending](#sending)). |
+| A deleted file's record that cannot be sealed, and Known after a page | In an app that does not wipe, a deleted file's record whose hash this phone does not know leaves **To send**, and goes in again once a version of it names the hash ([Sending](#sending), point 4). A page never lowers Known ([Fetching](#fetching), point 2). |
 | How the tables of sync in a data app are written ([data.md](data.md#rules-for-daos), point 5) | As the change counter is: only `SyncStore` of `core/sync-client` writes them, with SQL on the connection of its transaction. No DAO reads or writes them, and `checkDaoRules` stays as it is ([ADR 0044](../adr/0044-sync-tables-in-each-data-app.md)). |
 | A server with no account, which the setup code alone protects | Kept. The setup code is not bound to the recovery key. Someone who has the code and is faster than the user gets an empty server, and the user deploys a new one ([Joining](#joining)). |
 

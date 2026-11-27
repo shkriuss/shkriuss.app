@@ -1259,7 +1259,7 @@ Status: **Partly met.**
   `file-key` is dropped when the app locks. An app that waits with a
   timer keeps it until it comes back or locks.
 - MASWE-0025, non-repudiation: does not apply today. Nothing is sent to
-  anyone. Sync is not built yet.
+  anyone. No app syncs yet.
 - MASWE-0016 and 0019: as above.
 
 ### Network
@@ -1721,8 +1721,10 @@ The handover between apps:
 
 Sync:
 
-10. The protocol. The server is built, the apps' side is designed and
-    not built ([sync-protocol.md](../architecture/sync-protocol.md),
+10. The protocol. The server is built, and so is what each data app
+    does (`core/sync-client`). No app uses it yet. The Sync app and the
+    content provider of each data app are designed and not built
+    ([sync-protocol.md](../architecture/sync-protocol.md),
     [ADR 0009](../adr/0009-sync-protocol-and-server.md)). Open there:
     a proof that the server held nothing back, and the other points
     under its [open questions](../architecture/sync-protocol.md#open-questions).

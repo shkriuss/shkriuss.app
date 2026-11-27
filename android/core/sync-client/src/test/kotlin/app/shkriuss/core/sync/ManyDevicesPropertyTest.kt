@@ -16,7 +16,8 @@ import org.robolectric.RobolectricTestRunner
  * points, pages come twice or late, batches lose their answer, the user
  * asks for comparisons, and the server is put back to an earlier day. Once
  * every device has run to the end, every device holds the same records,
- * and one more run sends nothing.
+ * and one more run sends nothing. The histories run in an app that wipes,
+ * as Notes, and in one that does not, as Water, Reminders and Tasks.
  *
  * Each seed is one history. A failure names its seed, which repeats it.
  */
@@ -24,20 +25,25 @@ import org.robolectric.RobolectricTestRunner
 class ManyDevicesPropertyTest : SyncTest() {
     @Test
     fun everyDeviceEndsWithTheSameRecords() = runBlocking {
-        SEEDS.forEach { seed -> history(seed) }
+        SEEDS.forEach { seed -> history(seed, wipes = true) }
     }
 
-    private suspend fun history(seed: Int) {
+    @Test
+    fun everyDeviceEndsWithTheSameRecordsAlsoInAnAppThatDoesNotWipe() = runBlocking {
+        SEEDS.forEach { seed -> history(seed, wipes = false) }
+    }
+
+    private suspend fun history(seed: Int, wipes: Boolean) {
         val random = Random(seed)
         newServer()
-        val devices = List(3) { device("d$seed-$it", seed = seed * 10 + it) }
+        val devices = List(3) { device("d$seed-$it", wipes = wipes, seed = seed * 10 + it) }
         val oldPages = mutableListOf<ByteArray>()
         var snapshot: Map<String, Any>? = null
 
         repeat(STEPS) {
             val device = devices[random.nextInt(devices.size)]
             when (random.nextInt(100)) {
-                in 0..49 -> edit(device, random)
+                in 0..49 -> edit(device, random, wipes)
                 in 50..79 -> disruptedRun(device, random, oldPages)
                 in 80..89 -> clock.advanceBy(random.nextLong(0, 3) * random.nextLong(0, 1_500))
                 in 90..92 -> device.client.compare(device.call())
@@ -47,9 +53,9 @@ class ManyDevicesPropertyTest : SyncTest() {
             }
         }
 
-        // The end: Undo ends, so every deletion is wiped, as an app that wipes does. A deleted record that is not wiped
-        // is held back. Then every device runs until nothing changes, three times round, as phones do over the next hours.
-        devices.forEach { it.wipeEveryDeletion() }
+        // The end: in an app that wipes, Undo ends, so every deletion is wiped. A deleted record that is not wiped is held
+        // back. Then every device runs until nothing changes, three times round, as phones do over the next hours.
+        if (wipes) devices.forEach { it.wipeEveryDeletion() }
         repeat(3) { devices.forEach { it.runUntilQuiet() } }
 
         val expected = devices.first().records()
@@ -71,7 +77,8 @@ class ManyDevicesPropertyTest : SyncTest() {
         }
     }
 
-    private suspend fun edit(device: TestDevice, random: Random) {
+    /** One random edit. An app that does not wipe has no wipes, and its Undo works for as long as a record is deleted. */
+    private suspend fun edit(device: TestDevice, random: Random, wipes: Boolean) {
         val items = device.database.items().all()
         val files = device.database.attachments().all()
         val item = items.randomOrNull(random)
@@ -82,10 +89,10 @@ class ManyDevicesPropertyTest : SyncTest() {
             4 -> item?.let { device.deleteItem(it.record.id) }
             // Undo, while the item is deleted and not wiped.
             5 -> item?.takeIf { it.record.deletedAt != null && it.title.isNotEmpty() }?.let { device.restoreItem(it.record.id) }
-            6 -> item?.let { device.wipeItem(it.record.id) }
+            6 -> if (wipes) item?.let { device.wipeItem(it.record.id) }
             7 -> device.addFile("file ${random.nextInt(1_000)}", random.nextBytes(random.nextInt(1, 3_000)))
             8 -> file?.let { device.deleteFile(it.record.id) }
-            9 -> file?.let { device.wipeFile(it.record.id) }
+            9 -> if (wipes) file?.let { device.wipeFile(it.record.id) }
             else -> file?.takeIf { it.keyId != null }?.let { device.sealFileAgain(it.record.id) }
         }
     }

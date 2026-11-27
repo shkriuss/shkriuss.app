@@ -124,6 +124,85 @@ class NewRecoveryKeyTest : SyncTest() {
     }
 
     @Test
+    fun theLastFetchTakesWhatADeviceAlreadyOnTheNewKeySealedWithIt() = runBlocking {
+        val phone = device("phone")
+        val tablet = device("tablet")
+        tablet.addItem("Bread")
+        tablet.runUntilQuiet()
+        phone.runUntilQuiet()
+        // The phone follows the new key first: it seals everything again with it, and adds one more record.
+        phone.keys.addAndUse(newKeys())
+        server.keyId = phone.keys.current
+        phone.runUntilQuiet()
+        val tea = phone.addItem("Tea")
+        phone.runUntilQuiet()
+
+        // The tablet gets the new words. Its one last fetch meets only records sealed with P, the new key.
+        tablet.keys.addAndUse(newKeys())
+        val status = tablet.status()
+        assertTrue(status.wantsFetch)
+        val page = server.fetch(LISTS.value, tablet.deviceId, status.cursor, status.known, tablet.epoch, SyncFormat.MOST_RECORDS)
+        assertEquals("one page", 0, page[1 + 16 + 8 + 8].toInt())
+        tablet.client.import(tablet.call(), page)
+        assertEquals("taken by the last fetch", "Tea", tablet.database.items().find(tea.record.id)?.title)
+
+        tablet.runUntilQuiet()
+        phone.runUntilQuiet()
+        assertEquals(phone.records(), tablet.records())
+        assertEquals(setOf(server.keyId), keyIdsOnTheServer())
+    }
+
+    @Test
+    fun syncTurnedOnWhileTheServerNamesAKeyTheAppDoesNotHoldWaitsForTheNewWords() = runBlocking {
+        val phone = device("phone")
+        phone.addItem("Bread")
+        phone.keys.addAndUse(newKeys())
+        server.keyId = phone.keys.current
+        phone.runUntilQuiet()
+
+        // A tablet with only the old words turns sync on: S is not set yet.
+        val tablet = device("tablet", join = false)
+        assertEquals(SendBlock.ENTER_THE_NEW_RECOVERY_KEY, tablet.status().sendBlock)
+        val tea = tablet.addItem("Tea")
+        assertEquals(ExportResult.NothingToSend, tablet.client.export(tablet.call(), ExportRequest(false, 100, server.mostBytes)))
+        tablet.fetchAll()
+        assertTrue("records of the new key are skipped", tablet.status().counts.anotherRecoveryKey > 0)
+        assertFalse(tea.record.id in server.ids(LISTS.value))
+
+        // The user enters the new words: S is the new key, and what was skipped is fetched again.
+        tablet.keys.addAndUse(newKeys())
+        tablet.runUntilQuiet()
+        phone.runUntilQuiet()
+        assertEquals(SendBlock.NONE, tablet.status().sendBlock)
+        assertEquals(phone.records(), tablet.records())
+        assertEquals(setOf(server.keyId), keyIdsOnTheServer())
+    }
+
+    @Test
+    fun syncTurnedOnWhileTheServerNamesAnOlderKeyTheAppHoldsNeverSyncsWithThatKey() = runBlocking {
+        val phone = device("phone")
+        phone.addItem("Bread")
+        phone.runUntilQuiet()
+
+        // A tablet whose app already holds the new key turns sync on while the server still names the old one.
+        val tablet = device("tablet", join = false)
+        tablet.keys.addAndUse(newKeys())
+        val newKeyId = tablet.keys.current
+        val tea = tablet.addItem("Tea")
+        tablet.run()
+        assertEquals(SendBlock.SERVER_NAMES_AN_OLDER_KEY, tablet.status().sendBlock)
+        assertFalse("nothing is sent", tea.record.id in server.ids(LISTS.value))
+
+        // The server takes the statement. The tablet syncs with the new key, never with the old one.
+        server.keyId = newKeyId
+        phone.keys.addAndUse(newKeys())
+        repeat(2) { listOf(tablet, phone).forEach { it.runUntilQuiet() } }
+        assertEquals(SendBlock.NONE, tablet.status().sendBlock)
+        assertEquals(phone.records(), tablet.records())
+        assertEquals(setOf(newKeyId), keyIdsOnTheServer())
+    }
+
+    @Test
     fun aServerThatNamesAnOlderKeyIsNotFollowedAndSNeverMovesBack() = runBlocking {
         val phone = device("phone")
         phone.keys.addAndUse(newKeys())
