@@ -5,12 +5,15 @@ through a server that the user runs and that is never trusted. Every
 byte that leaves a phone for sync, every call, and every rule a device
 follows.
 
-- Status: designed, not built. The points the owner decided are in
+- Status: the server is built, in `backend/`
+  ([backend.md](../development/backend.md)). The rest is designed, not
+  built. The points the owner decided are in
   [Decided by the owner](#decided-by-the-owner).
-- The code will be `backend/` (the server), `android/core/sync-client`
-  (what each data app does), `android/app/sync` (the Sync app), and new
-  parts of `android/core/crypto` and `android/core/security`. All of
-  it must follow this page exactly. If this page is wrong or unclear,
+- The code is `backend/` (the server). It will be
+  `android/core/sync-client` (what each data app does),
+  `android/app/sync` (the Sync app), and new parts of
+  `android/core/crypto` and `android/core/security`. All of it must
+  follow this page exactly. If this page is wrong or unclear,
   the fix is a change to this page first, agreed with the owner.
 - Decisions: [ADR 0009](../adr/0009-sync-protocol-and-server.md) (the
   protocol and the server) and

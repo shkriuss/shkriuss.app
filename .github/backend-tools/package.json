@@ -1,0 +1,11 @@
+{
+  "name": "shkriuss-backend-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The tools that build, check, test and deploy the sync server in backend/, each pinned to one exact version. See docs/adr/0043-backend-tools-tests-and-deploy.md.",
+  "dependencies": {
+    "@cloudflare/workers-types": "5.20261102.1",
+    "typescript": "6.0.3",
+    "wrangler": "4.156.2"
+  }
+}

@@ -63,6 +63,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Licence
 
 - Apps: GPL-3.0. The full text is in [LICENSE](LICENSE).
-- Sync backend: AGPL-3.0. Its licence file will live in `backend/`.
+- Sync backend: AGPL-3.0. The full text is in [backend/LICENSE](backend/LICENSE).
 
 Open: whether the apps use "GPL-3.0-only" or "GPL-3.0-or-later".

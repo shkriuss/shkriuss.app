@@ -455,7 +455,7 @@ What does not:
    separate files.
 4. Keeping what it was asked to delete.
 
-The design is [sync-protocol.md](../architecture/sync-protocol.md), not built yet. It lists every
+The design is [sync-protocol.md](../architecture/sync-protocol.md). Its server is built; the apps' side is not yet. It lists every
 attack that was considered, and marks the ones that do not fail
 ([Attacks considered](../architecture/sync-protocol.md#attacks-considered)).
 
@@ -504,8 +504,9 @@ What stops it:
 4. Workflows use only GitHub's own actions, pinned to full commit SHAs.
    Tokens are read-only by default
    ([ci.md](../development/ci.md#rules-every-workflow-follows)).
-5. Secrets reach exactly two steps: signing a release and deploying the
-   site. The Sign job runs no code of the project
+5. Secrets reach exactly three steps: signing a release, deploying the
+   site and deploying the sync server. The Sign job runs no code of the
+   project, and neither deploy job does
    ([ADR 0013](../adr/0013-signing-key-custody-and-rotation.md),
    point 13).
 6. The release uses no cache. A second build on a new runner must give
@@ -573,8 +574,9 @@ The owner's GitHub and Cloudflare accounts:
 4. No GitHub token outlives its task. The token of the signing ceremony
    is deleted right after each run
    ([release.md](../development/release.md#restore-the-signing-key)).
-   Cloudflare is reached only with the narrow deploy token
-   ([site.md](../development/site.md#3-the-token)), never with the
+   Cloudflare is reached only with the narrow deploy tokens, each for
+   one Worker ([site.md](../development/site.md#3-the-token),
+   [backend.md](../development/backend.md#4-the-token)), never with the
    account's Global API Key.
 
 The domain:
@@ -702,22 +704,26 @@ as to the machine account
 
 #### The Cloudflare account
 
-The owner's Cloudflare account serves the hub site. A user's own sync
-server is the attacker
+The owner's Cloudflare account serves the hub site, and the owner's own
+sync server once the owner sets it up. A sync server, the owner's or a
+user's own, is the attacker
 [above](#a-compromised-or-curious-sync-server).
 
 What stops it:
 
-1. No code of ours runs there. The Worker serves static files only
-   ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)).
-2. The deploy token reaches one Worker, with no permission on the
-   domain's zone ([site.md](../development/site.md#3-the-token)).
+1. The site's Worker serves static files only, with no code of ours
+   ([ADR 0023](../adr/0023-hub-site-hosting-and-deploy.md)). The sync
+   server's Worker holds only ciphertext, and no device trusts it.
+2. Each deploy token reaches one Worker, with no permission on the
+   domain's zone, on D1 or on R2
+   ([site.md](../development/site.md#3-the-token),
+   [backend.md](../development/backend.md#4-the-token)).
 3. Apps are never downloaded from Cloudflare. Obtainium takes them from
    GitHub ([install.md](../user/install.md)).
 4. The fingerprint is also on GitHub. A changed site would not agree
    with it ([verify.md](../user/verify.md#check-in-more-than-one-place)).
 5. The account needs a second factor, and is reached only with the
-   narrow deploy token
+   narrow deploy tokens
    ([the rules](#the-rules-for-the-owners-accounts-and-the-domain)).
 
 What does not:
@@ -725,6 +731,9 @@ What does not:
 1. A takeover of the whole account can change the site and the domain's
    settings.
 2. A user who checks only the site would trust a wrong fingerprint.
+3. It can do to the owner's sync server what any server can do: read
+   and keep its ciphertext, hold records back, or delete everything.
+   The devices keep their own copies.
 
 #### The domain
 
@@ -1704,8 +1713,8 @@ The handover between apps:
 
 Sync:
 
-10. The protocol. Designed, not built
-    ([sync-protocol.md](../architecture/sync-protocol.md),
+10. The protocol. The server is built, the apps' side is designed and
+    not built ([sync-protocol.md](../architecture/sync-protocol.md),
     [ADR 0009](../adr/0009-sync-protocol-and-server.md)). Open there:
     a proof that the server held nothing back, and the other points
     under its [open questions](../architecture/sync-protocol.md#open-questions).

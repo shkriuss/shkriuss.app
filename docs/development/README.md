@@ -23,6 +23,9 @@ Pages:
 - [Hub site](site.md): how the website is built from the docs, checked
   and deployed to Cloudflare, its security headers, and how to set up
   Cloudflare from a phone.
+- [Sync server](backend.md): how the sync server in `backend/` is
+  checked, tested in Miniflare and deployed to Cloudflare, and how to
+  set up Cloudflare for it from a phone.
 - [Design system](design-system.md): the colour, type, shape and spacing
   tokens in `core/design`, how Material 3 is set up from them, the `Shk*`
   components and when to use each, and their tests.

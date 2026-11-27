@@ -1,0 +1,23 @@
+{
+  // The type check of the Worker and of the test entry. Wrangler builds
+  // the code itself; tsc only checks it. Run from backend/:
+  //   ./node_modules/.bin/tsc -p .
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/entry.ts"]
+}

@@ -1,0 +1,332 @@
+# Checks the sync server in backend/ on pull requests: the type check, the
+# build and every test in Miniflare. Pushes to main, and runs started by
+# hand on main, also deploy it to the Cloudflare Worker shkriuss-sync with
+# the cloudflare environment, once the owner has set that up.
+# How it works, and how to set it up from a phone:
+# docs/development/backend.md. Why it works this way:
+# docs/adr/0043-backend-tools-tests-and-deploy.md.
+
+name: Backend
+
+# Read-only token. No job in this workflow needs more. Deploy reaches
+# Cloudflare with the token of the cloudflare environment, not this one.
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    # Only pull requests that can change the server, its tools, or how it
+    # is checked and deployed.
+    paths:
+      - "backend/**"
+      - ".github/backend-tools/**"
+      - ".github/workflows/backend.yml"
+  # Every push to main, with no path filter. So the newest commit on main
+  # always has a run, and only that run deploys (see Deploy the server,
+  # step 1).
+  push:
+    branches: [main]
+  # To deploy by hand, for example right after setting up the environment.
+  workflow_dispatch:
+
+defaults:
+  run:
+    # Stops a step at the first failing command, also inside a pipe.
+    shell: bash
+
+jobs:
+  check:
+    # Not "Check": that name is CI's required check, and two checks of one
+    # name would be read as one by the rules of main.
+    name: Check the server
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: backend-check-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    outputs:
+      worker_sha256: ${{ steps.worker.outputs.sha256 }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Wrangler (with Miniflare), TypeScript and the Workers types, exactly
+      # as .github/backend-tools/package-lock.json pins them. No package
+      # runs code while it is installed.
+      - name: Install the pinned tools
+        run: .github/backend-tools/install.sh backend
+
+      # The type check, the build of the Worker as it is deployed, the
+      # build of the Worker the tests start, and every test.
+      - name: Type check, build and test
+        run: backend/check.sh
+
+      # Deploy the server builds the Worker again from main, with the same
+      # pinned tools, and deploys it only if it is byte for byte this one.
+      - name: Note the built Worker
+        id: worker
+        run: |
+          set -u
+          sum="$(sha256sum backend/build/worker/index.js | cut -d ' ' -f 1)"
+          echo "sha256=$sum" >> "$GITHUB_OUTPUT"
+          {
+            echo "### The sync server's Worker"
+            echo
+            echo "Built and tested. SHA-256 of \`index.js\`: \`$sum\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy the server
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The cloudflare environment holds the Cloudflare tokens. Only main may
+    # use it (docs/development/backend.md#set-up-cloudflare).
+    environment:
+      name: cloudflare
+      url: ${{ steps.deploy.outputs.url }}
+    # Deploys wait for each other and are never cancelled half-way.
+    concurrency:
+      group: backend-deploy
+      cancel-in-progress: false
+    steps:
+      # 1. An older run must not replace a newer server. Every push to main
+      #    has its own run, so the newest commit always deploys.
+      - name: Check that this is the newest commit on main
+        id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          head="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if ! [[ "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not read the newest commit on main."
+            exit 1
+          fi
+          if [ "$head" = "$GITHUB_SHA" ]; then
+            echo "newest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::A newer commit is on main. Its run deploys the sync server, so this run does not."
+            echo "newest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 2. Until the owner sets up the sync server, there is nothing to
+      #    deploy to. That is not a fault: the run says so and ends.
+      - name: Check the settings of the cloudflare environment
+        id: settings
+        if: steps.newest.outputs.newest == 'true'
+        env:
+          HAS_TOKEN: ${{ secrets.CLOUDFLARE_SYNC_API_TOKEN != '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          SYNC_D1_DATABASE_ID: ${{ vars.SYNC_D1_DATABASE_ID }}
+        run: |
+          set -u
+          if [ "$HAS_TOKEN" != true ] && [ -z "$SYNC_D1_DATABASE_ID" ]; then
+            echo "::notice::The sync server is not set up yet, so nothing was deployed (docs/development/backend.md#set-up-cloudflare)."
+            echo "### Not deployed: the sync server is not set up in the cloudflare environment yet." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$HAS_TOKEN" != true ]; then
+            echo "::error::The cloudflare environment has no secret CLOUDFLARE_SYNC_API_TOKEN."
+            exit 1
+          fi
+          if ! [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::error::The cloudflare environment needs the variable CLOUDFLARE_ACCOUNT_ID: the account ID, 32 characters 0-9 and a-f."
+            exit 1
+          fi
+          if ! [[ "$SYNC_D1_DATABASE_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "::error::The cloudflare environment needs the variable SYNC_D1_DATABASE_ID: the ID of the D1 database shkriuss-sync, 36 characters such as 01234567-89ab-cdef-0123-456789abcdef."
+            exit 1
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      # Only the pinned tools, and the server's source and configuration.
+      # Wrangler builds the Worker from them. No project code runs here.
+      - name: Check out the tools and the server
+        if: steps.settings.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/backend-tools
+            backend/src
+            backend/wrangler.jsonc
+          sparse-checkout-cone-mode: false
+
+      - name: Install the pinned tools
+        if: steps.settings.outputs.ready == 'true'
+        run: .github/backend-tools/install.sh "$RUNNER_TEMP/tools"
+
+      # 3. The same Worker that the job Check the server built and tested.
+      - name: Build the Worker, and compare it with the tested one
+        if: steps.settings.outputs.ready == 'true'
+        env:
+          WORKER_SHA256: ${{ needs.check.outputs.worker_sha256 }}
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -u
+          "$RUNNER_TEMP/tools/node_modules/.bin/wrangler" deploy --dry-run \
+            --outdir "$RUNNER_TEMP/worker" --config backend/wrangler.jsonc > /dev/null
+          actual="$(sha256sum "$RUNNER_TEMP/worker/index.js" | cut -d ' ' -f 1)"
+          if ! [[ "$WORKER_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$actual" != "$WORKER_SHA256" ]; then
+            echo "::error::The Worker built here is not the one the job Check the server tested."
+            exit 1
+          fi
+          echo "The Worker is the one the job Check the server tested."
+
+      # 4. The configuration with the user's own database ID in place of the
+      #    zero ID. Exactly one line changes.
+      - name: Put the database ID into the configuration
+        if: steps.settings.outputs.ready == 'true'
+        env:
+          SYNC_D1_DATABASE_ID: ${{ vars.SYNC_D1_DATABASE_ID }}
+        run: |
+          set -u
+          placeholder='      "database_id": "00000000-0000-0000-0000-000000000000"'
+          config=backend/wrangler.jsonc
+          deploy="$RUNNER_TEMP/worker/wrangler.jsonc"
+          if [ "$(grep -cxF -- "$placeholder" "$config")" != 1 ]; then
+            echo "::error file=$config::Expected exactly one line: $placeholder"
+            exit 1
+          fi
+          # The ID was checked above: hex digits and hyphens only.
+          sed "s|^      \"database_id\": \"00000000-0000-0000-0000-000000000000\"\$|      \"database_id\": \"$SYNC_D1_DATABASE_ID\"|" \
+            "$config" > "$deploy"
+          if [ "$(diff "$config" "$deploy" | grep -c '^[<>]')" != 2 ]; then
+            echo "::error::The configuration did not change in exactly one line."
+            exit 1
+          fi
+
+      # The only step that sees the token. Rules:
+      # - Never print it, never use set -x.
+      # - curl reads it from a private file, never from its command line,
+      #   and the trap deletes the file. Wrangler reads it from the
+      #   environment.
+      # - The Worker must already exist. This step never creates it, and
+      #   the token, which may only edit that one Worker, could not either.
+      # - Wrangler uploads the Worker that was compared above, unchanged,
+      #   with the configuration of the step before: no routes, no custom
+      #   domains.
+      - name: Deploy to the Cloudflare Worker
+        id: deploy
+        if: steps.settings.outputs.ready == 'true'
+        working-directory: ${{ runner.temp }}/worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SYNC_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # Wrangler sends no usage data to Cloudflare.
+          WRANGLER_SEND_METRICS: "false"
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/wrangler-output.json
+        run: |
+          set -u
+          # The Worker's name, from wrangler.jsonc. Exactly one such line.
+          mapfile -t names < <(sed -n 's/^  "name": "\([a-z0-9-]*\)",$/\1/p' wrangler.jsonc)
+          if [ "${#names[@]}" -ne 1 ] || ! [[ "${names[0]}" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+            echo "::error file=backend/wrangler.jsonc::Expected exactly one line of the form:   \"name\": \"worker-name\","
+            exit 1
+          fi
+          worker="${names[0]}"
+
+          auth="$RUNNER_TEMP/cloudflare-auth"
+          answer="$RUNNER_TEMP/cloudflare-answer.json"
+          trap 'rm -f "$auth" "$answer"' EXIT
+          (umask 077 && printf 'Authorization: Bearer %s\n' "$CLOUDFLARE_API_TOKEN" > "$auth")
+
+          # 1. The Worker must exist. Its tag identifies it.
+          status="$(curl -sS --retry 3 --max-time 60 -o "$answer" -w '%{http_code}' -H @"$auth" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")"
+          rm -f "$auth"
+          jq -r '.errors[]? | "Cloudflare error \(.code): \(.message)"' "$answer" 2> /dev/null || true
+          if [ "$status" = 404 ] || jq -e '.errors | any(.code == 10007 or .code == 10090)' "$answer" > /dev/null 2>&1; then
+            echo "::error::The Worker $worker does not exist. Create it by hand in the Cloudflare dashboard (docs/development/backend.md#1-the-worker). This workflow never creates it."
+            exit 1
+          fi
+          if [ "$status" = 401 ] || [ "$status" = 403 ]; then
+            echo "::error::The token cannot reach the Worker $worker. The Worker may not exist, or the token is not an account API token with Editor on it (docs/development/backend.md#set-up-cloudflare)."
+            exit 1
+          fi
+          if [ "$status" != 200 ]; then
+            echo "::error::Could not read the Worker $worker (HTTP $status)."
+            exit 1
+          fi
+          tag="$(jq -r '.result.default_environment.script.tag // ""' "$answer")"
+          if ! [[ "$tag" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "::error::Unexpected answer about the Worker $worker."
+            exit 1
+          fi
+          echo "The Worker $worker exists."
+
+          # 2. Upload the compared Worker as a new version, and deploy it.
+          "$RUNNER_TEMP/tools/node_modules/.bin/wrangler" deploy index.js --no-bundle --config wrangler.jsonc
+
+          # 3. What Wrangler reports: the same Worker, a new version, and
+          #    its workers.dev address.
+          mapfile -t deployment < <(jq -rs --arg name "$worker" '
+            [.[] | select(.type == "deploy" and .worker_name == $name)] | last
+            | if . == null then empty else
+                (.worker_tag // ""), (.version_id // ""),
+                ([.targets[]? | strings | select(endswith(".workers.dev"))] | first // "")
+              end
+          ' "$WRANGLER_OUTPUT_FILE_PATH")
+          if [ "${#deployment[@]}" -ne 3 ] || [ "${deployment[0]}" != "$tag" ]; then
+            echo "::error::Wrangler did not report a deploy to the existing Worker $worker."
+            exit 1
+          fi
+          if ! [[ "${deployment[1]}" =~ ^[0-9a-f-]{36}$ ]]; then
+            echo "::error::Wrangler did not report the new version."
+            exit 1
+          fi
+          if ! [[ "${deployment[2]}" =~ ^https://${worker}\.[a-z0-9-]+\.workers\.dev$ ]]; then
+            echo "::error::Wrangler did not report the workers.dev address of $worker."
+            exit 1
+          fi
+          {
+            echo "url=${deployment[2]}"
+            echo "version=${deployment[1]}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deployed version ${deployment[1]} of $worker to ${deployment[2]}."
+
+      # No secrets. Asks the live server for info until it answers as this
+      # version of the server does: HTTP 200, the answer byte 00, versions
+      # 1 to 1, and 40 bytes in all.
+      - name: Check the live server
+        if: steps.settings.outputs.ready == 'true'
+        env:
+          SERVER_URL: ${{ steps.deploy.outputs.url }}
+          VERSION: ${{ steps.deploy.outputs.version }}
+        run: |
+          set -u
+          body="$RUNNER_TEMP/info"
+          # workers.dev turns away clients that send a default library
+          # User-Agent, so this check names itself.
+          agent="shkriuss-backend-check/1 (+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY)"
+          for attempt in $(seq 1 12); do
+            status="$(curl -sS --max-time 30 -A "$agent" -o "$body" -w '%{http_code}' "$SERVER_URL/v1/info" || true)"
+            start="$(head -c 3 "$body" 2> /dev/null | od -An -tx1 | tr -d ' \n')"
+            if [ "$status" = 200 ] && [ "$start" = 000101 ] && [ "$(wc -c < "$body")" = 40 ]; then
+              state="$(od -An -tu1 -j 27 -N 1 "$body" | tr -d ' ')"
+              case "$state" in
+                0) said="no account yet" ;;
+                1) said="in use" ;;
+                2) said="closed" ;;
+                *) echo "::error::The live server named an unknown state."; exit 1 ;;
+              esac
+              {
+                echo "### Deployed the sync server"
+                echo
+                echo "- Address: $SERVER_URL"
+                echo "- Version of the Worker: $VERSION"
+                echo "- The server answers info: $said."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "The live server answers info: $said."
+              exit 0
+            fi
+            echo "Attempt $attempt: HTTP $status. Trying again in 10 seconds."
+            sleep 10
+          done
+          echo "::error::$SERVER_URL/v1/info did not answer as the sync server within two minutes."
+          exit 1
