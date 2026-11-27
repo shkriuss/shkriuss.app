@@ -163,6 +163,9 @@ use it." Only its **Done** takes the address out.
    by name in the phone's language order, ties by package name. An app
    `app.shkriuss.<name>` with a handover screen that fails only the
    comparison of certificates gets a row too, and is never called.
+   When Apps comes to the front, Sync asks each data app that a run is
+   not serving for its `status`, a call on the phone with no network,
+   and the rows show what it gives.
 5. Under the name, the first line that applies:
 
    | When | Line |
@@ -326,7 +329,8 @@ fixes what a run does, in which order. Here is the rest.
 6. `info` is read when the phone joins, after `0C`, in the first run of
    a day, and at `stop` 4 or 6 at every start of Sync (also the first
    after an update) and on **Try again**. When it names version 1, the
-   stop ends and the periodic work is asked for again. A request uses its three
+   stop ends and the periodic work is asked for again. A run that finds
+   `limits` missing reads `info` first. A request uses its three
    limits, halved after each lack of CPU time, down to one record.
 7. In the first run of a day, also the `status` of every data app and
    the list of devices.
@@ -393,7 +397,7 @@ fixes what a run does, in which order. Here is the rest.
 
 | What | Limit or default |
 |---|---|
-| Server address | 9 to 255 characters: `https://`, a host name, and `:` and a port from 1 to 65,535 if not 443. Lower case. Spaces at either end, one `/` at the end and `:443` are dropped. Sync adds a missing `https://`. A path, query, user part, `http://` or IP address: "Enter only the address, such as sync.example.workers.dev." |
+| Server address | 9 to 255 ASCII characters: `https://`, a host name, and `:` and a port from 1 to 65,535 if not 443. Lower case. A host name in other letters is turned into its ASCII form (IDNA, as Android's `IDN.toASCII` does) before the checks, and that form is shown and stored. Spaces at either end, one `/` at the end and `:443` are dropped. Sync adds a missing `https://`. A path, query, user part, `http://` or IP address: "Enter only the address, such as sync.example.workers.dev." |
 | Device code | 8 characters, `A` to `Z` without `I` and `O`, and `2` to `9`. Spaces and hyphens dropped, lower case taken as upper. It ends 10 minutes after it was made. |
 | Setup code | 26 characters of the same letters and digits |
 | Device name | 1 to 40 code points, one line, no space at either end. At first Android's model name, cut to 40 code points, or "Android device". |
