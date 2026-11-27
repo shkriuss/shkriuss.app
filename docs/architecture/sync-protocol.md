@@ -1729,8 +1729,8 @@ What that means:
    app.
 
 The Sync app's screens, its settings, which networks it uses for
-files, and what it shows during a long transfer are for its
-specification ([Open questions](#open-questions)).
+files, and what it shows during a long transfer are in its
+[specification](../apps/sync/spec.md).
 
 ## A lost device
 
@@ -2226,8 +2226,8 @@ Not decided here. Each says what decides it.
 1. **The Sync app's specification.** Its screens and settings, which
    networks carry files, what a long transfer shows, and its
    notification
-   ([notifications.md](notifications.md#open), question 3). Needed
-   before the Sync app is built.
+   ([notifications.md](notifications.md#open), question 3). Decided in
+   [its specification](../apps/sync/spec.md).
 2. **The screens of a new recovery key**, with repair once a keyset
    holds two keys
    ([crypto-design.md](../security/crypto-design.md#open-questions),

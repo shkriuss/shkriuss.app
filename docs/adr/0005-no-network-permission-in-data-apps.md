@@ -117,6 +117,6 @@ here on were decided when the record was completed.
 - The Sync app needs `INTERNET` and what WorkManager needs. Each
   permission gets its place in the allow list of the APK rules check
   when the Sync app is built, with the owner's sentence.
-- Open: the Sync app's own specification: its screens and settings
+- The Sync app's own specification, its screens and settings
   ([sync-protocol.md](../architecture/sync-protocol.md#open-questions),
-  question 1).
+  question 1), is [docs/apps/sync/spec.md](../apps/sync/spec.md).
