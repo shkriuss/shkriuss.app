@@ -105,7 +105,8 @@ class TestDevice(
     val content = ListsContent(database, items, attachments, streamFolder, dataVersion, wipes) { keys.current }
     val fetchFolder = File(root, "fetch")
     val client = SyncClient(database, content, keys, clock, fetchFolder)
-    val deviceId: SyncId = from?.deviceId ?: SyncId(random.nextBytes(16))
+    /** The device ID of the Sync app here. A test may give it a new one, as when the Sync app joins again. */
+    var deviceId: SyncId = from?.deviceId ?: SyncId(random.nextBytes(16))
 
     /** The Sync app's view: the epoch it last learned. */
     var epoch: SyncId = server.epoch

@@ -306,6 +306,40 @@ class StreamsTest : SyncTest() {
         assertFalse(tablet.fetchFolder.resolve(id).exists())
     }
 
+    @Test
+    fun aNewDeviceIdOnTheSameServerKeepsTheDeletionOfChunksThatWasDue() = runBlocking {
+        val (phone, tablet, id) = fileOnTheServer()
+        tablet.moveStreams()
+        clock.advanceBy(10)
+        phone.deleteFile(id)
+        phone.wipeFile(id)
+        phone.sendAll(comparison = false)
+
+        // The Sync app joins the same server again, as another device, before it asked for the deletion.
+        phone.deviceId = SyncId(ByteArray(16) { 7 })
+        phone.runUntilQuiet()
+        assertTrue("the chunks are deleted", server.streams.isEmpty())
+    }
+
+    @Test
+    fun inAnAppThatDoesNotWipeADeletionThatWinsWithoutTheFileHereStillGoes() = runBlocking {
+        val phone = device("phone", wipes = false)
+        val file = phone.addFile("photo.jpg", bytes)
+        phone.runUntilQuiet()
+
+        // The tablet has the record from a backup that left the file out, deletes it, and then turns sync on.
+        val tablet = device("tablet", wipes = false, on = false)
+        tablet.attachments.takeFromBackup(phone.database.attachments().find(file.record.id)!!.copy(changeNumber = 0))
+        clock.advanceBy(10)
+        tablet.deleteFile(file.record.id)
+        tablet.client.setOn(true)
+        tablet.runUntilQuiet()
+        phone.runUntilQuiet()
+
+        assertTrue("the deletion reached the phone", phone.database.attachments().find(file.record.id)?.record?.deletedAt != null)
+        assertEquals(phone.records(), tablet.records())
+    }
+
     /** The tablet deletes the file; the phone brings it back, with a later edit. */
     private suspend fun bringBack(beforeTheDeletion: Boolean, whileItRuns: Boolean) {
         val (phone, tablet, id) = fileOnTheServer()

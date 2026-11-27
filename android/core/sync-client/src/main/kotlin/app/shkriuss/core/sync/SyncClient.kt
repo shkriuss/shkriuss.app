@@ -516,7 +516,10 @@ class SyncClient(
                 stopped = stopped,
                 stoppedKeyId = if (stopped == Stop.NONE) null else state.stoppedKeyId,
             )
-            state = startComparison(moved, forgetDeletions = true)
+            // The numbers of deleted files' records mean nothing on another server or epoch. On the same server and
+            // epoch, with only another device ID, they are still the server's numbers.
+            val numbersMoved = state.serverId != call.serverId.hex || state.epoch != call.epoch.hex
+            state = startComparison(moved, forgetDeletions = numbersMoved)
         }
         if (keyIds != null && state.syncKeyId == null && call.serverKeyId == keyIds.current) {
             // The first time the app can sync: it syncs with its current key. What it skipped before is fetched again.
@@ -808,6 +811,12 @@ class SyncClient(
                 sendOrdinary(came.id, taken.changeNumber)
                 if (record.isDeleted && stored != null && stored.isFile && !stored.isDeleted) {
                     stream(came.id)?.let { putStream(it.copy(onServer = false)) }
+                }
+                // The stored version goes out, and its plaintext names its stream's hash. A file's stream is the same
+                // in every version of its record, so the hash that came is kept if this phone does not know it.
+                if (stream != null && stored?.streamLength != null && stream(came.id)?.hash == null) {
+                    val known = stream(came.id) ?: StreamState.of(came.id, stream.length, here = content.hasStream(came.id, stream.length))
+                    putStream(known.copy(hash = Hex.of(stream.hash)))
                 }
             }
         }
