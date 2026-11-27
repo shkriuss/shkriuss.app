@@ -15,8 +15,10 @@ follows this page.
 - Sealing file keys again in the database is built with Notes, the
   first app that stores files
   ([Notes' spec](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)).
-- Not built yet on the phones: the keys of sync
-  ([Sync keys](#sync-keys)) and a new recovery key
+- The keys of sync ([Sync keys](#sync-keys)) are in
+  `android/core/crypto`, and the mode "Sign a device" of the handover is
+  in `android/core/security`. The Sync app that uses them is not built
+  yet, nor is a new recovery key
   ([A new recovery key](#a-new-recovery-key)). The sync server checks
   both signatures of sync, in `backend/`.
 - The code is `android/core/crypto`. It must follow this page exactly.
@@ -53,7 +55,7 @@ The page ends with every [assumption](#assumptions), the
 | Files | One random key per file. The file is encrypted once. |
 | Hardware keys | Four AES-256-GCM keys per app in the Android Keystore, StrongBox where the phone has it |
 | App lock | Optional. One system prompt unlocks the file keys. Sync and reminders go on while locked. |
-| Sync identity | Not built yet. One signing key for each device, in the Sync app's Keystore. One account key that comes from the recovery key and signs who may join. |
+| Sync identity | One signing key for each device, in the Sync app's Keystore. One account key that comes from the recovery key and signs who may join. |
 | Database rows | Not encrypted by the app. Android's file-based encryption protects them ([ADR 0004](../adr/0004-room-on-system-sqlite-no-sqlcipher.md)). |
 | Every blob | Starts with `SHK`, a version byte and a kind byte |
 
@@ -148,14 +150,16 @@ Not protected, by decision or by nature:
    The owner accepted the four as they come.
 4. Tink features that are used: the AEAD, Streaming AEAD, PRF and key
    derivation primitives, the binary keyset format
-   (`TinkProtoKeysetFormat`) and the Keystore helper
-   (`integration.android.AndroidKeystore`).
+   (`TinkProtoKeysetFormat`), the Keystore helper
+   (`integration.android.AndroidKeystore`), and for sync its Ed25519
+   signature (`Ed25519Sign`, `Ed25519Verify`, without a prefix) for the
+   account key and its check that a point is on the curve P-256
+   (`EllipticCurves.pointDecode`) for a device's public key.
 5. Tink features that are not used: JSON keysets, JWT, hybrid encryption,
    MAC, deterministic AEAD, `AndroidKeysetManager`, shared
    preferences, any key management service client, and FIPS mode.
-6. Not built yet: Tink's signature primitive, with Ed25519, for the
-   account key of sync ([Sync keys](#sync-keys)). Until then no code
-   calls it.
+6. Signatures with a device key are made by the Android Keystore, not
+   by Tink ([Where Android does the work, not Tink](#where-android-does-the-work-not-tink)).
 
 ### No Play services provider
 
