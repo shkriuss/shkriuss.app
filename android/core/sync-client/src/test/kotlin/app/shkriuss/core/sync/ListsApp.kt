@@ -133,13 +133,23 @@ class ListsContent(
     /** True to make the next [sealFileKeysAgain] stop before it writes, as when the app is stopped there. */
     var stopNextSeal = false
 
+    /**
+     * Called with the ID at the first [find] after sync took that record:
+     * the moment after the import's transaction, when the app's own writes
+     * may come in between.
+     */
+    var afterTake: (suspend (String) -> Unit)? = null
+    private val taken = mutableSetOf<String>()
+
     override suspend fun changesSince(afterChangeNumber: Long, limit: Int): List<SyncChange> {
         val both = database.items().changes(afterChangeNumber, limit) + database.attachments().changes(afterChangeNumber, limit)
         return both.sortedBy { it.changeNumber }.take(limit).map { SyncChange(it.id, it.changeNumber) }
     }
 
-    override suspend fun find(id: String): SyncRecord? =
-        database.items().find(id)?.let(::syncRecordOf) ?: database.attachments().find(id)?.let(::syncRecordOf)
+    override suspend fun find(id: String): SyncRecord? {
+        if (taken.remove(id)) afterTake?.invoke(id)
+        return database.items().find(id)?.let(::syncRecordOf) ?: database.attachments().find(id)?.let(::syncRecordOf)
+    }
 
     override fun read(dataVersion: Int, entry: BackupRecord): SyncRecord? = when (entry.type) {
         ITEM -> readItem(dataVersion, entry)?.let(::syncRecordOf)
@@ -147,7 +157,11 @@ class ListsContent(
         else -> null
     }
 
-    override suspend fun take(record: SyncRecord, tie: (stored: SyncRecord, came: SyncRecord) -> Int): SyncTaken = when (record.entry.type) {
+    override suspend fun take(record: SyncRecord, tie: (stored: SyncRecord, came: SyncRecord) -> Int): SyncTaken = also {
+        if (afterTake != null) taken += record.id
+    }.let { takeRecord(record, tie) }
+
+    private suspend fun takeRecord(record: SyncRecord, tie: (stored: SyncRecord, came: SyncRecord) -> Int): SyncTaken = when (record.entry.type) {
         ITEM -> items.takeFromSync(readItem(this.dataVersion, record.entry)!!) { s, c -> tie(syncRecordOf(s), syncRecordOf(c)) }
         else -> attachments.takeFromSync(readAttachment(record.entry)!!) { s, c -> tie(syncRecordOf(s), syncRecordOf(c)) }
     }
@@ -164,7 +178,7 @@ class ListsContent(
     }
 
     override suspend fun removeStream(fileId: String) {
-        streamFile(fileId).delete()
+        if (database.attachments().find(fileId)?.record?.deletedAt != null) streamFile(fileId).delete()
     }
 
     override suspend fun afterImport() {

@@ -79,7 +79,13 @@ interface SyncContent {
      */
     suspend fun moveStreamIn(fileId: String, fetched: File)
 
-    /** Removes this phone's copy of the stream of the file [fileId], whose deleted record sync took. */
+    /**
+     * Removes this phone's copy of the stream of the file [fileId], whose
+     * deleted record sync took. Sync calls it after its transaction, once
+     * it found the record still deleted. The app's own writes go on beside
+     * sync, so the app removes the stream only if its record is still
+     * deleted when it holds the lock that its own writes of streams take.
+     */
     suspend fun removeStream(fileId: String)
 
     /**

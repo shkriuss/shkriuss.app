@@ -130,6 +130,28 @@ class StreamsTest : SyncTest() {
         assertFalse(id in tablet.storedStreams())
     }
 
+    @Test
+    fun aFileTheAppBringsBackRightAfterTheImportKeepsItsStream() = runBlocking {
+        val (phone, tablet, id) = fileOnTheServer()
+        tablet.moveStreams()
+        clock.advanceBy(10)
+        phone.deleteFile(id)
+        phone.wipeFile(id)
+        phone.runUntilQuiet()
+
+        // Right after the import took the deletion, and before sync removes the stream, the app's own write brings
+        // the record back, as a restore of a backup could.
+        tablet.content.afterTake = { fileId ->
+            tablet.content.afterTake = null
+            clock.advanceBy(10)
+            tablet.attachments.restore(fileId)
+        }
+        tablet.fetchAll()
+
+        assertEquals(null, tablet.database.attachments().find(id)?.record?.deletedAt)
+        assertTrue("the stream stays", id in tablet.storedStreams())
+    }
+
     /** The tablet deletes the file; the phone brings it back, with a later edit. */
     private suspend fun bringBack(beforeTheDeletion: Boolean, whileItRuns: Boolean) {
         val (phone, tablet, id) = fileOnTheServer()

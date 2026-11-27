@@ -278,7 +278,11 @@ class SyncClient(
             after.sealFileKeys = state.sealFileKeys
             ImportResult.Taken(taken, state.cursor)
         }
-        after.removedStreams.forEach { content.removeStream(it) }
+        after.removedStreams.forEach { fileId ->
+            // The app's own writes go on beside sync: a restore may have brought the record back since the commit.
+            val stillDeleted = database.withWriteTransaction { content.find(fileId)?.isDeleted != false }
+            if (stillDeleted) content.removeStream(fileId)
+        }
         if (after.sealFileKeys) {
             // Kept in the state until it is done, so that a stop here only makes the next import do it.
             content.sealFileKeysAgain()
