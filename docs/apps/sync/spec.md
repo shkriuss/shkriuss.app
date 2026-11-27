@@ -138,7 +138,8 @@ use it." Only its **Done** takes the address out.
    | `09` | "The code is wrong, used or too old." A device code goes back to step 4, empty. A setup code stays at step 5: "Check the secret SETUP_CODE in the dashboard: this code, with no spaces." |
    | `0A`, naming an older key that the keeper holds | Sync asks the keeper again ([point 8](../../architecture/sync-protocol.md#how-the-sync-app-gets-its-statement-and-its-name-key)). |
    | `0A`, any other key | "This server belongs to another recovery key, with the short name 1a2b3c4d. Join with an app that keeps that key, or deploy a new server." |
-   | `05`, `06`, `01` | The lines of step 2 |
+   | `05`, `01` | The lines of step 2 |
+   | `06` | The join is cancelled, and step 2 says the server was closed. No more requests go to it. |
    | `03` | The key was removed: Sync deletes it, and the join goes back to step 6 with a new key. |
    | `04` twice | "The server refused this phone. Try again later." |
    | No answer | "Could not reach the server." **Try again** sends the same `enrol`, or goes back to step 6 when the statement is older than 10 minutes. |
@@ -207,9 +208,10 @@ data app's `streams` say at the next run.
 
 1. Top bar: "Devices". Sync reads
    [`devices`](../../architecture/sync-protocol.md#devices) when the
-   screen comes to the front and the last read is a minute old or more.
-   `ShkLoadingState` the first time. After a failed read, the last list
-   stays, with "Could not read the list of devices."
+   screen comes to the front, unless the screen shows a list read less
+   than a minute ago. `ShkLoadingState` until a list is there. After a
+   failed read, a list the screen shows stays, with "Could not read the
+   list of devices."
 2. Only devices that are in: this phone first, then the others by name
    in the phone's language order, ties by when added, then device ID.
    A row: the name, or "A device with a name this phone cannot read",
@@ -279,7 +281,7 @@ The device line on Apps shows the first that applies, as the protocol's
 | The day's limit (`07 02`, or Cloudflare's) | "The server's limit for today is used. Sync goes on at 04:00." | | 00:00 UTC |
 | Full (`08`) | "The server is full. Changes wait on this phone. The self-hosting guide says what to do." | **Try again** | A batch is stored. Fetching goes on. Sending is tried once a day and on **Try again**. |
 | Three failed runs in a row | "Could not reach the server since 14:05. Sync tries every 4 hours." | **Try again** | A run works |
-| Put back ([`heads`](../../architecture/sync-protocol.md#heads), point 5) | "The server was put back to an earlier time. Check the list of devices." | **Devices** | Devices opens |
+| Put back ([`heads`](../../architecture/sync-protocol.md#heads), point 5) | "The server was put back to an earlier time. Check the list of devices." | **Devices** | Devices shows a list read after the put-back was found |
 
 1. Another epoch (`0B`) is no problem: every data app compares
    everything, and its row says so. After `0C`, Sync reads `info` again
@@ -442,7 +444,7 @@ so after a stop Sync does the step again.
 | Server address | `stage` 1, `joinedAt`, `address`, `serverId`, `limits` | The join opens at step 2, filled in. Another server ID drops the old key and setup code. |
 | Cancel a join | `stage` 0 and the join's values gone, `deleteSetupCode` kept; then the device key and the name key | At the next start, a `stage` 0 with a device key or name key left deletes them. |
 | Setup code | `setupCode` and `deleteSetupCode` in one write, before it shows | The same code shows again. |
-| The device key | `deviceAlias`, then the key, then `deviceId` | An alias with no key: the key is made then. |
+| The device key | `deviceAlias`, then the key, then `deviceId` | An alias with no key: the key is made then. An alias with a key and no `deviceId`: the ID is worked out from the key's public key then. |
 | The keeper's answer | The name key; `stage` 2 and `name`; `enrol` | Before `stage` 2: a setup code goes back to step 6, a device code to step 4, to be typed again. At `stage` 2 Sync asks `heads` with that key. `00`: the writes of "`enrol` gives `00`", with the epoch and key ID of `heads`. `02`: back to the same step as before `stage` 2. `03`: the key is deleted, back to step 6. `05`: the clock line of step 2, and the join stays at `stage` 2. `06`: the join is cancelled, and step 2 says the server was closed; no more requests go to it. |
 | `enrol` gives `00` | `stage` 3, `epoch`, `keyId`, `setupCode` gone; the periodic work | As `stage` 2 above. At `stage` 3, the next start asks for the periodic work again. |
 | Rename | `devices/name`; `name`, `revision` | The next list takes the name from the server. |
