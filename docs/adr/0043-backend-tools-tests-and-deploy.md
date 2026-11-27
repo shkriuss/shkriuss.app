@@ -122,6 +122,15 @@
    `0C`, which today no request within the limit reaches.
 9. The Worker logs nothing: Cloudflare's Workers Logs and Logpush are off
    in `wrangler.jsonc`, and the code writes no log.
+10. Decided by the owner: eight points that sync-protocol.md left open
+    are written on that page as the server answers them, under their
+    calls. Among them: a GET with a body, a path outside `/v1/`, D1's
+    row reads of the day, the same record twice in one batch, and the
+    server's limit of R2 calls in `files/have`.
+11. Decided by the owner: `enrol` answers `0A` with the current key ID
+    before the code is checked, as "Joining" says. A stranger can learn
+    the key ID that way. The page's list of what the server and
+    strangers can learn says so.
 
 ## Options rejected
 
