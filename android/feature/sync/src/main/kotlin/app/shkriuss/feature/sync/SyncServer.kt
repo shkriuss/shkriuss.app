@@ -14,6 +14,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.cert.CertPathValidatorException
 import java.security.cert.CertificateException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLPeerUnverifiedException
@@ -48,12 +50,19 @@ fun interface Transport {
  * Android.
  */
 class HttpsTransport : Transport {
+    /** Cuts a request that takes longer than [MOST_REQUEST_MILLIS], also one whose server sends a byte now and then. */
+    private val deadline = Deadline(MOST_REQUEST_MILLIS)
+
     override fun send(request: HttpRequest): HttpResult {
         val connection = try {
             URL(request.url).openConnection() as? HttpsURLConnection ?: return HttpResult.NoAnswer
         } catch (_: IOException) {
             return HttpResult.NoAnswer
         }
+        return deadline.within(onLate = connection::disconnect) { exchange(connection, request) }
+    }
+
+    private fun exchange(connection: HttpsURLConnection, request: HttpRequest): HttpResult {
         return try {
             connection.instanceFollowRedirects = false
             connection.useCaches = false
@@ -90,6 +99,9 @@ class HttpsTransport : Transport {
         private const val CONNECT_TIMEOUT_MILLIS = 30_000
         private const val READ_TIMEOUT_MILLIS = 60_000
 
+        /** The longest one request may take, its 4 MiB of chunks on a slow network included. */
+        private const val MOST_REQUEST_MILLIS = 300_000L
+
         /** More than any answer of the protocol: 4 MiB of chunks and their table. */
         private const val MOST_ANSWER_BYTES = 4_194_304 + 65_536
 
@@ -125,6 +137,25 @@ class HttpsTransport : Transport {
                 if (out.size() + read > most) return null
                 out.write(buffer, 0, read)
             }
+        }
+    }
+}
+
+/**
+ * Runs work that must end within [millis]: when it is late, `onLate` runs
+ * on another thread, as a connection's disconnect, which makes the
+ * blocked work fail. A server that sends a byte now and then cannot hold
+ * a run, and with it every later one, for longer.
+ */
+internal class Deadline(private val millis: Long) {
+    private val timer = Executors.newSingleThreadScheduledExecutor { task -> Thread(task, "sync-deadline").apply { isDaemon = true } }
+
+    fun <T> within(onLate: () -> Unit, work: () -> T): T {
+        val late = timer.schedule(onLate, millis, TimeUnit.MILLISECONDS)
+        try {
+            return work()
+        } finally {
+            late.cancel(false)
         }
     }
 }

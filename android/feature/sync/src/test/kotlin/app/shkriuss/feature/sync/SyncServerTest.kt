@@ -10,7 +10,9 @@ import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLPeerUnverifiedException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -235,4 +237,25 @@ class SyncServerTest {
         assertNull(HttpsTransport.readAtMost(ByteArrayInputStream(ByteArray(11)), 10))
         assertEquals(10, HttpsTransport.readAtMost(ByteArrayInputStream(ByteArray(10)), 10)?.size)
     }
+
+    @Test
+    fun aRequestThatTakesLongerThanItsDeadlineIsCut() {
+        // A server that takes the connection and sends nothing: the read waits until the deadline cuts it.
+        java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress()).use { server ->
+            java.net.Socket(server.inetAddress, server.localPort).use { socket ->
+                val started = System.nanoTime()
+                assertThrows(java.io.IOException::class.java) { Deadline(200).within(onLate = socket::close) { socket.getInputStream().read() } }
+                assertTrue("cut at the deadline", System.nanoTime() - started < 5_000_000_000L)
+            }
+        }
+    }
+
+    @Test
+    fun aRequestWithinItsDeadlineIsNotCut() {
+        var late = false
+        assertEquals(7, Deadline(200).within(onLate = { late = true }) { 7 })
+        Thread.sleep(400)
+        assertFalse(late)
+    }
 }
+

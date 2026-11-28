@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 187 tests. They use real keys
+- `feature/sync` has 9 test classes with 189 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -889,8 +889,8 @@ second build must write the same mapping file, or the release stops. See
     the headers of a signed request, a `04` sent once more, Cloudflare's
     answers, a certificate for another name, times and versions outside
     their limits, a page, also a cut one, which ends at its last record,
-    the head after a batch, the devices, also their times, and the file
-    calls.
+    the head after a batch, the devices, also their times, the file
+    calls, and the deadline that cuts a request that takes too long.
   - `SyncJoinTest`, `SyncDevicesTest` and `SyncServicesTest`: each join
     step and each answer of `info`, of the keeper and of `enrol`, also
     one that comes after the join was cancelled or started anew, a
