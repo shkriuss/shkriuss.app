@@ -169,4 +169,13 @@ class SyncServicesTest {
         scheduler.refuse = true
         assertFalse("Could not start a run", services.syncNow())
     }
+
+    @Test
+    fun anInfoWhoseAnswerCameAfterALeaveWritesNothing() {
+        store.update { joinedState(keys, server, clock).copy(stage = Stage.STOPPED, stop = Stop.UPDATE_SERVER) }
+        server.onRequest = { path -> if (path == "/v1/info") forgetServer(store, keys.sync.crypto.sync, scheduler) }
+        services.startChecks()
+        assertEquals(SyncState(), store.now())
+        assertEquals("no periodic job for a server the phone left", 0, scheduler.periodic)
+    }
 }

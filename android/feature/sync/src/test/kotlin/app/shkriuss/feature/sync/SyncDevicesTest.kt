@@ -43,7 +43,7 @@ class SyncDevicesTest {
         joined()
         server.devices += FakeDevice(syncId(8), ByteArray(65), removed = false, addedAt = 2, sealedName = ByteArray(60) { 1 })
         server.devices += FakeDevice(syncId(9), ByteArray(65), removed = true, addedAt = 3, sealedName = ByteArray(60) { 2 })
-        val rows = (devices.list() as DeviceAnswer.Done).value
+        val rows = (devices.list(UNREADABLE) as DeviceAnswer.Done).value
         assertEquals(2, rows.size)
         val own = rows.single { it.thisPhone }
         assertEquals("Pixel 9 Pro", own.name)
@@ -72,7 +72,7 @@ class SyncDevicesTest {
         assertEquals(DeviceAnswer.Unreachable, devices.remove(syncId(8)))
         assertTrue(syncId(8).hex in store.now().removed)
         server.unreachable = false
-        devices.list()
+        devices.list(UNREADABLE)
         assertTrue("the next read of the list removes it", lost.removed)
         assertTrue(store.now().putBack)
     }
@@ -129,8 +129,40 @@ class SyncDevicesTest {
     fun anAnswerThatEndsItWritesItsProblem() {
         joined()
         server.refuseNext("/v1/devices", 0x03)
-        assertEquals(DeviceAnswer.Problem, devices.list())
+        assertEquals(DeviceAnswer.Problem, devices.list(UNREADABLE))
         assertEquals(Stop.REMOVED, store.now().stop)
         assertEquals("a device action counts no failed run", 0, store.now().failedRuns)
+    }
+
+    @Test
+    fun theRowsAreThisPhoneFirstThenByNameThenWhenAddedThenId() {
+        joined()
+        val sync = keys.sync.crypto.sync
+        fun named(id: Int, name: String?, added: Long) = FakeDevice(
+            syncId(id),
+            ByteArray(65),
+            removed = false,
+            addedAt = added,
+            sealedName = name?.let { sync.sealName(DeviceId.ofBytes(id(id))!!, it) } ?: ByteArray(60),
+        )
+        server.devices += listOf(named(0x20, "Tablet", 5), named(0x21, "anna", 9), named(0x22, "Bert", 1), named(0x24, "Bert", 1), named(0x23, "Bert", 0), named(0x25, null, 2))
+        val rows = (devices.list(UNREADABLE) as DeviceAnswer.Done).value
+        assertTrue(rows.first().thisPhone)
+        assertEquals(
+            listOf(syncId(0x25), syncId(0x21), syncId(0x23), syncId(0x22), syncId(0x24), syncId(0x20)),
+            rows.drop(1).map { it.id },
+        )
+    }
+
+    @Test
+    fun aRenameWhoseAnswerCameAfterALeaveWritesNothing() {
+        joined()
+        server.onRequest = { path -> if (path == "/v1/devices/name") forgetServer(store, keys.sync.crypto.sync, scheduler) }
+        devices.rename("Tablet")
+        assertEquals(SyncState(), store.now())
+    }
+
+    private companion object {
+        const val UNREADABLE = "A device with a name this phone cannot read"
     }
 }

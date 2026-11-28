@@ -7,6 +7,7 @@ import app.shkriuss.core.crypto.DeviceNames
 import app.shkriuss.core.crypto.SyncKeys
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.sync.SyncId
+import java.text.Collator
 
 /**
  * Reads the list of devices and keeps the removed ones removed
@@ -71,11 +72,17 @@ class SyncDevices(
     private val problems: ProblemWriter,
     private val clock: Clock,
 ) {
-    /** The devices that are in: this phone first, as the screen orders the others. Also keeps the removed ones removed. */
-    fun list(): DeviceAnswer<List<DeviceRow>> = withSession { session ->
+    /**
+     * The devices that are in, in the order of Devices (docs/apps/sync/
+     * spec.md, "Devices", point 2): this phone first, then the others by
+     * name in the phone's language order, ties by when added, then device
+     * ID. A name that does not open counts as [unreadableName], the text
+     * the screen shows for it. Also keeps the removed ones removed.
+     */
+    fun list(unreadableName: String): DeviceAnswer<List<DeviceRow>> = withSession { session ->
         val devices = DeviceList(store, server, clock).read(session, revision = null)
         val thisPhone = store.now().deviceId
-        devices.filter { !it.removed }.map { device ->
+        val rows = devices.filter { !it.removed }.map { device ->
             val name = try {
                 DeviceId.ofBytes(device.id.toBytes())?.let { keys.openName(it, device.sealedName) }
             } catch (_: BlobException) {
@@ -83,6 +90,13 @@ class SyncDevices(
             }
             DeviceRow(device.id, name, device.id == thisPhone, device.addedAt, device.seenDay)
         }
+        val collator = Collator.getInstance()
+        rows.sortedWith(
+            compareByDescending<DeviceRow> { it.thisPhone }
+                .thenComparator { first, second -> collator.compare(first.name ?: unreadableName, second.name ?: unreadableName) }
+                .thenBy { it.addedAt }
+                .thenBy { it.id.hex },
+        )
     }
 
     /** **Rename**: seals [name], sends `devices/name`, then stores the name and the revision. */
@@ -91,7 +105,7 @@ class SyncDevices(
         return withSession { session ->
             val sealed = keys.sealName(session.key.deviceId, name)
             val revision = SyncRun.valueOf(server.renameDevice(session, sealed))
-            store.update { it.copy(name = name, revision = revision) }
+            store.update { if (it.isJoinedWith(session)) it.copy(name = name, revision = revision) else it }
         }
     }
 
@@ -109,7 +123,7 @@ class SyncDevices(
         }
         return withSession { session ->
             val revision = SyncRun.valueOf(server.removeDevice(session, id))
-            store.update { it.copy(revision = revision) }
+            store.update { if (it.isJoinedWith(session)) it.copy(revision = revision) else it }
         }
     }
 

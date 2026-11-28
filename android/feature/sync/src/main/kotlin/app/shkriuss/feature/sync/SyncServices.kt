@@ -142,12 +142,17 @@ class SyncServices(
             info.state == ServerState.CLOSED -> Stop.CLOSED
             else -> null
         }
-        if (stop != null) {
-            store.update { it.copy(stop = stop) }
-            return
+        // Only the state this answer is for: a Leave or a new join while `info` was on its way is kept.
+        fun same(now: SyncState) = now.stage == Stage.STOPPED && now.stop == state.stop && now.address == address && now.deviceId == state.deviceId
+        var joined = false
+        store.update {
+            when {
+                !same(it) -> it
+                stop != null -> it.copy(stop = stop)
+                else -> it.copy(stage = Stage.JOINED, stop = null, limits = info.limits, infoAt = clock.nowMillis()).also { joined = true }
+            }
         }
-        store.update { it.copy(stage = Stage.JOINED, stop = null, limits = info.limits, infoAt = clock.nowMillis()) }
-        scheduler.schedulePeriodic()
+        if (joined) scheduler.schedulePeriodic()
     }
 
     /**

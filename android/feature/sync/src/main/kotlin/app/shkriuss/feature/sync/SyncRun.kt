@@ -168,8 +168,8 @@ class SyncRun(
         /** True after a lack of CPU time or a `0C` on a file request: the files wait for the next run, with less in each request. */
         private var filesStopped = false
 
-        /** The app that got a result `05`: it gets no further batch in this run. */
-        private var noMoreBatchesFor: String? = null
+        /** The apps that got a result `05`: they get no further batch in this run. */
+        private val noMoreBatchesFor = mutableSetOf<String>()
 
         /** Ends the run here when Android stopped its job. */
         private fun checkStop() {
@@ -264,10 +264,9 @@ class SyncRun(
             write { state -> state.withApp(name) { it.copy(poked = false) } }
             val context = courierContext()
             val status = statusOf(app, context) ?: return
-            if (!status.isOn || !status.canSyncNow) {
-                record(name, status, goodNow = false)
-                return
-            }
+            // What the app has to do is kept before any transfer, so that a run that fails part way serves it again.
+            record(name, status, goodNow = false)
+            if (!status.isOn || !status.canSyncNow) return
             val heads = this.heads ?: return
             val head = heads.of(name)
             val needsFetch = status.cursor != head.head || head.told < status.known ||
@@ -348,7 +347,7 @@ class SyncRun(
             var tries = 0
             repeat(MOST_BATCHES) {
                 checkStop()
-                if (!sendingAllowed() || (comparison && comparisonsWait()) || noMoreBatchesFor == name) return true
+                if (!sendingAllowed() || (comparison && comparisonsWait()) || name in noMoreBatchesFor) return true
                 progress.value = RunProgress(name, if (comparison) RunStep.COMPARING else RunStep.SENDING)
                 val batch = when (val answer = couriers.export(app, context, comparison, mostRecords(), mostBytes())) {
                     is CourierAnswer.Done -> answer.value ?: return true
@@ -372,7 +371,7 @@ class SyncRun(
                             if (!fetchAll(app, context, status)) return false
                         }
                         if (SendResult.CHUNKS_BEING_DELETED in results) {
-                            noMoreBatchesFor = name
+                            noMoreBatchesFor += name
                             return true
                         }
                     }
@@ -416,7 +415,8 @@ class SyncRun(
             deleteStreams(app, context, list.filter { it.work == StreamWork.DELETE })
             // Asking which chunks the server has moves no chunk, so it goes on any network: only files/send and files/fetch wait.
             val sends = list.filter { it.work == StreamWork.SEND }
-            val sent = if (sends.isNotEmpty() && !filesStopped) StreamSender(app, context).send(sends) else false
+            // A full server takes no chunks either: sending is tried once a day, and on Try again.
+            val sent = if (sends.isNotEmpty() && !filesStopped && sendingAllowed()) StreamSender(app, context).send(sends) else false
             val fetches = list.filter { it.work == StreamWork.FETCH }
             if (fetches.isNotEmpty() && !filesStopped && filesMayMove()) StreamFetcher(app, context).fetch(fetches)
             return sent

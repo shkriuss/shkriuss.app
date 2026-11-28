@@ -572,5 +572,55 @@ class SyncRunTest {
         assertFalse(store.now().fault)
         assertEquals(0, store.now().failedRuns)
     }
-}
 
+    @Test
+    fun aFullServerTakesNoChunksUntilSendingIsTriedAgain() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 6 }
+        val fileId = id(0x74)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        store.update { state -> state.copy(full = true, fullAt = clock.nowMillis).withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertFalse("/v1/files/send" in server.paths())
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run(asked = true)
+        assertEquals(listOf(hex(fileId) to true), water.sent)
+    }
+
+    @Test
+    fun aResult05KeepsEachAppFromFurtherBatchesAlsoWhenItIsServedAgain() {
+        joined()
+        run()
+        notes.toSend += id(1) to blob(server.keyId, 1)
+        water.toSend += id(2) to blob(server.keyId, 2)
+        store.update { state -> state.withApp("notes") { it.copy(poked = true) }.withApp("water") { it.copy(poked = true) } }
+        val chunksBeingDeleted = HttpResult.Answer(200, Bytes().u8(0).bytes(server.epoch.toBytes()).i64(0).i64(0).i32(1).u8(5).done())
+        server.answerNext("/v1/changes", chunksBeingDeleted)
+        server.answerNext("/v1/changes", chunksBeingDeleted)
+        // Notes pokes again while Water is served: it is served once more in this run, and gets no batch.
+        water.onStatus = { store.update { state -> state.withApp("notes") { it.copy(poked = true) } } }
+        server.requests.clear()
+        notes.calls.clear()
+        run()
+        assertEquals(2, server.requests.count { it.url.contains("/v1/changes") })
+        assertEquals("Notes is served twice", 4, notes.calls.count { it == "status" })
+        assertEquals("and asked for one batch", 1, notes.calls.count { it == "export" })
+    }
+
+    @Test
+    fun anAppWhoseTransferFailedIsServedAtTheNextRun() {
+        joined()
+        run()
+        water.toSend += id(3) to blob(server.keyId, 3)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.answerNext("/v1/changes", HttpResult.NoAnswer)
+        assertEquals(RunEnd.ENDED, run())
+        assertTrue("its work is kept", store.now().app("water").work)
+        assertFalse(store.now().app("water").poked)
+        run()
+        assertEquals(0, water.toSend.size)
+    }
+}

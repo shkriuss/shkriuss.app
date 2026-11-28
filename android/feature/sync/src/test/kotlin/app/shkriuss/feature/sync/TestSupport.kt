@@ -186,6 +186,9 @@ internal class FakeServer(private val clock: TestClock, val address: String = "h
     val requests = mutableListOf<HttpRequest>()
     var unreachable = false
 
+    /** Runs before the server answers a request, with its path: a test makes the user act while the request is on its way. */
+    var onRequest: (String) -> Unit = {}
+
     /** Answers that come first, by path without query, in order. Null lets the server answer that one itself. */
     val ahead = mutableMapOf<String, ArrayDeque<HttpResult?>>()
 
@@ -205,6 +208,7 @@ internal class FakeServer(private val clock: TestClock, val address: String = "h
         if (unreachable) return HttpResult.NoAnswer
         val pathAndQuery = request.url.removePrefix(address)
         val path = pathAndQuery.substringBefore('?')
+        onRequest(path)
         val queued = ahead[path]
         if (!queued.isNullOrEmpty()) queued.removeFirst()?.let { return it }
         val query = pathAndQuery.substringAfter('?', "").split('&').filter { it.isNotEmpty() }.associate { it.substringBefore('=') to it.substringAfter('=') }
