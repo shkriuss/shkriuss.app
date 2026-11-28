@@ -122,27 +122,34 @@ class SyncDevices(
         }
     }
 
-    /** **Remove** another device: its ID goes into `removed` before the request, so a request that did not arrive is made again. */
+    /**
+     * **Remove** another device: its ID goes into `removed` before the
+     * request, so a request that did not arrive is made again. The ID and
+     * the request are for the join this Remove was made in: after a Leave
+     * or a new join, nothing is marked and nothing is sent.
+     */
     fun remove(id: SyncId): DeviceAnswer<Unit> {
         val state = store.now()
         if (id == state.deviceId) return DeviceAnswer.Problem
-        try {
-            if (id.hex !in state.removed) {
-                if (state.removed.size >= SyncState.MOST_REMOVED) {
+        return try {
+            withSession<Unit>(madeIn = state) { session ->
+                val now = store.now()
+                if (id.hex !in now.removed) {
                     // More removed devices than Sync keeps: a fault, as for a list that shows more (spec, Problems).
-                    store.update { if (it.isSameDeviceAs(state)) it.copy(fault = true) else it }
-                    return DeviceAnswer.Problem
+                    if (now.removed.size >= SyncState.MOST_REMOVED) throw EndRun(Reason.Fault)
+                    val marked = store.update { if (it.isJoinedWith(session)) it.copy(removed = it.removed + id.hex) else it }
+                    if (!marked.isJoinedWith(session)) throw JoinChanged()
                 }
-                store.update { it.copy(removed = it.removed + id.hex) }
+                val revision = SyncRun.valueOf(server.removeDevice(session, id))
+                store.update { if (it.isJoinedWith(session)) it.copy(revision = keptRevision(it, revision)) else it }
             }
-        } catch (_: CouldNotSaveException) {
-            return DeviceAnswer.NotSaved
-        }
-        return withSession { session ->
-            val revision = SyncRun.valueOf(server.removeDevice(session, id))
-            store.update { if (it.isJoinedWith(session)) it.copy(revision = keptRevision(it, revision)) else it }
+        } catch (_: JoinChanged) {
+            DeviceAnswer.Problem
         }
     }
+
+    /** A Leave or a new join came while an action went: it stops there. */
+    private class JoinChanged : Exception("The join changed")
 
     /** **Show the code**: a new device code, which voids the one before. */
     fun deviceCode(): DeviceAnswer<DeviceCode> = withSession { session -> SyncRun.valueOf(server.enrolCode(session)) }
@@ -210,7 +217,6 @@ class SyncDevices(
         if (state.putBack && state.devicesAt != null) store.update { it.copy(putBack = false) }
     }
 
-    /** [action] with the session of a joined phone. Lost keys stop sync, and any answer that ends it writes its problem. */
     /**
      * The revision to keep after an action that answered [revision]. A lower
      * one than Sync knows means the server was put back: the higher one is
@@ -219,9 +225,15 @@ class SyncDevices(
      */
     private fun keptRevision(state: SyncState, revision: Long): Long = maxOf(state.revision, revision)
 
-    private fun <T> withSession(action: (Session) -> T): DeviceAnswer<T> {
+    /**
+     * [action] with the session of a joined phone, and only of the join
+     * [madeIn] when it is given. Lost keys stop sync, and any answer that
+     * ends it writes its problem.
+     */
+    private fun <T> withSession(madeIn: SyncState? = null, action: (Session) -> T): DeviceAnswer<T> {
         val state = store.now()
         if (state.stage != Stage.JOINED) return DeviceAnswer.Problem
+        if (madeIn != null && !state.isSameDeviceAs(madeIn)) return DeviceAnswer.Problem
         val session = try {
             SyncRun.sessionOf(state, keys)
         } catch (_: BlobException) {

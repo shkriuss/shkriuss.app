@@ -78,6 +78,16 @@ class SyncDevicesTest {
     }
 
     @Test
+    fun aRemoveAfterLeaveMarksNothingForTheNextJoinAndSendsNothing() {
+        joined()
+        assertEquals(DeviceAnswer.Done(Unit), devices.leave(anyway = true))
+        server.requests.clear()
+        assertEquals(DeviceAnswer.Problem, devices.remove(syncId(8)))
+        assertTrue("the next join starts with no removed device", store.now().removed.isEmpty())
+        assertTrue(server.requests.isEmpty())
+    }
+
+    @Test
     fun theDeviceCodeComesFromTheServer() {
         joined()
         assertEquals(DeviceAnswer.Done(DeviceCode("ABCD2345", clock.nowMillis + 600_000)), devices.deviceCode())

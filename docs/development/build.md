@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 193 tests. They use real keys
+- `feature/sync` has 9 test classes with 194 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -902,6 +902,7 @@ second build must write the same mapping file, or the release stops. See
     **Close the server**, a device request that clears the fault and the
     clock, also when a removal after the list fails, also on a phone
     that is not joined, a Remove with every removed ID that Sync keeps,
+    a Remove after a Leave, which marks and sends nothing,
     an action that answers a lower revision, which keeps the higher one,
     the order of the rows of Devices, the checks at each start, also a
     day-old join that a new one replaced meanwhile, which stays, the
