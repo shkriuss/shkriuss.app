@@ -880,4 +880,29 @@ class SyncRunTest {
         assertEquals("one heads", 1, server.paths().count { it == "/v1/heads" })
         assertEquals(0, store.now().halved)
     }
+
+    @Test
+    fun aBatchOfTheOtherKindLeavesTheAppAndGoesNowhere() {
+        joined()
+        run()
+        water.toSend += id(3) to blob(server.keyId, 3)
+        water.otherKind = true
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertTrue("no batch was sent", server.requests.none { it.method == RequestMethod.POST && it.url.contains("/v1/changes") })
+        assertEquals(1, water.toSend.size)
+    }
+
+    @Test
+    fun aFullServerStaysFullUntilARecordIsStored() {
+        joined()
+        run()
+        water.toSend += id(4) to blob(server.keyId, 4)
+        store.update { state -> state.copy(full = true, fullAt = clock.nowMillis).withApp("water") { it.copy(poked = true) } }
+        val nothingStored = HttpResult.Answer(200, Bytes().u8(0).bytes(server.epoch.toBytes()).i64(0).i64(0).i32(1).u8(5).done())
+        server.answerNext("/v1/changes", nothingStored)
+        run(asked = true)
+        assertTrue("still full", store.now().full)
+    }
 }

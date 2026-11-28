@@ -71,6 +71,9 @@ sealed interface KeyStep {
     data object CouldNotMake : KeyStep
 
     data object NotSaved : KeyStep
+
+    /** **Back**, a cancel or another address while the key was made: nothing was written, and the key is gone. */
+    data object Changed : KeyStep
 }
 
 /** What `enrol`, or the check of a join whose `enrol` was sent, gave (docs/apps/sync/spec.md, join step 7). */
@@ -132,6 +135,16 @@ class SyncJoin(
 ) {
     /** Counts each address entered and each cancel, so that an `info` answer counts only for the newest one. */
     private val attempts = AtomicLong()
+
+    /** Held from the check of a keeper's answer to its write. */
+    private val keeperAnswers = Any()
+
+    /** Writes what [change] gives, or nothing for null. True when it wrote. */
+    private fun writeIf(change: (SyncState) -> SyncState?): Boolean {
+        var applied = false
+        store.update { state -> change(state)?.also { applied = true } ?: state }
+        return applied
+    }
 
     /**
      * Step 2: checks the address, asks for `info`, and starts the join with
@@ -217,14 +230,29 @@ class SyncJoin(
      * after `0A`.
      */
     fun joinRequest(keyId: KeyId? = null): KeyStep {
+        val attempt = attempts.get()
         try {
             val state = store.now()
+            if (state.stage != Stage.JOINING) return KeyStep.NotSaved
             val address = state.address ?: return KeyStep.NotSaved
             val serverId = state.serverId ?: return KeyStep.NotSaved
-            val alias = state.deviceAlias ?: keys.newDeviceKeyNumber().also { number -> store.update { it.copy(deviceAlias = number) } }
+            // The Keystore can take a while: each write is for this join only, so Back or another address meanwhile is kept.
+            fun ofThisJoin(now: SyncState) = attempts.get() == attempt && now.stage == Stage.JOINING && now.address == address &&
+                now.serverId == serverId && now.joinedAt == state.joinedAt
+            val alias = state.deviceAlias ?: keys.newDeviceKeyNumber().also { number ->
+                if (!writeIf { if (ofThisJoin(it) && it.deviceAlias == null) it.copy(deviceAlias = number) else null }) return KeyStep.Changed
+            }
             val key = keys.makeDeviceKey(alias)
             val id = key.deviceId.toSyncId()
-            if (store.now().deviceId != id) store.update { it.copy(deviceId = id) }
+            if (!writeIf { if (ofThisJoin(it) && it.deviceAlias == alias) it.copy(deviceId = id) else null }) {
+                // A key that no state names goes now, or at the next start.
+                try {
+                    if (store.now().deviceAlias != alias) keys.deleteDeviceKey(alias)
+                } catch (_: BlobException) {
+                    // The next start deletes it: no state names it.
+                }
+                return KeyStep.Changed
+            }
             val request = DeviceJoinRequest.of(serverId.toBytes(), address, key.publicKey, keyId) ?: return KeyStep.CouldNotMake
             return KeyStep.Request(request)
         } catch (_: CannotMakeHardwareKeyException) {
@@ -242,18 +270,13 @@ class SyncJoin(
      */
     fun takeSignedJoin(signed: SignedJoin, request: DeviceJoinRequest, code: String): EnrolStep {
         if (!signed.isFor(request)) return EnrolStep.NotForThisJoin
-        // The keeper can answer after Back or a new join: its answer counts only for the join it was asked for.
-        if (!store.now().isJoinOf(request)) return EnrolStep.Changed
-        var applied = false
-        try {
-            keys.storeNameKey(signed)
-            store.update {
-                if (it.isJoinOf(request)) {
-                    applied = true
-                    it.copy(stage = Stage.ENROL_SENT, name = it.name ?: firstName())
-                } else {
-                    it
-                }
+        val applied = try {
+            // One keeper's answer at a time, from the check to the write: an older answer cannot store its name key over a newer one's.
+            synchronized(keeperAnswers) {
+                // The keeper can answer after Back or a new join: its answer counts only for the join it was asked for.
+                if (!store.now().isJoinOf(request)) return EnrolStep.Changed
+                keys.storeNameKey(signed)
+                writeIf { if (it.isJoinOf(request)) it.copy(stage = Stage.ENROL_SENT, name = it.name ?: firstName()) else null }
             }
         } catch (_: BlobException) {
             return EnrolStep.NotSaved

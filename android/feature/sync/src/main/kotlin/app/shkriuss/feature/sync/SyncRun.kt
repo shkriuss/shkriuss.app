@@ -394,13 +394,16 @@ class SyncRun(
                     is CourierAnswer.Done -> answer.value ?: return true
                     else -> return false
                 }
+                // A batch of the other kind breaks the courier contract: the app is left for this run.
+                if (batch.comparison != comparison) return false
                 checkStop()
                 when (val answer = server.send(session, name, batch)) {
                     is ServerAnswer.Done -> {
                         passed()
                         tries = 0
-                        if (store.now().full) write { it.copy(full = false, fullAt = null) }
                         val sent = answer.value
+                        // Full holds until a record is stored (spec, Problems).
+                        if (store.now().full && sent.answer.outcomes.any { it.result.hasNumber }) write { it.copy(full = false, fullAt = null) }
                         if (sent.answer.epoch != context.epoch) throw EndRun(Reason.Fault)
                         when (val taken = courier().exported(app, context, batch.token, sent.bytes)) {
                             is CourierAnswer.Done -> if (taken.value == ExportedResult.IGNORED) return false

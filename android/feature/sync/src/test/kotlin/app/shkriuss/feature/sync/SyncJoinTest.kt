@@ -26,7 +26,8 @@ class SyncJoinTest {
     private val clock = TestClock()
     private val keys by lazy { TestKeys(temporary.newFolder()) }
     private val server by lazy { FakeServer(clock) }
-    private val store = SyncStateStore(MemoryPreferences())
+    private val preferences = MemoryPreferences()
+    private val store = SyncStateStore(preferences)
     private val scheduler = FakeScheduler()
     private val join by lazy { SyncJoin(store, SyncServer(server, keys.sync.crypto.sync, clock), keys.sync.crypto.sync, scheduler, clock, "Pixel 9 Pro") }
 
@@ -369,5 +370,21 @@ class SyncJoinTest {
         server.refuseNext("/v1/heads", 0x01, 0, 0)
         assertEquals(EnrolStep.Line(AddressStep.UpdateServer), join.checkSentEnrol())
         assertEquals("the join waits at stage 2", Stage.ENROL_SENT, store.now().stage)
+    }
+
+    @Test
+    fun aKeyMadeWhileTheJoinWasCancelledWritesNothingAndGoes() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val back = Thread { join.cancel() }
+        // Right after the key number is written, Back cancels the join while the Keystore makes the key.
+        preferences.afterCommit = {
+            back.start()
+            while (back.state != Thread.State.BLOCKED && back.isAlive) Thread.onSpinWait()
+        }
+        assertEquals(KeyStep.Changed, join.joinRequest())
+        back.join()
+        assertEquals(SyncState(), store.now())
+        assertNull("the key is gone", keys.sync.crypto.sync.deviceKey(1))
     }
 }

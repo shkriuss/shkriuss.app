@@ -1,6 +1,7 @@
 package app.shkriuss.core.sync
 
 import app.shkriuss.core.crypto.KeyId
+import java.nio.ByteBuffer
 
 /**
  * Reads the layout of `status` (docs/architecture/sync-protocol.md, "What
@@ -131,8 +132,10 @@ class ExportedBatch private constructor(
             val count = reader.u32()
             if (cursor < 0 || known < cursor || count !in 1..minOf(mostRecords, SyncFormat.MOST_RECORDS).toLong()) throw LayoutException()
             var total = 0L
+            val ids = HashSet<ByteBuffer>()
             repeat(count.toInt()) { index ->
-                reader.bytes(SyncFormat.ID_BYTES)
+                // Each record is in a batch at most once.
+                if (!ids.add(ByteBuffer.wrap(reader.bytes(SyncFormat.ID_BYTES)))) throw LayoutException()
                 val length = reader.u32()
                 if (length !in SyncFormat.SMALLEST_SEALED..SyncFormat.LARGEST_SEALED) throw LayoutException()
                 total += length

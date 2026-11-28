@@ -108,6 +108,8 @@ class CourierLayoutsTest {
         val alone = BatchLayout.write(1, epoch, 0, 0, false, listOf(BatchRecord(records[0].id, ByteArray(70_000))))
         assertNotNull("one record alone is always allowed", ExportedBatch.read(alone, 1, 65_536))
         assertNull("something after the last record", ExportedBatch.read(bytes + 0, 3, 180))
+        val twice = BatchLayout.write(2, epoch, 0, 0, false, listOf(records[0], records[1], records[0]))
+        assertNull("one record twice", ExportedBatch.read(twice, 3, 180))
     }
 
     @Test

@@ -78,6 +78,9 @@ internal class MemoryPreferences : SharedPreferences {
     var commits = 0
     var failWrites = false
 
+    /** Runs once, after the next commit, while the store still holds its lock: a test makes another write wait. */
+    var afterCommit: (() -> Unit)? = null
+
     override fun getAll(): MutableMap<String, *> = values.toMutableMap()
 
     override fun getString(key: String?, defValue: String?): String? = values[key] as? String ?: defValue
@@ -125,6 +128,10 @@ internal class MemoryPreferences : SharedPreferences {
             removals.forEach { values.remove(it) }
             values.putAll(changes)
             commits++
+            afterCommit?.let { hook ->
+                afterCommit = null
+                hook()
+            }
             return true
         }
 
@@ -394,6 +401,9 @@ internal class FakeDataApp(val name: String) {
     /** How many bytes of its stored streams were read through `readStream`. */
     var bytesRead = 0L
 
+    /** True when `export` gives a batch of the other kind than asked, which breaks the courier contract. */
+    var otherKind = false
+
     /** True when `import` takes a page but answers a cursor below its Through, which breaks the courier contract. */
     var cursorBehind = false
 
@@ -449,7 +459,7 @@ internal class FakeDataApp(val name: String) {
         lastBatch = records
         lastComparison = comparison
         token++
-        return ExportedBatch.read(batchBytes(token, epoch!!, cursor, known, comparison, records), mostRecords, mostBytes)
+        return ExportedBatch.read(batchBytes(token, epoch!!, cursor, known, comparison != otherKind, records), mostRecords, mostBytes)
     }
 
     fun exported(token: Long, answer: ByteArray): ExportedResult {
