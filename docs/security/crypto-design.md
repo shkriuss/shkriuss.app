@@ -17,8 +17,8 @@ follows this page.
   ([Notes' spec](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)).
 - The keys of sync ([Sync keys](#sync-keys)) are in
   `android/core/crypto`, and the mode "Sign a device" of the handover is
-  in `android/core/security`. The Sync app that uses them is not built
-  yet, nor is a new recovery key
+  in `android/core/security`. The Sync app uses them, in
+  `android/feature/sync`. A new recovery key is not built yet
   ([A new recovery key](#a-new-recovery-key)). The sync server checks
   both signatures of sync, in `backend/`.
 - The code is `android/core/crypto`. It must follow this page exactly.

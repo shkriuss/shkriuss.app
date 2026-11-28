@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Sync (app.shkriuss.sync), the only app of the suite with the network.
+    Its permissions are listed in docs/security/permissions.md. Its allow
+    list in the APK rules check has these three, and no other:
+
+    - INTERNET, to talk to the user's own server (hard rule 4, ADR 0005);
+    - ACCESS_NETWORK_STATE and RECEIVE_BOOT_COMPLETED, which JobScheduler
+      needs to wait for a network and to keep the periodic work after a
+      restart (docs/apps/sync/spec.md, "Permissions").
+
+    Android grants all three at install. Sync asks for none, shows no
+    notification, sets no alarm and has no system prompt.
+
+    Sync uses core/security only to ask a data app to "Sign a device" and
+    to check the data apps it carries for. The eight screens, the status
+    provider and the two permissions of that module are removed here; its
+    <queries> for the apps with a handover screen stay.
+
+    Sync keeps only state of this phone, so Android backup and
+    device-to-device transfer are turned off.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- The two of core/security: Sync has no system prompt and no app lock, and hides no other windows. -->
+    <uses-permission
+        android:name="android.permission.USE_BIOMETRIC"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.HIDE_OVERLAY_WINDOWS"
+        tools:node="remove" />
+
+    <!--
+        androidx.core adds this permission for Android 12 and older only,
+        below the minimum. Removed for good, as in Water.
+    -->
+    <permission
+        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        tools:node="remove" />
+    <uses-permission
+        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        tools:node="remove" />
+
+    <application
+        android:name=".SyncApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Shk"
+        android:usesCleartextTraffic="false">
+
+        <!-- The one screen of Sync. SyncManifestTest checks which parts are exported. -->
+        <activity
+            android:name=".SyncActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Sync's courier provider: poke and state, for the data apps
+            (docs/architecture/sync-protocol.md, "What the Sync app
+            answers"). Exported with no permission, as every courier
+            provider: it checks the caller's certificate first and gives a
+            refused caller nothing.
+        -->
+        <provider
+            android:name="app.shkriuss.feature.sync.SyncCourierProvider"
+            android:authorities="${applicationId}.courier"
+            android:exported="true"
+            tools:ignore="ExportedContentProvider" />
+
+        <!-- The service of Sync's runs. Only Android can bind it: it asks for BIND_JOB_SERVICE. -->
+        <service
+            android:name="app.shkriuss.feature.sync.SyncJobService"
+            android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!--
+            Room comes with core/sync-client, whose layouts Sync shares with
+            the data apps. Sync has no database, so Room's service for a
+            database open in several processes is removed.
+        -->
+        <service
+            android:name="androidx.room3.MultiInstanceInvalidationService"
+            tools:node="remove" />
+
+        <!-- The eight screens and the status provider of core/security. -->
+        <activity
+            android:name="app.shkriuss.core.security.SecurityActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.CreateRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.EnterRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.ShowRecoveryKeyActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.AppLockActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.TurnOnAppLockActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.HandoverActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.shkriuss.core.security.GetKeysActivity"
+            tools:node="remove" />
+        <provider
+            android:name="app.shkriuss.core.security.KeeperStatusProvider"
+            tools:node="remove" />
+
+        <!--
+            androidx.profileinstaller adds this receiver, exported to every
+            caller with android.permission.DUMP. Removed, as in Water. The
+            start-up profile is still installed by its initializer.
+            MissingClass is ignored here only: the class comes in at run
+            time, and SyncManifestTest checks the removal.
+        -->
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:ignore="MissingClass"
+            tools:node="remove" />
+
+        <!--
+            Emoji support would look for a downloadable font from a system
+            font provider, on most phones Google Play services. Android
+            ships its own emoji font. As in Water's manifest.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:ignore="MissingClass"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
+    </application>
+</manifest>

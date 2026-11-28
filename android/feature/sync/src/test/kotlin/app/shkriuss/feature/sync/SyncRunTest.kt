@@ -1,0 +1,465 @@
+package app.shkriuss.feature.sync
+
+import app.shkriuss.core.crypto.RequestMethod
+import app.shkriuss.core.sync.ComparisonState
+import app.shkriuss.core.sync.ListedStream
+import app.shkriuss.core.sync.StreamWork
+import app.shkriuss.core.testing.TestClock
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+
+/**
+ * One run of Sync against a server in memory and data apps in memory
+ * (docs/architecture/sync-protocol.md, "When the Sync app runs";
+ * docs/apps/sync/spec.md, "When Sync runs" and "Problems").
+ */
+class SyncRunTest {
+    @get:Rule
+    val temporary = TemporaryFolder()
+
+    private val clock = TestClock()
+    private val keys by lazy { TestKeys(temporary.newFolder()) }
+    private val server by lazy { FakeServer(clock) }
+    private val water = FakeDataApp("water")
+    private val notes = FakeDataApp("notes")
+    private val couriers = FakeCouriers(water, notes)
+    private val store = SyncStateStore(MemoryPreferences())
+    private val scheduler = FakeScheduler()
+    private var metered = false
+    private val run by lazy {
+        val sync = keys.sync.crypto.sync
+        SyncRun(store, SyncServer(server, sync, clock), couriers, sync, { metered }, ProblemWriter(store, sync, scheduler, clock), clock)
+    }
+
+    private fun joined() {
+        val state = joinedState(keys, server, clock)
+        store.update { state }
+    }
+
+    private fun run(asked: Boolean = false): RunEnd = runBlocking { run.run(asked) }
+
+    private fun storeOnServer(app: String, vararg numbers: Long) {
+        numbers.forEach { number -> server.records.getOrPut(app) { mutableListOf() } += FakeRecord(id(number.toInt()), number, blob(server.keyId, number.toInt())) }
+        server.heads[app] = numbers.max()
+    }
+
+    @Test
+    fun aPhoneThatHasNotJoinedMakesNoRequest() {
+        assertEquals(RunEnd.NOT_JOINED, run())
+        store.update { it.copy(stage = Stage.JOINING) }
+        assertEquals(RunEnd.NOT_JOINED, run())
+        assertEquals(emptyList<String>(), server.paths())
+    }
+
+    @Test
+    fun theFirstRunOfADayAsksEveryAppAndReadsTheDevicesThenAQuietRunAsksOnlyHeads() {
+        joined()
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals(listOf("/v1/heads", "/v1/devices"), server.paths())
+        assertEquals(listOf("status", "export", "streams", "export", "status"), water.calls)
+        assertNotNull(store.now().syncedAt)
+        assertNotNull(store.now().app("water").goodAt)
+
+        server.requests.clear()
+        water.calls.clear()
+        clock.advanceBy(15 * 60 * 1000L)
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals("a quiet run: one request", listOf("/v1/heads"), server.paths())
+        assertEquals("no app is woken", emptyList<String>(), water.calls)
+    }
+
+    @Test
+    fun anAppWhoseHeadMovedFetchesEveryPageAndRemembersTheHead() {
+        joined()
+        run()
+        storeOnServer("water", 1, 2, 3)
+        store.update { it.copy(limits = Limits(2, 524_288, 256)) }
+        server.requests.clear()
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals(listOf("/v1/heads", "/v1/changes", "/v1/changes"), server.paths())
+        assertEquals(3, water.taken.size)
+        assertEquals(3, water.cursor)
+        assertEquals(3, store.now().app("water").head)
+        assertEquals("notes had nothing", emptyList<String>(), notes.taken)
+    }
+
+    @Test
+    fun aPokedAppIsServedAndThePokeIsCleared() {
+        joined()
+        run()
+        notes.toSend += id(9) to blob(server.keyId, 9)
+        store.update { state -> state.withApp("notes") { it.copy(poked = true) } }
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals(emptyList<Pair<ByteArray, ByteArray>>(), notes.toSend)
+        assertEquals(1L, server.heads["notes"])
+        assertFalse(store.now().app("notes").poked)
+        assertFalse("nothing left to do", store.now().app("notes").work)
+    }
+
+    @Test
+    fun aRecordThatChangedOnTheServerIsFetchedBeforeTheNextBatch() {
+        joined()
+        run()
+        water.toSend += id(1) to blob(server.keyId, 1)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        // The server's copy changed after the batch's cursor: refused with 01.
+        server.answerNext("/v1/changes", HttpResult.Answer(200, Bytes().u8(0).bytes(server.epoch.toBytes()).i64(0).i64(0).i32(1).u8(1).done()))
+        server.requests.clear()
+        run()
+        val changes = server.requests.filter { it.url.contains("/v1/changes") }.map { it.method }
+        assertEquals(listOf(RequestMethod.POST, RequestMethod.GET, RequestMethod.POST), changes)
+        assertEquals(0, water.toSend.size)
+    }
+
+    @Test
+    fun aFullServerStopsSendingUntilTheNextDayOrTryAgain() {
+        joined()
+        run()
+        water.toSend += id(3) to blob(server.keyId, 3)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.refuseNext("/v1/changes", 0x08)
+        run()
+        assertTrue(store.now().full)
+        assertEquals(SyncProblem.FULL, problemOf(store.now(), clock.nowMillis))
+
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertFalse("sending is tried once a day", "/v1/changes" in server.paths())
+
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run(asked = true)
+        assertFalse("Try again sends, and a stored batch ends it", store.now().full)
+        assertEquals(1L, server.heads["water"])
+    }
+
+    @Test
+    fun theDaysLimitStopsEveryRequestUntilMidnightUtc() {
+        joined()
+        run()
+        server.refuseNext("/v1/heads", 0x07, 0x02)
+        assertEquals(RunEnd.ENDED, run())
+        assertEquals(DayWait.EVERYTHING, store.now().dayWait)
+        assertEquals(SyncProblem.DAY_LIMIT, problemOf(store.now(), clock.nowMillis))
+        server.requests.clear()
+        assertEquals(RunEnd.WAITING, run(asked = true))
+        assertEquals("Sync now skips no wait for 00:00 UTC", emptyList<String>(), server.paths())
+        clock.nowMillis = SyncRun.nextUtcMidnight(clock.nowMillis)
+        assertEquals(RunEnd.WORKED, run())
+        assertNull(store.now().dayWait)
+    }
+
+    @Test
+    fun cloudflaresLimitOfRequestsWaitsTooButOnlyBatchesOfAComparisonWaitAfter0701() {
+        joined()
+        run()
+        server.answerNext("/v1/heads", HttpResult.Answer(SyncServer.DAY_REQUESTS_STATUS, ByteArray(0)))
+        run()
+        assertEquals(DayWait.EVERYTHING, store.now().dayWait)
+
+        clock.nowMillis = SyncRun.nextUtcMidnight(clock.nowMillis) + 1_000
+        water.comparison = ComparisonState.SENDING
+        water.comparisonToSend += id(4) to blob(server.keyId, 4)
+        water.toSend += id(5) to blob(server.keyId, 5)
+        // The ordinary batch is stored; the comparison's batch is answered 07 01.
+        server.answerNext("/v1/changes", null)
+        server.refuseNext("/v1/changes", 0x07, 0x01)
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals("the ordinary batch went", 0, water.toSend.size)
+        assertEquals(1, water.comparisonToSend.size)
+        assertEquals(DayWait.COMPARISONS, store.now().dayWait)
+        assertNull("only comparisons wait: no problem", problemOf(store.now(), clock.nowMillis))
+
+        water.toSend += id(6) to blob(server.keyId, 6)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertEquals("ordinary batches still go", 0, water.toSend.size)
+        assertEquals("the comparison waits for 00:00 UTC", 1, water.comparisonToSend.size)
+    }
+
+    @Test
+    fun answersThatStopSyncStopItAndCancelTheWorks() {
+        joined()
+        server.refuseNext("/v1/heads", 0x02)
+        assertEquals(RunEnd.ENDED, run())
+        assertEquals(Stage.STOPPED, store.now().stage)
+        assertEquals(Stop.NOT_A_DEVICE, store.now().stop)
+        assertEquals(1, scheduler.cancels)
+        server.requests.clear()
+        assertEquals("a stopped phone makes no request", RunEnd.NOT_JOINED, run())
+        assertEquals(emptyList<String>(), server.paths())
+    }
+
+    @Test
+    fun aRemovedPhoneDeletesItsDeviceKey() {
+        joined()
+        val alias = store.now().deviceAlias!!
+        server.refuseNext("/v1/heads", 0x03)
+        run()
+        assertEquals(Stop.REMOVED, store.now().stop)
+        assertNull(keys.sync.crypto.sync.deviceKey(alias))
+        assertEquals(SyncProblem.REMOVED, problemOf(store.now(), clock.nowMillis))
+    }
+
+    @Test
+    fun aClosedServerAndAVersionStopSync() {
+        joined()
+        server.serverState = ServerState.CLOSED
+        run()
+        assertEquals(Stop.CLOSED, store.now().stop)
+
+        store.update { joinedState(keys, server, clock).copy(infoAt = null) }
+        server.serverState = ServerState.IN_USE
+        server.lowest = 2
+        server.highest = 2
+        run()
+        assertEquals(Stop.UPDATE_SYNC, store.now().stop)
+
+        store.update { joinedState(keys, server, clock) }
+        server.refuseNext("/v1/heads", 0x01, 0x00, 0x00)
+        run()
+        assertEquals(Stop.UPDATE_SERVER, store.now().stop)
+    }
+
+    @Test
+    fun aRequestThatDoesNotCheckIsSentOnceMoreThenIsAFaultThatAPassingRequestClears() {
+        joined()
+        run()
+        server.refuseNext("/v1/heads", 0x04)
+        server.requests.clear()
+        assertEquals("sent again once, and passed", RunEnd.WORKED, run())
+        assertEquals(listOf("/v1/heads", "/v1/heads"), server.paths())
+
+        server.refuseNext("/v1/heads", 0x04)
+        server.refuseNext("/v1/heads", 0x04)
+        run()
+        assertTrue(store.now().fault)
+        assertEquals(SyncProblem.FAULT, problemOf(store.now(), clock.nowMillis))
+        assertEquals("a fault is not a failed run", 0, store.now().failedRuns)
+        run()
+        assertFalse(store.now().fault)
+    }
+
+    @Test
+    fun theClockOfA05IsShownUntilARequestPasses() {
+        joined()
+        run()
+        server.refuseNext("/v1/heads", 0x05, 0, 0, 0, 0, 0, 0, 0, 0)
+        run()
+        assertEquals(-clock.nowMillis, store.now().clockOff)
+        assertEquals(SyncProblem.CLOCK, problemOf(store.now(), clock.nowMillis))
+        run()
+        assertNull(store.now().clockOff)
+    }
+
+    @Test
+    fun threeFailedRunsWaitFourHoursButSyncNowGoes() {
+        joined()
+        run()
+        server.unreachable = true
+        repeat(3) { assertEquals(RunEnd.ENDED, run()) }
+        assertEquals(3, store.now().failedRuns)
+        assertEquals(SyncProblem.CANNOT_REACH, problemOf(store.now(), clock.nowMillis))
+        server.requests.clear()
+        assertEquals(RunEnd.WAITING, run())
+        assertEquals(emptyList<String>(), server.paths())
+        server.unreachable = false
+        assertEquals(RunEnd.WORKED, run(asked = true))
+        assertEquals(0, store.now().failedRuns)
+        assertNull(store.now().retryAt)
+    }
+
+    @Test
+    fun aLackOfCpuTimeHalvesTheRequestAndADayLaterAHalvingIsUndone() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        server.answerNext("/v1/changes", HttpResult.Answer(SyncServer.CPU_TIME_STATUS, ByteArray(0)))
+        server.requests.clear()
+        run()
+        assertEquals(1, store.now().halved)
+        val fetches = server.requests.filter { it.url.contains("/v1/changes") }.map { it.url.substringAfter("most=") }
+        assertEquals(listOf("100", "50"), fetches)
+        clock.advanceBy(SyncRun.DAY_MILLIS)
+        run()
+        assertEquals(0, store.now().halved)
+    }
+
+    @Test
+    fun anotherEpochIsTakenAndTheAppIsServedAgainWithIt() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        server.epoch = syncId(7)
+        run()
+        assertEquals(syncId(7), store.now().epoch)
+        assertEquals(syncId(7), water.epoch)
+        assertEquals(1, water.taken.size)
+    }
+
+    @Test
+    fun tooMuchInOneRequestReadsInfoAgain() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        server.refuseNext("/v1/changes", 0x0c)
+        server.limits = Triple(10L, 65_536L, 16L)
+        server.requests.clear()
+        run()
+        assertEquals(Limits(10, 65_536, 16), store.now().limits)
+        assertEquals("/v1/info", server.paths()[2])
+    }
+
+    @Test
+    fun aLowerRevisionOrARemovedDeviceInAgainIsAPutBackAndTheDeviceIsRemovedAgain() {
+        joined()
+        server.revision = 5
+        val lost = FakeDevice(syncId(9), ByteArray(65) { 4 }, removed = true, addedAt = 1, sealedName = ByteArray(60))
+        server.devices += lost
+        run()
+        assertEquals(setOf(syncId(9).hex), store.now().removed)
+        assertFalse(store.now().putBack)
+
+        // The database is put back: the device is in again, and the revision is lower.
+        lost.removed = false
+        server.revision = 3
+        run()
+        assertTrue(store.now().putBack)
+        assertTrue("removed again", lost.removed)
+        assertEquals(SyncProblem.PUT_BACK, problemOf(store.now(), clock.nowMillis))
+    }
+
+    @Test
+    fun lostKeysStopSync() {
+        joined()
+        keys.sync.crypto.sync.deleteNameKey()
+        run()
+        assertEquals(Stop.KEYS_GONE, store.now().stop)
+
+        store.update { joinedState(keys, server, clock).copy(deviceId = syncId(3)) }
+        run()
+        assertEquals("a device key that does not give deviceId", Stop.KEYS_GONE, store.now().stop)
+    }
+
+    @Test
+    fun anAppThatGivesNoAnswerIsLeftAndTheOthersAreServed() {
+        joined()
+        water.answers = false
+        notes.toSend += id(2) to blob(server.keyId, 2)
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals(1L, server.heads["notes"])
+        assertNull(store.now().app("water").goodAt)
+    }
+
+    @Test
+    fun anAppWithSyncOffIsRecordedAndSendsNothing() {
+        joined()
+        water.on = false
+        water.toSend += id(2) to blob(server.keyId, 2)
+        run()
+        assertFalse(store.now().app("water").on)
+        assertNull(server.heads["water"])
+    }
+
+    @Test
+    fun aStreamIsSentInChunksTheServerLacksAfterItsHashIsChecked() {
+        joined()
+        run()
+        val bytes = ByteArray(SyncRun.CHUNK_BYTES + 100) { (it % 251).toByte() }
+        val fileId = id(0x31)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), bytes.size.toLong(), 0, 0))
+        val damaged = id(0x32)
+        water.stored[hex(damaged)] = byteArrayOf(1, 2, 3)
+        water.streams += ListedStream(StreamWork.SEND, uuid(damaged), sha256(byteArrayOf(9)), 3, 0, 0)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals(2, server.chunks.keys.count { it.startsWith("water/${hex(fileId)}") })
+        assertEquals(setOf(hex(damaged) to false, hex(fileId) to true), water.sent.toSet())
+    }
+
+    @Test
+    fun aStreamIsFetchedAndFinishedButNotOnAMeteredNetwork() {
+        joined()
+        run()
+        val bytes = ByteArray(5_000) { (it % 7).toByte() }
+        val fileId = id(0x41)
+        val hash = sha256(bytes)
+        server.chunks["water/${hex(fileId)}/${hex(hash)}/0"] = bytes
+        water.streams = listOf(ListedStream(StreamWork.FETCH, uuid(fileId), hash, bytes.size.toLong(), 0, 0))
+        metered = true
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals("files wait for Wi-Fi", emptyList<String>(), water.finished)
+
+        metered = false
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals(listOf(hex(fileId)), water.finished)
+        assertTrue(bytes.contentEquals(water.written.getValue(hex(fileId)).toByteArray()))
+    }
+
+    @Test
+    fun filesOnMobileDataMoveOnAMeteredNetwork() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 1 }
+        val fileId = id(0x51)
+        val hash = sha256(bytes)
+        server.chunks["water/${hex(fileId)}/${hex(hash)}/0"] = bytes
+        water.streams = listOf(ListedStream(StreamWork.FETCH, uuid(fileId), hash, bytes.size.toLong(), 0, 0))
+        metered = true
+        store.update { state -> state.copy(filesOnMobile = true).withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals(listOf(hex(fileId)), water.finished)
+    }
+
+    @Test
+    fun aDeletedFilesChunksAreDeletedAndTheAppIsTold() {
+        joined()
+        run()
+        val fileId = id(0x61)
+        water.streams = listOf(ListedStream(StreamWork.DELETE, uuid(fileId), ByteArray(32), 0, 0, 12))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        metered = true
+        run()
+        assertEquals("a deletion moves no chunk, so it goes on any network", listOf(hex(fileId)), water.deleted)
+    }
+
+    @Test
+    fun aComparisonsBatchesGoAfterTheOrdinaryOnes() {
+        joined()
+        run()
+        water.comparison = ComparisonState.SENDING
+        water.comparisonToSend += id(7) to blob(server.keyId, 7)
+        water.toSend += id(8) to blob(server.keyId, 8)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        val order = server.records.getValue("water").sortedBy { it.number }.map { it.id[0].toInt() }
+        assertEquals(listOf(8, 7), order)
+    }
+
+    @Test
+    fun aRefusedPageEndsTheAppForThisRunAndItsCursorStays() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        water.dropPages = true
+        run()
+        assertEquals(0, water.cursor)
+        assertEquals("the head is not remembered, so the next run fetches again", 0, store.now().app("water").head)
+    }
+
+    private fun uuid(bytes: ByteArray): String {
+        val text = hex(bytes)
+        return "${text.substring(0, 8)}-${text.substring(8, 12)}-${text.substring(12, 16)}-${text.substring(16, 20)}-${text.substring(20)}"
+    }
+}

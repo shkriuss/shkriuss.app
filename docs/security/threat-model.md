@@ -103,8 +103,8 @@ same: "Whoever has the words can read your backups and your synced data"
    no-backup folder ([crypto-design.md](crypto-design.md#where-keys-are-stored)).
 3. For sync, each device gets a signing key that cannot leave it, in
    the Sync app ([crypto-design.md](crypto-design.md#sync-keys)).
-   `core/crypto` makes and uses it; the Sync app itself is not built
-   yet.
+   `core/crypto` makes it, and the Sync app signs each request with it
+   (`android/feature/sync`). The Sync app is not released yet.
 
 ### The signing key
 
@@ -422,9 +422,9 @@ What does not:
 2. A user who installs from somewhere else and skips the check with
    AppVerifier.
 
-Decided, and not built yet: the Sync app uses HTTPS only, trusts only
-the certificate authorities built into Android, and does not pin the
-server. Everything it sends is sealed and every request is signed, so a
+Decided, and built in the Sync app, which is not released yet: it uses
+HTTPS only, trusts only the certificate authorities built into Android,
+follows no redirect, and does not pin the server. Everything it sends is sealed and every request is signed, so a
 false certificate gives an attacker what the server has, and no more
 ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)). See [Network](#network)
 under MASVS.
@@ -1172,9 +1172,12 @@ Status: **Met for what is built.**
   which is ciphertext already.
 - MASWE-0009, MACs: met. There is no MAC of our own. The AEADs check
   every blob.
-- MASWE-0010 and 0011, signatures: nothing signs yet. The two signing
-  keys of sync are designed and not built
-  ([crypto-design.md](crypto-design.md#sync-keys)).
+- MASWE-0010 and 0011, signatures: met for what is built. The two
+  signing keys of sync are in `core/crypto`
+  ([crypto-design.md](crypto-design.md#sync-keys)): the device key, in
+  the Keystore, signs each request of the Sync app, and the account key
+  signs a join inside a data app. No app that uses them is released
+  yet.
 - MASWE-0012, random numbers: met. Every key, nonce and salt comes from
   Tink or the Keystore.
 - MASWE-0047, standard APIs: met. Tink and the Android Keystore only,
@@ -1215,16 +1218,20 @@ Status: **Partly met.**
 protocols and follows the relevant best practices.**
 Status: **Met for what is built.**
 
-- No app talks to a server yet, so there is no remote login. The
-  design: every request is signed by a key that cannot leave the
-  device, and a device joins only with a statement signed by a key
-  from the recovery key, and a one-time code
-  ([sync-protocol.md](../architecture/sync-protocol.md#keys-and-identity)). It is not built, so it
-  is Open.
+- No released app talks to a server yet, so there is no remote login.
+  The Sync app's requests and its join are built, without its screens:
+  every request is signed by a key that cannot leave the device, and a
+  device joins only with a statement signed by a key from the recovery
+  key, and a one-time code
+  ([sync-protocol.md](../architecture/sync-protocol.md#keys-and-identity)).
+  Open until the Sync app is released.
 - MASWE-0018, components: met for what is built. Nothing is exported
   except the launcher screen and the two parts of the handover. Those
   two have no permission: each checks the caller's certificate first,
-  and gives a refused caller nothing. Open: Catalog still exports the receiver of
+  and gives a refused caller nothing. The Sync app exports its screen,
+  its courier provider, which checks its caller in the same way, and
+  its job service, which only Android can bind
+  ([permissions.md](permissions.md#sync-appshkriusssync)). Open: Catalog still exports the receiver of
   `androidx.profileinstaller` to callers with `android.permission.DUMP`,
   until its next change. Water, Reminders, Tasks and Notes remove it
   ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
@@ -1280,16 +1287,19 @@ Status: **Partly met.**
 
 **MASVS-NETWORK-1: The app secures all network traffic according to the
 current best practices.**
-Status: **Does not apply to data apps. Decided for the Sync app, which
-is not built.**
+Status: **Does not apply to data apps. Decided and built for the Sync
+app, which is not released.**
 
 - Data apps have no network permission
   ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). They
   have no traffic, so MASWE-0026 and 0027 do not apply to them.
-- The Sync app does not exist yet. The owner decided its settings:
-  HTTPS only, no cleartext, only the certificate authorities built
-  into Android and none that a user added, and no redirect to another
-  host ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)).
+- The Sync app has the settings the owner decided: HTTPS only, no
+  cleartext, only the certificate authorities built into Android and
+  none that a user added, and no redirect to another host
+  ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)).
+  Its network security configuration and Android's own HTTP client do
+  it. Open: the tests on the emulators that a cleartext request, an
+  authority a user added and a redirect are refused.
 
 **MASVS-NETWORK-2: The app performs identity pinning for all remote
 endpoints under the developer's control.**
@@ -1736,8 +1746,9 @@ The handover between apps:
 Sync:
 
 10. The protocol. The server is built, and so is what each data app
-    does (`core/sync-client`). No app uses it yet. The Sync app and the
-    content provider of each data app are designed and not built
+    does (`core/sync-client`), and the Sync app without its screens. No
+    data app uses it yet: the content provider of each data app is
+    designed and not built
     ([sync-protocol.md](../architecture/sync-protocol.md),
     [ADR 0009](../adr/0009-sync-protocol-and-server.md)). Open there:
     a proof that the server held nothing back, and the other points

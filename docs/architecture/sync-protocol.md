@@ -7,14 +7,15 @@ follows.
 
 - Status: the server is built, in `backend/`
   ([backend.md](../development/backend.md)), and what each data app
-  does, in `android/core/sync-client`. No app uses it yet. The Sync app
-  and the content provider of each data app are designed, not built.
-  The points the owner decided are in
+  does, in `android/core/sync-client`. The Sync app is built without its
+  screens. The content provider of each data app is designed, not
+  built, so no data app syncs yet. The points the owner decided are in
   [Decided by the owner](#decided-by-the-owner).
-- The code is `backend/` (the server) and `android/core/sync-client`
-  (what each data app does). It will be `android/app/sync` (the Sync
-  app), and new parts of `android/core/crypto` and
-  `android/core/security`. All of it must follow this page exactly. If
+- The code is `backend/` (the server), `android/core/sync-client`
+  (what each data app does, and the names and layouts both sides of the
+  courier interface share), `android/feature/sync` and
+  `android/app/sync` (the Sync app), and parts of `android/core/crypto`
+  and `android/core/security`. All of it must follow this page exactly. If
   this page is wrong or unclear, the fix is a change to this page
   first, agreed with the owner.
 - Decisions: [ADR 0009](../adr/0009-sync-protocol-and-server.md) (the
@@ -462,9 +463,9 @@ All calls are `call` on the provider. Version 1 has these.
    ([crypto-design.md](../security/crypto-design.md#what-works-while-an-app-is-locked)).
 7. A data app trusts nothing the Sync app gives it. A page is checked
    as if the server had handed it over itself, because it has.
-8. The layouts of what `status` and `streams` give are below. The names
-   of the calls' arguments are fixed on this page when the content
-   provider is built, with the Sync app. The server sees none of them.
+8. The layouts of what `status` and `streams` give are below, and the
+   names of the calls' arguments under [Names of the calls](#names-of-the-calls).
+   The server sees none of them.
 
 `status` answers with:
 
@@ -599,6 +600,86 @@ A Sync app that the user force-stopped does not run until the user
 opens it ([When the Sync app runs](#when-the-sync-app-runs), point
 6). A data app whose call gets no answer says that the Sync app is
 not running, and offers to open it.
+
+### What `state` gives
+
+29 bytes:
+
+| Offset | Size | Content |
+|---|---|---|
+| 0 | 7 | `SHKSYNC` |
+| 7 | 1 | Version: `01` |
+| 8 | 1 | Type: `23`, a state |
+| 9 | 1 | The version of the courier interface: `01` |
+| 10 | 1 | `01` if this device has joined a server, else `00` |
+| 11 | 8 | When a run last ended well for the app that asks, or 0 for never |
+| 19 | 1 | What stops sync now: `00` nothing, `01` not joined (also closed, removed, or Sync lost its keys), `02` update the Sync app, `03` update the server, `04` the clock, `05` a fault, `06` the day's limit, `07` the server is full, `08` the server cannot be reached |
+| 20 | 8 | For `06` the end of the wait, 00:00 UTC. For `04` the server's clock minus the phone's, in milliseconds. Else 0. |
+| 28 | 1 | `01` if this app's files wait for a network that is not metered: **Files on mobile data** is off and the phone's network is metered now. Else `00`. |
+
+1. Byte 10 is `00` exactly when byte 19 is `01`.
+2. A put-back server, a wait of a comparison for the day and a run that
+   goes are not in it: each app's own row shows its comparison.
+3. Each data app's specification words what it shows for each value.
+
+### Names of the calls
+
+A call is `ContentResolver.call` on the provider
+`<application ID>.courier`, with the call's name as its method. Its
+arguments are the extras, and its answer is a `Bundle`. Every name of
+an argument starts with `app.shkriuss.courier.`; the table leaves that
+out. The code that both sides use is `Courier` in
+`android/core/sync-client`.
+
+Every call carries:
+
+| Name | Type | What |
+|---|---|---|
+| `VERSION` | Int | The version of the courier interface the caller speaks: 1 |
+
+Every call of the Sync app also carries what it last learned:
+
+| Name | Type | What |
+|---|---|---|
+| `SERVER_ID` | 16 bytes | The server ID |
+| `EPOCH` | 16 bytes | The epoch |
+| `DEVICE_ID` | 16 bytes | The device ID |
+| `KEY_ID` | Int | The server's current key ID, its four bytes as one big-endian number |
+
+The calls of a data app:
+
+| Call | Its arguments | Its answer |
+|---|---|---|
+| `status` | None | `BYTES`: the 115 bytes of [`status`](#what-status-gives) |
+| `compare` | None | Empty |
+| `export` | `COMPARISON` (Boolean), `MOST_RECORDS` (Int, 1 to 100), `MOST_BYTES` (Int, 50 to 524,288: the byte limit of `info`, halved after each lack of CPU time) | `RESULT` `BATCH` and `DESCRIPTOR`, the read end of a pipe that gives the [batch](#a-batch); or `RESULT` `NOTHING` |
+| `exported` | `TOKEN` (Long, the batch's bytes 9 to 16), `ANSWER` (bytes, the server's whole answer to the batch) | `RESULT`: `TAKEN` or `IGNORED` |
+| `import` | `PAGE`: the read end of a pipe that gives the [page](#a-page) as the server answered it | `RESULT` `TAKEN`, with `RECORDS` (Int, how many it took) and `CURSOR` (Long, its cursor now); or `RESULT` `DROPPED` |
+| `streams` | None | `DESCRIPTOR`: the read end of a pipe that gives the [list](#what-streams-gives) |
+| `readStream` | `FILE_ID` (16 bytes) | `DESCRIPTOR`: the read end that gives the stored stream; none when the app has no stream for it |
+| `streamSent` | `FILE_ID`, `HASH` (32 bytes, as `streams` named it), `FITS` (Boolean: true when every chunk is on the server, false when the stream did not fit its hash) | Empty |
+| `writeStream` | `FILE_ID`, `BYTES_HERE` (Long, as `streams` listed it) | `DESCRIPTOR`: the write end that takes the rest of the stream; none when the app does not want it |
+| `finishStream` | `FILE_ID` | `RESULT`: `STORED`, `WRONG` or `NOT_WANTED` |
+| `streamDeleted` | `FILE_ID` | Empty |
+
+The calls of the Sync app:
+
+| Call | Its arguments | Its answer |
+|---|---|---|
+| `poke` | None | Empty |
+| `state` | None | `BYTES`: the 29 bytes of [`state`](#what-state-gives) |
+
+1. A call refused as a whole answers only `REFUSAL`: `UPDATE` for
+   another version, and for a data app `OFF` when sync is off in it and
+   `NOT_NOW` when its `record` keyset cannot be used now. Nothing was
+   written.
+2. A caller that fails the check gets no answer at all, and nor does a
+   call of another name.
+3. An answer that breaks its layout counts as no answer. The other side
+   writes nothing for it.
+4. The batch, the page and the list pass through pipes, so a call
+   itself stays small. The side that gives a pipe end closes its own
+   copy once the call has answered.
 
 ### Turning sync on in a data app
 
@@ -802,8 +883,10 @@ something is down.
    failed runs in a row, the Sync app tries only every 4 hours until
    one works. The user can always ask for a run.
 
-How the Sync app tells the first two apart is checked on the first
-deployed server ([Assumptions](#assumptions)).
+The Sync app takes HTTP status 429, Cloudflare's answer for the day's
+requests of the free plan, as the first, and 503, its answer for a
+Worker that ran out of CPU time, as the second. That is checked on the
+first deployed server ([Assumptions](#assumptions)).
 
 ### `info`
 
@@ -1694,8 +1777,9 @@ What that means:
 
 ## When the Sync app runs
 
-1. WorkManager runs it every 15 minutes while the phone has a
-   network, soon after a data app poked it, and when the user asks.
+1. Android's JobScheduler runs it every 15 minutes while the phone has
+   a network, soon after a data app poked it, and when the user asks
+   ([ADR 0045](../adr/0045-sync-runs-through-jobscheduler.md)).
 2. A run asks for `heads`. Then it serves every data app that needs
    it:
    - an app whose head is not its cursor, or whose Known is above
@@ -2234,11 +2318,8 @@ Not decided here. Each says what decides it.
    question 14) and what users do after a harmful update
    ([ADR 0038](../adr/0038-a-stolen-signing-key.md)). Building that
    flow is a piece of work of its own.
-3. **For the owner, when each part is built:**
-   - the Sync app in the allow list of permissions, with `INTERNET`
-     and what WorkManager needs, each with its decision record;
-   - one measurement of CPU time on a deployed Worker on the free
-     plan, which takes a Cloudflare account.
+3. **For the owner:** one measurement of CPU time on a deployed
+   Worker on the free plan, which takes a Cloudflare account.
 4. **Each app's own sync points**, in its specification before it
    syncs:
    - what it shows for a record whose parent is missing;

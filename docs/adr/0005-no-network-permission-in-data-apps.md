@@ -1,6 +1,8 @@
 # 0005 No network permission in data apps, separate Sync app
 
-- Status: Accepted
+- Status: Accepted. Point 14's WorkManager superseded by
+  [0045](0045-sync-runs-through-jobscheduler.md): the Sync app runs
+  through Android's JobScheduler.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 4), 3, 4, 7, 10
   and 16, and the owner's review of

@@ -665,6 +665,14 @@ abstract class CheckApkRulesTask : DefaultTask() {
                 "android.permission.USE_BIOMETRIC",
                 "android.permission.HIDE_OVERLAY_WINDOWS",
             ),
+            // The only app with the network (hard rule 4, ADR 0005), and the two that JobScheduler needs to wait
+            // for a network and to keep its work after a restart (docs/apps/sync/spec.md, "Permissions").
+            // Owner's request.
+            "sync" to setOf(
+                "android.permission.INTERNET",
+                "android.permission.ACCESS_NETWORK_STATE",
+                "android.permission.RECEIVE_BOOT_COMPLETED",
+            ),
         )
 
         /**

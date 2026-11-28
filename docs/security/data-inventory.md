@@ -3,7 +3,7 @@
 What each app stores on the phone, where, whether it is in a backup, and
 what leaves the phone and how.
 
-- Status: covers Catalog, Water, Reminders, Tasks and Notes. It is
+- Status: covers Catalog, Water, Reminders, Tasks, Notes and Sync. It is
   written from the code, not from other pages. The file names and keys
   below are the ones in the code.
 - Each later app adds its section before its first release.
@@ -559,3 +559,53 @@ you copy goes to the clipboard.
   Uninstalling Notes does the same.
 - Backup files and copies stay where you put them. Delete them there.
 - Without the recovery words, nobody can open those backups.
+
+## Sync (`app.shkriuss.sync`)
+
+Sync is the only app with the network. It keeps state of this phone
+only: no records, no content of any app, no key that opens data and
+never the recovery words. Its screens are not built yet; what is below
+is what its code stores and sends.
+
+### On the phone
+
+Everything is in Sync's private storage, except the device key, which
+the Android Keystore holds.
+
+| What | Where | What it holds | In a backup |
+|---|---|---|---|
+| The preferences file `app.shkriuss.sync` | Sync's preferences folder | The state of this phone ([spec.md](../apps/sync/spec.md#data)): where the join stands, **the server's address**, the server ID, the epoch and the server's key ID, the account revision, the limits of the server, the number of the device key and the device ID, **this phone's name**, while joining the kind of code and **the setup code**, the addresses whose setup code waits to be deleted from the Worker, the IDs of devices seen as removed, the setting **Files on mobile data**, and for each data app its head on the server, when it last synced, and whether it has sync on, work to do or poked. Times and counts of waits and problems. Never a device code, a record ID or any content of an app. | No: Sync has no backup |
+| Key files, `shk-keys/` | Sync's no-backup folder | The name key, as Sync's `record` keyset, wrapped by its Background key ([crypto-design.md](crypto-design.md#the-name-key)). It opens only the names of devices. | No |
+| Set-aside key files, `shk-keys-set-aside/` | Sync's no-backup folder | A copy of a keyset file that could not be read, kept before the file is written again. Still wrapped. | No |
+| Hardware keys | The Android Keystore, in StrongBox where the phone has it | The device key `shk.device.<number>`, which signs each request and cannot be read out, and the Background key that wraps the name key ([crypto-design.md](crypto-design.md#the-device-key)). | No |
+| JobScheduler's two jobs | Android's own storage of jobs | When Sync runs: a periodic job and one soon. No ID, name or address. | No |
+
+- Batches, pages and file chunks pass through Sync's memory and pipes
+  only. Sync writes none of them to its storage.
+- The setup code is kept from the moment it shows until the join ends
+  or is cancelled ([spec.md](../apps/sync/spec.md#decided-by-the-owner),
+  point 4). A join left for a day is cancelled at the next start.
+
+### What leaves the phone, and how
+
+| To | What | How |
+|---|---|---|
+| The user's own server, at the address the user typed | Every request is signed with the device key, and carries the device ID and the phone's clock in its headers. What it sends: the device's public key and its join statement from a data app, a one-time code, **this phone's name sealed** with the name key, **records sealed** by the data apps, **file chunks** as the data apps stored them, encrypted, and which files and devices it asks about. In the clear beside them: each app's name, record IDs, file IDs, numbers and sizes ([sync-protocol.md](../architecture/sync-protocol.md#what-the-server-can-still-learn)). | HTTPS only, through Android's own HTTP client, with the certificate authorities built into Android, no redirect followed, and one fixed `User-Agent`, `shkriuss-sync/1`, so that no request names the phone's model |
+| A data app of the suite on this phone, through its courier provider | What Sync last learned of the server: its ID, the epoch, the device ID and the key ID; pages of sealed records; file chunks | `ContentResolver.call`, with pipes. Sync calls only a data app that passes the check of [ADR 0041](../adr/0041-the-handover-between-apps.md), point 9 |
+| A data app of the suite that calls Sync's courier provider | Whether this phone has joined, when a run last ended well for that app, and what stops sync now | Sync's provider answers only a data app that passes the same check |
+
+- Nothing goes to shkriuss.app, to Google or to anyone else. Sync
+  checks versions only with the user's own server.
+- A data app gives Sync records only sealed, and keys never
+  ([sync-protocol.md](../architecture/sync-protocol.md#the-courier-interface)).
+
+### How to delete it
+
+- In Sync, **Leave the server** removes this phone from the server and
+  deletes its keys. Its screens are not built yet.
+- In Android's Settings, open **Apps**, then **Sync**, **Storage**, and
+  tap **Clear storage**. Everything above goes, the keys too.
+  Uninstalling Sync does the same. The server keeps this phone in its
+  list of devices until another device removes it.
+- What is on the server goes when the user deletes the Worker, its
+  database and its bucket in the Cloudflare dashboard.

@@ -24,7 +24,7 @@ internal object BatchLayout {
 }
 
 /** What the server answered for one record of a batch (docs/architecture/sync-protocol.md, "Send"). */
-internal enum class SendResult(val code: Int, val hasNumber: Boolean) {
+enum class SendResult(internal val code: Int, val hasNumber: Boolean) {
     STORED(0x00, true),
     CHANGED_AFTER_CURSOR(0x01, false),
     ANOTHER_KEY_ID(0x02, false),
@@ -33,16 +33,16 @@ internal enum class SendResult(val code: Int, val hasNumber: Boolean) {
     CHUNKS_BEING_DELETED(0x05, false),
     ;
 
-    companion object {
+    internal companion object {
         fun of(code: Int): SendResult? = entries.firstOrNull { it.code == code }
     }
 }
 
 /** One result of the server's answer to a batch, with the record's new number after [SendResult.hasNumber]. */
-internal class SendOutcome(val result: SendResult, val number: Long)
+class SendOutcome internal constructor(val result: SendResult, val number: Long)
 
 /** The server's answer `00` to a batch: its epoch, the heads before and after it, and one result for each record. */
-internal class SendAnswer(val epoch: SyncId, val headBefore: Long, val headAfter: Long, val outcomes: List<SendOutcome>) {
+class SendAnswer internal constructor(val epoch: SyncId, val headBefore: Long, val headAfter: Long, val outcomes: List<SendOutcome>) {
     companion object {
         private const val DONE = 0x00
 
@@ -83,13 +83,13 @@ internal class SendAnswer(val epoch: SyncId, val headBefore: Long, val headAfter
 }
 
 /** One record of a page: its ID, the number the server gave it, and its sealed record. */
-internal class PageRecord(val id: String, val number: Long, val blob: ByteArray)
+class PageRecord internal constructor(val id: String, val number: Long, val blob: ByteArray)
 
 /**
  * A page, as the server answers a fetch and `import` takes it
  * (docs/architecture/sync-protocol.md, "Fetch" and "A page").
  */
-internal class Page(val epoch: SyncId, val since: Long, val through: Long, val more: Boolean, val records: List<PageRecord>) {
+class Page internal constructor(val epoch: SyncId, val since: Long, val through: Long, val more: Boolean, val records: List<PageRecord>) {
     companion object {
         private const val DONE = 0x00
 

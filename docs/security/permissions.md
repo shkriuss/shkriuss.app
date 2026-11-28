@@ -18,7 +18,8 @@ permission updates this page and has its own decision record
   [PROMPTS.md](../development/PROMPTS.md#2-build). Today Water,
   Reminders and Tasks are allowed the same five: the three of
   `core/notify` and the two of `core/security`. Notes is allowed the two
-  of `core/security` only. An app that is not on the list may request
+  of `core/security` only. Sync is allowed the network and the two that
+  JobScheduler needs. An app that is not on the list may request
   none, and no app may
   declare a permission of its own. The check is described in
   [build.md](../development/build.md#apk-rules-check).
@@ -353,6 +354,66 @@ Other components that libraries add, none of them a permission:
 Notes stores its data in its own database and its files in its own
 folder, and backs them up only into the backup file of the suite, so
 Android backup and device-to-device transfer are turned off.
+
+### Sync (`app.shkriuss.sync`)
+
+The only app with the network. Three permissions: `INTERNET`, and two
+that Android's JobScheduler needs for Sync's runs
+([ADR 0045](../adr/0045-sync-runs-through-jobscheduler.md)). Sync shows
+no notification, sets no alarm, has no system prompt and no app lock,
+and reads no file.
+
+| Permission | From | Why |
+|---|---|---|
+| `android.permission.INTERNET` | `app/sync` | To talk to the user's own server, over HTTPS only ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). Granted at install. |
+| `android.permission.ACCESS_NETWORK_STATE` | `app/sync` | For JobScheduler to wait for a network, and for Sync to tell a metered network before it moves file chunks. Granted at install. |
+| `android.permission.RECEIVE_BOOT_COMPLETED` | `app/sync` | For JobScheduler to keep Sync's periodic job after a restart. Sync has no receiver of its own. Granted at install. |
+
+- They are Sync's allow list in the APK rules check, which its
+  [specification](../apps/sync/spec.md#permissions) names. The owner
+  asked for the three. A build of Sync with any other permission fails.
+- Sync asks the user for none. Android grants all three at install.
+- No `WAKE_LOCK`: Android holds one while a job of JobScheduler runs.
+
+Sync's manifest removes what libraries add:
+
+| Part | Added by | What happens to it |
+|---|---|---|
+| `android.permission.USE_BIOMETRIC` and `android.permission.HIDE_OVERLAY_WINDOWS` | `core/security` | Removed. Sync uses the module only to ask a data app to "Sign a device" and to check the data apps. |
+| The eight screens and the status provider of `core/security` | `core/security` | Removed. Sync keeps no recovery key and no app lock, and is no keeper. |
+| `app.shkriuss.sync.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | `androidx.core` | Removed, as in Water. |
+| `androidx.room3.MultiInstanceInvalidationService` | Room, through `core/sync-client` | Removed. Sync has no database. |
+| `androidx.profileinstaller.ProfileInstallReceiver` | `androidx.profileinstaller` | Removed, as in Water. |
+
+What Sync exports, and nothing else (`SyncManifestTest` checks it):
+
+- `SyncActivity`, its one screen, with the launcher's intent filter
+  only.
+- Its courier provider, `app.shkriuss.feature.sync.SyncCourierProvider`,
+  authority `app.shkriuss.sync.courier`, with no permission, as every
+  courier provider
+  ([sync-protocol.md](../architecture/sync-protocol.md#no-permission-of-our-own)).
+  It checks the caller first: a data app of the suite, of the same
+  build kind, signed now with exactly Sync's certificate. A refused
+  caller gets nothing. It answers two calls, `poke` and `state`, holds
+  no data and takes no file.
+- Its job service, `app.shkriuss.feature.sync.SyncJobService`, which
+  asks for `android.permission.BIND_JOB_SERVICE`: only Android can
+  bind it.
+
+Other parts:
+
+- `androidx.startup.InitializationProvider`: not exported. The emoji
+  font loader is removed from it, as in Water.
+- `<queries>` for the action `app.shkriuss.action.HANDOVER`, from
+  `core/security`: Sync sees the data apps with a handover screen, and
+  no other app.
+- The network security configuration forbids cleartext, trusts only
+  the certificate authorities built into Android and asks for
+  certificate transparency.
+
+Sync keeps only state of this phone and has no backup, so Android
+backup and device-to-device transfer are turned off.
 
 ## Apps that use `core/notify`
 

@@ -30,10 +30,10 @@ only what that server cannot read, and holds no data of its own.
 | Stored | No records. State of this phone: a preferences file, the device key, the name key. |
 | Backup | None. No record types, no data version. |
 | Networks | Records on any network. File chunks only on an unmetered network, unless **Files on mobile data** is on. Off at first. A file's own record waits with its file. |
-| Runs | WorkManager: every 15 minutes with a network, soon after a poke, and on **Sync now** |
+| Runs | Android's JobScheduler: every 15 minutes with a network, soon after a poke, and on **Sync now** |
 | Long transfers | Shown on Apps while a run goes. They go on over as many runs as they need. |
 | Notifications, reminders, app lock | None. Sync never holds the recovery key. |
-| Permissions | `INTERNET`, and three that WorkManager needs. All granted at install. |
+| Permissions | `INTERNET`, and two that JobScheduler needs. All granted at install. |
 
 ## As in Water
 
@@ -50,8 +50,8 @@ only what that server cannot read, and holds no data of its own.
   and **keeper**: as in
   [sync-protocol.md](../../architecture/sync-protocol.md#words-used-on-this-page).
 - **Joined.** The server took this phone's `enrol`, and Sync holds the
-  device key and the name key. **Run.** One piece of WorkManager's work
-  in which Sync serves the data apps.
+  device key and the name key. **Run.** One job of JobScheduler in
+  which Sync serves the data apps.
 - **Unmetered network.** One that Android does not mark as metered,
   usually Wi-Fi. **Mobile data**: every metered network.
 - **Problem.** Something that stops sync on this phone until time or
@@ -313,12 +313,15 @@ unmetered network. Each data app's specification words them.
 [sync-protocol.md](../../architecture/sync-protocol.md#when-the-sync-app-runs)
 fixes what a run does, in which order. Here is the rest.
 
-1. One periodic work, every 15 minutes, with a connected network. It is
+1. One periodic job of JobScheduler, every 15 minutes, with a
+   connected network, kept after a restart
+   ([ADR 0045](../../adr/0045-sync-runs-through-jobscheduler.md)). It is
    made when the phone joins, and asked for again at every start of
    Sync while `stage` is 3, which changes nothing when it exists. It is
    cancelled when the phone leaves or stops.
-2. One one-time work, for a poke and for **Sync now**, with a connected
-   network. A new request while one waits keeps the one that waits.
+2. One job soon, for a poke and for **Sync now**, with a connected
+   network. A new request while one waits keeps the one that waits; a
+   request of **Sync now** takes the place of a poke's.
 3. One run at a time. The run clears `poked.<app>` when it starts on
    that app, before `status`. A poke that comes later marks the app
    again, and the run serves it again before it ends.
@@ -353,7 +356,7 @@ fixes what a run does, in which order. Here is the rest.
 |---|---|---|
 | The device key | Sync's Android Keystore, alias `shk.device.<number>` ([crypto-design.md](../../security/crypto-design.md#the-device-key)) | At most one. From join step 6 until the phone leaves, is removed, or starts another join. |
 | The name key | `shk-keys/record`, wrapped by Sync's Background key ([The name key](../../security/crypto-design.md#the-name-key)) | From the keeper's answer on |
-| WorkManager's database | `androidx.work.workdb`, in Sync's private storage | The two works, their conditions and fixed tags. No ID, name or address. |
+| JobScheduler's jobs | Android's own storage of jobs | The two jobs, their conditions and whether the user asked for the run. No ID, name or address. |
 | State | One preferences file, `app.shkriuss.sync`, in Sync's private storage | The table below |
 
 | Key | What it holds | Limits |
@@ -474,7 +477,7 @@ so after a stop Sync does the step again.
 | A courier call fails or gets no answer | That app is left for this run ([sync-protocol.md](../../architecture/sync-protocol.md#what-a-data-app-answers), point 5). Its row says so. |
 | A data app refuses a page | Nothing is written there, its cursor stays, and the next run fetches again. |
 | A request to the server | [Problems](#problems). Rename, Remove and Close say "Could not reach the server. Try again." Rename and Close change nothing. A Remove keeps the ID in `removed`, so the next read of the list removes that device. **Show the code** as in [Devices](#devices), point 3. |
-| Asking WorkManager for a run | "Could not start a run. Try again." under **Sync now** |
+| Asking JobScheduler for a run | "Could not start a run. Try again." under **Sync now** |
 
 ### A press twice or late
 
@@ -525,34 +528,33 @@ new phone joins as a new device.
 | Permission | From | Why |
 |---|---|---|
 | `android.permission.INTERNET` | `app/sync` | To talk to the user's own server. Only Sync has it (hard rule 4). |
-| `android.permission.ACCESS_NETWORK_STATE` | WorkManager | To wait for a network, and to tell a metered one before each chunk request |
-| `android.permission.WAKE_LOCK` | WorkManager | To keep the phone awake while a run works |
-| `android.permission.RECEIVE_BOOT_COMPLETED` | WorkManager | To keep the periodic work after a restart |
+| `android.permission.ACCESS_NETWORK_STATE` | JobScheduler | To wait for a network, and to tell a metered one before each chunk request |
+| `android.permission.RECEIVE_BOOT_COMPLETED` | JobScheduler | To keep the periodic job after a restart |
 
-1. Android grants all four at install. Sync asks for none. No
+1. Android grants all three at install. Sync asks for none. No
    notifications, alarms, foreground service, system prompt, storage
-   or camera.
-2. Removed in the manifest: `FOREGROUND_SERVICE` and WorkManager's
-   `SystemForegroundService`; WorkManager's `DiagnosticsReceiver` and
-   the receiver of `androidx.profileinstaller`, both open to callers
-   with `android.permission.DUMP`; `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
-   and the emoji font loader of `androidx.emoji2`, as in every app; the
-   eight screens, the status provider and the two
-   permissions of `core/security`. Kept: its `<queries>` for the
-   handover ([permissions.md](../../security/permissions.md#the-handover-between-apps),
+   or camera. No `WAKE_LOCK`: Android holds one while a job runs.
+2. Removed in the manifest: the receiver of `androidx.profileinstaller`,
+   open to callers with `android.permission.DUMP`;
+   `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` and the emoji font loader
+   of `androidx.emoji2`, as in every app; Room's
+   `MultiInstanceInvalidationService`, which comes with
+   `core/sync-client`, as Sync has no database; the eight screens, the
+   status provider and the two permissions of `core/security`. Kept:
+   its `<queries>` for the handover
+   ([permissions.md](../../security/permissions.md#the-handover-between-apps),
    point 8).
 3. Exported: `SyncActivity`; Sync's courier provider,
    `app.shkriuss.sync.courier`, with no permission, which checks the
-   caller before anything else; and WorkManager's `SystemJobService`,
-   which only Android can reach (`BIND_JOB_SERVICE`). WorkManager's
-   receivers are not exported.
+   caller before anything else; and its job service, which only Android
+   can reach (`BIND_JOB_SERVICE`). Sync has no receiver.
 4. Android backup and device transfer are off. The network security
    configuration forbids cleartext, trusts only the authorities built
    into Android and asks for certificate transparency. No redirect. One
    fixed `User-Agent`, `shkriuss-sync/1`
    ([The connection](../../architecture/sync-protocol.md#the-connection)).
-5. The four are Sync's allow list in the APK rules check, with the
-   decision record of WorkManager.
+5. The three are Sync's allow list in the APK rules check
+   ([ADR 0045](../../adr/0045-sync-runs-through-jobscheduler.md)).
 
 ## TalkBack
 
@@ -573,8 +575,8 @@ As in Water, and:
 | Module | Change |
 |---|---|
 | `core/crypto` | The device key, the name key and a sealed name ([Sync keys](../../security/crypto-design.md#sync-keys)). Random setup codes. The cleanup at start ([Hardware keys](../../security/crypto-design.md#hardware-keys), rule 8) leaves every `shk.device.*` key alone. At each start, after it, Sync calls `deleteOtherDeviceKeys` with the number `deviceAlias` holds, which deletes every other device key. |
-| `core/security` | Handover format version 2, mode "Sign a device", with Sync the only caller that passes for it. The asking side (`SuiteApps`, `keepers`, `KeeperCall`) works for Sync. |
-| `core/sync-client` | Each data app's courier provider, and its calls to `poke` and `state`, when that app syncs |
+| `core/security` | Handover format version 2, mode "Sign a device", with Sync the only caller that passes for it. The asking side (`SuiteApps`, `keepers`, `KeeperCall`) works for Sync. The check of the handover also finds the data apps for Sync's courier calls and checks a caller of its courier provider (`courierApps`, `courierPeer`). |
+| `core/sync-client` | The names of the courier calls and their arguments, the readers of `status`, a list of streams and a batch, and the layout of `state`, which Sync and the data apps share. Each data app's courier provider, and its calls to `poke` and `state`, when that app syncs |
 | `core/design`, `core/notify` | Nothing |
 
 ## Out of scope for version 1
@@ -596,7 +598,7 @@ networks, long transfers and notification. The owner asked this page to
 say, for every value and action, its limits and what happens when Sync
 stops between two writes, a write fails, a press comes twice or late,
 and the clock or the time zone changes
-([When things go wrong](#when-things-go-wrong)). And seven answers:
+([When things go wrong](#when-things-go-wrong)). And eight answers:
 
 1. Records go on any network. File chunks only on an unmetered network,
    unless **Files on mobile data** is on. It is off at first. So a
@@ -618,6 +620,9 @@ and the clock or the time zone changes
    apps that have keys.
 7. A data app that gives Sync no answer is listed at join step 6 with
    "Update Water, or open it once, then try again."
+8. Sync runs through Android's JobScheduler, not WorkManager: no new
+   dependency, no database of its own and no `WAKE_LOCK`
+   ([ADR 0045](../../adr/0045-sync-runs-through-jobscheduler.md)).
 
 The rest is in
 [sync-protocol.md](../../architecture/sync-protocol.md#decided-by-the-owner).
@@ -641,8 +646,9 @@ Choices this page made without a decision by the owner on that point.
 10. The `User-Agent` `shkriuss-sync/1`.
 11. **Leave anyway** when the server cannot be reached.
 12. A full server: sending tried once a day and on **Try again**.
-13. WorkManager's `DiagnosticsReceiver` removed, as Water removes the
-    receiver of `androidx.profileinstaller`.
+13. Room's `MultiInstanceInvalidationService` removed from the
+    manifest, as Water removes the receiver of
+    `androidx.profileinstaller`.
 14. A join left at `stage` 1 for a day is cancelled at the next start,
     so no setup code stays on the phone. The line to delete it from the
     Worker stays until **Done**, for at most 8 servers.
@@ -650,32 +656,27 @@ Choices this page made without a decision by the owner on that point.
 
 ## Open
 
-1. **The layout of `state`** and the names of every courier call's
-   arguments: fixed on
-   [sync-protocol.md](../../architecture/sync-protocol.md#what-a-data-app-answers)
-   when the courier providers are built.
-2. **WorkManager's decision record**, with the dependency change: its
-   version, the Room 2 it brings beside Room 3, a
-   `Configuration.Provider` in place of its global instance (no service
-   locators), whether **Sync now** can be expedited work, its own use
-   of Android's alarms to notice a force stop, and what it adds to the
-   manifest. Then the owner's sentence for the allow list.
-3. **`status` byte 54** is `01` while every record in **To send** is
+1. **The tests on the emulators** of the courier interface and of the
+   connection ([sync-protocol.md](../../architecture/sync-protocol.md#what-the-tests-must-cover)):
+   with Water's courier provider, the first one built.
+2. **`status` byte 54** is `01` while every record in **To send** is
    held back, so Sync would wake that app at every run. The protocol
    page says so, or `status` counts only what `export` would give now.
    Decided with the courier provider.
-4. **A new recovery key**: its screens and Sync's two steps
+3. **A new recovery key**: its screens and Sync's two steps
    ([sync-protocol.md](../../architecture/sync-protocol.md#open-questions),
    question 2).
-5. **A lost or damaged name key**: version 1 joins again.
-6. **A notification when sync stops**, later, with a part of
+4. **A lost or damaged name key**: version 1 joins again.
+5. **A notification when sync stops**, later, with a part of
    `core/notify` that shows one without alarms.
-7. **How often Android runs Sync** when it is rarely opened, on
+6. **How often Android runs Sync** when it is rarely opened, on
    GrapheneOS. Seen on phones.
-8. **Cloudflare's two answers**, for the day's requests and for CPU
-   time, told apart on the first deployed server, and **a data app that
-   was force-stopped or never opened**
+7. **Cloudflare's two answers**, for the day's requests and for CPU
+   time: Sync takes HTTP 429 as the first and 503 as the second
+   ([sync-protocol.md](../../architecture/sync-protocol.md#answers)),
+   checked on the first deployed server; and **a data app that was
+   force-stopped or never opened**
    ([sync-protocol.md](../../architecture/sync-protocol.md#assumptions),
    points 8 and 1).
-9. **The pages for users**: permissions.md, data-inventory.md, a user
-   guide for Sync and the self-hosting guide, when the app is built.
+8. **The pages for users**: a user guide for Sync and the self-hosting
+   guide, with Sync's screens.
