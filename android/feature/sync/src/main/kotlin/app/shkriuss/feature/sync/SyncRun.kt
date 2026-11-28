@@ -317,6 +317,11 @@ class SyncRun(
             if (streamsSent && !sendBatches(app, context, comparison = false)) return
             if (!sendBatches(app, context, comparison = true)) return
             val after = statusOf(app, context) ?: return
+            // The last status too: one of another epoch breaks the courier contract, and the app is not served.
+            if (after.isOn && after.canSyncNow && after.epoch != context.epoch) {
+                everyStatus = false
+                return
+            }
             write { state -> state.withApp(name) { it.copy(head = head.head) } }
             record(name, after, goodNow = true)
         }
@@ -571,7 +576,8 @@ class SyncRun(
              * was read past its listed length or its hash differs, or the
              * app says it has no stream. No answer, a refusal, a failed pipe
              * and a stream that ends early, as when the app's process ends
-             * during the read, prove nothing about its bytes.
+             * during the read, prove nothing about its bytes. The read stops
+             * one byte past the listed length, and when Android stops the job.
              */
             private fun hashOf(stream: ListedStream): HashCheck {
                 val input = when (val answer = courier().readStream(app, context, stream.fileIdBytes)) {
@@ -580,7 +586,7 @@ class SyncRun(
                 }
                 return try {
                     input.use {
-                        val counting = ChunkHashingInput(it)
+                        val counting = ChunkHashingInput(it, most = stream.length + 1, beforeRead = ::checkStop)
                         val hash = StreamHash.of(counting)
                         when {
                             counting.count < stream.length -> HashCheck.UNREADABLE
@@ -959,18 +965,29 @@ internal fun SyncState.isSameDeviceAs(other: SyncState): Boolean = stage == othe
 /**
  * Counts the bytes it passes on, and hashes them chunk by chunk
  * (sync-protocol.md, "Chunks"), so that the read that sends can be held to
- * the bytes that the check read.
+ * the bytes that the check read. It ends after [most] bytes, and runs
+ * [beforeRead] before each read, so that a stop of the job ends it too.
  */
-private class ChunkHashingInput(private val input: InputStream) : InputStream() {
+private class ChunkHashingInput(private val input: InputStream, private val most: Long, private val beforeRead: () -> Unit) : InputStream() {
     var count = 0L
         private set
 
     private val hashes = mutableListOf<ByteArray>()
     private val chunk = ByteArrayOutputStream()
 
-    override fun read(): Int = input.read().also { if (it >= 0) take(byteArrayOf(it.toByte()), 0, 1) }
+    override fun read(): Int {
+        if (count >= most) return -1
+        beforeRead()
+        return input.read().also { if (it >= 0) take(byteArrayOf(it.toByte()), 0, 1) }
+    }
 
-    override fun read(buffer: ByteArray, offset: Int, length: Int): Int = input.read(buffer, offset, length).also { if (it > 0) take(buffer, offset, it) }
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (length == 0) return 0
+        // Past [most] bytes the stream already does not fit: nothing more is read.
+        if (count >= most) return -1
+        beforeRead()
+        return input.read(buffer, offset, minOf(length.toLong(), most - count).toInt()).also { if (it > 0) take(buffer, offset, it) }
+    }
 
     /** The hash of each chunk read, the last one too. Call it once the stream has ended. */
     fun chunkHashes(): List<ByteArray> {

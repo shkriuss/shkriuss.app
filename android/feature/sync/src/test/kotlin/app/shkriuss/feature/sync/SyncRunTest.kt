@@ -1068,4 +1068,49 @@ class SyncRunTest {
         val fetches = server.requests.filter { it.url.contains("/v1/changes") }.map { it.url.substringAfter("most=") }
         assertEquals(listOf("100", "50"), fetches)
     }
+
+    @Test
+    fun aLastStatusOfAnotherEpochDoesNotRecordTheAppAsServed() {
+        joined()
+        run()
+        water.toSend += id(7) to blob(server.keyId, 7)
+        water.onExport = { water.statusEpoch = syncId(9) }
+        val goodAt = store.now().app("water").goodAt
+        clock.advanceBy(60_000)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertTrue("the batch was sent", server.requests.any { it.method == RequestMethod.POST && it.url.contains("/v1/changes") })
+        assertEquals(goodAt, store.now().app("water").goodAt)
+        assertTrue("the app is served again", store.now().app("water").work)
+    }
+
+    @Test
+    fun theCheckOfAStreamReadsAtMostOneBytePastItsListedLength() {
+        joined()
+        run()
+        val bytes = ByteArray(3 * SyncRun.CHUNK_BYTES) { (it % 13).toByte() }
+        val fileId = id(0x4a)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes.copyOf(10)), 10, 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals(11L, water.bytesRead)
+        assertEquals(listOf(hex(fileId) to false), water.sent)
+    }
+
+    @Test
+    fun aRunStoppedWhileAStreamIsCheckedReadsNoMoreOfIt() {
+        joined()
+        run()
+        val bytes = ByteArray(3 * SyncRun.CHUNK_BYTES) { (it % 7).toByte() }
+        val fileId = id(0x4b)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), bytes.size.toLong(), 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { water.bytesRead > 0 } })
+        assertTrue("the read ended at the stop", water.bytesRead < bytes.size)
+        assertFalse("/v1/files/send" in server.paths())
+    }
 }

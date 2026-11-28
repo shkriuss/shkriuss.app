@@ -152,6 +152,17 @@ class SyncDevicesTest {
     }
 
     @Test
+    fun aListThatPassesClearsTheFaultAndTheClockAlsoWhenARemovalAfterItFails() {
+        joined()
+        server.devices += FakeDevice(syncId(0x66), ByteArray(65) { 3 }, removed = false, addedAt = 2, sealedName = ByteArray(60))
+        store.update { it.copy(fault = true, clockOff = 7 * 60_000L, removed = setOf(syncId(0x66).hex)) }
+        server.answerNext("/v1/devices/remove", HttpResult.NoAnswer)
+        assertEquals(DeviceAnswer.Unreachable, devices.list("Unknown"))
+        assertFalse(store.now().fault)
+        assertNull(store.now().clockOff)
+    }
+
+    @Test
     fun aRemoveWithEveryRemovedIdThatSyncKeepsIsAFault() {
         joined()
         store.update { it.copy(removed = (1..SyncState.MOST_REMOVED).map { number -> "%032x".format(number) }.toSet()) }

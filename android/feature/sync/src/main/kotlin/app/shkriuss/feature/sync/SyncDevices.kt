@@ -26,6 +26,10 @@ internal class DeviceList(private val store: SyncStateStore, private val server:
     fun read(session: Session, revision: Long?, beforeRequest: () -> Unit = {}): List<ListedDevice> {
         beforeRequest()
         val devices = SyncRun.valueOf(server.devices(session))
+        // A request passed: the fault and the clock no longer hold (spec, Problems), also when a removal below fails.
+        if (store.now().let { it.fault || it.clockOff != null }) {
+            store.update { if (it.isJoinedWith(session) && (it.fault || it.clockOff != null)) it.copy(fault = false, clockOff = null) else it }
+        }
         val state = store.now()
         val thisPhone = state.deviceId?.hex
         val inAgain = devices.filter { !it.removed && it.id.hex in state.removed }
