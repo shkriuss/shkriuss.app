@@ -120,7 +120,8 @@ class SyncKeys internal constructor(private val vault: KeyVault) {
      * keyset under its Background key (crypto-design.md, "The name key",
      * point 2). A stored name key that is damaged is first copied to the
      * set-aside folder. Throws [BlobException] if what is stored cannot be
-     * judged now.
+     * judged now, and [CannotMakeHardwareKeyException] if a Background key
+     * is needed and Android could make none.
      */
     fun storeNameKey(signed: SignedJoin) = sync {
         when (vault.look(KeysetName.RECORD)) {
