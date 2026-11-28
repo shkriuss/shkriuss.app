@@ -15,6 +15,10 @@ specification is
   Tasks changes.
 - **Licences** on a tablet: a notice opened beside the list starts at
   its top, also after another notice was read to its end.
+- When another app asks Tasks for its keys and Android's key store
+  cannot answer for a moment, Tasks now says "Try again in a moment".
+  Before, it said that it does not keep the recovery key, and sent you
+  to enter the 24 words.
 - Ready for the Sync app, which is not released yet: when Sync asks,
   Tasks can sign that this phone may join your sync server. Tasks shows
   the server and asks you to allow it. If Tasks keeps your recovery key,

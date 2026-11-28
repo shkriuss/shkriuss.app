@@ -97,6 +97,8 @@ enum class SecuritySample(@param:StringRes val title: Int) {
     SignDeviceOtherKey(R.string.sample_sign_device_other_key),
     SignDeviceNoKeys(R.string.sample_sign_device_no_keys),
     SignDeviceNotKept(R.string.sample_sign_device_not_kept),
+    SignDeviceDamaged(R.string.sample_sign_device_damaged),
+    SignDeviceFailed(R.string.sample_sign_device_failed),
 }
 
 /**
@@ -353,6 +355,24 @@ private fun Sample(sample: SecuritySample, onBack: () -> Unit, modifier: Modifie
         )
         SecuritySample.SignDeviceNotKept -> HandoverContent(
             HandoverNotKept,
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+            mode = HandoverMode.SIGN_DEVICE,
+        )
+        SecuritySample.SignDeviceDamaged -> HandoverContent(
+            HandoverFailed(damaged = true),
+            SAMPLE_SYNC,
+            SAMPLE_KEEPER,
+            false,
+            HandoverActions(onDeny = onBack),
+            modifier,
+            mode = HandoverMode.SIGN_DEVICE,
+        )
+        SecuritySample.SignDeviceFailed -> HandoverContent(
+            HandoverFailed(damaged = false),
             SAMPLE_SYNC,
             SAMPLE_KEEPER,
             false,

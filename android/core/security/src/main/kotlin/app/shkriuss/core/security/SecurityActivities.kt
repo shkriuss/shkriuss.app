@@ -317,13 +317,15 @@ class TurnOnAppLockActivity : ComponentActivity(), WordsScreen {
 
 /**
  * A keeper's handover screen (ADR 0041): another app of the suite asks for
- * its own keys, or for four words to be checked first. Exported with no
- * permission, so any app may start it: its own check of the caller is the
- * only gate. It checks before it reads anything else or shows anything,
- * and again before it hands the keys over. A caller that fails gets a
- * cancelled result that says `REFUSED`, and no screen. It may take
- * four words, so its window blocks screenshots like the recovery key
- * screens.
+ * its own keys, or for four words to be checked first. The Sync app, and
+ * only it, asks in the mode "Sign a device" (crypto-design.md, "The
+ * handover format, version 2"). Exported with no permission, so any app
+ * may start it: its own check of the caller is the only gate. It checks
+ * before it reads anything else or shows anything, and again before it
+ * hands the keys or the signed join over. A caller that fails gets a
+ * cancelled result that says `REFUSED`, and no screen. It may take four
+ * words, or all 24 in an app that signs a join without keeping the key,
+ * so its window blocks screenshots like the recovery key screens.
  */
 @OptIn(SecurityScreenSamples::class)
 class HandoverActivity : ComponentActivity(), WordsScreen {

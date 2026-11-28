@@ -18,6 +18,10 @@ get reminders during the hours you choose. Its specification is
 - Two changes in Settings made one right after the other are written in
   the order you made them. On a busy phone the older of two changes of
   the same setting could be the one that stayed.
+- When another app asks Water for its keys and Android's key store
+  cannot answer for a moment, Water now says "Try again in a moment".
+  Before, it said that it does not keep the recovery key, and sent you
+  to enter the 24 words.
 - Ready for the Sync app, which is not released yet: when Sync asks,
   Water can sign that this phone may join your sync server. Water shows
   the server and asks you to allow it. If Water keeps your recovery key,

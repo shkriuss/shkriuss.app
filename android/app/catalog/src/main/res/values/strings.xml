@@ -591,6 +591,8 @@
     <string name="sample_sign_device_other_key">Handover: the server uses another recovery key</string>
     <string name="sample_sign_device_no_keys">Handover: Sync asks an app with no recovery key</string>
     <string name="sample_sign_device_not_kept">Handover: Sync asks, and the kept key is gone</string>
+    <string name="sample_sign_device_damaged">Handover: Sync asks, and a key file is damaged</string>
+    <string name="sample_sign_device_failed">Handover: Sync asks, and the keys cannot be read now</string>
     <string name="sample_enter_done_app_lock_off">Enter: done, and the app lock turned off</string>
     <string name="app_lock_intro">The screens of the app lock that every app shares, from core/security. Each state shows with sample data. Catalog has no app lock: nothing here locks, unlocks or shows the system prompt. Back returns to this list.</string>
     <string name="sample_lock_locked">Lock screen</string>

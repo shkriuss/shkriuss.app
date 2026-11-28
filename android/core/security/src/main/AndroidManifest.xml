@@ -78,9 +78,10 @@
 
         <!--
             The handover screen of a keeper: another app of the suite asks
-            for its own keys. Exported with no permission: the screen checks
-            the caller's certificate first, and gives a refused caller a
-            cancelled result and no screen. The intent filter has no
+            for its own keys, or the Sync app, and only it, asks this app to
+            sign that the phone may join a sync server. Exported with no
+            permission: the screen checks the caller's certificate first,
+            and gives a refused caller a cancelled result and no screen. The intent filter has no
             category, so the screen opens only when it is named; it is there
             so that the other apps can find it.
         -->
@@ -100,9 +101,10 @@
             android:theme="@style/Theme.Shk" />
 
         <!--
-            Tells the other apps of the suite whether this app keeps the
-            recovery key, and its short name. Exported with no permission:
-            it checks the caller's certificate first, and answers a refused
+            Tells the other data apps of the suite, and the Sync app,
+            whether this app keeps the recovery key, and the short name of
+            the key its keys come from. Exported with no permission: it
+            checks the caller's certificate first, and answers a refused
             caller nothing. It answers one call and holds no data.
 
             Lint's ExportedContentProvider asks for a permission or for no
