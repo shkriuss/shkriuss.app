@@ -4,6 +4,7 @@ import android.content.ComponentName
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import app.shkriuss.core.design.ShkTheme
