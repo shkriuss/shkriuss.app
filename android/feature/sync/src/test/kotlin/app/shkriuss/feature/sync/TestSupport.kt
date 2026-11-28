@@ -408,6 +408,9 @@ internal class FakeDataApp(val name: String) {
     /** How many bytes of its stored streams were read through `readStream`. */
     var bytesRead = 0L
 
+    /** The most bytes one read of a stream from `readStream` gives, as a slow app's pipe may. */
+    var readLimit = Int.MAX_VALUE
+
     /** The courier version its `status` names. */
     var courierVersion = 1
 
@@ -546,7 +549,8 @@ internal class FakeCouriers(vararg apps: FakeDataApp) : Couriers {
                 ?.let { if (fake.reads == fake.changedRead) it.copyOf().also { bytes -> bytes[0] = (bytes[0] + 1).toByte() } else it }
                 ?.inputStream()?.let { input ->
                 object : java.io.FilterInputStream(input) {
-                    override fun read(buffer: ByteArray, offset: Int, length: Int): Int = super.read(buffer, offset, length).also { if (it > 0) fake.bytesRead += it }
+                    override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
+                        super.read(buffer, offset, minOf(length, fake.readLimit)).also { if (it > 0) fake.bytesRead += it }
                 }
             }
         }

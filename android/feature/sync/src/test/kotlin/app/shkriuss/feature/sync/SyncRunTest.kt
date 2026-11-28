@@ -1241,4 +1241,22 @@ class SyncRunTest {
         run()
         assertTrue("water was served", "status" in water.calls)
     }
+
+    @Test
+    fun aRunStoppedWhileAChunkIsReadReadsNoMoreOfIt() {
+        joined()
+        run()
+        val bytes = ByteArray(3 * SyncRun.CHUNK_BYTES) { (it % 3).toByte() }
+        val fileId = id(0x4f)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), bytes.size.toLong(), 0, 0))
+        // A pipe that gives at most 1,000 bytes at a time, as a slow app's pipe may.
+        water.readLimit = 1_000
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        // The check reads the stream once; the stop comes with the first bytes of the second read.
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { water.bytesRead > bytes.size } })
+        assertTrue("the chunk was not read to its end", water.bytesRead < bytes.size + SyncRun.CHUNK_BYTES)
+        assertFalse("/v1/files/send" in server.paths())
+    }
 }

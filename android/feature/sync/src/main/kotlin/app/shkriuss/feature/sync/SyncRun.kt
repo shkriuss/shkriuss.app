@@ -634,7 +634,7 @@ class SyncRun(
                         for (number in first until chunks) {
                             val length = chunkLength(stream.length, number)
                             // A stream that ends early on this second read is a failed courier call too.
-                            val bytes = readFully(it, length) ?: run {
+                            val bytes = readFully(it, length, ::checkStop) ?: run {
                                 appLeft = true
                                 return
                             }
@@ -943,10 +943,12 @@ class SyncRun(
             }
         }
 
-        private fun readFully(input: InputStream, length: Int): ByteArray? {
+        /** [length] bytes of [input], or null when it ends first. [beforeRead] runs before each read, so that a stop of the job ends it too. */
+        private fun readFully(input: InputStream, length: Int, beforeRead: () -> Unit): ByteArray? {
             val bytes = ByteArray(length)
             var at = 0
             while (at < length) {
+                beforeRead()
                 val read = input.read(bytes, at, length - at)
                 if (read < 0) return null
                 at += read
