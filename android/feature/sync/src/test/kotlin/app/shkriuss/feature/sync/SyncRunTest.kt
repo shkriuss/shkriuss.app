@@ -664,4 +664,37 @@ class SyncRunTest {
         assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { stopped } })
         assertFalse("/v1/changes" in server.paths())
     }
+
+    @Test
+    fun aFileRequestThatRanOutOfCpuTimeStopsTheReadingOfALargeStream() {
+        joined()
+        run()
+        val bytes = ByteArray(3 * SyncRun.CHUNK_BYTES) { (it % 11).toByte() }
+        val fileId = id(0x77)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), bytes.size.toLong(), 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.answerNext("/v1/files/send", HttpResult.Answer(SyncServer.CPU_TIME_STATUS, ByteArray(0)))
+        server.requests.clear()
+        run()
+        assertEquals(1, server.paths().count { it == "/v1/files/send" })
+        // The hash reads the stream once; the chunks are read up to the request that was refused, not to the end.
+        assertEquals(bytes.size + 2L * SyncRun.CHUNK_BYTES, water.bytesRead)
+    }
+
+    @Test
+    fun aStreamThatEndsEarlyIsLeftAndAnAppWithNoStreamIsToldItDoesNotFit() {
+        joined()
+        run()
+        val short = id(0x78)
+        water.stored[hex(short)] = ByteArray(5) { 2 }
+        val missing = id(0x79)
+        water.streams = listOf(
+            ListedStream(StreamWork.SEND, uuid(missing), ByteArray(32) { 3 }, 10, 0, 0),
+            ListedStream(StreamWork.SEND, uuid(short), sha256(ByteArray(10) { 2 }), 10, 0, 0),
+        )
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals("only the stream the app does not have", listOf(hex(missing) to false), water.sent)
+    }
 }

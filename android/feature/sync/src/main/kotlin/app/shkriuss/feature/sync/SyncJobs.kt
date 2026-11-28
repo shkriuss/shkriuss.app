@@ -83,24 +83,21 @@ class JobSchedulerScheduler(context: Context) : Scheduler {
  * job's run.
  */
 class SyncJobService : JobService() {
-    private val running = ConcurrentHashMap<Int, Running>()
-
-    /** One job's work, and whether Android stopped it. */
-    private class Running(val job: Job, val stopped: AtomicBoolean)
+    private val running = RunningJobs()
 
     override fun onStartJob(params: JobParameters): Boolean {
         val sync = (application as? SyncHost)?.sync ?: return false
         val asked = params.extras.getBoolean(JobSchedulerScheduler.ASKED, false)
-        val stopped = AtomicBoolean(false)
+        val entry = running.begin(params.jobId)
         val job = sync.scope.launch(start = CoroutineStart.LAZY) {
             try {
-                sync.run.run(asked) { stopped.get() }
+                sync.run.run(asked) { entry.stopped.get() }
             } finally {
-                running.remove(params.jobId)
-                if (!stopped.get()) jobFinished(params, false)
+                running.end(params.jobId, entry)
+                if (!entry.stopped.get()) jobFinished(params, false)
             }
         }
-        running[params.jobId] = Running(job, stopped)
+        entry.job = job
         job.start()
         return true
     }
@@ -111,10 +108,40 @@ class SyncJobService : JobService() {
      * continues.
      */
     override fun onStopJob(params: JobParameters): Boolean {
-        running.remove(params.jobId)?.let {
-            it.stopped.set(true)
-            it.job.cancel()
-        }
+        running.stop(params.jobId)
         return false
+    }
+}
+
+/**
+ * The runs of the jobs that Android started, one for each job ID. A job
+ * that Android starts again under the same ID takes the place of the one
+ * before, and the end of the older run never removes the newer one.
+ */
+internal class RunningJobs {
+    private val running = ConcurrentHashMap<Int, Entry>()
+
+    /** One job's run: whether Android stopped it, and its work. */
+    class Entry {
+        val stopped = AtomicBoolean(false)
+
+        @Volatile
+        var job: Job? = null
+    }
+
+    /** A new run for [jobId]. */
+    fun begin(jobId: Int): Entry = Entry().also { running[jobId] = it }
+
+    /** The run [entry] of [jobId] ended. A newer run of the same ID stays. */
+    fun end(jobId: Int, entry: Entry) {
+        running.remove(jobId, entry)
+    }
+
+    /** Android stopped [jobId]: its run stops before its next request. */
+    fun stop(jobId: Int) {
+        running.remove(jobId)?.let {
+            it.stopped.set(true)
+            it.job?.cancel()
+        }
     }
 }

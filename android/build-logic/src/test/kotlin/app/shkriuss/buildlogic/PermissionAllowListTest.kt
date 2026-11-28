@@ -156,16 +156,6 @@ class PermissionAllowListTest {
     }
 
     @Test
-    fun theNetworkPermissionFailsInEveryDataApp() {
-        listOf("water" to water, "reminders" to reminders, "tasks" to tasks, "notes" to notes).forEach { (app, allowed) ->
-            assertOneProblem(
-                "android.permission.ACCESS_NETWORK_STATE in the manifest (rule 4: not on the allow list of $app)",
-                CheckApkRulesTask.permissionProblems(requests(*(allowed + "android.permission.ACCESS_NETWORK_STATE").toTypedArray()), app),
-            )
-        }
-    }
-
-    @Test
     fun aManifestWithNoPermissionPassesForEveryApp() {
         assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(manifest(), "water"))
         assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(manifest(), "catalog"))

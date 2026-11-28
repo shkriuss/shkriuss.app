@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 8 test classes with 110 tests. They use real keys
+- `feature/sync` has 9 test classes with 114 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -853,9 +853,12 @@ second build must write the same mapping file, or the release stops. See
     server that takes no chunks either, an app whose transfer failed and
     is served at the next run, an app whose courier call fails, which is
     left and not recorded as served, a stream that could not be read,
-    which is not called damaged, a run stopped by Android, also during a
-    courier call, and a Leave while a run goes, which the run does not
-    overwrite.
+    or ended early, which is not called damaged, a file request refused
+    for CPU time, which stops the reading of a large stream, a run
+    stopped by Android, also during a courier call, and a Leave while a
+    run goes, which the run does not overwrite.
+  - `RunningJobsTest`: each job of the job service stops only its own
+    run, also when Android starts a job again under the same ID.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
     the headers of a signed request, a `04` sent once more, Cloudflare's
     answers, a page, the devices and the file calls.
@@ -1348,7 +1351,7 @@ does not. The owner asked for them.
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. In a compiled XML file, an element named `WebView` or after each WebView class fails, so does a `class` attribute with such a name, and an `android:name` with one. A layout without them passes. Every compiled XML file of an APK is found by its content, also under a short name, and one the reader cannot read fails. Each WebView class as a value in `resources.arsc` fails, and so does a `<fragment>` that names `android.webkit.WebViewFragment` through a string resource. Values without one pass. A resource table the reader cannot read fails. |
 | `DaoRulesSqlTest` | The DAO rules check reads comments and quoted text in one pass. A marked purge whose `OR` hides behind `--` or `/*` inside `'...'`, `"..."`, `` `...` `` or `[...]` fails, and so does one behind a quote inside a comment, or behind an escaped quote. A `DELETE` behind `'--'` in a read fails. A purge of deleted rows passes, with quoted names, comments and text. |
-| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water, of Reminders and of Tasks pass, and the two of Notes. `INTERNET` fails in all four, the three of `core/notify` fail in Notes, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
+| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water, of Reminders and of Tasks pass, the two of Notes, and the three of Sync. `INTERNET` fails in all four data apps, the three of `core/notify` fail in Notes, the permissions of the data apps, `WAKE_LOCK` and `FOREGROUND_SERVICE` fail in Sync, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 | `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The eight screens of `core/security` with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the eight screens alone needs both, and so does a new screen of the module: the rule matches every screen by the start of its name. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
 The tests catch a weaker check. They fail when `allowBackup` true is

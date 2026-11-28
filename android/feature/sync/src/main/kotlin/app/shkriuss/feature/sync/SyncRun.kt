@@ -494,14 +494,28 @@ class SyncRun(
                 return anySent
             }
 
-            /** Whether the stored stream, read to its end, fits the hash and the length that `streams` named. */
+            /**
+             * Whether the stored stream, read to its end, fits the hash and
+             * the length that `streams` named. It does not fit only when it
+             * was read past its listed length or its hash differs, or the
+             * app says it has no stream. No answer, a refusal, a failed pipe
+             * and a stream that ends early, as when the app's process ends
+             * during the read, prove nothing about its bytes.
+             */
             private fun hashOf(stream: ListedStream): HashCheck {
-                val input = (couriers.readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value ?: return HashCheck.UNREADABLE
+                val input = when (val answer = couriers.readStream(app, context, stream.fileIdBytes)) {
+                    is CourierAnswer.Done -> answer.value ?: return HashCheck.DOES_NOT_FIT
+                    else -> return HashCheck.UNREADABLE
+                }
                 return try {
                     input.use {
                         val counting = CountingInput(it)
-                        val fits = StreamHash.of(counting).contentEquals(stream.hash) && counting.count == stream.length
-                        if (fits) HashCheck.FITS else HashCheck.DOES_NOT_FIT
+                        val hash = StreamHash.of(counting)
+                        when {
+                            counting.count < stream.length -> HashCheck.UNREADABLE
+                            counting.count == stream.length && hash.contentEquals(stream.hash) -> HashCheck.FITS
+                            else -> HashCheck.DOES_NOT_FIT
+                        }
                     }
                 } catch (_: IOException) {
                     HashCheck.UNREADABLE
@@ -524,7 +538,9 @@ class SyncRun(
                             val length = chunkLength(stream.length, number)
                             val bytes = readFully(it, length) ?: return
                             if (pending.isNotEmpty() && (pending.size >= fileItems() || pending.sumOf { (_, chunk) -> chunk.bytes.size } + length > CHUNK_BYTES)) flush()
-                            if (stopped || key in failed) return
+                            // A request that ran out of CPU time, a metered network or a failed courier call stops the
+                            // reading too, so that no more chunks of a large file wait in memory.
+                            if (stopped || filesStopped || appLeft || key in failed) return
                             pending += key to OutgoingChunk(stream.fileIdBytes, stream.hash, number, bytes, StreamHash.of(ByteArrayInputStream(bytes)))
                         }
                     }
