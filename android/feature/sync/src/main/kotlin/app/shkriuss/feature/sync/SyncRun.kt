@@ -170,6 +170,9 @@ class SyncRun(
         /** True after a lack of CPU time or a `0C` on a file request: the files wait for the next run, with less in each request. */
         private var filesStopped = false
 
+        /** False when an app gave no usable `status` in this run: the first run of the day then comes again. */
+        private var everyStatus = true
+
         /** A courier call of the app being served failed: it is left for this run, and nothing records it as served well. */
         private var appLeft = false
 
@@ -179,6 +182,12 @@ class SyncRun(
         /** Ends the run here when Android stopped its job. */
         private fun checkStop() {
             if (stopped()) throw RunStopped()
+        }
+
+        /** The data apps' couriers, after the check that Android has not stopped the job: every courier call goes through here. */
+        private fun courier(): Couriers {
+            checkStop()
+            return couriers
         }
 
         /**
@@ -196,7 +205,7 @@ class SyncRun(
             if (start.limits == null || !sameUtcDay(start.infoAt, now)) readInfo()
             val heads = readHeads()
             val firstOfDay = !sameUtcDay(store.now().statusAt, now)
-            apps = couriers.find().passed.sortedBy { it.name.value }
+            apps = courier().find().passed.sortedBy { it.name.value }
             val epochMoved = start.epoch != heads.epoch
             if (epochMoved) takeEpoch(heads.epoch)
             var toServe = apps.filter { firstOfDay || epochMoved || needs(it.name.value, heads) }
@@ -210,7 +219,8 @@ class SyncRun(
                 toServe = apps.filter { store.now().app(it.name.value).poked }
                 if (toServe.isEmpty()) return@repeat
             }
-            if (firstOfDay) write { it.copy(statusAt = clock.nowMillis()) }
+            // An app whose status failed would else wait a day for the check that finds a lost poke.
+            if (firstOfDay && everyStatus) write { it.copy(statusAt = clock.nowMillis()) }
         }
 
         private fun needs(app: String, heads: Heads): Boolean {
@@ -237,7 +247,9 @@ class SyncRun(
          * ends at the list of devices leaves it for the next run.
          */
         private fun readHeads(): Heads {
-            val heads = valueOf(retrying { server.heads(session) })
+            // `heads` has no size to halve: a lack of CPU time or a 0C ends the run, as any other failed request does.
+            checkStop()
+            val heads = valueOf(server.heads(session))
             passed()
             this.heads = heads
             val state = store.now()
@@ -321,15 +333,20 @@ class SyncRun(
         }
 
         /** The app's `status`, or null when it gave none or refused: then it is left for this run. Sync off is recorded. */
-        private fun statusOf(app: CourierApp, context: CourierContext): SyncStatus? = when (val answer = couriers.status(app, context)) {
+        private fun statusOf(app: CourierApp, context: CourierContext): SyncStatus? = when (val answer = courier().status(app, context)) {
             is CourierAnswer.Done -> answer.value.takeIf { it.courierVersion == ServerInfo.VERSION }
             is CourierAnswer.Refused -> {
                 if (answer.refusal == Refusal.OFF) {
                     write { state -> state.withApp(app.name.value) { it.copy(on = false, work = false) } }
+                } else {
+                    everyStatus = false
                 }
                 null
             }
-            CourierAnswer.NoAnswer -> null
+            CourierAnswer.NoAnswer -> {
+                everyStatus = false
+                null
+            }
         }
 
         /** Fetches every page above the app's cursor and hands each to `import`. False when the app is left for this run. */
@@ -349,7 +366,7 @@ class SyncRun(
                 if (fetched.page.since != cursor || fetched.page.epoch != context.epoch) throw EndRun(Reason.Fault)
                 // A page that says more wait, and moves nothing forward, would be fetched again and again.
                 if (fetched.page.more && fetched.page.through <= cursor) throw EndRun(Reason.Fault)
-                when (val imported = couriers.import(app, context, fetched.bytes)) {
+                when (val imported = courier().import(app, context, fetched.bytes)) {
                     is CourierAnswer.Done -> when (val result = imported.value) {
                         is Imported.Taken -> {
                             // A page that is taken moves the cursor to its Through: any other answer is a failed call.
@@ -373,7 +390,7 @@ class SyncRun(
                 checkStop()
                 if (!sendingAllowed() || (comparison && comparisonsWait()) || name in noMoreBatchesFor) return true
                 progress.value = RunProgress(name, if (comparison) RunStep.COMPARING else RunStep.SENDING)
-                val batch = when (val answer = couriers.export(app, context, comparison, mostRecords(), mostBytes())) {
+                val batch = when (val answer = courier().export(app, context, comparison, mostRecords(), mostBytes())) {
                     is CourierAnswer.Done -> answer.value ?: return true
                     else -> return false
                 }
@@ -385,7 +402,7 @@ class SyncRun(
                         if (store.now().full) write { it.copy(full = false, fullAt = null) }
                         val sent = answer.value
                         if (sent.answer.epoch != context.epoch) throw EndRun(Reason.Fault)
-                        when (val taken = couriers.exported(app, context, batch.token, sent.bytes)) {
+                        when (val taken = courier().exported(app, context, batch.token, sent.bytes)) {
                             is CourierAnswer.Done -> if (taken.value == ExportedResult.IGNORED) return false
                             else -> return false
                         }
@@ -437,7 +454,7 @@ class SyncRun(
          * that the app is left for this run.
          */
         private fun moveStreams(app: CourierApp, context: CourierContext): Boolean? {
-            val list = when (val answer = couriers.streams(app, context)) {
+            val list = when (val answer = courier().streams(app, context)) {
                 is CourierAnswer.Done -> answer.value
                 else -> return null
             }
@@ -461,7 +478,7 @@ class SyncRun(
                 passed()
                 group.zip(results).forEach { (stream, result) ->
                     // After NOT_NOW the next run asks again. With no answer from the app, it is left for this run.
-                    if (result != DeleteResult.NOT_NOW && couriers.streamDeleted(app, context, stream.fileIdBytes) !is CourierAnswer.Done) {
+                    if (result != DeleteResult.NOT_NOW && courier().streamDeleted(app, context, stream.fileIdBytes) !is CourierAnswer.Done) {
                         appLeft = true
                         return
                     }
@@ -508,7 +525,7 @@ class SyncRun(
                     // be read at all is no proof of that: the app is left for this run, and nothing is said about it.
                     when (hashOf(stream)) {
                         HashCheck.FITS -> queue(stream, first, chunks)
-                        HashCheck.DOES_NOT_FIT -> if (couriers.streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false) !is CourierAnswer.Done) appLeft = true
+                        HashCheck.DOES_NOT_FIT -> if (courier().streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false) !is CourierAnswer.Done) appLeft = true
                         HashCheck.UNREADABLE -> appLeft = true
                     }
                 }
@@ -525,7 +542,7 @@ class SyncRun(
              * during the read, prove nothing about its bytes.
              */
             private fun hashOf(stream: ListedStream): HashCheck {
-                val input = when (val answer = couriers.readStream(app, context, stream.fileIdBytes)) {
+                val input = when (val answer = courier().readStream(app, context, stream.fileIdBytes)) {
                     is CourierAnswer.Done -> answer.value ?: return HashCheck.DOES_NOT_FIT
                     else -> return HashCheck.UNREADABLE
                 }
@@ -546,7 +563,7 @@ class SyncRun(
 
             private fun queue(stream: ListedStream, first: Int, chunks: Int) {
                 val key = stream.fileId
-                val input = (couriers.readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value
+                val input = (courier().readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value
                 if (input == null) {
                     appLeft = true
                     return
@@ -604,7 +621,7 @@ class SyncRun(
             }
 
             private fun sent(stream: ListedStream) {
-                if (couriers.streamSent(app, context, stream.fileIdBytes, stream.hash, fits = true) is CourierAnswer.Done) anySent = true else appLeft = true
+                if (courier().streamSent(app, context, stream.fileIdBytes, stream.hash, fits = true) is CourierAnswer.Done) anySent = true else appLeft = true
             }
 
             private fun show() {
@@ -627,7 +644,7 @@ class SyncRun(
             }
 
             private fun fetchOne(stream: ListedStream): Boolean {
-                val out = when (val answer = couriers.writeStream(app, context, stream.fileIdBytes, stream.bytesHere)) {
+                val out = when (val answer = courier().writeStream(app, context, stream.fileIdBytes, stream.bytesHere)) {
                     // The app does not want this stream now.
                     is CourierAnswer.Done -> answer.value ?: return false
                     else -> {
@@ -671,7 +688,7 @@ class SyncRun(
                     false
                 }
                 if (!whole || here != stream.length) return false
-                if (couriers.finishStream(app, context, stream.fileIdBytes) !is CourierAnswer.Done) appLeft = true
+                if (courier().finishStream(app, context, stream.fileIdBytes) !is CourierAnswer.Done) appLeft = true
                 return true
             }
 

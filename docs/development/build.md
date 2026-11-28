@@ -835,33 +835,34 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 134 tests. They use real keys
+- `feature/sync` has 9 test classes with 139 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
   (`FakeDataApp`):
-  - `SyncRunTest`: a quiet run, the fetch of every page, a poke, a
-    refusal `01` and the fetch before the next batch, a full server, the
-    day's limits, every answer that stops sync, the fault and the clock,
-    which `info` clears too, three failed runs and the 4-hour wait,
-    halving for CPU time, also on a file request, and its undoing a day
-    later, another epoch, also one that a run took to no app, which
-    every app gets at the next run, `0C`, a page that moves nothing, a
-    put-back server with a removed device in again, lost keys, an app
-    that gives no answer, or answers `import` with another cursor, more
-    chunks on the server than a stream has, streams sent, fetched,
-    deleted and kept off a metered network, only the chunks the server
-    lacks, the order of ordinary and comparison batches, no batch after
-    a `05` for each app that got one, a full server that takes no chunks
-    either, an app whose transfer failed and is served at the next run,
-    an app whose courier call fails, which is left and not recorded as
-    served, a stream that could not be read, or ended early, also on its
-    second read, which is not called damaged, a pipe that fails while a
-    stream is fetched, a file request refused for CPU time, which stops
-    the reading of a large stream, a run stopped by Android, also during
-    a courier call, a Leave while a run goes, which the run does not
-    overwrite, and an app that pokes each time it is served, whose job
-    runs again.
+  - `SyncRunTest`: a quiet run, a first status of the day that failed,
+    which is asked again, the fetch of every page, a poke, a refusal
+    `01` and the fetch before the next batch, a full server, the day's
+    limits, every answer that stops sync, the fault and the clock, which
+    `info` clears too, three failed runs and the 4-hour wait, halving
+    for CPU time, also on a file request, but not for `heads`, and its
+    undoing a day later, another epoch, also one that a run took to no
+    app, which every app gets at the next run, `0C`, a page that moves
+    nothing, a put-back server with a removed device in again, lost
+    keys, an app that gives no answer, or answers `import` with another
+    cursor, more chunks on the server than a stream has, streams sent,
+    fetched, deleted and kept off a metered network, only the chunks the
+    server lacks, the order of ordinary and comparison batches, no batch
+    after a `05` for each app that got one, a full server that takes no
+    chunks either, an app whose transfer failed and is served at the
+    next run, an app whose courier call fails, which is left and not
+    recorded as served, a stream that could not be read, or ended early,
+    also on its second read, which is not called damaged, a pipe that
+    fails while a stream is fetched, a file request refused for CPU
+    time, which stops the reading of a large stream, a run stopped by
+    Android, also during a courier call or a file request, a Leave while
+    a run goes, which the run does not overwrite, and an app that pokes
+    each time it is served, whose job runs again.
   - `RunningJobsTest`: each job of the job service stops only its own
     run, also when Android starts a job again under the same ID.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
@@ -873,11 +874,12 @@ second build must write the same mapping file, or the release stops. See
     step and each answer of `info`, of the keeper and of `enrol`, also
     one that comes after the join was cancelled or started anew, a
     version refusal at the check of a sent `enrol`, the actions of
-    Devices and **Close the server**, the order of the rows of Devices,
-    the checks at each start, also the key of a removed phone and lost
-    keys found before a Leave, `poke` and `state`, the problems in their
-    order, and answers that come after a Leave, also of a second Leave,
-    which write nothing.
+    Devices and **Close the server**, also on a phone that is not
+    joined, a Remove with every removed ID that Sync keeps, the order of
+    the rows of Devices, the checks at each start, also the key of a
+    removed phone and lost keys found before a Leave, `poke` and
+    `state`, the problems in their order, and answers that come after a
+    Leave, also of a second Leave, which write nothing.
   - `SyncStateStoreTest` and `ServerAddressTest`: every stored value and
     its limits, one write for one step, and the address rules.
   - `SyncAndroidPartsTest`, under Robolectric: the courier provider's

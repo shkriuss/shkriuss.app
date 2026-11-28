@@ -133,6 +133,25 @@ class SyncDevicesTest {
     }
 
     @Test
+    fun aCloseOnAPhoneThatIsNotJoinedSetsNothingAndSendsNothing() {
+        joined()
+        store.update { it.copy(stage = Stage.STOPPED, stop = Stop.UPDATE_SERVER) }
+        server.requests.clear()
+        assertEquals(DeviceAnswer.Problem, devices.close())
+        assertFalse(store.now().closing)
+        assertEquals(emptyList<String>(), server.paths())
+    }
+
+    @Test
+    fun aRemoveWithEveryRemovedIdThatSyncKeepsIsAFault() {
+        joined()
+        store.update { it.copy(removed = (1..SyncState.MOST_REMOVED).map { number -> "%032x".format(number) }.toSet()) }
+        assertEquals(DeviceAnswer.Problem, devices.remove(syncId(0x77)))
+        assertTrue(store.now().fault)
+        assertEquals(SyncState.MOST_REMOVED, store.now().removed.size)
+    }
+
+    @Test
     fun aCloseWhoseAnswerWasLostEndsAtTheNext06() {
         joined()
         server.serverState = ServerState.CLOSED

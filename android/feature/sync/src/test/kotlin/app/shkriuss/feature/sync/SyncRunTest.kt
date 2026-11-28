@@ -839,4 +839,45 @@ class SyncRunTest {
         assertTrue(store.now().fault)
         assertEquals("the app is not told the stream is on the server", emptyList<Pair<String, Boolean>>(), water.sent)
     }
+
+    @Test
+    fun aRunStoppedWhileFilesAreSentTellsTheAppNothing() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 6 }
+        val fileId = id(0x44)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        var stopped = false
+        server.onRequest = { path -> if (path == "/v1/files/send") stopped = true }
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { stopped } })
+        assertTrue("the chunk went", server.paths().contains("/v1/files/send"))
+        assertEquals("no streamSent after the stop", emptyList<Pair<String, Boolean>>(), water.sent)
+    }
+
+    @Test
+    fun anAppWhoseFirstStatusOfTheDayFailedIsAskedAgainAtTheNextRun() {
+        joined()
+        water.failCalls += "status"
+        run()
+        water.failCalls.clear()
+        water.calls.clear()
+        clock.advanceBy(15 * 60 * 1000L)
+        run()
+        assertTrue("water is asked again", "status" in water.calls)
+        water.calls.clear()
+        clock.advanceBy(15 * 60 * 1000L)
+        run()
+        assertEquals("then the day's check is done", emptyList<String>(), water.calls)
+    }
+
+    @Test
+    fun aLackOfCpuTimeForHeadsEndsTheRunAndHalvesNothing() {
+        joined()
+        server.answerNext("/v1/heads", HttpResult.Answer(SyncServer.CPU_TIME_STATUS, ByteArray(0)))
+        assertEquals(RunEnd.ENDED, run())
+        assertEquals("one heads", 1, server.paths().count { it == "/v1/heads" })
+        assertEquals(0, store.now().halved)
+    }
 }

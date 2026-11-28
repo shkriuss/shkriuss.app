@@ -115,7 +115,11 @@ class SyncDevices(
         if (id == state.deviceId) return DeviceAnswer.Problem
         try {
             if (id.hex !in state.removed) {
-                if (state.removed.size >= SyncState.MOST_REMOVED) return DeviceAnswer.Problem
+                if (state.removed.size >= SyncState.MOST_REMOVED) {
+                    // More removed devices than Sync keeps: a fault, as for a list that shows more (spec, Problems).
+                    store.update { if (it.isSameDeviceAs(state)) it.copy(fault = true) else it }
+                    return DeviceAnswer.Problem
+                }
                 store.update { it.copy(removed = it.removed + id.hex) }
             }
         } catch (_: CouldNotSaveException) {
@@ -159,13 +163,18 @@ class SyncDevices(
      * stops for good with this server, and `closing` stays until the user
      * has read its dialog ([closeRead]).
      */
-    fun close(): DeviceAnswer<Unit> {
-        try {
-            store.update { it.copy(closing = true) }
-        } catch (_: CouldNotSaveException) {
-            return DeviceAnswer.NotSaved
+    fun close(): DeviceAnswer<Unit> = withSession { session ->
+        // `closing` and `account/delete` are both for the server of this one session, read once.
+        var marked = false
+        store.update {
+            if (it.isJoinedWith(session)) {
+                marked = true
+                it.copy(closing = true)
+            } else {
+                it
+            }
         }
-        return withSession<Unit> { session ->
+        if (marked) {
             when (val answer = server.deleteAccount(session)) {
                 is ServerAnswer.Done, ServerAnswer.Closed -> problems.stop(Stop.CLOSED, session)
                 else -> SyncRun.fail(answer)
