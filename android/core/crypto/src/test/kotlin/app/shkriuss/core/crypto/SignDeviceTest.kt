@@ -127,6 +127,9 @@ class SignDeviceTest {
         keeper.hardware.keystoreFails = true
         assertFalse("the Keystore cannot say now", keeper.open().setup.keepsNoRecoveryKey())
         keeper.hardware.keystoreFails = false
+        keeper.unreadable = setOf(KeysetName.RECOVERY)
+        assertFalse("Android cannot read the kept copy's file now", keeper.open().setup.keepsNoRecoveryKey())
+        keeper.unreadable = emptySet()
         keeper.hardware.removeScreenLock()
         assertTrue("the Recovery guard went with the screen lock", keeper.open().setup.keepsNoRecoveryKey())
     }

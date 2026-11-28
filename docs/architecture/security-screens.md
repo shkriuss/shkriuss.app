@@ -188,9 +188,10 @@ The keeper's side, `HandoverActivity` and `HandoverViewModel`:
    gives `NOT_KEEPER`. So does a kept copy that is damaged when the
    prompt runs (`closingRefusal`). The screen sets that result as soon
    as it shows, so Back gives it too. "Does not keep the key" needs
-   certainty (`KeySetup.keepsNoRecoveryKey`): no kept copy, or its
-   Recovery guard is gone. When the Keystore cannot say at **Allow**,
-   the screen says "try again in a moment" and gives no reason. The asking app then says so: "Get
+   certainty (`KeySetup.keepsNoRecoveryKey`): Android says there is no
+   kept copy, or its Recovery guard is gone. When Android or the
+   Keystore cannot say at **Allow**, the screen says "try again in a
+   moment" and gives no reason. The asking app then says so: "Get
    the keys" tells the user to enter the words instead, and the check of
    the words for the app lock asks for all 24.
 7. **Do not allow**, or leaving the screen, gives a cancelled result

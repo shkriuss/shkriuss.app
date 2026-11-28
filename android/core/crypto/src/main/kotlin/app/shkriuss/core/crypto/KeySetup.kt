@@ -309,13 +309,16 @@ class KeySetup internal constructor(private val vault: KeyVault) {
 
     /**
      * True only if it is certain that this app does not keep the recovery
-     * key now: no kept copy is stored, or its Recovery guard is gone. False
-     * when the Keystore cannot say now, so that a handover screen asks to
-     * try again instead of saying that the key is not kept.
+     * key now: Android says that no kept copy is stored, or its Recovery
+     * guard is gone. False when Android or the Keystore cannot say now, so
+     * that a handover screen asks to try again instead of saying that the
+     * key is not kept.
      */
     fun keepsNoRecoveryKey(): Boolean = vault.locked {
         when (vault.look(KeysetName.RECOVERY)) {
-            is Stored.Missing, is Stored.KeyGone -> true
+            // A file that cannot be read now also looks missing: only Android's certain answer counts.
+            is Stored.Missing -> vault.isMissing(KeysetName.RECOVERY)
+            is Stored.KeyGone -> true
             else -> false
         }
     }
