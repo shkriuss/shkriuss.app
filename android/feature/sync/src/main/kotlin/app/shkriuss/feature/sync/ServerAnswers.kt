@@ -168,7 +168,7 @@ internal object ServerLayouts {
                 0x02 -> ServerAnswer.NotADevice
                 0x03 -> ServerAnswer.Removed
                 0x04 -> ServerAnswer.DoesNotCheck
-                0x05 -> ServerAnswer.Clock(reader.i64())
+                0x05 -> ServerAnswer.Clock(reader.i64().also { if (!isTime(it)) return ServerAnswer.Broken })
                 0x06 -> ServerAnswer.Closed
                 0x07 -> when (reader.u8()) {
                     1 -> ServerAnswer.DayLimit(comparisonsOnly = true)
@@ -193,6 +193,7 @@ internal object ServerLayouts {
         val highest = reader.u8()
         val serverId = SyncId(reader.bytes(ID_BYTES))
         val clock = reader.i64()
+        if (!isTime(clock)) return null
         val state = reader.u8().let { code -> ServerState.entries.firstOrNull { it.code == code } } ?: return null
         val limits = Limits.nearest(reader.u32(), reader.u32(), reader.u32())
         return ServerInfo(lowest, highest, serverId, clock, state, limits)
@@ -220,7 +221,7 @@ internal object ServerLayouts {
     fun deviceCode(reader: Reader): DeviceCode? {
         val code = String(reader.bytes(DEVICE_CODE_LENGTH), Charsets.US_ASCII)
         if (!code.all { it in SyncState.CODE_ALPHABET }) return null
-        return DeviceCode(code, reader.i64())
+        return DeviceCode(code, reader.i64().takeIf(::isTime) ?: return null)
     }
 
     fun devices(reader: Reader): List<ListedDevice>? {
@@ -314,7 +315,9 @@ internal object ServerLayouts {
     /** The page of a fetch: the whole answer, which [Page.read] reads from its byte `00` on. */
     fun page(bytes: ByteArray): ServerAnswer<FetchedPage> {
         if (bytes.isNotEmpty() && bytes[0].toInt() == DONE) {
-            return Page.read(bytes)?.let { ServerAnswer.Done(FetchedPage(bytes, it)) } ?: ServerAnswer.Broken
+            // A cut page ends at its last record: Through is that record's number (sync-protocol.md, "Fetch", point 2).
+            return Page.read(bytes)?.takeIf { !it.more || it.records.lastOrNull()?.number == it.through }
+                ?.let { ServerAnswer.Done(FetchedPage(bytes, it)) } ?: ServerAnswer.Broken
         }
         return answer(bytes) { null }
     }
@@ -322,7 +325,10 @@ internal object ServerLayouts {
     /** The answer to a batch of [count] records: the whole answer, which [SendAnswer.read] reads from its byte `00` on. */
     fun sent(bytes: ByteArray, count: Int): ServerAnswer<SentBatch> {
         if (bytes.isNotEmpty() && bytes[0].toInt() == DONE) {
-            return SendAnswer.read(bytes, count)?.let { ServerAnswer.Done(SentBatch(bytes, it)) } ?: ServerAnswer.Broken
+            // The head after is the number of the last record stored, or the head before when none was ("Send", point 3).
+            return SendAnswer.read(bytes, count)
+                ?.takeIf { answer -> answer.headAfter == (answer.outcomes.lastOrNull { it.result.hasNumber }?.number ?: answer.headBefore) }
+                ?.let { ServerAnswer.Done(SentBatch(bytes, it)) } ?: ServerAnswer.Broken
         }
         return answer(bytes) { null }
     }

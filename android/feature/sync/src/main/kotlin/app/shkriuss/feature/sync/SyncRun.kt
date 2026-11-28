@@ -227,6 +227,7 @@ class SyncRun(
                 info.lowest > ServerInfo.VERSION -> throw EndRun(Reason.Stopped(Stop.UPDATE_SYNC))
                 info.highest < ServerInfo.VERSION -> throw EndRun(Reason.Stopped(Stop.UPDATE_SERVER))
             }
+            passed()
             write { it.copy(limits = info.limits, infoAt = clock.nowMillis()) }
         }
 
@@ -351,6 +352,8 @@ class SyncRun(
                 when (val imported = couriers.import(app, context, fetched.bytes)) {
                     is CourierAnswer.Done -> when (val result = imported.value) {
                         is Imported.Taken -> {
+                            // A page that is taken moves the cursor to its Through: any other answer is a failed call.
+                            if (result.cursor != fetched.page.through) return false
                             cursor = result.cursor
                             known = maxOf(known, fetched.page.through, cursor)
                         }
@@ -490,7 +493,9 @@ class SyncRun(
                 streams.zip(have).forEach { (stream, chunksThere) ->
                     checkStop()
                     val chunks = chunkCount(stream.length)
-                    val first = minOf(chunksThere, chunks.toLong()).toInt()
+                    // More chunks than the stream has is no answer the server can give.
+                    if (chunksThere > chunks) throw EndRun(Reason.Fault)
+                    val first = chunksThere.toInt()
                     done += minOf(stream.length, first.toLong() * CHUNK_BYTES)
                     show()
                     if (first == chunks) {

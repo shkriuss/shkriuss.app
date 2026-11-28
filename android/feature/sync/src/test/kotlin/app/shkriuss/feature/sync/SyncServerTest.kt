@@ -43,7 +43,7 @@ class SyncServerTest {
         assertEquals(ServerAnswer.NotADevice, read(0x02))
         assertEquals(ServerAnswer.Removed, read(0x03))
         assertEquals(ServerAnswer.DoesNotCheck, read(0x04))
-        assertEquals(ServerAnswer.Clock(0x0102030405060708), read(0x05, 1, 2, 3, 4, 5, 6, 7, 8))
+        assertEquals(ServerAnswer.Clock(1_700_000_000_000), read(0x05, 0, 0, 1, 0x8b, 0xcf, 0xe5, 0x68, 0))
         assertEquals(ServerAnswer.Closed, read(0x06))
         assertEquals(ServerAnswer.DayLimit(comparisonsOnly = true), read(0x07, 1))
         assertEquals(ServerAnswer.DayLimit(comparisonsOnly = false), read(0x07, 2))
@@ -67,6 +67,40 @@ class SyncServerTest {
             intArrayOf(0x0a, 1, 2, 3),
             intArrayOf(0x00, 1),
         ).forEach { assertEquals(it.joinToString(), ServerAnswer.Broken, read(*it)) }
+    }
+
+    @Test
+    fun aTimeOutsideItsLimitsBreaksTheAnswer() {
+        fun read(vararg bytes: Int) = ServerLayouts.answer(ByteArray(bytes.size) { bytes[it].toByte() }) { Unit }
+        assertEquals("a clock after 9999", ServerAnswer.Broken, read(0x05, 1, 2, 3, 4, 5, 6, 7, 8))
+        assertEquals("a clock below 0", ServerAnswer.Broken, read(0x05, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff))
+        answer(Bytes().u8(0).u8(1).u8(1).bytes(id(1)).i64(-1).u8(1).i32(100).i32(524_288).i32(256).done())
+        assertEquals("info's clock below 0", ServerAnswer.Broken, server.info("https://sync.example.workers.dev"))
+        answer(Bytes().u8(0).bytes("ABCD2345".toByteArray()).i64(clock.nowMillis + 60_000).done())
+        assertTrue(server.enrolCode(session) is ServerAnswer.Done)
+        answer(Bytes().u8(0).bytes("ABCD2345".toByteArray()).i64(-1).done())
+        assertEquals("a device code that ends before 1970", ServerAnswer.Broken, server.enrolCode(session))
+    }
+
+    @Test
+    fun aCutPageEndsAtItsLastRecordAndABatchAnswerEndsAtItsLastStoredRecord() {
+        val record = Bytes().bytes(id(5)).i64(6).i32(60).bytes(blob(KeyId(1), 1)).done()
+        fun page(through: Long, more: Int, records: Int) =
+            Bytes().u8(0).bytes(id(2)).i64(4).i64(through).u8(more).i32(records).bytes(if (records == 1) record else ByteArray(0)).done()
+        assertTrue(ServerLayouts.page(page(6, 1, 1)) is ServerAnswer.Done)
+        assertTrue("a whole page ends at the head", ServerLayouts.page(page(8, 0, 1)) is ServerAnswer.Done)
+        assertEquals("a cut page whose Through is above its last record", ServerAnswer.Broken, ServerLayouts.page(page(8, 1, 1)))
+        assertEquals("a cut page with no record", ServerAnswer.Broken, ServerLayouts.page(page(8, 1, 0)))
+
+        fun sent(after: Long, vararg numbers: Long?): ByteArray {
+            val out = Bytes().u8(0).bytes(id(2)).i64(4).i64(after).i32(numbers.size)
+            numbers.forEach { number -> if (number == null) out.u8(1) else out.u8(0).i64(number) }
+            return out.done()
+        }
+        assertTrue(ServerLayouts.sent(sent(9, 7, 9), 2) is ServerAnswer.Done)
+        assertTrue("nothing stored, the head stays", ServerLayouts.sent(sent(4, null), 1) is ServerAnswer.Done)
+        assertEquals("a head after above the last record stored", ServerAnswer.Broken, ServerLayouts.sent(sent(12, 7, 9), 2))
+        assertEquals("a head that moved with nothing stored", ServerAnswer.Broken, ServerLayouts.sent(sent(5, null), 1))
     }
 
     @Test

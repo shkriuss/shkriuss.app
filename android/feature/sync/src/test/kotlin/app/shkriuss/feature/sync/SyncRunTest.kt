@@ -798,4 +798,45 @@ class SyncRunTest {
         assertEquals("not recorded as served", goodAt, store.now().app("water").goodAt)
         assertEquals("no status after the streams", 1, water.calls.count { it == "status" })
     }
+
+    @Test
+    fun infoThatPassesClearsAFaultAlsoWhenHeadsThenFails() {
+        joined()
+        store.update { it.copy(fault = true, clockOff = 7 * 60_000L) }
+        clock.advanceBy(SyncRun.DAY_MILLIS)
+        server.answerNext("/v1/heads", HttpResult.NoAnswer)
+        assertEquals(RunEnd.ENDED, run())
+        assertTrue("info was read", server.paths().contains("/v1/info"))
+        assertFalse(store.now().fault)
+        assertNull(store.now().clockOff)
+    }
+
+    @Test
+    fun anAppWhoseImportAnswersAnotherCursorIsNotRecordedAsServed() {
+        joined()
+        run()
+        storeOnServer("water", 1, 2, 3)
+        water.cursorBehind = true
+        run()
+        assertEquals("its head is not taken", 0, store.now().app("water").head)
+        water.cursorBehind = false
+        water.cursor = 0
+        run()
+        assertEquals(3, store.now().app("water").head)
+    }
+
+    @Test
+    fun moreChunksOnTheServerThanAStreamHasIsAFault() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 5 }
+        val fileId = id(0x43)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.answerNext("/v1/files/have", HttpResult.Answer(200, Bytes().u8(0).i32(2).done()))
+        assertEquals(RunEnd.ENDED, run())
+        assertTrue(store.now().fault)
+        assertEquals("the app is not told the stream is on the server", emptyList<Pair<String, Boolean>>(), water.sent)
+    }
 }

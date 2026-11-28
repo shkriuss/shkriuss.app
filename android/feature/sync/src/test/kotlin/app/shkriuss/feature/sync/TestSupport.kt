@@ -394,6 +394,9 @@ internal class FakeDataApp(val name: String) {
     /** How many bytes of its stored streams were read through `readStream`. */
     var bytesRead = 0L
 
+    /** True when `import` takes a page but answers a cursor below its Through, which breaks the courier contract. */
+    var cursorBehind = false
+
     /** True when the pipes that `writeStream` gives fail, as when the app's process ends. */
     var failWrites = false
 
@@ -465,7 +468,7 @@ internal class FakeDataApp(val name: String) {
         val read = Page.read(page) ?: return Imported.Dropped
         if (dropPages || read.epoch != epoch || read.since != cursor) return Imported.Dropped
         read.records.forEach { taken += it.id }
-        cursor = read.through
+        cursor = if (cursorBehind) read.through - 1 else read.through
         known = maxOf(known, read.through)
         return Imported.Taken(read.records.size, cursor)
     }
