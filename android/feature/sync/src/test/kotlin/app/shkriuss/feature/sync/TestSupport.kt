@@ -197,6 +197,9 @@ internal class FakeServer(private val clock: TestClock, val address: String = "h
     val requests = mutableListOf<HttpRequest>()
     var unreachable = false
 
+    /** True for a server that gives a page of up to 100 records, whatever a fetch asks for. */
+    var ignoresMost = false
+
     /** Runs before the server answers a request, with its path: a test makes the user act while the request is on its way. */
     var onRequest: (String) -> Unit = {}
 
@@ -330,7 +333,7 @@ internal class FakeServer(private val clock: TestClock, val address: String = "h
         val app = query.getValue("app")
         if (query.getValue("epoch") != epoch.hex) return Bytes().u8(0x0b).bytes(epoch.toBytes()).done()
         val since = query.getValue("since").toLong()
-        val most = query.getValue("most").toInt()
+        val most = if (ignoresMost) 100 else query.getValue("most").toInt()
         val above = records[app].orEmpty().filter { it.number > since }.sortedBy { it.number }
         val taken = above.take(most)
         val head = heads[app] ?: 0

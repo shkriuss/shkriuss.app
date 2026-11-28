@@ -1007,4 +1007,65 @@ class SyncRunTest {
         assertEquals(1, store.now().halved)
         assertEquals(0, store.now().failedRuns)
     }
+
+    @Test
+    fun aPageOfMoreRecordsThanTheFetchAskedForIsAFault() {
+        joined()
+        run()
+        store.update { it.copy(limits = Limits(2, 524_288, 256)) }
+        storeOnServer("water", 1, 2, 3)
+        server.ignoresMost = true
+        run()
+        assertTrue(store.now().fault)
+        assertTrue("the page is not imported", water.taken.isEmpty())
+    }
+
+    @Test
+    fun aPageOfRecordsOverTheByteLimitOfInfoIsAFaultButOneRecordAloneIsTaken() {
+        joined()
+        run()
+        store.update { it.copy(limits = Limits(100, 65_536, 256)) }
+        server.records.getOrPut("water") { mutableListOf() } += FakeRecord(id(1), 1, blob(server.keyId, 1, 70_000))
+        server.heads["water"] = 1
+        run()
+        assertFalse(store.now().fault)
+        assertEquals(1, water.taken.size)
+
+        server.records.getValue("water") += listOf(FakeRecord(id(2), 2, blob(server.keyId, 2, 40_000)), FakeRecord(id(3), 3, blob(server.keyId, 3, 40_000)))
+        server.heads["water"] = 3
+        run()
+        assertTrue(store.now().fault)
+        assertEquals("the page is not imported", 1, water.taken.size)
+    }
+
+    @Test
+    fun aFileRequestRefusedAsTooMuchHalvesItsItemsWhenOnlyTheRecordLimitFell() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 9 }
+        val fileId = id(0x49)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.refuseNext("/v1/files/have", 0x0c)
+        server.limits = Triple(10L, 524_288L, 256L)
+        run()
+        assertEquals(Limits(10, 524_288, 256), store.now().limits)
+        assertEquals(1, store.now().halved)
+        assertEquals(0, store.now().failedRuns)
+    }
+
+    @Test
+    fun aFetchRefusedAsTooMuchIsHalvedWhenOnlyTheItemLimitFell() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        server.refuseNext("/v1/changes", 0x0c)
+        server.limits = Triple(100L, 524_288L, 16L)
+        server.requests.clear()
+        run()
+        assertEquals(1, store.now().halved)
+        val fetches = server.requests.filter { it.url.contains("/v1/changes") }.map { it.url.substringAfter("most=") }
+        assertEquals(listOf("100", "50"), fetches)
+    }
 }

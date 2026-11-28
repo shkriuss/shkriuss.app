@@ -369,13 +369,15 @@ class SyncRun(
             progress.value = RunProgress(name, if (status.comparison == ComparisonState.NONE) RunStep.FETCHING else RunStep.COMPARING)
             while (true) {
                 checkStop()
-                val fetched = when (val answer = retrying { server.fetch(session, name, cursor, known, context.epoch, mostRecords()) }) {
+                var asked = 0
+                val fetched = when (val answer = retrying { server.fetch(session, name, cursor, known, context.epoch, mostRecords().also { asked = it }) }) {
                     is ServerAnswer.Done -> answer.value
                     is ServerAnswer.OtherEpoch -> throw EpochMoved(answer.epoch)
                     else -> fail(answer)
                 }
                 passed()
                 if (fetched.page.since != cursor || fetched.page.epoch != context.epoch) throw EndRun(Reason.Fault)
+                if (!withinLimits(fetched, asked)) throw EndRun(Reason.Fault)
                 // A page that says more wait, and moves nothing forward, would be fetched again and again.
                 if (fetched.page.more && fetched.page.through <= cursor) throw EndRun(Reason.Fault)
                 when (val imported = courier().import(app, context, fetched.bytes)) {
@@ -392,6 +394,18 @@ class SyncRun(
                 }
                 if (!fetched.page.more) return true
             }
+        }
+
+        /**
+         * Whether a page keeps the limits of its request: at most the [asked]
+         * records, and more than one record only within the byte limit of
+         * `info`. A page that breaks one is a fault (spec, Problems).
+         */
+        private fun withinLimits(fetched: FetchedPage, asked: Int): Boolean {
+            val records = fetched.page.records
+            if (records.size > asked) return false
+            val bytes = store.now().limits?.bytes ?: Limits.BYTES.last
+            return records.size <= 1 || records.sumOf { it.blob.size.toLong() } <= bytes
         }
 
         /** Sends batches of [comparison] records until the app has none. False when the app is left for this run. */
@@ -749,12 +763,18 @@ class SyncRun(
             else -> fail(answer)
         }
 
-        /** After `0C`: `info` again, and if its limits are not lower, a halving of what the request carries. */
+        /**
+         * After `0C`: `info` again, and if the limit of what the request
+         * carries is not lower, a halving of it. A file request carries
+         * items; batches and pages carry records and bytes.
+         */
         private fun lessAfterTooMuch(files: Boolean = false): Boolean {
             val before = store.now().limits
             readInfo()
             val after = store.now().limits
-            return if (after != null && before != null && (after.records < before.records || after.bytes < before.bytes || after.fileItems < before.fileItems)) true else halve(files)
+            val lower = after != null && before != null &&
+                if (files) after.fileItems < before.fileItems else after.records < before.records || after.bytes < before.bytes
+            return lower || halve(files)
         }
 
         /** [call], made again after a lack of CPU time with half as much, and after `0C` with the limits of a new `info`. */
