@@ -133,6 +133,15 @@ class SyncDevicesTest {
     }
 
     @Test
+    fun aDeviceRequestThatPassesClearsTheFaultAndTheClock() {
+        joined()
+        store.update { it.copy(fault = true, clockOff = 7 * 60_000L) }
+        assertTrue(devices.deviceCode() is DeviceAnswer.Done)
+        assertFalse(store.now().fault)
+        assertNull(store.now().clockOff)
+    }
+
+    @Test
     fun aCloseOnAPhoneThatIsNotJoinedSetsNothingAndSendsNothing() {
         joined()
         store.update { it.copy(stage = Stage.STOPPED, stop = Stop.UPDATE_SERVER) }

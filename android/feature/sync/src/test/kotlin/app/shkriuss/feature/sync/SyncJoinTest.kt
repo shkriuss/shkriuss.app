@@ -387,4 +387,39 @@ class SyncJoinTest {
         assertEquals(SyncState(), store.now())
         assertNull("the key is gone", keys.sync.crypto.sync.deviceKey(1))
     }
+
+    @Test
+    fun aCheckOfASentEnrolThatTheServerRefusesTwiceSaysSo() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val request = requestFor()
+        server.unreachable = true
+        join.takeSignedJoin(keys.sign(request, clock.nowMillis), request, "ABCD2345")
+        server.unreachable = false
+        server.refuseNext("/v1/heads", 0x04)
+        server.refuseNext("/v1/heads", 0x04)
+        assertEquals(EnrolStep.Refused, join.checkSentEnrol())
+    }
+
+    @Test
+    fun aTryAgainOfAnEarlierJoinChangesNothingInTheNewOne() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val older = requestFor()
+        val signedOlder = keys.sign(older, clock.nowMillis)
+        server.unreachable = true
+        join.takeSignedJoin(signedOlder, older, "ABCD2345")
+        server.unreachable = false
+        // That step 7 stays open while the user cancels and joins again, with a new key.
+        join.cancel()
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val newer = requestFor()
+        assertTrue(join.takeSignedJoin(keys.sign(newer, clock.nowMillis), newer, "ABCD2345") is EnrolStep.Joined)
+        val joined = store.now()
+        assertEquals(EnrolStep.Changed, join.enrolAgain(signedOlder, "ABCD2345"))
+        clock.advanceBy(SyncJoin.STATEMENT_LIFE_MILLIS + 1)
+        assertEquals("also when its statement is too old", EnrolStep.Changed, join.enrolAgain(signedOlder, "ABCD2345"))
+        assertEquals(joined, store.now())
+    }
 }

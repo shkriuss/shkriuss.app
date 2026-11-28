@@ -209,7 +209,10 @@ class SyncDevices(
                 problems.stop(Stop.KEYS_GONE, onlyIf = { it.isSameDeviceAs(state) })
                 return DeviceAnswer.Problem
             }
-            DeviceAnswer.Done(action(session))
+            val done = action(session)
+            // A request passed: the fault and the clock no longer hold (spec, Problems).
+            store.update { if (it.isJoinedWith(session) && (it.fault || it.clockOff != null)) it.copy(fault = false, clockOff = null) else it }
+            DeviceAnswer.Done(done)
         } catch (end: EndRun) {
             if (end.reason == Reason.Unreachable) return DeviceAnswer.Unreachable
             try {

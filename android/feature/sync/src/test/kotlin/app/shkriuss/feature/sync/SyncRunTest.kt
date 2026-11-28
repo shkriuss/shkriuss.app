@@ -905,4 +905,16 @@ class SyncRunTest {
         run(asked = true)
         assertTrue("still full", store.now().full)
     }
+
+    @Test
+    fun anAppWhoseFirstStatusOfTheDayNamedAnotherVersionIsAskedAgain() {
+        joined()
+        water.courierVersion = 2
+        run()
+        water.courierVersion = 1
+        water.calls.clear()
+        clock.advanceBy(15 * 60 * 1000L)
+        run()
+        assertTrue("water is asked again", "status" in water.calls)
+    }
 }

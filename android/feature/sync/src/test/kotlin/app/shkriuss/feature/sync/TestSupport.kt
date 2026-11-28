@@ -401,6 +401,9 @@ internal class FakeDataApp(val name: String) {
     /** How many bytes of its stored streams were read through `readStream`. */
     var bytesRead = 0L
 
+    /** The courier version its `status` names. */
+    var courierVersion = 1
+
     /** True when `export` gives a batch of the other kind than asked, which breaks the courier contract. */
     var otherKind = false
 
@@ -427,7 +430,7 @@ internal class FakeDataApp(val name: String) {
             known = 0
         }
         return SyncStatus(
-            courierVersion = 1,
+            courierVersion = courierVersion,
             dataVersion = 1,
             isOn = on,
             canSyncNow = canSync,

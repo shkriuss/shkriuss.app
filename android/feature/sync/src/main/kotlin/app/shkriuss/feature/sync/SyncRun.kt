@@ -334,7 +334,10 @@ class SyncRun(
 
         /** The app's `status`, or null when it gave none or refused: then it is left for this run. Sync off is recorded. */
         private fun statusOf(app: CourierApp, context: CourierContext): SyncStatus? = when (val answer = courier().status(app, context)) {
-            is CourierAnswer.Done -> answer.value.takeIf { it.courierVersion == ServerInfo.VERSION }
+            is CourierAnswer.Done -> answer.value.takeIf { it.courierVersion == ServerInfo.VERSION } ?: run {
+                everyStatus = false
+                null
+            }
             is CourierAnswer.Refused -> {
                 if (answer.refusal == Refusal.OFF) {
                     write { state -> state.withApp(app.name.value) { it.copy(on = false, work = false) } }

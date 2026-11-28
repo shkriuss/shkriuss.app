@@ -295,10 +295,38 @@ class SyncJoin(
 
     /** **Try again** at step 7: the same `enrol`, or back to step 6 when the statement is older than 10 minutes. */
     fun enrolAgain(signed: SignedJoin, code: String): EnrolStep {
+        val state = store.now()
+        // Only for the join this statement was signed for: a step 7 left open from an earlier join changes nothing.
+        when (isSignedFor(state, signed)) {
+            null -> return EnrolStep.NotSaved
+            false -> return EnrolStep.Changed
+            true -> Unit
+        }
         if (clock.nowMillis() - signed.time > STATEMENT_LIFE_MILLIS) {
-            return if (saved { store.update { it.copy(stage = Stage.JOINING) } }) EnrolStep.TooOld else EnrolStep.NotSaved
+            return when (applyTo(JoinMark.of(state)) { it.copy(stage = Stage.JOINING) }) {
+                true -> EnrolStep.TooOld
+                false -> EnrolStep.Changed
+                null -> EnrolStep.NotSaved
+            }
         }
         return enrol(signed, code)
+    }
+
+    /**
+     * True when [state] is at `stage` 2 with the join that [signed] was
+     * signed for: its server, address and device key. A join whose key is
+     * gone counts, so that `enrol` sends it back to step 6. Null when the
+     * Keystore cannot be used now.
+     */
+    private fun isSignedFor(state: SyncState, signed: SignedJoin): Boolean? {
+        if (state.stage != Stage.ENROL_SENT) return false
+        val session = try {
+            sessionOrNull(state)
+        } catch (_: BlobException) {
+            return null
+        } ?: return true
+        val request = DeviceJoinRequest.of(session.serverId.toBytes(), session.address, session.key.publicKey, null) ?: return false
+        return signed.isFor(request)
     }
 
     private fun enrol(signed: SignedJoin, code: String): EnrolStep {
@@ -368,6 +396,7 @@ class SyncJoin(
             // The server answered: the lines of step 2, as for `enrol`.
             is ServerAnswer.Version -> EnrolStep.Line(if (answer.lowest > ServerInfo.VERSION) AddressStep.UpdateSync else AddressStep.UpdateServer)
             ServerAnswer.UntrustedCertificate -> EnrolStep.Line(AddressStep.Untrusted)
+            ServerAnswer.DoesNotCheck -> EnrolStep.Refused
             else -> EnrolStep.Unreachable
         }
     }
