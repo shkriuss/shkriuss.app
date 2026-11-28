@@ -340,6 +340,28 @@ class SyncRunTest {
     }
 
     @Test
+    fun thePutBackLineWaitsForAListReadAfterThePutBackWasFound() {
+        joined()
+        server.revision = 5
+        run()
+        assertNotNull(store.now().devicesAt)
+        val sync = keys.sync.crypto.sync
+        val devices = SyncDevices(store, SyncServer(server, sync, clock), sync, scheduler, ProblemWriter(store, sync, scheduler, clock), clock)
+
+        // The put-back is found, and the list that `heads` asks for gets no answer.
+        server.revision = 3
+        server.answerNext("/v1/devices", HttpResult.NoAnswer)
+        run()
+        assertTrue(store.now().putBack)
+        devices.putBackSeen()
+        assertTrue("only a list read before the put-back was found", store.now().putBack)
+
+        assertTrue(devices.list("?") is DeviceAnswer.Done)
+        devices.putBackSeen()
+        assertFalse(store.now().putBack)
+    }
+
+    @Test
     fun lostKeysStopSync() {
         joined()
         keys.sync.crypto.sync.deleteNameKey()
@@ -1054,6 +1076,27 @@ class SyncRunTest {
         run()
         assertEquals(2, server.paths().count { it == "/v1/files/have" })
         assertFalse("the first file request passed after the fault", store.now().fault)
+    }
+
+    @Test
+    fun aStreamThatCouldNotBeReadLeavesTheAppBeforeTheChunksOfAnEarlierOneGo() {
+        joined()
+        run()
+        val first = ByteArray(10) { 3 }
+        val second = ByteArray(10) { 4 }
+        water.stored[hex(id(0x4d))] = first
+        water.stored[hex(id(0x4e))] = second
+        water.streams = listOf(
+            ListedStream(StreamWork.SEND, uuid(id(0x4d)), sha256(first), 10, 0, 0),
+            ListedStream(StreamWork.SEND, uuid(id(0x4e)), sha256(second), 10, 0, 0),
+        )
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        // The first stream is checked and read into the next request; the check of the second ends early.
+        water.cutRead = 3
+        server.requests.clear()
+        run()
+        assertFalse("/v1/files/send" in server.paths())
+        assertTrue("no call after the one that failed", water.sent.isEmpty())
     }
 
     @Test

@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 191 tests. They use real keys
+- `feature/sync` has 9 test classes with 193 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -856,8 +856,8 @@ second build must write the same mapping file, or the release stops. See
     gets too, also after a run that ended at the list of devices, `0C`,
     which asks for less of what the refused request carries, a page that
     moves nothing, or holds more records than asked or more bytes than
-    `info` names, a put-back server with a removed device in again, lost
-    keys, an app that gives no answer, or answers `import` with another
+    `info` names, a put-back server with a removed device in again,
+    whose line waits for a list read after it was found, lost keys, an app that gives no answer, or answers `import` with another
     cursor, more chunks on the server than a stream has, streams sent,
     fetched, deleted and kept off a metered network, only the chunks the
     server lacks, the order of ordinary and comparison batches, no batch
@@ -869,8 +869,8 @@ second build must write the same mapping file, or the release stops. See
     not count as served, and one after a changed cursor, which fetches
     nothing, as one that cannot sync does, an app whose transfer failed
     and is served at the next run, an app whose courier call fails,
-    which is left and not recorded as served, a stream that could not be
-    read, or ended early, also on its second read, which is not called
+    which is left and not recorded as served, and gets no more chunks
+    sent, a stream that could not be read, or ended early, also on its second read, which is not called
     damaged, a stream longer than listed, whose check reads one byte
     past its length, or longer than its chunks can be numbered, a stream
     that changed after its check, also in a chunk the server has, or

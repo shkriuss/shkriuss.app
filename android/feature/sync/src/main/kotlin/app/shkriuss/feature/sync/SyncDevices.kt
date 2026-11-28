@@ -200,7 +200,11 @@ class SyncDevices(
         store.update { it.copy(closing = false) }
     }
 
-    /** Devices shows a list read after the put-back was found: its line no longer waits. */
+    /**
+     * Devices shows a list read after the put-back was found: its line no
+     * longer waits. A run that finds a put-back clears `devicesAt`, so a
+     * list read before it does not count.
+     */
     fun putBackSeen() {
         val state = store.now()
         if (state.putBack && state.devicesAt != null) store.update { it.copy(putBack = false) }

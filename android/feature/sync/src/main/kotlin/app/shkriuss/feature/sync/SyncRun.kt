@@ -267,7 +267,8 @@ class SyncRun(
             this.heads = heads
             val state = store.now()
             val putBack = heads.revision < state.revision
-            if (putBack) write { it.copy(putBack = true) }
+            // A list read before the put-back was found does not count: Devices must show one read after it.
+            if (putBack) write { it.copy(putBack = true, devicesAt = null) }
             if (heads.revision != state.revision || !sameUtcDay(state.devicesAt, clock.nowMillis())) {
                 DeviceList(store, server, clock).read(session, heads.revision, ::checkStop)
             }
@@ -577,6 +578,8 @@ class SyncRun(
                 total = streams.sumOf { it.length }
                 streams.zip(have).forEach { (stream, chunksThere) ->
                     checkStop()
+                    // A courier call that failed left the app for the run: no more calls to it, and no more chunks of it.
+                    if (appLeft) return@forEach
                     val chunks = chunkCount(stream.length)
                     // More chunks than the stream has is no answer the server can give.
                     if (chunksThere > chunks) throw EndRun(Reason.Fault)
@@ -588,7 +591,7 @@ class SyncRun(
                         sent(stream)
                         return@forEach
                     }
-                    if (appLeft || stopped || filesStopped || !filesMayMove()) return@forEach
+                    if (stopped || filesStopped || !filesMayMove()) return@forEach
                     // Damaged bytes never go to the server under the name of the good stream. A stream that could not
                     // be read at all is no proof of that: the app is left for this run, and nothing is said about it.
                     when (hashOf(stream)) {
@@ -695,7 +698,7 @@ class SyncRun(
             }
 
             private fun flush() {
-                if (pending.isEmpty() || stopped || filesStopped) return
+                if (pending.isEmpty() || stopped || filesStopped || appLeft) return
                 checkStop()
                 if (!filesMayMove()) {
                     // The network turned metered: no more chunks in this run.
@@ -720,7 +723,7 @@ class SyncRun(
                     done += chunk.bytes.size
                     val remaining = (left[key] ?: 0) - 1
                     left[key] = remaining
-                    if (remaining == 0 && key !in failed) byId[key]?.let(::sent)
+                    if (remaining == 0 && key !in failed && !appLeft) byId[key]?.let(::sent)
                 }
                 show()
             }
