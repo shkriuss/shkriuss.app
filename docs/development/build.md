@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 189 tests. They use real keys
+- `feature/sync` has 9 test classes with 190 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -847,7 +847,8 @@ second build must write the same mapping file, or the release stops. See
     next batch, a full server, the day's limits, every answer that stops
     sync, the fault and the clock, which `info` clears too, three failed
     runs and the 4-hour wait, halving for CPU time, also on a file
-    request, also when one record is the limit, but not for `heads`, and
+    request, also when one record is the limit, eight times to take 256
+    file items down to one, but not for `heads`, and
     its undoing a day later, another epoch, also one that a run took to
     no app, which every app gets at the next run, also one that Sync
     could not call then, a new key ID of the server, which every app

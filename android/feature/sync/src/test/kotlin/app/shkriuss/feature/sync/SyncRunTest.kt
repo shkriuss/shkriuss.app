@@ -1011,6 +1011,24 @@ class SyncRunTest {
     }
 
     @Test
+    fun anEighthHalvingTakesAFileRequestOf256ItemsDownToOne() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 9 }
+        val fileId = id(0x4a)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        store.update { state ->
+            state.copy(limits = Limits(1, 524_288, 256), halved = 7, halvedAt = clock.nowMillis).withApp("water") { it.copy(poked = true) }
+        }
+        server.answerNext("/v1/files/have", HttpResult.Answer(SyncServer.CPU_TIME_STATUS, ByteArray(0)))
+        run()
+        assertEquals(8, store.now().halved)
+        assertEquals(0, store.now().failedRuns)
+        assertFalse(store.now().fault)
+    }
+
+    @Test
     fun aPageOfMoreRecordsThanTheFetchAskedForIsAFault() {
         joined()
         run()

@@ -128,7 +128,7 @@ data class SyncState(
     /** The account revision last seen. */
     val revision: Long = 0,
     val limits: Limits? = null,
-    /** How often requests were halved for CPU time, 0 to 7, and when it was last changed. */
+    /** How often requests were halved for CPU time, 0 to 8, and when it was last changed. */
     val halved: Int = 0,
     val halvedAt: Long? = null,
     /** The number of the device key's alias, `shk.device.<number>`. */
@@ -172,7 +172,7 @@ data class SyncState(
         require((stop != null) == (stage == Stage.STOPPED)) { "A stop is set exactly when sync stopped" }
         require(address == null || SyncAddress.isValid(address)) { "Not a server address" }
         require(revision >= 0) { "A revision is not below 0" }
-        require(halved in 0..MOST_HALVINGS) { "Requests are halved at most 7 times" }
+        require(halved in 0..MOST_HALVINGS) { "Requests are halved at most 8 times" }
         require(deviceAlias == null || deviceAlias >= 1) { "An alias number starts at 1" }
         require(name == null || DeviceNames.isValid(name)) { "Not a name a device can have" }
         require(setupCode == null || isSetupCode(setupCode)) { "Not a setup code" }
@@ -197,7 +197,8 @@ data class SyncState(
     override fun toString(): String = "SyncState($stage, $stop)"
 
     companion object {
-        const val MOST_HALVINGS: Int = 7
+        /** Eight halvings take `info`'s largest file limit, 256 items, down to one. */
+        const val MOST_HALVINGS: Int = 8
         const val MOST_SETUP_CODES: Int = 8
         const val MOST_REMOVED: Int = 10_000
         const val MOST_FAILED_RUNS: Int = 3

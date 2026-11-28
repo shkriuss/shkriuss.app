@@ -370,7 +370,7 @@ fixes what a run does, in which order. Here is the rest.
 | `keyId` | The server's current key ID | 8 hex digits, from `stage` 3 on |
 | `revision` | The account revision last seen | 0 to 9,223,372,036,854,775,807 |
 | `limits` | The three limits of the last `info` | Records 1 to 100, bytes 65,536 to 524,288, file items 1 to 256. Stored as the nearest bound. |
-| `halved`, `halvedAt` | How often requests were halved for CPU time, and when | 0 to 7. A time. |
+| `halved`, `halvedAt` | How often requests were halved for CPU time, and when | 0 to 8. A time. |
 | `deviceAlias`, `deviceId` | The alias's number, and the device ID | 1 to 2,147,483,647. 32 hex digits: always the first 16 bytes of the SHA-256 of the public key under that alias. |
 | `name` | This phone's name, as last sealed | 1 to 40 code points, at most 160 bytes in UTF-8, one line, no space at either end |
 | `codeKind` | 1 a device code, 2 a setup code, as chosen at step 3 | 1 or 2, from step 3 until the join ends. A device code itself is never stored. |
@@ -598,7 +598,7 @@ networks, long transfers and notification. The owner asked this page to
 say, for every value and action, its limits and what happens when Sync
 stops between two writes, a write fails, a press comes twice or late,
 and the clock or the time zone changes
-([When things go wrong](#when-things-go-wrong)). And eight answers:
+([When things go wrong](#when-things-go-wrong)). And nine answers:
 
 1. Records go on any network. File chunks only on an unmetered network,
    unless **Files on mobile data** is on. It is off at first. So a
@@ -623,6 +623,8 @@ and the clock or the time zone changes
 8. Sync runs through Android's JobScheduler, not WorkManager: no new
    dependency, no database of its own and no `WAKE_LOCK`
    ([ADR 0045](../../adr/0045-sync-runs-through-jobscheduler.md)).
+9. Requests are halved at most eight times, so a file request that
+   `info` allows 256 items comes down to one item.
 
 The rest is in
 [sync-protocol.md](../../architecture/sync-protocol.md#decided-by-the-owner).
