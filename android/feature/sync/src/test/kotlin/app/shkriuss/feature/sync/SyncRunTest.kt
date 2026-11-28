@@ -934,4 +934,17 @@ class SyncRunTest {
         assertFalse("no chunk went", "/v1/files/send" in server.paths())
         assertEquals(listOf(hex(fileId) to false), water.sent)
     }
+
+    @Test
+    fun aBatchForAnotherEpochLeavesTheAppAndGoesNowhere() {
+        joined()
+        run()
+        water.toSend += id(6) to blob(server.keyId, 6)
+        water.batchEpoch = syncId(9)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertTrue("no batch was sent", server.requests.none { it.method == RequestMethod.POST && it.url.contains("/v1/changes") })
+        assertEquals(syncId(2), store.now().epoch)
+    }
 }

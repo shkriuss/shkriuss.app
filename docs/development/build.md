@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 148 tests. They use real keys
+- `feature/sync` has 9 test classes with 149 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -855,17 +855,17 @@ second build must write the same mapping file, or the release stops. See
     network, only the chunks the server lacks, the order of ordinary and
     comparison batches, no batch after a `05` for each app that got one,
     a full server that takes no chunks either, and stays full until a
-    record is stored, a batch of the other kind than asked, an app whose
-    transfer failed and is served at the next run, an app whose courier
-    call fails, which is left and not recorded as served, a stream that
-    could not be read, or ended early, also on its second read, which is
-    not called damaged, a stream that changed after its check, which
-    sends no chunk, a pipe that fails while a stream is fetched, a file
-    request refused for CPU time, which stops the reading of a large
-    stream, a run stopped by Android, also during a courier call or a
-    file request, a Leave while a run goes, which the run does not
-    overwrite, and an app that pokes each time it is served, whose job
-    runs again.
+    record is stored, a batch of the other kind than asked, or for
+    another epoch, an app whose transfer failed and is served at the
+    next run, an app whose courier call fails, which is left and not
+    recorded as served, a stream that could not be read, or ended early,
+    also on its second read, which is not called damaged, a stream that
+    changed after its check, which sends no chunk, a pipe that fails
+    while a stream is fetched, a file request refused for CPU time,
+    which stops the reading of a large stream, a run stopped by Android,
+    also during a courier call or a file request, a Leave while a run
+    goes, which the run does not overwrite, and an app that pokes each
+    time it is served, whose job runs again.
   - `RunningJobsTest`: each job of the job service stops only its own
     run, also when Android starts a job again under the same ID.
   - `SyncServerTest`: every refusal with its own layout, broken answers,

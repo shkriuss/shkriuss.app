@@ -408,6 +408,9 @@ internal class FakeDataApp(val name: String) {
     /** The courier version its `status` names. */
     var courierVersion = 1
 
+    /** The epoch `export` writes into its batches instead of its own, or null for its own. */
+    var batchEpoch: SyncId? = null
+
     /** True when `export` gives a batch of the other kind than asked, which breaks the courier contract. */
     var otherKind = false
 
@@ -469,7 +472,7 @@ internal class FakeDataApp(val name: String) {
         lastBatch = records
         lastComparison = comparison
         token++
-        return ExportedBatch.read(batchBytes(token, epoch!!, cursor, known, comparison != otherKind, records), mostRecords, mostBytes)
+        return ExportedBatch.read(batchBytes(token, batchEpoch ?: epoch!!, cursor, known, comparison != otherKind, records), mostRecords, mostBytes)
     }
 
     fun exported(token: Long, answer: ByteArray): ExportedResult {

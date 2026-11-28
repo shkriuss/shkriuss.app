@@ -105,6 +105,8 @@ object StreamListLayout {
 class ExportedBatch private constructor(
     /** The token, which `exported` gives back. */
     val token: Long,
+    /** The epoch the app made the batch for. */
+    val epoch: SyncId,
     /** True for the records of a comparison of everything. */
     val comparison: Boolean,
     /** How many records it holds. */
@@ -125,7 +127,7 @@ class ExportedBatch private constructor(
             val reader = ByteReader(bytes)
             reader.header(SyncFormat.TYPE_BATCH)
             val token = reader.i64()
-            reader.bytes(SyncFormat.ID_BYTES)
+            val epoch = SyncId(reader.bytes(SyncFormat.ID_BYTES))
             val cursor = reader.i64()
             val known = reader.i64()
             val comparison = reader.flag()
@@ -143,7 +145,7 @@ class ExportedBatch private constructor(
                 reader.bytes(length.toInt())
             }
             reader.end()
-            ExportedBatch(token, comparison, count.toInt(), bytes)
+            ExportedBatch(token, epoch, comparison, count.toInt(), bytes)
         } catch (_: LayoutException) {
             null
         }

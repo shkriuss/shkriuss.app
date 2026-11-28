@@ -101,6 +101,7 @@ class CourierLayoutsTest {
         val bytes = BatchLayout.write(token = 77, epoch = epoch, cursor = 1, known = 2, comparison = true, records = records)
         val batch = ExportedBatch.read(bytes, mostRecords = 3, mostBytes = 180)!!
         assertEquals(77, batch.token)
+        assertEquals(epoch, batch.epoch)
         assertEquals(3, batch.count)
         assertArrayEquals(bytes.copyOfRange(17, bytes.size), batch.body())
         assertNull("more records than asked", ExportedBatch.read(bytes, mostRecords = 2, mostBytes = 180))

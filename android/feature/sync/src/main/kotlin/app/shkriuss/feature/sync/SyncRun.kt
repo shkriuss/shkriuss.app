@@ -398,8 +398,8 @@ class SyncRun(
                     is CourierAnswer.Done -> answer.value ?: return true
                     else -> return false
                 }
-                // A batch of the other kind breaks the courier contract: the app is left for this run.
-                if (batch.comparison != comparison) return false
+                // A batch of the other kind, or for another epoch, breaks the courier contract: the app is left for this run.
+                if (batch.comparison != comparison || batch.epoch != context.epoch) return false
                 checkStop()
                 when (val answer = server.send(session, name, batch)) {
                     is ServerAnswer.Done -> {
