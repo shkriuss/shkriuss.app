@@ -488,7 +488,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has 25 test classes with 238 tests
+- `core/security` has 25 test classes with 240 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the

@@ -187,13 +187,14 @@ The keeper's side, `HandoverActivity` and `HandoverViewModel`:
 6. A keeper that does not keep the key now says so, with **Close**, and
    gives `NOT_KEEPER`. So does a kept copy that is damaged when the
    prompt runs (`closingRefusal`). The screen sets that result as soon
-   as it shows, so Back gives it too. "Does not keep the key" needs
-   certainty (`KeySetup.keepsNoRecoveryKey`): Android says there is no
-   kept copy, or its Recovery guard is gone. When Android or the
-   Keystore cannot say at **Allow**, the screen says "try again in a
-   moment" and gives no reason. The asking app then says so: "Get
+   as it shows, so Back gives it too. The asking app then says so: "Get
    the keys" tells the user to enter the words instead, and the check of
    the words for the app lock asks for all 24.
+   "Does not keep the key" needs certainty
+   (`KeySetup.keepsNoRecoveryKey`): Android says there is no kept copy,
+   its Recovery guard is gone, or the copy is damaged. When Android or
+   the Keystore cannot say, as the screen opens or at **Allow**, the
+   screen says "try again in a moment" and gives no reason.
 7. **Do not allow**, or leaving the screen, gives a cancelled result
    with no reason.
 
@@ -216,7 +217,9 @@ The same screen in the mode "Sign a device", for the Sync app only
    **Allow** opens the screen of all 24 words, as when the words are
    entered (`HandoverAllWords`). Words of another recovery key: "These
    words are for another recovery key.", which TalkBack reads when it
-   appears. Words being typed stay when the screen stops.
+   appears. Words being typed stay when the screen stops. Only an app
+   that certainly keeps no recovery key asks for the words: a keeper
+   whose kept copy cannot be read now says "try again in a moment".
 5. An app with no keys says so (`HandoverNoKeys`) and gives
    `NOT_KEEPER`. So does a keeper whose kept key is gone when **Allow**
    is tapped, with the advice to enter the words in that app. When the
@@ -833,17 +836,19 @@ file says that.
 - `HandoverViewModelsTest`: both sides of the handover with real
   cryptography on the stand-in: Allow and the prompt, a closed prompt,
   a keeper that does not keep the key, a Keystore that fails for a
-  moment at **Allow**, keys and the kept key dropped when the screen
-  stops, the check of four words, every outcome on the asking app's
-  side, an app lock that was reset, "keep it here too", the check of
-  the words for the app lock, and the security screen's keepers.
+  moment as the screen opens or at **Allow**, keys and the kept key
+  dropped when the screen stops, the check of four words, every outcome
+  on the asking app's side, an app lock that was reset, "keep it here
+  too", the check of the words for the app lock, and the security
+  screen's keepers.
 - `SignDeviceTest`: the mode "Sign a device": only the Sync app passes,
   and only in it; a reader of version 2 reads version 1; a keeper signs
   after the prompt; an app that does not keep the key signs with the
   words of its own key only; another key ID, no keys, keys that cannot
-  be read at **Allow** or after the words, a stop before or after the
-  signature; the second check of the caller; what the Sync app reads
-  from every answer; and the status provider's answer to it.
+  be read at **Allow** or after the words, a kept copy that cannot be
+  read as the screen opens, a stop before or after the signature; the
+  second check of the caller; what the Sync app reads from every
+  answer; and the status provider's answer to it.
 - `HandoverContentTest`: TalkBack reads "These words are for another
   recovery key." when it appears, and not the text around it.
 - `SecurityContentTest` and `FirstNeedTest`: the choices to get the keys

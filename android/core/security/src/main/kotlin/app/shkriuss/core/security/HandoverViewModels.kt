@@ -84,7 +84,12 @@ class HandoverViewModel internal constructor(
             val status = crypto.status()
             val first = if (join == null) {
                 val id = status.keyId?.toString()
-                if (status.keepsRecoveryKey && id != null) HandoverAsk(mode, id) else HandoverNotKept
+                when {
+                    status.keepsRecoveryKey && id != null -> HandoverAsk(mode, id)
+                    // "Not kept" only when that is certain. A Keystore that cannot say now asks to try again.
+                    crypto.setup.keepsNoRecoveryKey() -> HandoverNotKept
+                    else -> HandoverFailed(damaged = false)
+                }
             } else {
                 signingScreen(status, join)
             }
@@ -96,13 +101,20 @@ class HandoverViewModel internal constructor(
     /**
      * The first screen of [HandoverMode.SIGN_DEVICE]: no keys, keys that
      * cannot be read now or are damaged, keys of another recovery key, or
-     * what to sign.
+     * what to sign. Only an app that certainly keeps no recovery key asks
+     * for the 24 words; a kept copy that cannot be read now asks to try
+     * again.
      */
     private fun signingScreen(status: KeyStatus, join: DeviceJoinRequest): HandoverScreen {
         val own = status.keyId ?: return if (status.hasDerivedKeys) HandoverFailed(damaged = status.needsRepair) else HandoverNoKeys
         val signer = join.keyId ?: own
         if (!crypto.setup.hasKeysOf(signer)) return HandoverOtherKey(signer.toString())
-        return HandoverAsk(mode, signer.toString(), server = join.host, withWords = !status.keepsRecoveryKey)
+        val withWords = when {
+            status.keepsRecoveryKey -> false
+            crypto.setup.keepsNoRecoveryKey() -> true
+            else -> return HandoverFailed(damaged = false)
+        }
+        return HandoverAsk(mode, signer.toString(), server = join.host, withWords = withWords)
     }
 
     /** The user allows it: the system prompt of the Recovery guard, or all 24 words in an app that does not keep the key. */

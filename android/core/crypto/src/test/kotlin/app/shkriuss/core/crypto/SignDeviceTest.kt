@@ -6,6 +6,7 @@ import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.aead.XChaCha20Poly1305Key
 import com.google.crypto.tink.aead.XChaCha20Poly1305Parameters
 import com.google.crypto.tink.util.SecretBytes
+import java.io.File
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -130,6 +131,9 @@ class SignDeviceTest {
         keeper.unreadable = setOf(KeysetName.RECOVERY)
         assertFalse("Android cannot read the kept copy's file now", keeper.open().setup.keepsNoRecoveryKey())
         keeper.unreadable = emptySet()
+        val damaged = water()
+        File(damaged.folder, KeysetName.RECOVERY.text).writeBytes(ByteArray(8))
+        assertTrue("a damaged kept copy", damaged.open().setup.keepsNoRecoveryKey())
         keeper.hardware.removeScreenLock()
         assertTrue("the Recovery guard went with the screen lock", keeper.open().setup.keepsNoRecoveryKey())
     }

@@ -266,6 +266,21 @@ class SignDeviceTest {
     }
 
     @Test
+    fun aKeeperWhoseKeptCopyCannotBeReadNowIsNotSentToTheWords() {
+        val folder = File(temporary.newFolder(), "shk-keys")
+        val water = SoftwareKeysApp(folder, testAppName)
+        val key = water.crypto.setup.createRecoveryKey()
+        water.crypto.setup.storeDerivedKeys(key)
+        water.crypto.setup.beginKeepRecoveryKey(key)!!.finish()
+        // Android cannot look at the kept copy's file now: a read gives nothing, but the file is not known to be missing.
+        val kept = File(folder, "recovery")
+        assertTrue(kept.delete() && kept.mkdir())
+        val model = signing(water)
+        assertEquals(HandoverFailed(damaged = false), model.state.value)
+        assertNull(closingRefusal(model.state.value))
+    }
+
+    @Test
     fun aKeystoreThatFailsForAMomentAtAllowAsksToTryAgainAndGivesNoReason() {
         val (water, _) = water(keeps = true)
         val model = signing(water)

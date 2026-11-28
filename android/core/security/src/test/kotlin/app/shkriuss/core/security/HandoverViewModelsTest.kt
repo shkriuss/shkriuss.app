@@ -113,6 +113,17 @@ class HandoverViewModelsTest {
     }
 
     @Test
+    fun aKeystoreThatFailsForAMomentWhenTheScreenOpensAsksToTryAgain() {
+        val (keeper, _) = keeper()
+        keeper.keystoreFails = true
+        HandoverMode.entries.filter { it != HandoverMode.SIGN_DEVICE }.forEach { mode ->
+            val model = handover(keeper, mode)
+            assertEquals("not \"does not keep the key\" in $mode", HandoverFailed(damaged = false), model.state.value)
+            assertNull("the asking app does not offer the words", closingRefusal(model.state.value))
+        }
+    }
+
+    @Test
     fun aKeystoreThatFailsForAMomentAtAllowAsksToTryAgain() {
         val (keeper, _) = keeper()
         val model = handover(keeper)
