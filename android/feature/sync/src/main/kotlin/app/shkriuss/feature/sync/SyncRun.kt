@@ -164,6 +164,8 @@ class SyncRun(
 
     /** The work of one run, with the session it signs with. */
     private inner class OneRun(private val session: Session, private val asked: Boolean, private val stopped: () -> Boolean) {
+        /** The server, which checks for a stop also before it sends a `04` again. */
+        private val server = this@SyncRun.server.checkingBeforeRetry(::checkStop)
         private var heads: Heads? = null
         private var apps: List<CourierApp> = emptyList()
         private var sendingStopped = false
@@ -300,12 +302,8 @@ class SyncRun(
             appLeft = false
             val context = courierContext()
             val status = statusOf(app, context) ?: return
-            // An app that syncs answers with the epoch it was given: another one breaks the courier contract,
-            // and nothing of that status is kept.
-            if (status.isOn && status.canSyncNow && status.epoch != context.epoch) {
-                everyStatus = false
-                return
-            }
+            // Nothing of a status of another epoch is kept.
+            if (ofAnotherEpoch(status, context)) return
             // What the app has to do is kept before any transfer, so that a run that fails part way serves it again.
             record(name, status, goodNow = false)
             if (!status.isOn || !status.canSyncNow) return
@@ -319,13 +317,21 @@ class SyncRun(
             if (streamsSent && !sendBatches(app, context, comparison = false)) return
             if (!sendBatches(app, context, comparison = true)) return
             val after = statusOf(app, context) ?: return
-            // The last status too: one of another epoch breaks the courier contract, and the app is not served.
-            if (after.isOn && after.canSyncNow && after.epoch != context.epoch) {
-                everyStatus = false
-                return
-            }
+            // The last status too: the app is not recorded as served.
+            if (ofAnotherEpoch(after, context)) return
             write { state -> state.withApp(name) { it.copy(head = head.head) } }
             record(name, after, goodNow = true)
+        }
+
+        /**
+         * True for the status of an app that syncs but names another epoch
+         * than the one it was given: that breaks the courier contract, and
+         * the app is left for this run.
+         */
+        private fun ofAnotherEpoch(status: SyncStatus, context: CourierContext): Boolean {
+            if (!status.isOn || !status.canSyncNow || status.epoch == context.epoch) return false
+            everyStatus = false
+            return true
         }
 
         private fun record(name: String, status: SyncStatus, goodNow: Boolean) {
@@ -446,7 +452,7 @@ class SyncRun(
                         if (SendResult.CHANGED_AFTER_CURSOR in results) {
                             // The fetch brings the version that was in the way, and the app's merge decides.
                             val status = statusOf(app, context) ?: return false
-                            if (!fetchAll(app, context, status)) return false
+                            if (ofAnotherEpoch(status, context) || !fetchAll(app, context, status)) return false
                         }
                         if (SendResult.CHUNKS_BEING_DELETED in results) {
                             noMoreBatchesFor += name
@@ -708,7 +714,8 @@ class SyncRun(
                 var here = stream.bytesHere
                 val whole = try {
                     out.use {
-                        var number = (here / CHUNK_BYTES).toInt()
+                        // A stream whose bytes are all here fetches nothing: it is finished at once.
+                        var number = if (here >= stream.length) chunks else (here / CHUNK_BYTES).toInt()
                         while (number < chunks) {
                             checkStop()
                             if (filesStopped || !filesMayMove()) return false

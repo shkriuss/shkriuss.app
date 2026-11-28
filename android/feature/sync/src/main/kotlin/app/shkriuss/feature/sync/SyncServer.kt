@@ -143,7 +143,15 @@ class Session(val address: String, val serverId: SyncId, val key: DeviceKey) {
  * the device key is gone for good, and [app.shkriuss.core.crypto.BlobException]
  * when the Keystore cannot be used now.
  */
-class SyncServer(private val transport: Transport, private val keys: SyncKeys, private val clock: Clock) {
+class SyncServer(
+    private val transport: Transport,
+    private val keys: SyncKeys,
+    private val clock: Clock,
+    private val beforeRetry: () -> Unit = {},
+) {
+    /** The same calls, with [check] before a `04` is sent again: a run ends there when Android stopped its job. */
+    fun checkingBeforeRetry(check: () -> Unit): SyncServer = SyncServer(transport, keys, clock, check)
+
     /** `GET /v1/info`. Not signed. */
     fun info(address: String): ServerAnswer<ServerInfo> =
         answerOf(transport.send(HttpRequest(address + INFO, RequestMethod.GET, emptyMap(), null))) { ServerLayouts.answer(it, ServerLayouts::info) }
@@ -235,7 +243,8 @@ class SyncServer(private val transport: Transport, private val keys: SyncKeys, p
         read: (ByteArray) -> ServerAnswer<T>,
     ): ServerAnswer<T> {
         var answer: ServerAnswer<T> = ServerAnswer.DoesNotCheck
-        repeat(ATTEMPTS) {
+        repeat(ATTEMPTS) { attempt ->
+            if (attempt > 0) beforeRetry()
             val time = clock.nowMillis()
             val signature = keys.signRequest(session.key, session.serverId.toBytes(), time, method, pathAndQuery, signedPart ?: ByteArray(0))
             val headers = mapOf(

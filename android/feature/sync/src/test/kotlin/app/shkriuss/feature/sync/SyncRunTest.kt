@@ -1169,4 +1169,51 @@ class SyncRunTest {
         assertFalse("/v1/files/have" in server.paths())
         assertTrue("nothing is said about the stream", water.sent.isEmpty())
     }
+
+    @Test
+    fun aStatusOfAnotherEpochAfterAChangedCursorFetchesNothing() {
+        joined()
+        run()
+        water.toSend += id(7) to blob(server.keyId, 7)
+        var once = true
+        water.onExport = {
+            if (once) {
+                // Another device stored the same record first: the batch is answered "changed after the cursor".
+                once = false
+                server.records.getOrPut("water") { mutableListOf() } += FakeRecord(id(7), 1, blob(server.keyId, 8))
+                server.heads["water"] = 1
+                water.statusEpoch = syncId(9)
+            }
+        }
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertTrue("the batch was sent", server.requests.any { it.method == RequestMethod.POST && it.url.contains("/v1/changes") })
+        assertFalse("no fetch with that status", server.requests.any { it.method == RequestMethod.GET && it.url.contains("/v1/changes") })
+    }
+
+    @Test
+    fun aRunStoppedAfterA04SendsTheRequestNoMoreTimes() {
+        joined()
+        run()
+        server.refuseNext("/v1/heads", 0x04)
+        var stopped = false
+        server.onRequest = { path -> if (path == "/v1/heads") stopped = true }
+        server.requests.clear()
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { stopped } })
+        assertEquals(1, server.paths().count { it == "/v1/heads" })
+    }
+
+    @Test
+    fun aFetchedStreamWithAllItsBytesHereIsFinishedWithoutAFetch() {
+        joined()
+        run()
+        val fileId = id(0x4e)
+        water.streams = listOf(ListedStream(StreamWork.FETCH, uuid(fileId), sha256(ByteArray(10)), 10, 10, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertFalse("/v1/files/fetch" in server.paths())
+        assertEquals(listOf(hex(fileId)), water.finished)
+    }
 }
