@@ -118,7 +118,7 @@ class SyncDevices(
         return withSession { session ->
             val sealed = keys.sealName(session.key.deviceId, name)
             val revision = SyncRun.valueOf(server.renameDevice(session, sealed))
-            store.update { if (it.isJoinedWith(session)) it.copy(name = name, revision = revision) else it }
+            store.update { if (it.isJoinedWith(session)) it.copy(name = name, revision = keptRevision(it, revision)) else it }
         }
     }
 
@@ -140,7 +140,7 @@ class SyncDevices(
         }
         return withSession { session ->
             val revision = SyncRun.valueOf(server.removeDevice(session, id))
-            store.update { if (it.isJoinedWith(session)) it.copy(revision = revision) else it }
+            store.update { if (it.isJoinedWith(session)) it.copy(revision = keptRevision(it, revision)) else it }
         }
     }
 
@@ -207,6 +207,14 @@ class SyncDevices(
     }
 
     /** [action] with the session of a joined phone. Lost keys stop sync, and any answer that ends it writes its problem. */
+    /**
+     * The revision to keep after an action that answered [revision]. A lower
+     * one than Sync knows means the server was put back: the higher one is
+     * kept, so that the next `heads` finds the put-back and the removed
+     * devices are removed again (sync-protocol.md, `heads`, point 5).
+     */
+    private fun keptRevision(state: SyncState, revision: Long): Long = maxOf(state.revision, revision)
+
     private fun <T> withSession(action: (Session) -> T): DeviceAnswer<T> {
         val state = store.now()
         if (state.stage != Stage.JOINED) return DeviceAnswer.Problem

@@ -137,6 +137,15 @@ class SyncServicesTest {
     }
 
     @Test
+    fun aVersionCheckThatPassesClearsTheFaultAndTheClock() {
+        store.update { joinedState(keys, server, clock).copy(stage = Stage.STOPPED, stop = Stop.UPDATE_SERVER, fault = true, clockOff = 7 * 60_000L) }
+        services.startChecks()
+        assertEquals(Stage.JOINED, store.now().stage)
+        assertFalse(store.now().fault)
+        assertNull(store.now().clockOff)
+    }
+
+    @Test
     fun aPokeMarksTheAppAndAsksForARunSoon() {
         store.update { joinedState(keys, server, clock) }
         assertEquals(0, call(Courier.POKE)!!.size())

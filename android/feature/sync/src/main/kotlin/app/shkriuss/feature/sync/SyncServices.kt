@@ -151,8 +151,10 @@ class SyncServices(
         store.update {
             when {
                 !same(it) -> it
-                stop != null -> it.copy(stop = stop)
-                else -> it.copy(stage = Stage.JOINED, stop = null, limits = info.limits, infoAt = clock.nowMillis()).also { joined = true }
+                // `info` passed: the fault and the clock no longer hold (spec, Problems).
+                stop != null -> it.copy(stop = stop, fault = false, clockOff = null)
+                else -> it.copy(stage = Stage.JOINED, stop = null, limits = info.limits, infoAt = clock.nowMillis(), fault = false, clockOff = null)
+                    .also { joined = true }
             }
         }
         if (joined) scheduler.schedulePeriodic()

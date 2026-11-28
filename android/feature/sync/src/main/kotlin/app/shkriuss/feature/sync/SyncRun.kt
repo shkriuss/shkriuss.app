@@ -2,6 +2,7 @@ package app.shkriuss.feature.sync
 
 import app.shkriuss.core.crypto.BlobException
 import app.shkriuss.core.crypto.DeviceKeyGoneException
+import app.shkriuss.core.crypto.KeyId
 import app.shkriuss.core.crypto.NameKeyState
 import app.shkriuss.core.crypto.StreamHash
 import app.shkriuss.core.crypto.SyncKeys
@@ -210,8 +211,11 @@ class SyncRun(
             val firstOfDay = !sameUtcDay(store.now().statusAt, now)
             apps = courier().find().passed.sortedBy { it.name.value }
             val epochMoved = start.epoch != heads.epoch
-            if (epochMoved) takeEpoch(heads.epoch)
-            var toServe = apps.filter { firstOfDay || epochMoved || needs(it.name.value, heads) }
+            // Each app learns the server's current key ID from Sync's calls (sync-protocol.md, "A new recovery key"),
+            // so a new one reaches every app, as a new epoch does.
+            val keyMoved = start.keyId != heads.keyId
+            if (epochMoved || keyMoved) takeEpoch(heads.epoch, heads.keyId)
+            var toServe = apps.filter { firstOfDay || epochMoved || keyMoved || needs(it.name.value, heads) }
             repeat(PASSES) {
                 toServe.forEach {
                     checkStop()
@@ -246,9 +250,9 @@ class SyncRun(
         }
 
         /**
-         * `heads`: the key ID and the revision, and the list of devices when
-         * it is due. The epoch is taken after, by [takeEpoch]: a run that
-         * ends at the list of devices leaves it for the next run.
+         * `heads`: the revision, and the list of devices when it is due.
+         * The epoch and the key ID are taken after, by [takeEpoch]: a run
+         * that ends at the list of devices leaves them for the next run.
          */
         private fun readHeads(): Heads {
             // `heads` has no size to halve: a lack of CPU time or a 0C ends the run, as any other failed request does.
@@ -258,7 +262,7 @@ class SyncRun(
             this.heads = heads
             val state = store.now()
             val putBack = heads.revision < state.revision
-            write { it.copy(keyId = heads.keyId, putBack = it.putBack || putBack) }
+            if (putBack) write { it.copy(putBack = true) }
             if (heads.revision != state.revision || !sameUtcDay(state.devicesAt, clock.nowMillis())) {
                 DeviceList(store, server, clock).read(session, heads.revision, ::checkStop)
             }
@@ -266,12 +270,15 @@ class SyncRun(
         }
 
         /**
-         * A new epoch, and in the same write every app marked with work:
-         * an app this run does not reach is served at the next run, whose
-         * courier calls carry the new epoch, so that it compares everything.
+         * A new epoch or key ID, and in the same write every app marked with
+         * work: an app this run does not reach is served at the next run,
+         * whose courier calls carry the new values, so that it compares
+         * everything or takes the new key.
          */
-        private fun takeEpoch(epoch: SyncId) {
-            write { state -> apps.fold(state.copy(epoch = epoch)) { marked, app -> marked.withApp(app.name.value) { it.copy(work = true) } } }
+        private fun takeEpoch(epoch: SyncId, keyId: KeyId? = null) {
+            write { state ->
+                apps.fold(state.copy(epoch = epoch, keyId = keyId ?: state.keyId)) { marked, app -> marked.withApp(app.name.value) { it.copy(work = true) } }
+            }
         }
 
         /** A request passed: the clock and the fault no longer hold. */

@@ -163,6 +163,19 @@ class SyncDevicesTest {
     }
 
     @Test
+    fun anActionThatAnswersALowerRevisionKeepsTheHigherOne() {
+        joined()
+        server.devices += FakeDevice(syncId(0x66), ByteArray(65) { 3 }, removed = false, addedAt = 2, sealedName = ByteArray(60))
+        // The server was put back from revision 10 to 5: the next `heads` must still find that.
+        store.update { it.copy(revision = 10) }
+        server.revision = 5
+        assertEquals(DeviceAnswer.Done(Unit), devices.rename("Tablet"))
+        assertEquals(10, store.now().revision)
+        assertEquals(DeviceAnswer.Done(Unit), devices.remove(syncId(0x66)))
+        assertEquals(10, store.now().revision)
+    }
+
+    @Test
     fun aRemoveWithEveryRemovedIdThatSyncKeepsIsAFault() {
         joined()
         store.update { it.copy(removed = (1..SyncState.MOST_REMOVED).map { number -> "%032x".format(number) }.toSet()) }

@@ -1,5 +1,6 @@
 package app.shkriuss.feature.sync
 
+import app.shkriuss.core.crypto.KeyId
 import app.shkriuss.core.crypto.RequestMethod
 import app.shkriuss.core.sync.ComparisonState
 import app.shkriuss.core.sync.ListedStream
@@ -1215,5 +1216,29 @@ class SyncRunTest {
         run()
         assertFalse("/v1/files/fetch" in server.paths())
         assertEquals(listOf(hex(fileId)), water.finished)
+    }
+
+    @Test
+    fun aNewKeyIdOfTheServerReachesEveryApp() {
+        joined()
+        run()
+        water.calls.clear()
+        server.keyId = KeyId(0x01020304)
+        run()
+        assertEquals(KeyId(0x01020304), store.now().keyId)
+        assertTrue("water was served", "status" in water.calls)
+    }
+
+    @Test
+    fun aNewKeyIdReachesEveryAppAlsoAfterARunThatEndedAtTheListOfDevices() {
+        joined()
+        run()
+        server.keyId = KeyId(0x01020304)
+        server.revision = 3
+        server.answerNext("/v1/devices", HttpResult.NoAnswer)
+        run()
+        water.calls.clear()
+        run()
+        assertTrue("water was served", "status" in water.calls)
     }
 }
