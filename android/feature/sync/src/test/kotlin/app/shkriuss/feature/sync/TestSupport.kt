@@ -434,6 +434,9 @@ internal class FakeDataApp(val name: String) {
 
     /** The `readStream` call, counted from 1, whose stream ends at half its bytes, as when the app's process ends; 0 for none. */
     var cutRead = 0
+
+    /** The `readStream` call, counted from 1, whose stream has one more byte at its end, as when the stored file grows; 0 for none. */
+    var grownRead = 0
     var reads = 0
     private var token = 0L
     private var lastBatch: List<Pair<ByteArray, ByteArray>> = emptyList()
@@ -547,6 +550,7 @@ internal class FakeCouriers(vararg apps: FakeDataApp) : Couriers {
             fake.reads++
             stored[hex(fileId)]?.let { if (fake.reads == fake.cutRead) it.copyOf(it.size / 2) else it }
                 ?.let { if (fake.reads == fake.changedRead) it.copyOf().also { bytes -> bytes[0] = (bytes[0] + 1).toByte() } else it }
+                ?.let { if (fake.reads == fake.grownRead) it + byteArrayOf(1) else it }
                 ?.inputStream()?.let { input ->
                 object : java.io.FilterInputStream(input) {
                     override fun read(buffer: ByteArray, offset: Int, length: Int): Int =

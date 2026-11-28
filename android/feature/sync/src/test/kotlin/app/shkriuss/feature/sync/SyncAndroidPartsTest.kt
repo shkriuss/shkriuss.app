@@ -30,6 +30,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -181,6 +182,24 @@ class SyncAndroidPartsTest {
         assertEquals(CourierAnswer.NoAnswer, exporting(batch.copyOf(batch.size - 1)).export(water, context, false, 10, 65_536))
         val nothing = AndroidCouriers(app) { _, _, _ -> Bundle().apply { putString(Courier.RESULT, Courier.RESULT_NOTHING) } }
         assertEquals(CourierAnswer.Done(null), nothing.export(water, context, false, 10, 65_536))
+    }
+
+    @Test
+    fun aRunStoppedWhileABatchComesThroughItsPipeReadsNoMoreOfIt() {
+        class Stopped : Exception()
+        val couriers = AndroidCouriers(app) { _, _, _ ->
+            val (read, write) = ParcelFileDescriptor.createPipe().let { it[0] to it[1] }
+            ParcelFileDescriptor.AutoCloseOutputStream(write).use { it.write(ByteArray(10)) }
+            Bundle().apply {
+                putString(Courier.RESULT, Courier.RESULT_BATCH)
+                putParcelable(Courier.DESCRIPTOR, read)
+            }
+        }
+        // Android stops the job after the first bytes came through the pipe: the next read is not made.
+        var reads = 0
+        val stopping = couriers.checkingBeforeRead { if (++reads > 1) throw Stopped() }
+        assertThrows(Stopped::class.java) { stopping.export(water, context, comparison = false, mostRecords = 10, mostBytes = 65_536) }
+        assertEquals(2, reads)
     }
 
     /** A courier provider of a data app in the tests, which says who it is. */

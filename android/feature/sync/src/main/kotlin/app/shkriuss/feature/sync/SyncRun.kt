@@ -169,6 +169,9 @@ class SyncRun(
     private inner class OneRun(private val session: Session, private val asked: Boolean, private val stopped: () -> Boolean) {
         /** The server, which checks for a stop also before it sends a `04` again. */
         private val server = this@SyncRun.server.checkingBeforeRetry(::checkStop)
+
+        /** The couriers, which check for a stop also between the reads of a pipe that a data app fills. */
+        private val couriers = this@SyncRun.couriers.checkingBeforeRead(::checkStop)
         private var heads: Heads? = null
         private var apps: List<CourierApp> = emptyList()
         private var sendingStopped = false
@@ -676,6 +679,12 @@ class SyncRun(
                                 return
                             }
                             pending += key to OutgoingChunk(stream.fileIdBytes, stream.hash, number, bytes, chunkHash)
+                        }
+                        // A stream that grew after its check does not fit either.
+                        checkStop()
+                        if (it.read() >= 0) {
+                            changedAfterCheck(stream)
+                            return
                         }
                     }
                 } catch (_: IOException) {

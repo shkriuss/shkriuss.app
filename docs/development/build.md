@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 185 tests. They use real keys
+- `feature/sync` has 9 test classes with 187 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -871,18 +871,18 @@ second build must write the same mapping file, or the release stops. See
     read, or ended early, also on its second read, which is not called
     damaged, a stream longer than listed, whose check reads one byte
     past its length, or longer than its chunks can be numbered, a stream
-    that changed after its check, also in a chunk the server has, which
-    sends no chunk and does not fit, a pipe that fails while a stream is
-    fetched, a fetched stream whose bytes are all here, which is
-    finished without a fetch, a file request refused for CPU time, which
-    stops the reading of a large stream, a run stopped by Android, also
-    during a courier call, a file request, the check of a stream, the
-    skip to its first missing chunk, the read of a chunk or the write of
-    a fetched one, or before `info` after a `0C`, a `04` sent again or
-    the list of devices, a Leave while a run goes, also just after the
-    run first looked, which the run does not overwrite, and a new join
-    meanwhile, whose IDs no app gets from the run, and an app that pokes
-    each time it is served, whose job runs again.
+    that changed after its check, also in a chunk the server has, or
+    grew, which sends no chunk and does not fit, a pipe that fails while
+    a stream is fetched, a fetched stream whose bytes are all here,
+    which is finished without a fetch, a file request refused for CPU
+    time, which stops the reading of a large stream, a run stopped by
+    Android, also during a courier call, a file request, the check of a
+    stream, the skip to its first missing chunk, the read of a chunk or
+    the write of a fetched one, or before `info` after a `0C`, a `04`
+    sent again or the list of devices, a Leave while a run goes, also
+    just after the run first looked, which the run does not overwrite,
+    and a new join meanwhile, whose IDs no app gets from the run, and an
+    app that pokes each time it is served, whose job runs again.
   - `RunningJobsTest`: each job of the job service stops only its own
     run, also when Android starts a job again under the same ID.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
@@ -913,7 +913,8 @@ second build must write the same mapping file, or the release stops. See
     took it into its map, and the address rules.
   - `SyncAndroidPartsTest`, under Robolectric: the courier provider's
     check of its caller, JobScheduler's two jobs, courier calls as
-    bundles and pipes, and a courier authority that another app holds.
+    bundles and pipes, a stop of the job between two reads of a pipe,
+    and a courier authority that another app holds.
 - `app/sync` has two test classes: `SyncManifestTest` names everything
   Sync's merged manifest lets another app reach, its three permissions
   and the removals; `SyncPlaceholderScreenshotTest` draws the screen

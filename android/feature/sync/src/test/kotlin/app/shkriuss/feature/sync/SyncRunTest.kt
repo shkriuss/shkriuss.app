@@ -1397,4 +1397,19 @@ class SyncRunTest {
         assertFalse("/v1/files/send" in server.paths())
         assertEquals(listOf(hex(fileId) to false), water.sent)
     }
+
+    @Test
+    fun aStreamThatGrewAfterItsCheckDoesNotFit() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 7 }
+        val fileId = id(0x54)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        // The stored file grows by a byte between the check and the read that sends.
+        water.grownRead = water.reads + 2
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals(listOf(hex(fileId) to false), water.sent)
+    }
 }

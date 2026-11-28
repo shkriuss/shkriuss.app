@@ -114,11 +114,12 @@ class HttpsTransport : Transport {
             return false
         }
 
-        /** The bytes of [input], or null if there are more than [most]. */
-        internal fun readAtMost(input: InputStream, most: Int): ByteArray? {
+        /** The bytes of [input], or null if there are more than [most]. [beforeRead] runs before each read. */
+        internal fun readAtMost(input: InputStream, most: Int, beforeRead: () -> Unit = {}): ByteArray? {
             val out = ByteArrayOutputStream()
             val buffer = ByteArray(65_536)
             while (true) {
+                beforeRead()
                 val read = input.read(buffer)
                 if (read < 0) return out.toByteArray()
                 if (out.size() + read > most) return null

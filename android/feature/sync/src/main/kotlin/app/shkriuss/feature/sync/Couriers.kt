@@ -82,6 +82,12 @@ interface Couriers {
     fun finishStream(app: CourierApp, context: CourierContext, fileId: ByteArray): CourierAnswer<StreamFinish>
 
     fun streamDeleted(app: CourierApp, context: CourierContext, fileId: ByteArray): CourierAnswer<Unit>
+
+    /**
+     * The same couriers, with [check] before each read of a pipe that a
+     * data app fills: a run ends there when Android stopped its job.
+     */
+    fun checkingBeforeRead(check: () -> Unit): Couriers = this
 }
 
 /** Calls one method of one app's courier provider. Null for no answer. Tests pass their own. */
@@ -122,8 +128,14 @@ class ResolverCaller(private val context: Context) : CourierCaller {
  * [Courier]. Batches, pages and lists pass through pipes. Every answer is
  * checked against its layout: one that breaks it is no answer.
  */
-class AndroidCouriers(private val context: Context, private val caller: CourierCaller = ResolverCaller(context)) : Couriers {
+class AndroidCouriers(
+    private val context: Context,
+    private val beforeRead: () -> Unit = {},
+    private val caller: CourierCaller = ResolverCaller(context),
+) : Couriers {
     override fun find(): CourierApps = courierApps(context)
+
+    override fun checkingBeforeRead(check: () -> Unit): Couriers = AndroidCouriers(context, check, caller)
 
     override fun status(app: CourierApp, context: CourierContext): CourierAnswer<SyncStatus> = call(app, Courier.STATUS, context) { answer ->
         answer.getByteArray(Courier.BYTES)?.let(StatusLayout::read)
@@ -278,7 +290,7 @@ class AndroidCouriers(private val context: Context, private val caller: CourierC
 
     /** The bytes the read end [descriptor] gives, or null if there are more than [most] or it fails. It is closed. */
     private fun readAll(descriptor: ParcelFileDescriptor, most: Int): ByteArray? = try {
-        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { HttpsTransport.readAtMost(it, most) }
+        ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { HttpsTransport.readAtMost(it, most, beforeRead) }
     } catch (_: IOException) {
         null
     }
