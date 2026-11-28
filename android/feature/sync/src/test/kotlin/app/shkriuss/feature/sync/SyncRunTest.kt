@@ -1378,4 +1378,23 @@ class SyncRunTest {
         assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { !store.now().app("water").poked } })
         assertTrue("the next run serves the app again", store.now().app("water").work)
     }
+
+    @Test
+    fun aStreamThatChangedInAChunkTheServerHasDoesNotFit() {
+        joined()
+        run()
+        val bytes = ByteArray(3 * SyncRun.CHUNK_BYTES) { (it % 9).toByte() }
+        val fileId = id(0x53)
+        val hash = sha256(bytes)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), hash, bytes.size.toLong(), 0, 0))
+        repeat(2) { number -> server.chunks["water/${hex(fileId)}/${hex(hash)}/$number"] = ByteArray(SyncRun.CHUNK_BYTES) }
+        // The stored file changes in its first chunk, which the server has, between the check and the read that sends.
+        water.changedRead = water.reads + 2
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertFalse("/v1/files/send" in server.paths())
+        assertEquals(listOf(hex(fileId) to false), water.sent)
+    }
 }

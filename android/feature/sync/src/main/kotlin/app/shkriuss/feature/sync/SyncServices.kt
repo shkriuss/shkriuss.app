@@ -77,17 +77,14 @@ class SyncServices(
     }
 
     internal fun startChecks() {
+        join.cleanUpKeys()
         val state = store.now()
-        // A removed phone keeps no key: one whose deletion failed after the `03` goes here.
-        val removed = state.stage == Stage.STOPPED && state.stop == Stop.REMOVED
-        keys.deleteOtherDeviceKeys(state.deviceAlias.takeIf { state.stage != Stage.NOT_JOINED && !removed })
-        if (state.stage == Stage.NOT_JOINED && keys.nameKeyState() != NameKeyState.MISSING) keys.deleteNameKey()
         val now = clock.nowMillis()
         when (state.stage) {
             Stage.NOT_JOINED -> Unit
             Stage.JOINING -> {
                 val since = state.joinedAt
-                if (since == null || since > now || now - since >= SyncJoin.JOIN_LIFE_MILLIS) join.cancelStale(state) else join.dropEarlierNameKey()
+                if (since == null || since > now || now - since >= SyncJoin.JOIN_LIFE_MILLIS) join.cancelStale(state)
             }
             Stage.ENROL_SENT -> join.checkSentEnrol()
             // Only the state that was read: a Leave or a new join meanwhile, which deletes the keys, is kept.

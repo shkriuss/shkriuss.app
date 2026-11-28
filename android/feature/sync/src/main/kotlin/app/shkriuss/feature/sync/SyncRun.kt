@@ -629,6 +629,12 @@ class SyncRun(
                 }
             }
 
+            /** The stored stream changed after its check: nothing more of it goes, and the app is told it does not fit. */
+            private fun changedAfterCheck(stream: ListedStream) {
+                failed += stream.fileId
+                if (courier().streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false) !is CourierAnswer.Done) appLeft = true
+            }
+
             private fun queue(stream: ListedStream, first: Int, chunks: Int) {
                 val key = stream.fileId
                 val input = (courier().readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value
@@ -640,7 +646,18 @@ class SyncRun(
                 left[key] = chunks - first
                 try {
                     input.use {
-                        skipFully(it, first.toLong() * CHUNK_BYTES, ::checkStop)
+                        // The chunks the server has are read too, and held to what the check read: a change there
+                        // means the stored stream no longer fits, though no chunk of it goes.
+                        for (number in 0 until first) {
+                            val bytes = readFully(it, chunkLength(stream.length, number), ::checkStop) ?: run {
+                                appLeft = true
+                                return
+                            }
+                            if (!StreamHash.of(ByteArrayInputStream(bytes)).contentEquals(chunkHashes[key]?.getOrNull(number))) {
+                                changedAfterCheck(stream)
+                                return
+                            }
+                        }
                         for (number in first until chunks) {
                             val length = chunkLength(stream.length, number)
                             // A stream that ends early on this second read is a failed courier call too.
@@ -655,8 +672,7 @@ class SyncRun(
                             val chunkHash = StreamHash.of(ByteArrayInputStream(bytes))
                             if (!chunkHash.contentEquals(chunkHashes[key]?.getOrNull(number))) {
                                 // The stored file changed after the check: none of these bytes go under the stream's name.
-                                failed += key
-                                if (courier().streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false) !is CourierAnswer.Done) appLeft = true
+                                changedAfterCheck(stream)
                                 return
                             }
                             pending += key to OutgoingChunk(stream.fileIdBytes, stream.hash, number, bytes, chunkHash)
@@ -962,18 +978,6 @@ class SyncRun(
 
         /** The length of chunk [number] of a stream of [length] bytes. */
         fun chunkLength(length: Long, number: Int): Int = minOf(CHUNK_BYTES.toLong(), length - number.toLong() * CHUNK_BYTES).toInt()
-
-        /** Reads past [count] bytes of [input], with [beforeRead] before each read, so that a stop of the job ends it too. */
-        private fun skipFully(input: InputStream, count: Long, beforeRead: () -> Unit) {
-            var left = count
-            val buffer = ByteArray(65_536)
-            while (left > 0) {
-                beforeRead()
-                val read = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
-                if (read < 0) throw IOException("The stream ended early")
-                left -= read
-            }
-        }
 
         /** [length] bytes of [input], or null when it ends first. [beforeRead] runs before each read, so that a stop of the job ends it too. */
         private fun readFully(input: InputStream, length: Int, beforeRead: () -> Unit): ByteArray? {

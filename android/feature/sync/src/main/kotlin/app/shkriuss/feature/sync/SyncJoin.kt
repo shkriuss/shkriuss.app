@@ -137,8 +137,12 @@ class SyncJoin(
     /** Counts each address entered and each cancel, so that an `info` answer counts only for the newest one. */
     private val attempts = AtomicLong()
 
-    /** Held from the check of a keeper's answer to its write. */
-    private val keeperAnswers = Any()
+    /**
+     * Held while a join makes its device key and writes it, from the check
+     * of a keeper's answer to its write, and while the start deletes the
+     * keys that no state names.
+     */
+    private val keyWork = Any()
 
     /** Writes what [change] gives, or nothing for null. True when it wrote. */
     private fun writeIf(change: (SyncState) -> SyncState?): Boolean {
@@ -240,19 +244,23 @@ class SyncJoin(
             // The Keystore can take a while: each write is for this join only, so Back or another address meanwhile is kept.
             fun ofThisJoin(now: SyncState) = attempts.get() == attempt && now.stage == Stage.JOINING && now.address == address &&
                 now.serverId == serverId && now.joinedAt == state.joinedAt
-            val alias = state.deviceAlias ?: keys.newDeviceKeyNumber().also { number ->
-                if (!writeIf { if (ofThisJoin(it) && it.deviceAlias == null) it.copy(deviceAlias = number) else null }) return KeyStep.Changed
-            }
-            val key = keys.makeDeviceKey(alias)
-            val id = key.deviceId.toSyncId()
-            if (!writeIf { if (ofThisJoin(it) && it.deviceAlias == alias) it.copy(deviceId = id) else null }) {
-                // A key that no state names goes now, or at the next start.
-                try {
-                    if (store.now().deviceAlias != alias) keys.deleteDeviceKey(alias)
-                } catch (_: BlobException) {
-                    // The next start deletes it: no state names it.
+            // From the key number to the device ID, the start's cleanup waits: it never takes a key being made.
+            val key = synchronized(keyWork) {
+                val alias = state.deviceAlias ?: keys.newDeviceKeyNumber().also { number ->
+                    if (!writeIf { if (ofThisJoin(it) && it.deviceAlias == null) it.copy(deviceAlias = number) else null }) return KeyStep.Changed
                 }
-                return KeyStep.Changed
+                val made = keys.makeDeviceKey(alias)
+                val id = made.deviceId.toSyncId()
+                if (!writeIf { if (ofThisJoin(it) && it.deviceAlias == alias) it.copy(deviceId = id) else null }) {
+                    // A key that no state names goes now, or at the next start.
+                    try {
+                        if (store.now().deviceAlias != alias) keys.deleteDeviceKey(alias)
+                    } catch (_: BlobException) {
+                        // The next start deletes it: no state names it.
+                    }
+                    return KeyStep.Changed
+                }
+                made
             }
             val request = DeviceJoinRequest.of(serverId.toBytes(), address, key.publicKey, keyId) ?: return KeyStep.CouldNotMake
             return KeyStep.Request(request)
@@ -273,7 +281,7 @@ class SyncJoin(
         if (!signed.isFor(request)) return EnrolStep.NotForThisJoin
         val applied = try {
             // One keeper's answer at a time, from the check to the write: an older answer cannot store its name key over a newer one's.
-            synchronized(keeperAnswers) {
+            synchronized(keyWork) {
                 // The keeper can answer after Back or a new join: its answer counts only for the join it was asked for.
                 if (!store.now().isJoinOf(request)) return EnrolStep.Changed
                 keys.storeNameKey(signed)
@@ -405,19 +413,24 @@ class SyncJoin(
     }
 
     /**
-     * At each start: a join before `stage` 2 has no name key of its own, so
-     * one found then is an earlier server's whose deletion failed, and it
-     * goes now. Under the lock of the keeper's answers, so that the name
-     * key of an answer being taken stays. One that cannot go now goes at
-     * the next start.
+     * At each start: deletes the device keys and the name key that no state
+     * names, from the state as it is under the lock of the join's keys. So a
+     * join started meanwhile keeps its device key, and a keeper's answer
+     * being taken keeps its name key. A join before `stage` 2 has no name
+     * key of its own: one found then is an earlier server's whose deletion
+     * failed. A key that cannot go now goes at the next start.
      */
-    internal fun dropEarlierNameKey() {
-        try {
-            synchronized(keeperAnswers) {
-                if (store.now().stage == Stage.JOINING && keys.nameKeyState() != NameKeyState.MISSING) keys.deleteNameKey()
+    internal fun cleanUpKeys() {
+        synchronized(keyWork) {
+            val state = store.now()
+            // A removed phone keeps no key: one whose deletion failed after the `03` goes here.
+            val removed = state.stage == Stage.STOPPED && state.stop == Stop.REMOVED
+            keys.deleteOtherDeviceKeys(state.deviceAlias.takeIf { state.stage != Stage.NOT_JOINED && !removed })
+            try {
+                if ((state.stage == Stage.NOT_JOINED || state.stage == Stage.JOINING) && keys.nameKeyState() != NameKeyState.MISSING) keys.deleteNameKey()
+            } catch (_: BlobException) {
+                // The next start tries again.
             }
-        } catch (_: BlobException) {
-            // The next start tries again.
         }
     }
 
