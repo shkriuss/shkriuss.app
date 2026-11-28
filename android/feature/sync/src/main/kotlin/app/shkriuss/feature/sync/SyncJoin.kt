@@ -132,6 +132,7 @@ class SyncJoin(
             is ServerAnswer.Done -> answer.value
             ServerAnswer.UntrustedCertificate -> return AddressStep.Untrusted
             ServerAnswer.Unreachable -> return AddressStep.Unreachable
+            // A redirect or another HTTP status: "This address does not answer as a sync server."
             is ServerAnswer.Version -> return if (answer.lowest > ServerInfo.VERSION) AddressStep.UpdateSync else AddressStep.UpdateServer
             else -> return AddressStep.NotASyncServer
         }
@@ -242,7 +243,12 @@ class SyncJoin(
     private fun enrol(signed: SignedJoin, code: String): EnrolStep {
         val state = store.now()
         val kind = state.codeKind ?: return EnrolStep.NotSaved
-        val session = sessionOrNull(state) ?: return keyRemoved()
+        val session = try {
+            sessionOrNull(state)
+        } catch (_: BlobException) {
+            // The Keystore cannot be used now: the key is not gone.
+            return EnrolStep.NotSaved
+        } ?: return keyRemoved()
         val deviceId = state.deviceId ?: return keyRemoved()
         val name = state.name ?: firstName()
         val answer = try {
@@ -276,7 +282,11 @@ class SyncJoin(
     fun checkSentEnrol(): EnrolStep {
         val state = store.now()
         if (state.stage != Stage.ENROL_SENT) return EnrolStep.NotSaved
-        val session = sessionOrNull(state) ?: return keyRemoved()
+        val session = try {
+            sessionOrNull(state)
+        } catch (_: BlobException) {
+            return EnrolStep.NotSaved
+        } ?: return keyRemoved()
         val answer = try {
             server.heads(session)
         } catch (_: DeviceKeyGoneException) {
@@ -339,15 +349,12 @@ class SyncJoin(
 
     private fun cancelled(step: EnrolStep): EnrolStep = if (cancel()) step else EnrolStep.NotSaved
 
+    /** The join's session, or null when its key is gone. Throws [BlobException] when the Keystore cannot be used now. */
     private fun sessionOrNull(state: SyncState): Session? {
         val address = state.address ?: return null
         val serverId = state.serverId ?: return null
         val alias = state.deviceAlias ?: return null
-        val key = try {
-            keys.deviceKey(alias)
-        } catch (_: BlobException) {
-            null
-        } ?: return null
+        val key = keys.deviceKey(alias) ?: return null
         if (state.deviceId != null && key.deviceId.toHex() != state.deviceId.hex) return null
         return Session(address, serverId, key)
     }

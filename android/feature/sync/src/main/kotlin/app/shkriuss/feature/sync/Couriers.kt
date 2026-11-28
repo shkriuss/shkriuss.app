@@ -1,6 +1,7 @@
 package app.shkriuss.feature.sync
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import app.shkriuss.core.crypto.KeyId
@@ -88,12 +89,30 @@ fun interface CourierCaller {
     fun call(packageName: String, method: String, extras: Bundle): Bundle?
 }
 
-/** [CourierCaller] through Android's content resolver. A call that fails in any way is no answer. */
+/**
+ * [CourierCaller] through Android's content resolver. It calls the
+ * authority `<package>.courier` only when that package itself declares
+ * it: an authority is free for any app to declare while the data app that
+ * should hold it has none, so the app that passed the check must be the
+ * one that answers. Android installs no second app with an authority that
+ * one already has, so the package that declares it holds it. A call that
+ * fails in any way is no answer.
+ */
 class ResolverCaller(private val context: Context) : CourierCaller {
     override fun call(packageName: String, method: String, extras: Bundle): Bundle? = try {
-        context.contentResolver.call(Courier.authority(packageName), method, null, extras)
+        val authority = Courier.authority(packageName)
+        if (!declares(packageName, authority)) null else context.contentResolver.call(authority, method, null, extras)
     } catch (_: RuntimeException) {
         null
+    }
+
+    private fun declares(packageName: String, authority: String): Boolean = try {
+        val flags = PackageManager.PackageInfoFlags.of(PackageManager.GET_PROVIDERS.toLong())
+        context.packageManager.getPackageInfo(packageName, flags).providers.orEmpty().any { provider ->
+            provider.authority?.split(';')?.contains(authority) == true
+        }
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
     }
 }
 
@@ -154,7 +173,7 @@ class AndroidCouriers(private val context: Context, private val caller: CourierC
         }
         val (readEnd, writeEnd) = pipe[0] to pipe[1]
         // A pipe holds only a little: the page is written while the app reads it, and the call waits for the app.
-        val writer = thread(name = "sync-page") {
+        thread(name = "sync-page") {
             try {
                 ParcelFileDescriptor.AutoCloseOutputStream(writeEnd).use { it.write(page) }
             } catch (_: IOException) {
@@ -175,10 +194,9 @@ class AndroidCouriers(private val context: Context, private val caller: CourierC
                 }
             }
         } finally {
+            // The writer ends when the page is written, or when the app has closed its copy of the read end, as
+            // every taker of a pipe end does (sync-protocol.md, "Names of the calls", point 4).
             closeQuietly(readEnd)
-            // A writer that is stuck on an app that read nothing ends when its end of the pipe is closed.
-            writer.join(WRITER_WAIT_MILLIS)
-            if (writer.isAlive) closeQuietly(writeEnd)
         }
     }
 
@@ -282,6 +300,5 @@ class AndroidCouriers(private val context: Context, private val caller: CourierC
         /** The largest list of streams that [StreamListLayout] takes. */
         const val MOST_LIST_BYTES = 9 + StreamListLayout.MOST_STREAMS * 73
 
-        const val WRITER_WAIT_MILLIS = 5_000L
     }
 }

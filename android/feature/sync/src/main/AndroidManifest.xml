@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    What feature/sync's code needs from Android, beside the network that
+    app/sync declares (hard rule 4): JobScheduler waits for a network and
+    tells a metered one, and keeps the periodic job after a restart
+    (ADR 0045, docs/security/permissions.md, "Sync"). Android grants both
+    at install. Only app/sync uses this module.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+</manifest>

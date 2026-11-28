@@ -462,4 +462,115 @@ class SyncRunTest {
         val text = hex(bytes)
         return "${text.substring(0, 8)}-${text.substring(8, 12)}-${text.substring(12, 16)}-${text.substring(16, 20)}-${text.substring(20)}"
     }
+
+    @Test
+    fun afterAResult05TheAppGetsNoFurtherBatchInThisRun() {
+        joined()
+        run()
+        water.comparison = ComparisonState.SENDING
+        water.toSend += id(1) to blob(server.keyId, 1)
+        water.comparisonToSend += id(2) to blob(server.keyId, 2)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        // Its file's chunks are being deleted: not stored, for now.
+        server.answerNext("/v1/changes", HttpResult.Answer(200, Bytes().u8(0).bytes(server.epoch.toBytes()).i64(0).i64(0).i32(1).u8(5).done()))
+        server.requests.clear()
+        run()
+        assertEquals("one batch only", 1, server.requests.count { it.url.contains("/v1/changes") })
+        assertEquals(1, water.toSend.size)
+        assertEquals(1, water.comparisonToSend.size)
+    }
+
+    @Test
+    fun aPageThatSaysMoreWaitAndMovesNothingIsAFault() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        server.answerNext("/v1/changes", HttpResult.Answer(200, Bytes().u8(0).bytes(server.epoch.toBytes()).i64(0).i64(0).u8(1).i32(0).done()))
+        assertEquals(RunEnd.ENDED, run())
+        assertTrue(store.now().fault)
+    }
+
+    @Test
+    fun aLackOfCpuTimeOnAFileRequestHalvesOnceAndTheFilesWaitForTheNextRun() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 3 }
+        val fileId = id(0x71)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.answerNext("/v1/files/send", HttpResult.Answer(SyncServer.CPU_TIME_STATUS, ByteArray(0)))
+        server.requests.clear()
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals("the same request is not made again", 1, server.paths().count { it == "/v1/files/send" })
+        assertEquals(1, store.now().halved)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals(listOf(hex(fileId) to true), water.sent)
+    }
+
+    @Test
+    fun aStreamWhoseChunksAreAllOnTheServerIsSentOnAMeteredNetworkWithNoChunkMoved() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 4 }
+        val fileId = id(0x72)
+        val hash = sha256(bytes)
+        server.chunks["water/${hex(fileId)}/${hex(hash)}/0"] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), hash, 10, 0, 0))
+        metered = true
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertEquals(listOf(hex(fileId) to true), water.sent)
+        assertFalse("/v1/files/send" in server.paths())
+    }
+
+    @Test
+    fun onlyTheChunksTheServerLacksAreSent() {
+        joined()
+        run()
+        val bytes = ByteArray(SyncRun.CHUNK_BYTES + 5) { (it % 13).toByte() }
+        val fileId = id(0x73)
+        val hash = sha256(bytes)
+        server.chunks["water/${hex(fileId)}/${hex(hash)}/0"] = bytes.copyOf(SyncRun.CHUNK_BYTES)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), hash, bytes.size.toLong(), 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        val sends = server.requests.filter { it.url.contains("/v1/files/send") }
+        assertEquals(1, sends.size)
+        assertEquals("one chunk, the second", 1, java.nio.ByteBuffer.wrap(sends.single().body!!).short.toInt())
+        assertEquals(1, java.nio.ByteBuffer.wrap(sends.single().body!!, 2 + 16 + 32, 4).int)
+        assertEquals(listOf(hex(fileId) to true), water.sent)
+    }
+
+    @Test
+    fun whatARunWritesAfterTheUserLeftDoesNotOverwriteTheLeave() {
+        joined()
+        run()
+        water.toSend += id(1) to blob(server.keyId, 1)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        // Leave, while the run serves Water: stage 0 and the server's values gone, then the keys.
+        water.onStatus = { forgetServer(store, keys.sync.crypto.sync, scheduler) }
+        run()
+        assertEquals(SyncState(), store.now())
+        assertNull("no problem from the run", problemOf(store.now(), clock.nowMillis))
+    }
+
+    @Test
+    fun aRunStopsBeforeItsNextRequestWhenAndroidStoppedItsJob() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        var stopped = false
+        water.onStatus = { stopped = true }
+        server.requests.clear()
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { stopped } })
+        assertEquals("heads only", listOf("/v1/heads"), server.paths())
+        assertFalse(store.now().fault)
+        assertEquals(0, store.now().failedRuns)
+    }
 }
+

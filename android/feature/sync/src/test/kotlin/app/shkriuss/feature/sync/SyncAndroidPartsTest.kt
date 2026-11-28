@@ -3,10 +3,15 @@ package app.shkriuss.feature.sync
 import android.app.Application
 import android.app.job.JobInfo
 import android.app.job.JobScheduler
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
+import android.content.pm.ProviderInfo
 import android.content.pm.Signature
 import android.content.pm.SigningInfo
+import android.database.Cursor
+import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import app.shkriuss.core.crypto.AppName
@@ -14,8 +19,8 @@ import app.shkriuss.core.crypto.KeyId
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.security.CourierApp
-import app.shkriuss.core.sync.Courier
 import app.shkriuss.core.sync.ComparisonState
+import app.shkriuss.core.sync.Courier
 import app.shkriuss.core.sync.Refusal
 import app.shkriuss.core.sync.SendBlock
 import app.shkriuss.core.sync.SyncCounts
@@ -176,5 +181,54 @@ class SyncAndroidPartsTest {
         assertEquals(CourierAnswer.NoAnswer, exporting(batch.copyOf(batch.size - 1)).export(water, context, false, 10, 65_536))
         val nothing = AndroidCouriers(app) { _, _, _ -> Bundle().apply { putString(Courier.RESULT, Courier.RESULT_NOTHING) } }
         assertEquals(CourierAnswer.Done(null), nothing.export(water, context, false, 10, 65_536))
+    }
+
+    /** A courier provider of a data app in the tests, which says who it is. */
+    class EchoCourier : ContentProvider() {
+        override fun onCreate(): Boolean = true
+
+        override fun call(method: String, arg: String?, extras: Bundle?): Bundle = Bundle().apply { putString("answered", method) }
+
+        override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
+
+        override fun getType(uri: Uri): String? = null
+
+        override fun insert(uri: Uri, values: ContentValues?): Uri? = null
+
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
+
+        override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
+    }
+
+    /** Installs [holder] with a courier provider of Water's authority, which answers. Water itself is installed with none. */
+    private fun courierHeldBy(holder: String) {
+        val info = ProviderInfo().apply {
+            authority = "app.shkriuss.water.courier"
+            packageName = holder
+            name = EchoCourier::class.java.name
+        }
+        if (holder != "app.shkriuss.water") install("app.shkriuss.water", suiteCertificate)
+        packages.installPackage(
+            PackageInfo().apply {
+                packageName = holder
+                applicationInfo = ApplicationInfo().apply { packageName = holder }
+                providers = arrayOf(info)
+                signingInfo = signing(suiteCertificate)
+            },
+        )
+        Robolectric.buildContentProvider(EchoCourier::class.java).create(info)
+    }
+
+    @Test
+    fun syncCallsACourierAuthorityOnlyWhenTheCheckedAppItselfHoldsIt() {
+        courierHeldBy("app.shkriuss.thief")
+        assertEquals("the authority answers", "x", app.contentResolver.call("app.shkriuss.water.courier", "x", null, null)?.getString("answered"))
+        assertNull("but Water does not hold it", ResolverCaller(app).call("app.shkriuss.water", Courier.STATUS, Bundle()))
+    }
+
+    @Test
+    fun syncCallsTheCourierOfTheAppThatHoldsIt() {
+        courierHeldBy("app.shkriuss.water")
+        assertEquals(Courier.STATUS, ResolverCaller(app).call("app.shkriuss.water", Courier.STATUS, Bundle())?.getString("answered"))
     }
 }

@@ -91,12 +91,17 @@ class SyncRun(
     /** What the run does now, or null between the apps and when no run goes. */
     val now: StateFlow<RunProgress?> = progress.asStateFlow()
 
-    /** One run. [asked] is true for **Sync now** and **Try again**: it skips the 4-hour wait and tries sending on a full server. */
-    suspend fun run(asked: Boolean): RunEnd = oneAtATime.withLock {
+    /**
+     * One run. [asked] is true for **Sync now** and **Try again**: it
+     * skips the 4-hour wait and tries sending on a full server. The run
+     * asks [stopped] before each request and each courier call, and ends
+     * there when Android stopped its job.
+     */
+    suspend fun run(asked: Boolean, stopped: () -> Boolean = { false }): RunEnd = oneAtATime.withLock {
         withContext(Dispatchers.IO) {
             going.value = true
             try {
-                runLocked(asked)
+                runLocked(asked, stopped)
             } finally {
                 progress.value = null
                 going.value = false
@@ -104,8 +109,8 @@ class SyncRun(
         }
     }
 
-    private fun runLocked(asked: Boolean): RunEnd {
-        if (store.now().stage != Stage.JOINED) return RunEnd.NOT_JOINED
+    private fun runLocked(asked: Boolean, stopped: () -> Boolean): RunEnd {
+        if (stopped() || store.now().stage != Stage.JOINED) return RunEnd.NOT_JOINED
         val now = clock.nowMillis()
         val state = try {
             store.update { it.withWaitsOver(now) }
@@ -114,17 +119,25 @@ class SyncRun(
         }
         if (state.dayWait == DayWait.EVERYTHING) return RunEnd.WAITING
         if (state.failedRuns >= SyncState.MOST_FAILED_RUNS && state.retryAt != null && now < state.retryAt && !asked) return RunEnd.WAITING
+        val session = try {
+            sessionOf(state, keys)
+        } catch (_: BlobException) {
+            // The Keystore cannot be used now, as before the first unlock. The next run tries.
+            return RunEnd.ENDED
+        }
         return try {
-            val session = sessionOf(state, keys) ?: throw EndRun(Reason.Stopped(Stop.KEYS_GONE))
+            if (session == null) throw EndRun(Reason.Stopped(Stop.KEYS_GONE))
             if (keys.nameKeyState() == NameKeyState.MISSING || keys.nameKeyState() == NameKeyState.LOST) throw EndRun(Reason.Stopped(Stop.KEYS_GONE))
-            OneRun(session, asked).go()
-            store.update { it.copy(syncedAt = clock.nowMillis(), failedRuns = 0, retryAt = null) }
+            OneRun(session, asked, stopped).go()
+            store.update { if (it.isJoinedWith(session)) it.copy(syncedAt = clock.nowMillis(), failedRuns = 0, retryAt = null) else it }
             RunEnd.WORKED
+        } catch (_: RunStopped) {
+            RunEnd.ENDED
         } catch (end: EndRun) {
-            ended(end.reason)
+            ended(end.reason, session)
             RunEnd.ENDED
         } catch (_: DeviceKeyGoneException) {
-            ended(Reason.Stopped(Stop.KEYS_GONE))
+            ended(Reason.Stopped(Stop.KEYS_GONE), session)
             RunEnd.ENDED
         } catch (_: BlobException) {
             // The Keystore cannot be used now, as before the first unlock. The next run tries.
@@ -134,19 +147,43 @@ class SyncRun(
         }
     }
 
-    /** Writes what [reason] says. A write that fails is left: the next run meets the same answer. */
-    private fun ended(reason: Reason) {
+    /**
+     * Writes what [reason] says, only while the phone is still joined with
+     * [session]: a Leave or a new join while the run went keeps what it
+     * wrote. A write that fails is left: the next run meets the same answer.
+     */
+    private fun ended(reason: Reason, session: Session?) {
         try {
-            problems.write(reason, countsAsFailedRun = true)
+            problems.write(reason, countsAsFailedRun = true, session = session)
         } catch (_: CouldNotSaveException) {
             // The next run meets the same answer.
         }
     }
 
     /** The work of one run, with the session it signs with. */
-    private inner class OneRun(private val session: Session, private val asked: Boolean) {
+    private inner class OneRun(private val session: Session, private val asked: Boolean, private val stopped: () -> Boolean) {
         private var heads: Heads? = null
         private var sendingStopped = false
+
+        /** True after a lack of CPU time or a `0C` on a file request: the files wait for the next run, with less in each request. */
+        private var filesStopped = false
+
+        /** The app that got a result `05`: it gets no further batch in this run. */
+        private var noMoreBatchesFor: String? = null
+
+        /** Ends the run here when Android stopped its job. */
+        private fun checkStop() {
+            if (stopped()) throw RunStopped()
+        }
+
+        /**
+         * One write of the state, made only while the phone is still joined
+         * with this run's session. A Leave, a cancel or a new join while
+         * the run went keeps what it wrote.
+         */
+        private fun write(change: (SyncState) -> SyncState) {
+            store.update { if (it.isJoinedWith(session)) change(it) else it }
+        }
 
         fun go() {
             val start = store.now()
@@ -158,12 +195,15 @@ class SyncRun(
             val epochMoved = start.epoch != heads.epoch
             var toServe = apps.filter { firstOfDay || epochMoved || needs(it.name.value, heads) }
             repeat(PASSES) {
-                toServe.forEach { serve(it) }
+                toServe.forEach {
+                    checkStop()
+                    serve(it)
+                }
                 // A poke that came while the run served its app marks it again: it is served again before the run ends.
                 toServe = apps.filter { store.now().app(it.name.value).poked }
                 if (toServe.isEmpty()) return@repeat
             }
-            if (firstOfDay) store.update { it.copy(statusAt = clock.nowMillis()) }
+            if (firstOfDay) write { it.copy(statusAt = clock.nowMillis()) }
         }
 
         private fun needs(app: String, heads: Heads): Boolean {
@@ -180,7 +220,7 @@ class SyncRun(
                 info.lowest > ServerInfo.VERSION -> throw EndRun(Reason.Stopped(Stop.UPDATE_SYNC))
                 info.highest < ServerInfo.VERSION -> throw EndRun(Reason.Stopped(Stop.UPDATE_SERVER))
             }
-            store.update { it.copy(limits = info.limits, infoAt = clock.nowMillis()) }
+            write { it.copy(limits = info.limits, infoAt = clock.nowMillis()) }
         }
 
         /** `heads`: the epoch, the key ID and the revision, and the list of devices when it is due. */
@@ -190,7 +230,7 @@ class SyncRun(
             this.heads = heads
             val state = store.now()
             val putBack = heads.revision < state.revision
-            store.update { it.copy(epoch = heads.epoch, keyId = heads.keyId, putBack = it.putBack || putBack) }
+            write { it.copy(epoch = heads.epoch, keyId = heads.keyId, putBack = it.putBack || putBack) }
             if (heads.revision != state.revision || !sameUtcDay(state.devicesAt, clock.nowMillis())) {
                 DeviceList(store, server, clock).read(session, heads.revision)
             }
@@ -200,7 +240,7 @@ class SyncRun(
         /** A request passed: the clock and the fault no longer hold. */
         private fun passed() {
             val state = store.now()
-            if (state.fault || state.clockOff != null) store.update { it.copy(fault = false, clockOff = null) }
+            if (state.fault || state.clockOff != null) write { it.copy(fault = false, clockOff = null) }
         }
 
         private fun serve(app: CourierApp) {
@@ -211,7 +251,7 @@ class SyncRun(
                     return
                 } catch (moved: EpochMoved) {
                     // Every app compares everything: each courier call from now on carries the new epoch.
-                    store.update { it.copy(epoch = moved.epoch) }
+                    write { it.copy(epoch = moved.epoch) }
                     if (++epochs >= MOST_EPOCHS) throw EndRun(Reason.Fault)
                 } finally {
                     progress.value = null
@@ -221,7 +261,7 @@ class SyncRun(
 
         private fun serveOnce(app: CourierApp) {
             val name = app.name.value
-            store.update { state -> state.withApp(name) { it.copy(poked = false) } }
+            write { state -> state.withApp(name) { it.copy(poked = false) } }
             val context = courierContext()
             val status = statusOf(app, context) ?: return
             if (!status.isOn || !status.canSyncNow) {
@@ -238,14 +278,14 @@ class SyncRun(
             if (streamsSent && !sendBatches(app, context, comparison = false)) return
             if (!sendBatches(app, context, comparison = true)) return
             val after = statusOf(app, context) ?: return
-            store.update { state -> state.withApp(name) { it.copy(head = head.head) } }
+            write { state -> state.withApp(name) { it.copy(head = head.head) } }
             record(name, after, goodNow = true)
         }
 
         private fun record(name: String, status: SyncStatus, goodNow: Boolean) {
             val work = status.hasOrdinaryChanges || status.hasComparisonRecords || status.hasStreamsToMove ||
                 status.comparison != ComparisonState.NONE || status.wantsFetch
-            store.update { state ->
+            write { state ->
                 state.withApp(name) { it.copy(on = status.isOn, work = status.isOn && work, goodAt = if (goodNow) clock.nowMillis() else it.goodAt) }
             }
         }
@@ -264,7 +304,7 @@ class SyncRun(
             is CourierAnswer.Done -> answer.value.takeIf { it.courierVersion == ServerInfo.VERSION }
             is CourierAnswer.Refused -> {
                 if (answer.refusal == Refusal.OFF) {
-                    store.update { state -> state.withApp(app.name.value) { it.copy(on = false, work = false) } }
+                    write { state -> state.withApp(app.name.value) { it.copy(on = false, work = false) } }
                 }
                 null
             }
@@ -278,6 +318,7 @@ class SyncRun(
             var known = status.known
             progress.value = RunProgress(name, if (status.comparison == ComparisonState.NONE) RunStep.FETCHING else RunStep.COMPARING)
             while (true) {
+                checkStop()
                 val fetched = when (val answer = retrying { server.fetch(session, name, cursor, known, context.epoch, mostRecords()) }) {
                     is ServerAnswer.Done -> answer.value
                     is ServerAnswer.OtherEpoch -> throw EpochMoved(answer.epoch)
@@ -285,6 +326,8 @@ class SyncRun(
                 }
                 passed()
                 if (fetched.page.since != cursor || fetched.page.epoch != context.epoch) throw EndRun(Reason.Fault)
+                // A page that says more wait, and moves nothing forward, would be fetched again and again.
+                if (fetched.page.more && fetched.page.through <= cursor) throw EndRun(Reason.Fault)
                 when (val imported = couriers.import(app, context, fetched.bytes)) {
                     is CourierAnswer.Done -> when (val result = imported.value) {
                         is Imported.Taken -> {
@@ -304,7 +347,8 @@ class SyncRun(
             val name = app.name.value
             var tries = 0
             repeat(MOST_BATCHES) {
-                if (!sendingAllowed() || (comparison && comparisonsWait())) return true
+                checkStop()
+                if (!sendingAllowed() || (comparison && comparisonsWait()) || noMoreBatchesFor == name) return true
                 progress.value = RunProgress(name, if (comparison) RunStep.COMPARING else RunStep.SENDING)
                 val batch = when (val answer = couriers.export(app, context, comparison, mostRecords(), mostBytes())) {
                     is CourierAnswer.Done -> answer.value ?: return true
@@ -314,7 +358,7 @@ class SyncRun(
                     is ServerAnswer.Done -> {
                         passed()
                         tries = 0
-                        if (store.now().full) store.update { it.copy(full = false, fullAt = null) }
+                        if (store.now().full) write { it.copy(full = false, fullAt = null) }
                         val sent = answer.value
                         if (sent.answer.epoch != context.epoch) throw EndRun(Reason.Fault)
                         when (val taken = couriers.exported(app, context, batch.token, sent.bytes)) {
@@ -327,16 +371,19 @@ class SyncRun(
                             val status = statusOf(app, context) ?: return false
                             if (!fetchAll(app, context, status)) return false
                         }
-                        if (SendResult.CHUNKS_BEING_DELETED in results) return true
+                        if (SendResult.CHUNKS_BEING_DELETED in results) {
+                            noMoreBatchesFor = name
+                            return true
+                        }
                     }
                     ServerAnswer.Full -> {
                         sendingStopped = true
-                        store.update { it.copy(full = true, fullAt = clock.nowMillis()) }
+                        write { it.copy(full = true, fullAt = clock.nowMillis()) }
                         return true
                     }
                     is ServerAnswer.DayLimit -> {
                         if (!answer.comparisonsOnly || !comparison) fail(answer)
-                        store.update { it.copy(dayWait = DayWait.COMPARISONS, dayWaitUntil = nextUtcMidnight(clock.nowMillis())) }
+                        write { it.copy(dayWait = DayWait.COMPARISONS, dayWaitUntil = nextUtcMidnight(clock.nowMillis())) }
                         return true
                     }
                     ServerAnswer.OutOfCpuTime -> if (!halve() || ++tries > MOST_TRIES) fail(answer)
@@ -367,17 +414,20 @@ class SyncRun(
                 else -> return false
             }
             deleteStreams(app, context, list.filter { it.work == StreamWork.DELETE })
+            // Asking which chunks the server has moves no chunk, so it goes on any network: only files/send and files/fetch wait.
             val sends = list.filter { it.work == StreamWork.SEND }
-            val sent = if (sends.isNotEmpty() && filesMayMove()) StreamSender(app, context).send(sends) else false
+            val sent = if (sends.isNotEmpty() && !filesStopped) StreamSender(app, context).send(sends) else false
             val fetches = list.filter { it.work == StreamWork.FETCH }
-            if (fetches.isNotEmpty() && filesMayMove()) StreamFetcher(app, context).fetch(fetches)
+            if (fetches.isNotEmpty() && !filesStopped && filesMayMove()) StreamFetcher(app, context).fetch(fetches)
             return sent
         }
 
         private fun deleteStreams(app: CourierApp, context: CourierContext, deletes: List<ListedStream>) {
             deletes.chunked(fileItems()).forEach { group ->
+                checkStop()
+                if (filesStopped) return
                 val files = group.map { it.fileIdBytes to it.deletedNumber }
-                val results = valueOf(retrying { server.filesDelete(session, app.name.value, files) })
+                val results = fileValue(server.filesDelete(session, app.name.value, files)) ?: return
                 passed()
                 group.zip(results).forEach { (stream, result) ->
                     // After NOT_NOW, or with no answer, the next run asks again.
@@ -400,21 +450,25 @@ class SyncRun(
             private var anySent = false
 
             fun send(streams: List<ListedStream>): Boolean {
-                val have = streams.chunked(fileItems()).flatMap { group ->
-                    valueOf(retrying { server.filesHave(session, app.name.value, group.map { StreamRef(it.fileIdBytes, it.hash) }) })
+                val have = mutableListOf<Long>()
+                for (group in streams.chunked(fileItems())) {
+                    checkStop()
+                    have += fileValue(server.filesHave(session, app.name.value, group.map { StreamRef(it.fileIdBytes, it.hash) })) ?: return false
                 }
                 passed()
                 total = streams.sumOf { it.length }
                 streams.zip(have).forEach { (stream, chunksThere) ->
-                    if (stopped) return anySent
+                    checkStop()
                     val chunks = chunkCount(stream.length)
                     val first = minOf(chunksThere, chunks.toLong()).toInt()
                     done += minOf(stream.length, first.toLong() * CHUNK_BYTES)
                     show()
                     if (first == chunks) {
+                        // Every chunk is there already: no chunk moves, so this goes on any network.
                         sent(stream)
                         return@forEach
                     }
+                    if (stopped || filesStopped || !filesMayMove()) return@forEach
                     // Damaged bytes never go to the server under the name of the good stream.
                     if (!fitsItsHash(stream)) {
                         couriers.streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false)
@@ -457,7 +511,8 @@ class SyncRun(
             }
 
             private fun flush() {
-                if (pending.isEmpty() || stopped) return
+                if (pending.isEmpty() || stopped || filesStopped) return
+                checkStop()
                 if (!filesMayMove()) {
                     // The network turned metered: no more chunks in this run.
                     stopped = true
@@ -466,7 +521,7 @@ class SyncRun(
                 progress.value = RunProgress(app.name.value, RunStep.SENDING_FILES, done, total)
                 val chunks = pending.toList()
                 pending.clear()
-                val stored = valueOf(retrying { server.filesSend(session, app.name.value, chunks.map { it.second }) })
+                val stored = fileValue(server.filesSend(session, app.name.value, chunks.map { it.second })) ?: return
                 passed()
                 chunks.zip(stored).forEach { (keyed, isStored) ->
                     val (key, chunk) = keyed
@@ -500,7 +555,7 @@ class SyncRun(
                 total = streams.sumOf { it.length }
                 done = streams.sumOf { it.bytesHere }
                 streams.forEach { stream ->
-                    if (!filesMayMove()) return
+                    if (filesStopped || !filesMayMove()) return
                     if (!fetchOne(stream)) return@forEach
                 }
             }
@@ -513,7 +568,8 @@ class SyncRun(
                     out.use {
                         var number = (here / CHUNK_BYTES).toInt()
                         while (number < chunks) {
-                            if (!filesMayMove()) return false
+                            checkStop()
+                            if (filesStopped || !filesMayMove()) return false
                             val refs = mutableListOf<ChunkRef>()
                             var bytes = 0L
                             while (number < chunks && refs.size < fileItems() && bytes + chunkLength(stream.length, number) <= CHUNK_BYTES) {
@@ -523,7 +579,7 @@ class SyncRun(
                                 number++
                             }
                             progress.value = RunProgress(app.name.value, RunStep.FETCHING_FILES, done, total)
-                            val fetched = valueOf(retrying { server.filesFetch(session, app.name.value, refs) })
+                            val fetched = fileValue(server.filesFetch(session, app.name.value, refs)) ?: return false
                             passed()
                             for ((ref, chunk) in refs.zip(fetched)) {
                                 // A chunk the server lacks: another device must send it first. The app still wants the stream.
@@ -554,8 +610,21 @@ class SyncRun(
             val state = store.now()
             val limits = state.limits ?: return false
             if (state.halved >= SyncState.MOST_HALVINGS || (limits.records shr state.halved) <= 1) return false
-            store.update { it.copy(halved = it.halved + 1, halvedAt = clock.nowMillis()) }
+            write { it.copy(halved = it.halved + 1, halvedAt = clock.nowMillis()) }
             return true
+        }
+
+        /**
+         * The value of a file request's [answer]. After a lack of CPU time
+         * or a `0C` the request is not made again as it was: what one
+         * request carries is halved, or `info` read again, and the files
+         * wait for the next run (null). Any other answer ends the run.
+         */
+        private fun <T> fileValue(answer: ServerAnswer<T>): T? = when (answer) {
+            is ServerAnswer.Done -> answer.value
+            ServerAnswer.OutOfCpuTime -> if (halve()) null.also { filesStopped = true } else fail(answer)
+            ServerAnswer.TooMuch -> if (lessAfterTooMuch()) null.also { filesStopped = true } else fail(answer)
+            else -> fail(answer)
         }
 
         /** After `0C`: `info` again, and if its limits are not lower, a halving. */
@@ -601,6 +670,9 @@ class SyncRun(
 
     /** Thrown inside a run when the server names another epoch: the app is served again with it. */
     private class EpochMoved(val epoch: SyncId) : Exception("Another epoch")
+
+    /** Thrown inside a run when Android stopped its job. Nothing is written for it. */
+    private class RunStopped : Exception("The run was stopped")
 
     internal companion object {
         /** A stream is cut into chunks of 4 MiB, and one request carries at most that much. */
@@ -650,7 +722,7 @@ class SyncRun(
                 is ServerAnswer.Clock -> Reason.ClockOff(answer.serverTime)
                 is ServerAnswer.DayLimit -> if (answer.comparisonsOnly) Reason.Fault else Reason.Wait(DayWait.EVERYTHING)
                 ServerAnswer.DayRequestsUsed -> Reason.Wait(DayWait.EVERYTHING)
-                ServerAnswer.Unreachable, ServerAnswer.UntrustedCertificate, ServerAnswer.OutOfCpuTime -> Reason.Unreachable
+                ServerAnswer.Unreachable, ServerAnswer.NotTheWorker, ServerAnswer.UntrustedCertificate, ServerAnswer.OutOfCpuTime -> Reason.Unreachable
                 ServerAnswer.Full -> Reason.Full
                 else -> Reason.Fault
             },
@@ -721,6 +793,9 @@ internal sealed interface Reason {
 
 /** Thrown inside a run, and in the other steps that talk to the server, when an answer ends what they do. */
 internal class EndRun(val reason: Reason) : Exception("The run ended")
+
+/** True while the phone is joined, and with the device of [session]: a Leave or a new join since makes it false. */
+internal fun SyncState.isJoinedWith(session: Session): Boolean = stage == Stage.JOINED && deviceId?.hex == session.key.deviceId.toHex()
 
 /** Counts the bytes it passes on. */
 private class CountingInput(private val input: InputStream) : InputStream() {

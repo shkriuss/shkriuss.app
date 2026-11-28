@@ -366,8 +366,8 @@ and reads no file.
 | Permission | From | Why |
 |---|---|---|
 | `android.permission.INTERNET` | `app/sync` | To talk to the user's own server, over HTTPS only ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). Granted at install. |
-| `android.permission.ACCESS_NETWORK_STATE` | `app/sync` | For JobScheduler to wait for a network, and for Sync to tell a metered network before it moves file chunks. Granted at install. |
-| `android.permission.RECEIVE_BOOT_COMPLETED` | `app/sync` | For JobScheduler to keep Sync's periodic job after a restart. Sync has no receiver of its own. Granted at install. |
+| `android.permission.ACCESS_NETWORK_STATE` | `feature/sync` | For JobScheduler to wait for a network, and for Sync to tell a metered network before it moves file chunks. Granted at install. |
+| `android.permission.RECEIVE_BOOT_COMPLETED` | `feature/sync` | For JobScheduler to keep Sync's periodic job after a restart. Sync has no receiver of its own. Granted at install. |
 
 - They are Sync's allow list in the APK rules check, which its
   [specification](../apps/sync/spec.md#permissions) names. The owner

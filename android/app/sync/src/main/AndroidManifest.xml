@@ -4,10 +4,11 @@
     Its permissions are listed in docs/security/permissions.md. Its allow
     list in the APK rules check has these three, and no other:
 
-    - INTERNET, to talk to the user's own server (hard rule 4, ADR 0005);
-    - ACCESS_NETWORK_STATE and RECEIVE_BOOT_COMPLETED, which JobScheduler
-      needs to wait for a network and to keep the periodic work after a
-      restart (docs/apps/sync/spec.md, "Permissions").
+    - INTERNET, declared here, to talk to the user's own server (hard
+      rule 4, ADR 0005);
+    - ACCESS_NETWORK_STATE and RECEIVE_BOOT_COMPLETED, which feature/sync
+      declares beside its code: JobScheduler needs them to wait for a
+      network and to keep the periodic job after a restart (ADR 0045).
 
     Android grants all three at install. Sync asks for none, shows no
     notification, sets no alarm and has no system prompt.
@@ -24,8 +25,6 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- The two of core/security: Sync has no system prompt and no app lock, and hides no other windows. -->
     <uses-permission

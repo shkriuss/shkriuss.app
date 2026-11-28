@@ -377,11 +377,17 @@ internal class FakeDataApp(val name: String) {
     val deleted = mutableListOf<String>()
     val calls = mutableListOf<String>()
     var dropPages = false
+
+    /** Runs once, at the next `status`, before the answer: a test makes the user act while a run goes. */
+    var onStatus: () -> Unit = {}
     private var token = 0L
     private var lastBatch: List<Pair<ByteArray, ByteArray>> = emptyList()
     private var lastComparison = false
 
     fun status(context: CourierContext): SyncStatus {
+        val hook = onStatus
+        onStatus = {}
+        hook()
         if (epoch != context.epoch) {
             epoch = context.epoch
             cursor = 0

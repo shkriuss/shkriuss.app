@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 8 test classes with 89 tests. They use real keys
+- `feature/sync` has 8 test classes with 99 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -843,11 +843,14 @@ second build must write the same mapping file, or the release stops. See
   - `SyncRunTest`: a quiet run, the fetch of every page, a poke, a
     refusal `01` and the fetch before the next batch, a full server,
     the day's limits, every answer that stops sync, the fault and the
-    clock, three failed runs and the 4-hour wait, halving for CPU time
-    and its undoing a day later, another epoch, `0C`, a put-back server
-    with a removed device in again, lost keys, an app that gives no
-    answer, streams sent, fetched, deleted and kept off a metered
-    network, and the order of ordinary and comparison batches.
+    clock, three failed runs and the 4-hour wait, halving for CPU time,
+    also on a file request, and its undoing a day later, another epoch,
+    `0C`, a page that moves nothing, a put-back server with a removed
+    device in again, lost keys, an app that gives no answer, streams
+    sent, fetched, deleted and kept off a metered network, only the
+    chunks the server lacks, the order of ordinary and comparison
+    batches, no batch after a `05`, a run stopped by Android, and a
+    Leave while a run goes, which the run does not overwrite.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
     the headers of a signed request, a `04` sent once more, Cloudflare's
     answers, a page, the devices and the file calls.
@@ -858,8 +861,8 @@ second build must write the same mapping file, or the release stops. See
   - `SyncStateStoreTest` and `ServerAddressTest`: every stored value and
     its limits, one write for one step, and the address rules.
   - `SyncAndroidPartsTest`, under Robolectric: the courier provider's
-    check of its caller, JobScheduler's two jobs, and courier calls as
-    bundles and pipes.
+    check of its caller, JobScheduler's two jobs, courier calls as
+    bundles and pipes, and a courier authority that another app holds.
 - `app/sync` has two test classes: `SyncManifestTest` names everything
   Sync's merged manifest lets another app reach, its three permissions
   and the removals; `SyncPlaceholderScreenshotTest` draws the screen

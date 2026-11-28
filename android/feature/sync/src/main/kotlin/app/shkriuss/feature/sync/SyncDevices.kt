@@ -24,10 +24,16 @@ internal class DeviceList(private val store: SyncStateStore, private val server:
         val inAgain = devices.filter { !it.removed && it.id.hex in state.removed }
         var latest = revision ?: state.revision
         inAgain.forEach { latest = SyncRun.valueOf(server.removeDevice(session, it.id)) }
-        val removed = state.removed + devices.filter { it.removed && it.id.hex != thisPhone }.map { it.id.hex }
-        if (removed.size > SyncState.MOST_REMOVED) throw EndRun(Reason.Fault)
+        val newlyRemoved = devices.filter { it.removed && it.id.hex != thisPhone }.map { it.id.hex }
+        if ((state.removed + newlyRemoved).size > SyncState.MOST_REMOVED) throw EndRun(Reason.Fault)
         store.update {
-            it.copy(removed = removed, revision = latest, devicesAt = clock.nowMillis(), putBack = it.putBack || inAgain.isNotEmpty())
+            // From the state as it is now: an ID that Remove added meanwhile stays.
+            val removed = it.removed + newlyRemoved
+            if (!it.isJoinedWith(session) || removed.size > SyncState.MOST_REMOVED) {
+                it
+            } else {
+                it.copy(removed = removed, revision = latest, devicesAt = clock.nowMillis(), putBack = it.putBack || inAgain.isNotEmpty())
+            }
         }
         return devices.map { device -> if (device.id in inAgain.map { it.id }) device.asRemoved() else device }
     }
@@ -140,9 +146,9 @@ class SyncDevices(
         } catch (_: CouldNotSaveException) {
             return DeviceAnswer.NotSaved
         }
-        return withSession { session ->
+        return withSession<Unit> { session ->
             when (val answer = server.deleteAccount(session)) {
-                is ServerAnswer.Done, ServerAnswer.Closed -> problems.stop(Stop.CLOSED)
+                is ServerAnswer.Done, ServerAnswer.Closed -> problems.stop(Stop.CLOSED, session)
                 else -> SyncRun.fail(answer)
             }
         }
@@ -163,8 +169,14 @@ class SyncDevices(
     private fun <T> withSession(action: (Session) -> T): DeviceAnswer<T> {
         val state = store.now()
         if (state.stage != Stage.JOINED) return DeviceAnswer.Problem
+        val session = try {
+            SyncRun.sessionOf(state, keys)
+        } catch (_: BlobException) {
+            return DeviceAnswer.NotSaved
+        } catch (_: CouldNotSaveException) {
+            return DeviceAnswer.NotSaved
+        }
         return try {
-            val session = SyncRun.sessionOf(state, keys)
             if (session == null) {
                 problems.stop(Stop.KEYS_GONE)
                 return DeviceAnswer.Problem
@@ -173,13 +185,13 @@ class SyncDevices(
         } catch (end: EndRun) {
             if (end.reason == Reason.Unreachable) return DeviceAnswer.Unreachable
             try {
-                problems.write(end.reason, countsAsFailedRun = false)
+                problems.write(end.reason, countsAsFailedRun = false, session = session)
             } catch (_: CouldNotSaveException) {
                 // Apps shows the problem at the next request.
             }
             DeviceAnswer.Problem
         } catch (_: DeviceKeyGoneException) {
-            problems.stop(Stop.KEYS_GONE)
+            problems.stop(Stop.KEYS_GONE, session)
             DeviceAnswer.Problem
         } catch (_: BlobException) {
             DeviceAnswer.NotSaved

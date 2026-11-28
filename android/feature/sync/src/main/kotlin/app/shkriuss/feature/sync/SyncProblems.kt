@@ -98,37 +98,59 @@ interface Scheduler {
  * Writes what an answer of the server means for the whole phone
  * (docs/apps/sync/spec.md, "Problems"): a stop, with both works
  * cancelled, a fault, the clock, a wait for the day, a full server, or a
- * failed run.
+ * failed run. Given the session the answer came with, it writes only
+ * while the phone is still joined with that device: a Leave or a new join
+ * in between keeps what it wrote.
  */
 class ProblemWriter(private val store: SyncStateStore, private val keys: SyncKeys, private val scheduler: Scheduler, private val clock: Clock) {
-    /** Sync stops for [stop]. A removed phone's device key is deleted after the state no longer needs it. */
-    fun stop(stop: Stop) {
-        val alias = store.now().deviceAlias
-        store.update { it.copy(stage = Stage.STOPPED, stop = stop) }
+    /**
+     * Sync stops for [stop]. A removed phone's device key, the one of
+     * [session], is deleted after the state no longer needs it. False when
+     * the phone was no longer joined with [session], and nothing changed.
+     */
+    fun stop(stop: Stop, session: Session? = null): Boolean {
+        var stopped = false
+        store.update {
+            if (session != null && !it.isJoinedWith(session)) {
+                it
+            } else {
+                stopped = true
+                it.copy(stage = Stage.STOPPED, stop = stop)
+            }
+        }
+        if (!stopped) return false
         scheduler.cancel()
-        if (stop == Stop.REMOVED && alias != null) {
+        if (stop == Stop.REMOVED && session != null) {
             try {
-                keys.deleteDeviceKey(alias)
+                keys.deleteDeviceKey(session.key.number)
             } catch (_: BlobException) {
                 // The next start deletes every device key that the state does not keep.
             }
         }
+        return true
     }
 
     /** Writes what [reason] says. [countsAsFailedRun] is true in a run, where a server that cannot be reached counts. */
-    internal fun write(reason: Reason, countsAsFailedRun: Boolean) {
+    internal fun write(reason: Reason, countsAsFailedRun: Boolean, session: Session?) {
+        if (reason is Reason.Stopped) {
+            stop(reason.stop, session)
+            return
+        }
         val now = clock.nowMillis()
-        when (reason) {
-            is Reason.Stopped -> stop(reason.stop)
-            Reason.Fault -> store.update { it.copy(fault = true) }
-            is Reason.ClockOff -> store.update { it.copy(clockOff = reason.serverTime - now) }
-            Reason.Full -> store.update { it.copy(full = true, fullAt = now) }
-            is Reason.Wait -> store.update { it.copy(dayWait = reason.kind, dayWaitUntil = SyncRun.nextUtcMidnight(now)) }
-            Reason.Unreachable -> if (countsAsFailedRun) {
-                store.update {
+        store.update {
+            if (session != null && !it.isJoinedWith(session)) return@update it
+            when (reason) {
+                Reason.Fault -> it.copy(fault = true)
+                is Reason.ClockOff -> it.copy(clockOff = reason.serverTime - now)
+                Reason.Full -> it.copy(full = true, fullAt = now)
+                is Reason.Wait -> it.copy(dayWait = reason.kind, dayWaitUntil = SyncRun.nextUtcMidnight(now))
+                Reason.Unreachable -> if (countsAsFailedRun) {
                     val failed = minOf(it.failedRuns + 1, SyncState.MOST_FAILED_RUNS)
                     it.copy(failedRuns = failed, retryAt = if (failed == SyncState.MOST_FAILED_RUNS) now + SyncRun.RETRY_WAIT_MILLIS else null)
+                } else {
+                    it
                 }
+                is Reason.Stopped -> it
             }
         }
     }

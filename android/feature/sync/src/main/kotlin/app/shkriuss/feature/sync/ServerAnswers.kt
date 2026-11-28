@@ -58,8 +58,11 @@ sealed interface ServerAnswer<out T> {
     /** Not from the Worker: Cloudflare says that the request ran out of CPU time. */
     data object OutOfCpuTime : ServerAnswer<Nothing>
 
-    /** No connection, no such host, a failed handshake, or an answer that is not the Worker's for another reason. */
+    /** No connection, no such host, a failed handshake, or no whole answer. */
     data object Unreachable : ServerAnswer<Nothing>
+
+    /** An answer with another HTTP status, a redirect among them: it is not the Worker's. */
+    data object NotTheWorker : ServerAnswer<Nothing>
 
     /** The server's certificate is not one this phone trusts. */
     data object UntrustedCertificate : ServerAnswer<Nothing>

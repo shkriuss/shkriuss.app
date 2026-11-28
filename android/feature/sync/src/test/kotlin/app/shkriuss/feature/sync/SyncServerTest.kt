@@ -115,7 +115,7 @@ class SyncServerTest {
         answers.addLast(HttpResult.Answer(SyncServer.CPU_TIME_STATUS, ByteArray(0)))
         assertEquals(ServerAnswer.OutOfCpuTime, server.heads(session))
         answers.addLast(HttpResult.Answer(302, ByteArray(0)))
-        assertEquals("a redirect is not followed", ServerAnswer.Unreachable, server.heads(session))
+        assertEquals("a redirect is not followed", ServerAnswer.NotTheWorker, server.heads(session))
         answers.addLast(HttpResult.NoAnswer)
         assertEquals(ServerAnswer.Unreachable, server.heads(session))
         answers.addLast(HttpResult.Untrusted)

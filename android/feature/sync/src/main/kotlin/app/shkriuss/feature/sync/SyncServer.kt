@@ -245,7 +245,7 @@ class SyncServer(private val transport: Transport, private val keys: SyncKeys, p
             HttpURLConnection.HTTP_OK -> read(result.body)
             DAY_REQUESTS_STATUS -> ServerAnswer.DayRequestsUsed
             CPU_TIME_STATUS -> ServerAnswer.OutOfCpuTime
-            else -> ServerAnswer.Unreachable
+            else -> ServerAnswer.NotTheWorker
         }
     }
 

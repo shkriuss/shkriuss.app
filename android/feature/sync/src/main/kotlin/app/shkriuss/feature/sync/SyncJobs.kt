@@ -7,6 +7,9 @@ import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
 import android.os.PersistableBundle
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -75,24 +78,43 @@ class JobSchedulerScheduler(context: Context) : Scheduler {
 /**
  * The service JobScheduler starts for a run. Only Android can reach it:
  * its manifest entry asks callers for `BIND_JOB_SERVICE`. The run itself
- * is [SyncRun]; Android holds a wake lock while the job runs.
+ * is [SyncRun]; Android holds a wake lock while the job runs. Each job
+ * keeps its own work, so that Android stopping one job stops only that
+ * job's run.
  */
 class SyncJobService : JobService() {
-    private var job: Job? = null
+    private val running = ConcurrentHashMap<Int, Running>()
+
+    /** One job's work, and whether Android stopped it. */
+    private class Running(val job: Job, val stopped: AtomicBoolean)
 
     override fun onStartJob(params: JobParameters): Boolean {
         val sync = (application as? SyncHost)?.sync ?: return false
         val asked = params.extras.getBoolean(JobSchedulerScheduler.ASKED, false)
-        job = sync.scope.launch {
-            sync.run.run(asked)
-            jobFinished(params, false)
+        val stopped = AtomicBoolean(false)
+        val job = sync.scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                sync.run.run(asked) { stopped.get() }
+            } finally {
+                running.remove(params.jobId)
+                if (!stopped.get()) jobFinished(params, false)
+            }
         }
+        running[params.jobId] = Running(job, stopped)
+        job.start()
         return true
     }
 
-    /** Android ends the run. Everything a run does can stop and go on: the next run continues. */
+    /**
+     * Android ends the job. Its run stops before its next request or
+     * courier call. Everything a run does can stop and go on: the next run
+     * continues.
+     */
     override fun onStopJob(params: JobParameters): Boolean {
-        job?.cancel()
+        running.remove(params.jobId)?.let {
+            it.stopped.set(true)
+            it.job.cancel()
+        }
         return false
     }
 }

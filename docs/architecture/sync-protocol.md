@@ -679,7 +679,12 @@ The calls of the Sync app:
    writes nothing for it.
 4. The batch, the page and the list pass through pipes, so a call
    itself stays small. The side that gives a pipe end closes its own
-   copy once the call has answered.
+   copy once the call has answered. The side that takes one closes it
+   once it has read or written what it needs.
+5. The Sync app calls `<application ID>.courier` only when that
+   application declares it: an authority is free for any app to declare
+   while the data app that should hold it has none. Android installs no
+   second app with an authority that one already has.
 
 ### Turning sync on in a data app
 

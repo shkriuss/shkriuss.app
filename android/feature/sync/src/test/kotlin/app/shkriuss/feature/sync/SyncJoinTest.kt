@@ -67,6 +67,8 @@ class SyncJoinTest {
         assertEquals(AddressStep.Untrusted, join.enterAddress("sync.example.workers.dev"))
         server.answerNext("/v1/info", HttpResult.Answer(200, byteArrayOf(0, 1)))
         assertEquals(AddressStep.NotASyncServer, join.enterAddress("sync.example.workers.dev"))
+        server.answerNext("/v1/info", HttpResult.Answer(301, ByteArray(0)))
+        assertEquals("a redirect", AddressStep.NotASyncServer, join.enterAddress("sync.example.workers.dev"))
         assertEquals(Stage.NOT_JOINED, store.now().stage)
         assertNull(store.now().deviceAlias)
     }
@@ -245,5 +247,22 @@ class SyncJoinTest {
         assertEquals(SyncJoin.DEFAULT_NAME, nameOf(""))
         assertEquals(SyncJoin.DEFAULT_NAME, nameOf("one\nline"))
         assertNotNull(nameOf("Ŝ".repeat(45)))
+    }
+
+    @Test
+    fun aKeystoreThatFailsForAMomentKeepsTheJoinsKey() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val request = requestFor()
+        server.unreachable = true
+        join.takeSignedJoin(keys.sign(request, clock.nowMillis), request, "ABCD2345")
+        server.unreachable = false
+        val alias = store.now().deviceAlias!!
+        keys.sync.keystoreFails = true
+        assertEquals(EnrolStep.NotSaved, join.checkSentEnrol())
+        keys.sync.keystoreFails = false
+        assertEquals(alias, store.now().deviceAlias)
+        assertEquals(Stage.ENROL_SENT, store.now().stage)
+        assertNotNull(keys.sync.crypto.sync.deviceKey(alias))
     }
 }
