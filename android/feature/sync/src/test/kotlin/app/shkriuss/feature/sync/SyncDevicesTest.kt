@@ -78,6 +78,25 @@ class SyncDevicesTest {
     }
 
     @Test
+    fun aRemovalThatPassesClearsAFaultEvenWhenALaterOneFails() {
+        joined()
+        listOf(syncId(8), syncId(9)).forEach { server.devices += FakeDevice(it, ByteArray(65), removed = false, addedAt = 2, sealedName = ByteArray(60)) }
+        store.update { it.copy(removed = setOf(syncId(8).hex, syncId(9).hex)) }
+        // Another action finds a fault after the list passed, while the first removal is on its way.
+        var acted = false
+        server.onRequest = { path ->
+            if (path == "/v1/devices/remove" && !acted) {
+                acted = true
+                store.update { it.copy(fault = true) }
+            }
+        }
+        server.answerNext("/v1/devices/remove", null)
+        server.answerNext("/v1/devices/remove", HttpResult.NoAnswer)
+        assertEquals(DeviceAnswer.Unreachable, devices.list(UNREADABLE))
+        assertFalse("the first removal passed after the fault", store.now().fault)
+    }
+
+    @Test
     fun aRemoveAfterLeaveMarksNothingForTheNextJoinAndSendsNothing() {
         joined()
         assertEquals(DeviceAnswer.Done(Unit), devices.leave(anyway = true))

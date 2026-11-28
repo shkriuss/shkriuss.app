@@ -26,10 +26,7 @@ internal class DeviceList(private val store: SyncStateStore, private val server:
     fun read(session: Session, revision: Long?, beforeRequest: () -> Unit = {}): List<ListedDevice> {
         beforeRequest()
         val devices = SyncRun.valueOf(server.devices(session))
-        // A request passed: the fault and the clock no longer hold (spec, Problems), also when a removal below fails.
-        if (store.now().let { it.fault || it.clockOff != null }) {
-            store.update { if (it.isJoinedWith(session) && (it.fault || it.clockOff != null)) it.copy(fault = false, clockOff = null) else it }
-        }
+        passed(session)
         val state = store.now()
         val thisPhone = state.deviceId?.hex
         val inAgain = devices.filter { !it.removed && it.id.hex in state.removed }
@@ -37,6 +34,7 @@ internal class DeviceList(private val store: SyncStateStore, private val server:
         inAgain.forEach {
             beforeRequest()
             latest = SyncRun.valueOf(server.removeDevice(session, it.id))
+            passed(session)
         }
         val newlyRemoved = devices.filter { it.removed && it.id.hex != thisPhone }.map { it.id.hex }
         if ((state.removed + newlyRemoved).size > SyncState.MOST_REMOVED) throw EndRun(Reason.Fault)
@@ -50,6 +48,17 @@ internal class DeviceList(private val store: SyncStateStore, private val server:
             }
         }
         return devices.map { device -> if (device.id in inAgain.map { it.id }) device.asRemoved() else device }
+    }
+
+    /**
+     * A request passed: the fault and the clock no longer hold (spec,
+     * Problems), also when a later removal fails, and also when another
+     * action found them while this list was read.
+     */
+    private fun passed(session: Session) {
+        if (store.now().let { it.fault || it.clockOff != null }) {
+            store.update { if (it.isJoinedWith(session) && (it.fault || it.clockOff != null)) it.copy(fault = false, clockOff = null) else it }
+        }
     }
 
     private fun ListedDevice.asRemoved() = ListedDevice(id, publicKey, removed = true, addedAt, seenDay, sealedName)
