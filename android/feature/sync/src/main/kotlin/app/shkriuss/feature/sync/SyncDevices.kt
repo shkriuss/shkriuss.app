@@ -136,17 +136,22 @@ class SyncDevices(
      * reach the server", the request is not made.
      */
     fun leave(anyway: Boolean): DeviceAnswer<Unit> {
+        val before = store.now()
         if (!anyway) {
             val removed = withSession { session -> SyncRun.valueOf(server.removeDevice(session, session.key.deviceId.toSyncId())) }
             if (removed is DeviceAnswer.Unreachable || removed is DeviceAnswer.NotSaved) return removed
         }
         return try {
-            forgetServer(store, keys, scheduler)
+            // Only the server and key this Leave was for: a join that started meanwhile, after another Leave, is kept.
+            forgetServer(store, keys, scheduler) { it.isSameServerAndKeyAs(before) }
             DeviceAnswer.Done(Unit)
         } catch (_: CouldNotSaveException) {
             DeviceAnswer.NotSaved
         }
     }
+
+    private fun SyncState.isSameServerAndKeyAs(other: SyncState): Boolean = address == other.address &&
+        serverId == other.serverId && deviceAlias == other.deviceAlias && deviceId == other.deviceId
 
     /**
      * **Close the server**: `closing` first, then `account/delete`. The

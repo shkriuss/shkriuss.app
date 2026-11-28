@@ -236,6 +236,8 @@ internal object ServerLayouts {
             }
             val added = reader.i64()
             val seen = reader.i64()
+            // Both are times; the day seen is the first millisecond of a UTC day.
+            if (!isTime(added) || !isTime(seen) || seen % SyncRun.DAY_MILLIS != 0L) return null
             val nameLength = reader.u16()
             if (nameLength !in SHORTEST_SEALED_NAME..LONGEST_SEALED_NAME) return null
             ListedDevice(id, key, removed, added, seen, reader.bytes(nameLength))

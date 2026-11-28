@@ -96,6 +96,22 @@ class SyncDevicesTest {
     }
 
     @Test
+    fun aLeaveWhoseAnswerCameAfterAnotherLeaveAndANewJoinKeepsTheNewJoin() {
+        joined()
+        val newer = SyncState(stage = Stage.JOINING, address = "https://other.example.org", serverId = syncId(9), joinedAt = clock.nowMillis)
+        // While this Leave's request is on its way, a second Leave ends first, and the user starts another join.
+        server.onRequest = { path ->
+            if (path == "/v1/devices/remove") {
+                server.onRequest = {}
+                forgetServer(store, keys.sync.crypto.sync, scheduler)
+                store.update { newer }
+            }
+        }
+        assertEquals(DeviceAnswer.Done(Unit), devices.leave(anyway = false))
+        assertEquals(newer, store.now())
+    }
+
+    @Test
     fun leaveAnywayWhenTheServerCannotBeReached() {
         joined()
         server.unreachable = true

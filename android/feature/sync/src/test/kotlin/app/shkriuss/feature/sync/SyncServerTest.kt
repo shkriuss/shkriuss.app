@@ -146,6 +146,13 @@ class SyncServerTest {
         assertTrue(device.removed)
         assertEquals(86_400_000, device.seenDay)
 
+        val addedBeforeTime = Bytes().bytes(id(3)).bytes(ByteArray(65) { 4 }).u8(1).i64(-1).i64(86_400_000).u16(52).bytes(ByteArray(52)).done()
+        answer(Bytes().u8(0).u16(1).bytes(addedBeforeTime).done())
+        assertEquals("an added time below 0", ServerAnswer.Broken, server.devices(session))
+        val seenMidDay = Bytes().bytes(id(3)).bytes(ByteArray(65) { 4 }).u8(1).i64(7).i64(86_400_001).u16(52).bytes(ByteArray(52)).done()
+        answer(Bytes().u8(0).u16(1).bytes(seenMidDay).done())
+        assertEquals("a day seen that is not the start of a UTC day", ServerAnswer.Broken, server.devices(session))
+
         val many = Bytes().u8(0).u16(1_001)
         repeat(1_001) { many.bytes(Bytes().bytes(Bytes().i64(it.toLong()).i64(0).done()).bytes(ByteArray(65)).u8(1).i64(0).i64(0).u16(52).bytes(ByteArray(52)).done()) }
         answer(many.done())
