@@ -90,7 +90,8 @@ class SyncServices(
                 if (since == null || since > now || now - since >= SyncJoin.JOIN_LIFE_MILLIS) join.cancel()
             }
             Stage.ENROL_SENT -> join.checkSentEnrol()
-            Stage.JOINED -> if (keysLost(state)) problems.stop(Stop.KEYS_GONE) else scheduler.schedulePeriodic()
+            // Only the state that was read: a Leave or a new join meanwhile, which deletes the keys, is kept.
+            Stage.JOINED -> if (keysLost(state)) problems.stop(Stop.KEYS_GONE, onlyIf = { it.isSameDeviceAs(state) }) else scheduler.schedulePeriodic()
             Stage.STOPPED -> if (state.stop == Stop.UPDATE_SYNC || state.stop == Stop.UPDATE_SERVER) checkVersion()
         }
     }
@@ -133,7 +134,7 @@ class SyncServices(
     private fun checkVersion() {
         val state = store.now()
         if (keysLost(state)) {
-            problems.stop(Stop.KEYS_GONE)
+            problems.stop(Stop.KEYS_GONE, onlyIf = { it.isSameDeviceAs(state) })
             return
         }
         val address = state.address ?: return

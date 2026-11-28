@@ -192,7 +192,7 @@ class SyncDevices(
         }
         return try {
             if (session == null) {
-                problems.stop(Stop.KEYS_GONE)
+                problems.stop(Stop.KEYS_GONE, onlyIf = { it.isSameDeviceAs(state) })
                 return DeviceAnswer.Problem
             }
             DeviceAnswer.Done(action(session))

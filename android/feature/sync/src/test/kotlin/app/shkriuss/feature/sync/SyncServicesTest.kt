@@ -91,6 +91,21 @@ class SyncServicesTest {
     }
 
     @Test
+    fun lostKeysFoundBeforeALeaveStopNothing() {
+        val sync = keys.sync.crypto.sync
+        val joined = joinedState(keys, server, clock)
+        store.update { joined }
+        // The check at start read the joined state; the user left before it wrote.
+        forgetServer(store, sync, scheduler)
+        val problems = ProblemWriter(store, sync, scheduler, clock)
+        assertFalse(problems.stop(Stop.KEYS_GONE, onlyIf = { it.isSameDeviceAs(joined) }))
+        assertEquals(Stage.NOT_JOINED, store.now().stage)
+        store.update { joined }
+        assertTrue("the same device still stops", problems.stop(Stop.KEYS_GONE, onlyIf = { it.isSameDeviceAs(joined) }))
+        assertEquals(Stop.KEYS_GONE, store.now().stop)
+    }
+
+    @Test
     fun aPhoneThatHasNotJoinedKeepsNoKey() {
         val state = joinedState(keys, server, clock)
         services.startChecks()

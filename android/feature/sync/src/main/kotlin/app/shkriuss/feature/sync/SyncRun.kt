@@ -134,10 +134,10 @@ class SyncRun(
         } catch (_: RunStopped) {
             RunEnd.ENDED
         } catch (end: EndRun) {
-            ended(end.reason, session)
+            ended(end.reason, session, state)
             RunEnd.ENDED
         } catch (_: DeviceKeyGoneException) {
-            ended(Reason.Stopped(Stop.KEYS_GONE), session)
+            ended(Reason.Stopped(Stop.KEYS_GONE), session, state)
             RunEnd.ENDED
         } catch (_: BlobException) {
             // The Keystore cannot be used now, as before the first unlock. The next run tries.
@@ -148,13 +148,14 @@ class SyncRun(
     }
 
     /**
-     * Writes what [reason] says, only while the phone is still joined with
-     * [session]: a Leave or a new join while the run went keeps what it
-     * wrote. A write that fails is left: the next run meets the same answer.
+     * Writes what [reason] says, only while the phone is still the device
+     * of [joined], and joined with [session] when there is one: a Leave or
+     * a new join while the run went keeps what it wrote. A write that fails
+     * is left: the next run meets the same answer.
      */
-    private fun ended(reason: Reason, session: Session?) {
+    private fun ended(reason: Reason, session: Session?, joined: SyncState) {
         try {
-            problems.write(reason, countsAsFailedRun = true, session = session)
+            problems.write(reason, countsAsFailedRun = true, session = session, onlyIf = { it.isSameDeviceAs(joined) })
         } catch (_: CouldNotSaveException) {
             // The next run meets the same answer.
         }
@@ -552,7 +553,11 @@ class SyncRun(
                         skipFully(it, first.toLong() * CHUNK_BYTES)
                         for (number in first until chunks) {
                             val length = chunkLength(stream.length, number)
-                            val bytes = readFully(it, length) ?: return
+                            // A stream that ends early on this second read is a failed courier call too.
+                            val bytes = readFully(it, length) ?: run {
+                                appLeft = true
+                                return
+                            }
                             if (pending.isNotEmpty() && (pending.size >= fileItems() || pending.sumOf { (_, chunk) -> chunk.bytes.size } + length > CHUNK_BYTES)) flush()
                             // A request that ran out of CPU time, a metered network or a failed courier call stops the
                             // reading too, so that no more chunks of a large file wait in memory.
@@ -562,6 +567,7 @@ class SyncRun(
                     }
                 } catch (_: IOException) {
                     failed += key
+                    appLeft = true
                 }
             }
 
@@ -868,6 +874,13 @@ internal class EndRun(val reason: Reason) : Exception("The run ended")
 
 /** True while the phone is joined, and with the device of [session]: a Leave or a new join since makes it false. */
 internal fun SyncState.isJoinedWith(session: Session): Boolean = stage == Stage.JOINED && deviceId?.hex == session.key.deviceId.toHex()
+
+/**
+ * The same stage, server and device key as [other]: no Leave, join or stop
+ * came between. A problem found from [other] is written only then.
+ */
+internal fun SyncState.isSameDeviceAs(other: SyncState): Boolean = stage == other.stage && address == other.address &&
+    serverId == other.serverId && deviceAlias == other.deviceAlias && deviceId == other.deviceId
 
 /** Counts the bytes it passes on. */
 private class CountingInput(private val input: InputStream) : InputStream() {

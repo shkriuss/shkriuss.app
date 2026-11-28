@@ -758,4 +758,24 @@ class SyncRunTest {
         store.update { state -> state.withApp("water") { it.copy(poked = true) } }
         assertFalse("a run that ended early waits for the next job", runsAgain(RunEnd.ENDED, store.now()))
     }
+
+    @Test
+    fun aStreamThatEndsEarlyOnItsSecondReadLeavesTheApp() {
+        joined()
+        run()
+        val good = id(0x7a)
+        water.stored[hex(good)] = ByteArray(10) { 4 }
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(good), sha256(ByteArray(10) { 4 }), 10, 0, 0))
+        // The first read checks the hash; the second, for the chunks, ends early.
+        water.cutRead = 2
+        val goodAt = store.now().app("water").goodAt
+        clock.advanceBy(60_000)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        water.calls.clear()
+        run()
+        assertEquals("nothing said about the stream", emptyList<Pair<String, Boolean>>(), water.sent)
+        assertEquals("not recorded as served", goodAt, store.now().app("water").goodAt)
+        assertEquals("no status after the streams", 1, water.calls.count { it == "status" })
+        assertTrue(store.now().app("water").work)
+    }
 }

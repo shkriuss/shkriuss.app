@@ -242,16 +242,33 @@ class SyncJoin(
      */
     fun takeSignedJoin(signed: SignedJoin, request: DeviceJoinRequest, code: String): EnrolStep {
         if (!signed.isFor(request)) return EnrolStep.NotForThisJoin
+        // The keeper can answer after Back or a new join: its answer counts only for the join it was asked for.
+        if (!store.now().isJoinOf(request)) return EnrolStep.Changed
+        var applied = false
         try {
             keys.storeNameKey(signed)
-            store.update { it.copy(stage = Stage.ENROL_SENT, name = it.name ?: firstName()) }
+            store.update {
+                if (it.isJoinOf(request)) {
+                    applied = true
+                    it.copy(stage = Stage.ENROL_SENT, name = it.name ?: firstName())
+                } else {
+                    it
+                }
+            }
         } catch (_: BlobException) {
             return EnrolStep.NotSaved
         } catch (_: CouldNotSaveException) {
             return EnrolStep.NotSaved
         }
+        // A name key stored for a join that ended meanwhile goes at the next start, or with the next join's own.
+        if (!applied) return EnrolStep.Changed
         return enrol(signed, code)
     }
+
+    /** At step 6 of the join that [request] was made for: the same server, address and device key. */
+    private fun SyncState.isJoinOf(request: DeviceJoinRequest): Boolean = stage == Stage.JOINING && address == request.address &&
+        serverId?.toBytes()?.contentEquals(request.serverId) == true &&
+        deviceId == DeviceId.ofPublicKey(request.devicePublicKey).toSyncId()
 
     /** **Try again** at step 7: the same `enrol`, or back to step 6 when the statement is older than 10 minutes. */
     fun enrolAgain(signed: SignedJoin, code: String): EnrolStep {

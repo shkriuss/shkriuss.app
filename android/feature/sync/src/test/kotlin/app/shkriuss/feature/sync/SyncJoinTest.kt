@@ -324,4 +324,35 @@ class SyncJoinTest {
         assertEquals(newer, store.now())
         assertNotNull("the newer join keeps its key", keys.sync.crypto.sync.deviceKey(alias))
     }
+
+    @Test
+    fun aKeeperAnswerAfterBackChangesNothing() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val request = requestFor()
+        val signed = keys.sign(request, clock.nowMillis)
+        join.cancel()
+        assertEquals(EnrolStep.Changed, join.takeSignedJoin(signed, request, "ABCD2345"))
+        assertEquals(Stage.NOT_JOINED, store.now().stage)
+        assertNull(store.now().address)
+        assertEquals("no name key", NameKeyState.MISSING, keys.sync.crypto.sync.nameKeyState())
+        assertTrue("no request went out", server.paths().none { it == "/v1/enrol" })
+    }
+
+    @Test
+    fun aKeeperAnswerForAnEarlierJoinChangesNothingInTheNewOne() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val older = requestFor()
+        val signed = keys.sign(older, clock.nowMillis)
+        // Back to step 1, and a new join of the same server with a new key.
+        join.cancel()
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        requestFor()
+        val newer = store.now()
+        assertEquals(EnrolStep.Changed, join.takeSignedJoin(signed, older, "ABCD2345"))
+        assertEquals(newer, store.now())
+        assertEquals(NameKeyState.MISSING, keys.sync.crypto.sync.nameKeyState())
+    }
 }

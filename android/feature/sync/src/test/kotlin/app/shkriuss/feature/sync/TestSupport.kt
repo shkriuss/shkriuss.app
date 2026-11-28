@@ -393,6 +393,10 @@ internal class FakeDataApp(val name: String) {
 
     /** How many bytes of its stored streams were read through `readStream`. */
     var bytesRead = 0L
+
+    /** The `readStream` call, counted from 1, whose stream ends at half its bytes, as when the app's process ends; 0 for none. */
+    var cutRead = 0
+    var reads = 0
     private var token = 0L
     private var lastBatch: List<Pair<ByteArray, ByteArray>> = emptyList()
     private var lastComparison = false
@@ -502,7 +506,8 @@ internal class FakeCouriers(vararg apps: FakeDataApp) : Couriers {
     override fun readStream(app: CourierApp, context: CourierContext, fileId: ByteArray): CourierAnswer<InputStream?> =
         answer(app, "readStream") {
             val fake = this
-            stored[hex(fileId)]?.inputStream()?.let { input ->
+            fake.reads++
+            stored[hex(fileId)]?.let { if (fake.reads == fake.cutRead) it.copyOf(it.size / 2) else it }?.inputStream()?.let { input ->
                 object : java.io.FilterInputStream(input) {
                     override fun read(buffer: ByteArray, offset: Int, length: Int): Int = super.read(buffer, offset, length).also { if (it > 0) fake.bytesRead += it }
                 }

@@ -106,12 +106,13 @@ class ProblemWriter(private val store: SyncStateStore, private val keys: SyncKey
     /**
      * Sync stops for [stop]. A removed phone's device key, the one of
      * [session], is deleted after the state no longer needs it. False when
-     * the phone was no longer joined with [session], and nothing changed.
+     * the phone was no longer joined with [session], or the state no longer
+     * passes [onlyIf], and nothing changed.
      */
-    fun stop(stop: Stop, session: Session? = null): Boolean {
+    fun stop(stop: Stop, session: Session? = null, onlyIf: (SyncState) -> Boolean = { true }): Boolean {
         var stopped = false
         store.update {
-            if (session != null && !it.isJoinedWith(session)) {
+            if ((session != null && !it.isJoinedWith(session)) || !onlyIf(it)) {
                 it
             } else {
                 stopped = true
@@ -131,14 +132,14 @@ class ProblemWriter(private val store: SyncStateStore, private val keys: SyncKey
     }
 
     /** Writes what [reason] says. [countsAsFailedRun] is true in a run, where a server that cannot be reached counts. */
-    internal fun write(reason: Reason, countsAsFailedRun: Boolean, session: Session?) {
+    internal fun write(reason: Reason, countsAsFailedRun: Boolean, session: Session?, onlyIf: (SyncState) -> Boolean = { true }) {
         if (reason is Reason.Stopped) {
-            stop(reason.stop, session)
+            stop(reason.stop, session, onlyIf)
             return
         }
         val now = clock.nowMillis()
         store.update {
-            if (session != null && !it.isJoinedWith(session)) return@update it
+            if ((session != null && !it.isJoinedWith(session)) || !onlyIf(it)) return@update it
             when (reason) {
                 Reason.Fault -> it.copy(fault = true)
                 is Reason.ClockOff -> it.copy(clockOff = reason.serverTime - now)
