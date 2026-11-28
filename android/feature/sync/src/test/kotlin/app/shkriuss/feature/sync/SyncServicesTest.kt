@@ -3,6 +3,7 @@ package app.shkriuss.feature.sync
 import android.os.Bundle
 import app.shkriuss.core.crypto.AppName
 import app.shkriuss.core.crypto.NameKeyState
+import app.shkriuss.core.data.Clock
 import app.shkriuss.core.sync.Courier
 import app.shkriuss.core.sync.Refusal
 import app.shkriuss.core.sync.SyncAppState
@@ -144,6 +145,27 @@ class SyncServicesTest {
         services.startChecks()
         assertEquals(NameKeyState.MISSING, keys.sync.crypto.sync.nameKeyState())
         assertEquals("the join goes on", Stage.JOINING, store.now().stage)
+    }
+
+    @Test
+    fun aJoinMadeWhileTheStartCancelsADayOldOneStays() {
+        var hook: () -> Unit = {}
+        val hooked = object : Clock {
+            override fun nowMillis(): Long {
+                val once = hook
+                hook = {}
+                once()
+                return clock.nowMillis
+            }
+        }
+        val sync = keys.sync.crypto.sync
+        val starting = SyncServices(store, sync, SyncServer(server, sync, hooked), FakeCouriers(), scheduler, { metered }, hooked, "Pixel 9 Pro")
+        store.update { SyncState(stage = Stage.JOINING, joinedAt = clock.nowMillis - SyncJoin.JOIN_LIFE_MILLIS, address = server.address, serverId = server.serverId) }
+        val fresh = SyncState(stage = Stage.JOINING, joinedAt = clock.nowMillis, address = "https://other.example.workers.dev", serverId = syncId(5))
+        // The user starts a new join while the start looks at the day-old one.
+        hook = { store.update { fresh } }
+        starting.startChecks()
+        assertEquals(fresh, store.now())
     }
 
     @Test

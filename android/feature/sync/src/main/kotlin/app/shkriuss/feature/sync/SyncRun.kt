@@ -115,10 +115,12 @@ class SyncRun(
         if (stopped() || store.now().stage != Stage.JOINED) return RunEnd.NOT_JOINED
         val now = clock.nowMillis()
         val state = try {
-            store.update { it.withWaitsOver(now) }
+            store.update { if (it.stage == Stage.JOINED) it.withWaitsOver(now) else it }
         } catch (_: CouldNotSaveException) {
             return RunEnd.ENDED
         }
+        // A Leave or a new join just after the first look: nothing is written over it.
+        if (state.stage != Stage.JOINED) return RunEnd.NOT_JOINED
         if (state.dayWait == DayWait.EVERYTHING) return RunEnd.WAITING
         if (state.failedRuns >= SyncState.MOST_FAILED_RUNS && state.retryAt != null && now < state.retryAt && !asked) return RunEnd.WAITING
         val session = try {
@@ -467,8 +469,7 @@ class SyncRun(
                         }
                     }
                     ServerAnswer.Full -> {
-                        sendingStopped = true
-                        write { it.copy(full = true, fullAt = clock.nowMillis()) }
+                        serverFull()
                         return true
                     }
                     is ServerAnswer.DayLimit -> {
@@ -669,7 +670,11 @@ class SyncRun(
                 progress.value = RunProgress(app.name.value, RunStep.SENDING_FILES, done, total)
                 val chunks = pending.toList()
                 pending.clear()
-                val stored = fileValue(server.filesSend(session, app.name.value, chunks.map { it.second })) ?: return
+                val stored = fileValue(server.filesSend(session, app.name.value, chunks.map { it.second })) ?: run {
+                    // A full server: this sender stops reading chunks too.
+                    if (sendingStopped) stopped = true
+                    return
+                }
                 passed()
                 chunks.zip(stored).forEach { (keyed, isStored) ->
                     val (key, chunk) = keyed
@@ -791,7 +796,15 @@ class SyncRun(
             is ServerAnswer.Done -> answer.value
             ServerAnswer.OutOfCpuTime -> if (halve(files = true)) null.also { filesStopped = true } else fail(answer)
             ServerAnswer.TooMuch -> if (lessAfterTooMuch(files = true)) null.also { filesStopped = true } else fail(answer)
+            // A full server takes no more chunks, and fetching goes on (spec, Problems).
+            ServerAnswer.Full -> null.also { serverFull() }
             else -> fail(answer)
+        }
+
+        /** The server is full: no more sending in this run, and full until a record is stored. */
+        private fun serverFull() {
+            sendingStopped = true
+            write { it.copy(full = true, fullAt = clock.nowMillis()) }
         }
 
         /**

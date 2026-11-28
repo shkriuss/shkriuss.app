@@ -2,6 +2,7 @@ package app.shkriuss.feature.sync
 
 import app.shkriuss.core.crypto.KeyId
 import app.shkriuss.core.crypto.RequestMethod
+import app.shkriuss.core.data.Clock
 import app.shkriuss.core.sync.ComparisonState
 import app.shkriuss.core.sync.ListedStream
 import app.shkriuss.core.sync.StreamWork
@@ -1274,5 +1275,49 @@ class SyncRunTest {
         assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { (water.written[hex(fileId)]?.size() ?: 0) > 0 } })
         assertTrue("the chunk was not written to its end", water.written.getValue(hex(fileId)).size() < bytes.size)
         assertTrue("nothing is finished", water.finished.isEmpty())
+    }
+
+    @Test
+    fun aFullServerAtAFileRequestStopsSendingAndFetchingGoesOn() {
+        joined()
+        run()
+        val sendBytes = ByteArray(10) { 4 }
+        val sendId = id(0x51)
+        water.stored[hex(sendId)] = sendBytes
+        val fetchBytes = ByteArray(10) { 6 }
+        val fetchId = id(0x52)
+        val fetchHash = sha256(fetchBytes)
+        server.chunks["water/${hex(fetchId)}/${hex(fetchHash)}/0"] = fetchBytes
+        water.streams = listOf(
+            ListedStream(StreamWork.SEND, uuid(sendId), sha256(sendBytes), 10, 0, 0),
+            ListedStream(StreamWork.FETCH, uuid(fetchId), fetchHash, 10, 0, 0),
+        )
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.refuseNext("/v1/files/send", 0x08)
+        assertEquals(RunEnd.WORKED, run())
+        assertTrue(store.now().full)
+        assertEquals("the fetch went on", listOf(hex(fetchId)), water.finished)
+    }
+
+    @Test
+    fun aLeaveJustAfterTheRunLookedAtTheStateIsKept() {
+        joined()
+        run()
+        var hook: () -> Unit = {}
+        val hooked = object : Clock {
+            override fun nowMillis(): Long {
+                val once = hook
+                hook = {}
+                once()
+                return clock.nowMillis
+            }
+        }
+        val sync = keys.sync.crypto.sync
+        val late = SyncRun(store, SyncServer(server, sync, hooked), couriers, sync, { metered }, ProblemWriter(store, sync, scheduler, hooked), hooked)
+        // The user leaves right after the run saw the phone joined.
+        hook = { forgetServer(store, sync, scheduler) }
+        assertEquals(RunEnd.NOT_JOINED, runBlocking { late.run(asked = false) })
+        assertEquals(Stage.NOT_JOINED, store.now().stage)
+        assertNull(store.now().stop)
     }
 }

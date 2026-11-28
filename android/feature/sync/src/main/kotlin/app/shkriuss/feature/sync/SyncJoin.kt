@@ -431,6 +431,12 @@ class SyncJoin(
         return saved { forgetServer(store, keys, scheduler) }
     }
 
+    /**
+     * At start: cancels the join [stale], a day old, only while it is still
+     * the one Sync holds. A new join made meanwhile stays.
+     */
+    internal fun cancelStale(stale: SyncState): Boolean = saved { forgetServer(store, keys, scheduler) { it.sameJoinAs(stale) } }
+
     /** The same join, or the same lack of one, as [other]: nothing cancelled, started or sent meanwhile. */
     private fun SyncState.sameJoinAs(other: SyncState): Boolean = stage == other.stage && address == other.address &&
         serverId == other.serverId && joinedAt == other.joinedAt && deviceAlias == other.deviceAlias && deviceId == other.deviceId
