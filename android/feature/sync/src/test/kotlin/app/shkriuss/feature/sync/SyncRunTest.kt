@@ -1029,6 +1029,34 @@ class SyncRunTest {
     }
 
     @Test
+    fun aFileRequestThatPassesClearsAFaultEvenWhenALaterOneFails() {
+        joined()
+        run()
+        val first = ByteArray(10) { 1 }
+        val second = ByteArray(10) { 2 }
+        water.stored[hex(id(0x4b))] = first
+        water.stored[hex(id(0x4c))] = second
+        water.streams = listOf(
+            ListedStream(StreamWork.SEND, uuid(id(0x4b)), sha256(first), 10, 0, 0),
+            ListedStream(StreamWork.SEND, uuid(id(0x4c)), sha256(second), 10, 0, 0),
+        )
+        store.update { state -> state.copy(limits = Limits(1, 524_288, 1)).withApp("water") { it.copy(poked = true) } }
+        // A device action, such as Rename, finds a fault while the run goes, after `heads` passed.
+        var acted = false
+        server.onRequest = { path ->
+            if (path == "/v1/files/have" && !acted) {
+                acted = true
+                store.update { it.copy(fault = true) }
+            }
+        }
+        server.answerNext("/v1/files/have", null)
+        server.answerNext("/v1/files/have", HttpResult.NoAnswer)
+        run()
+        assertEquals(2, server.paths().count { it == "/v1/files/have" })
+        assertFalse("the first file request passed after the fault", store.now().fault)
+    }
+
+    @Test
     fun aPageOfMoreRecordsThanTheFetchAskedForIsAFault() {
         joined()
         run()

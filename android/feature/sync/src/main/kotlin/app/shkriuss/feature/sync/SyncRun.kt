@@ -571,8 +571,9 @@ class SyncRun(
                 for (group in streams.chunked(fileItems())) {
                     checkStop()
                     have += fileValue(server.filesHave(session, app.name.value, group.map { StreamRef(it.fileIdBytes, it.hash) })) ?: return false
+                    // Each request that passes clears the fault and the clock, also one that a device action found while the run went.
+                    passed()
                 }
-                passed()
                 total = streams.sumOf { it.length }
                 streams.zip(have).forEach { (stream, chunksThere) ->
                     checkStop()
