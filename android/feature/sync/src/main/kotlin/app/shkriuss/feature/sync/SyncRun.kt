@@ -326,7 +326,10 @@ class SyncRun(
 
         private fun courierContext(): CourierContext {
             val state = store.now()
-            val serverId = state.serverId ?: throw EndRun(Reason.Stopped(Stop.KEYS_GONE))
+            // A Leave or a new join while the run went: the run ends here, so that no app gets another join's IDs
+            // while the server calls still go to this run's server.
+            if (!state.isJoinedWith(session) || state.serverId != session.serverId || state.address != session.address) throw RunStopped()
+            val serverId = session.serverId
             val epoch = state.epoch ?: throw EndRun(Reason.Stopped(Stop.KEYS_GONE))
             val deviceId = state.deviceId ?: throw EndRun(Reason.Stopped(Stop.KEYS_GONE))
             val keyId = state.keyId ?: throw EndRun(Reason.Stopped(Stop.KEYS_GONE))

@@ -61,7 +61,7 @@ object StatusLayout {
  * Reads the layout of `streams` (docs/architecture/sync-protocol.md, "What
  * `streams` gives"): the header, then entries of 73 bytes to the end.
  * Strict: a kind it does not know, a hash or a length that a kind does not
- * use, or bytes of a fetch beyond its length give null.
+ * use, bytes of a fetch beyond its length, or a file named twice give null.
  */
 object StreamListLayout {
     /** The most streams one list may name, so that a list never takes more memory than this many entries. */
@@ -74,9 +74,12 @@ object StreamListLayout {
         if (reader.remaining % StreamListWriter.ENTRY_BYTES != 0) throw LayoutException()
         val count = reader.remaining / StreamListWriter.ENTRY_BYTES
         if (count > MOST_STREAMS) throw LayoutException()
+        val fileIds = HashSet<String>()
         List(count) {
             val work = reader.u8().let { code -> StreamWork.entries.firstOrNull { it.code == code } } ?: throw LayoutException()
             val fileId = RecordIds.toText(reader.bytes(SyncFormat.ID_BYTES))
+            // Each file is in a list at most once: Sync keeps what it moves by file ID.
+            if (!fileIds.add(fileId)) throw LayoutException()
             val hash = reader.bytes(SyncFormat.HASH_BYTES)
             val length = reader.i64()
             val here = reader.i64()

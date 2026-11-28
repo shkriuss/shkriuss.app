@@ -72,8 +72,8 @@ class CourierLayoutsTest {
         val file = "00112233-4455-6677-8899-aabbccddeeff"
         val streams = listOf(
             ListedStream(StreamWork.SEND, file, ByteArray(32) { 1 }, 10, 0, 0),
-            ListedStream(StreamWork.FETCH, file, ByteArray(32) { 2 }, 10, 4, 0),
-            ListedStream(StreamWork.DELETE, file, ByteArray(32), 0, 0, 12),
+            ListedStream(StreamWork.FETCH, "00112233-4455-6677-8899-aabbccddee01", ByteArray(32) { 2 }, 10, 4, 0),
+            ListedStream(StreamWork.DELETE, "00112233-4455-6677-8899-aabbccddee02", ByteArray(32), 0, 0, 12),
         )
         streams.forEach(writer::write)
         val read = StreamListLayout.read(out.toByteArray())!!
@@ -90,6 +90,13 @@ class CourierLayoutsTest {
             "a stream to send with no bytes" to ListedStream(StreamWork.SEND, file, ByteArray(32) { 1 }, 0, 0, 0),
         ).forEach { (what, stream) -> assertNull(what, StreamListLayout.read(one(stream))) }
         assertNull("a cut entry", StreamListLayout.read(out.toByteArray().copyOf(out.size() - 1)))
+        val twice = ByteArrayOutputStream().also { bytes ->
+            StreamListWriter(bytes).apply {
+                write(ListedStream(StreamWork.SEND, file, ByteArray(32) { 1 }, 10, 0, 0))
+                write(ListedStream(StreamWork.FETCH, file, ByteArray(32) { 2 }, 20, 0, 0))
+            }
+        }
+        assertNull("one file twice", StreamListLayout.read(twice.toByteArray()))
         assertNotNull("an empty list", StreamListLayout.read(ByteArrayOutputStream().also { StreamListWriter(it) }.toByteArray()))
     }
 

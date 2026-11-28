@@ -16,6 +16,7 @@ import java.security.cert.CertPathValidatorException
 import java.security.cert.CertificateException
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 
 /** One request as it goes out: the whole URL, the method, its headers and its body. */
 class HttpRequest(val url: String, val method: RequestMethod, val headers: Map<String, String>, val body: ByteArray?) {
@@ -73,24 +74,13 @@ class HttpsTransport : Transport {
             // An answer longer than any of the protocol is no answer.
             val answer = if (stream == null) ByteArray(0) else stream.use { readAtMost(it, MOST_ANSWER_BYTES) }
             answer?.let { HttpResult.Answer(status, it) } ?: HttpResult.NoAnswer
-        } catch (error: SSLHandshakeException) {
-            if (isUntrusted(error)) HttpResult.Untrusted else HttpResult.NoAnswer
-        } catch (_: IOException) {
-            HttpResult.NoAnswer
+        } catch (error: IOException) {
+            resultOf(error)
         } catch (_: SecurityException) {
             HttpResult.NoAnswer
         } finally {
             connection.disconnect()
         }
-    }
-
-    private fun isUntrusted(error: Throwable): Boolean {
-        var cause: Throwable? = error
-        while (cause != null) {
-            if (cause is CertPathValidatorException || cause is CertificateException) return true
-            cause = cause.cause
-        }
-        return false
     }
 
     companion object {
@@ -102,6 +92,27 @@ class HttpsTransport : Transport {
 
         /** More than any answer of the protocol: 4 MiB of chunks and their table. */
         private const val MOST_ANSWER_BYTES = 4_194_304 + 65_536
+
+        /**
+         * What a connection that failed with [error] counts as: a
+         * certificate this phone does not trust, or one for another host
+         * name, is [HttpResult.Untrusted]; anything else is no answer.
+         */
+        internal fun resultOf(error: IOException): HttpResult = when {
+            // A trusted certificate for another name: the host name check after the handshake fails.
+            error is SSLPeerUnverifiedException -> HttpResult.Untrusted
+            error is SSLHandshakeException && isUntrusted(error) -> HttpResult.Untrusted
+            else -> HttpResult.NoAnswer
+        }
+
+        private fun isUntrusted(error: Throwable): Boolean {
+            var cause: Throwable? = error
+            while (cause != null) {
+                if (cause is CertPathValidatorException || cause is CertificateException) return true
+                cause = cause.cause
+            }
+            return false
+        }
 
         /** The bytes of [input], or null if there are more than [most]. */
         internal fun readAtMost(input: InputStream, most: Int): ByteArray? {

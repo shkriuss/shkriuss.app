@@ -947,4 +947,22 @@ class SyncRunTest {
         assertTrue("no batch was sent", server.requests.none { it.method == RequestMethod.POST && it.url.contains("/v1/changes") })
         assertEquals(syncId(2), store.now().epoch)
     }
+
+    @Test
+    fun aRunWhoseJoinChangedWhileHeadsWasOnItsWayGivesNoAppTheNewJoin() {
+        joined()
+        run()
+        water.calls.clear()
+        notes.calls.clear()
+        // While heads is on its way, the user leaves and joins another server. The Leave could not delete this
+        // run's key, so its signed requests still pass.
+        server.onRequest = { path ->
+            if (path == "/v1/heads") {
+                server.onRequest = {}
+                store.update { joinedState(keys, server, clock).copy(serverId = syncId(8), epoch = syncId(9), statusAt = null, devicesAt = clock.nowMillis) }
+            }
+        }
+        assertEquals(RunEnd.ENDED, run())
+        assertEquals("no courier call", emptyList<String>(), water.calls + notes.calls)
+    }
 }

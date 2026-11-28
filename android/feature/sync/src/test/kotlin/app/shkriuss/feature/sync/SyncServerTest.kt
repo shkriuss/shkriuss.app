@@ -4,6 +4,10 @@ import app.shkriuss.core.crypto.KeyId
 import app.shkriuss.core.crypto.RequestMethod
 import app.shkriuss.core.testing.TestClock
 import java.io.ByteArrayInputStream
+import java.net.SocketTimeoutException
+import java.security.cert.CertificateException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -104,6 +108,14 @@ class SyncServerTest {
         assertTrue("nothing stored, the head stays", ServerLayouts.sent(sent(4, null), 1) is ServerAnswer.Done)
         assertEquals("a head after above the last record stored", ServerAnswer.Broken, ServerLayouts.sent(sent(12, 7, 9), 2))
         assertEquals("a head that moved with nothing stored", ServerAnswer.Broken, ServerLayouts.sent(sent(5, null), 1))
+    }
+
+    @Test
+    fun aCertificateForAnotherNameIsUntrustedAndOtherFailuresAreNoAnswer() {
+        assertEquals(HttpResult.Untrusted, HttpsTransport.resultOf(SSLPeerUnverifiedException("Hostname sync.example.org not verified")))
+        assertEquals(HttpResult.Untrusted, HttpsTransport.resultOf(SSLHandshakeException("not trusted").apply { initCause(CertificateException("no path")) }))
+        assertEquals(HttpResult.NoAnswer, HttpsTransport.resultOf(SSLHandshakeException("reset")))
+        assertEquals(HttpResult.NoAnswer, HttpsTransport.resultOf(SocketTimeoutException()))
     }
 
     @Test

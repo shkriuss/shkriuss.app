@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 149 tests. They use real keys
+- `feature/sync` has 9 test classes with 151 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -864,15 +864,17 @@ second build must write the same mapping file, or the release stops. See
     while a stream is fetched, a file request refused for CPU time,
     which stops the reading of a large stream, a run stopped by Android,
     also during a courier call or a file request, a Leave while a run
-    goes, which the run does not overwrite, and an app that pokes each
-    time it is served, whose job runs again.
+    goes, which the run does not overwrite, and a new join meanwhile,
+    whose IDs no app gets from the run, and an app that pokes each time
+    it is served, whose job runs again.
   - `RunningJobsTest`: each job of the job service stops only its own
     run, also when Android starts a job again under the same ID.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
     the headers of a signed request, a `04` sent once more, Cloudflare's
-    answers, times and versions outside their limits, a page, also a cut
-    one, which ends at its last record, the head after a batch, the
-    devices, also their times, and the file calls.
+    answers, a certificate for another name, times and versions outside
+    their limits, a page, also a cut one, which ends at its last record,
+    the head after a batch, the devices, also their times, and the file
+    calls.
   - `SyncJoinTest`, `SyncDevicesTest` and `SyncServicesTest`: each join
     step and each answer of `info`, of the keeper and of `enrol`, also
     one that comes after the join was cancelled or started anew, a
