@@ -342,6 +342,9 @@ class SyncJoin(
             ServerAnswer.Removed -> keyRemoved(mark)
             ServerAnswer.Closed -> cancelled(mark, EnrolStep.Closed)
             is ServerAnswer.Clock -> EnrolStep.Line(AddressStep.ClockOff(answer.serverTime - clock.nowMillis()))
+            // The server answered: the lines of step 2, as for `enrol`.
+            is ServerAnswer.Version -> EnrolStep.Line(if (answer.lowest > ServerInfo.VERSION) AddressStep.UpdateSync else AddressStep.UpdateServer)
+            ServerAnswer.UntrustedCertificate -> EnrolStep.Line(AddressStep.Untrusted)
             else -> EnrolStep.Unreachable
         }
     }

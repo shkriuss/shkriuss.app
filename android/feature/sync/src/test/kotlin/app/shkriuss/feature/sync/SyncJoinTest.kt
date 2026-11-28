@@ -355,4 +355,19 @@ class SyncJoinTest {
         assertEquals(newer, store.now())
         assertEquals(NameKeyState.MISSING, keys.sync.crypto.sync.nameKeyState())
     }
+
+    @Test
+    fun theCheckOfASentEnrolSaysWhichSideToUpdate() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val request = requestFor()
+        server.unreachable = true
+        join.takeSignedJoin(keys.sign(request, clock.nowMillis), request, "ABCD2345")
+        server.unreachable = false
+        server.refuseNext("/v1/heads", 0x01, 2, 2)
+        assertEquals(EnrolStep.Line(AddressStep.UpdateSync), join.checkSentEnrol())
+        server.refuseNext("/v1/heads", 0x01, 0, 0)
+        assertEquals(EnrolStep.Line(AddressStep.UpdateServer), join.checkSentEnrol())
+        assertEquals("the join waits at stage 2", Stage.ENROL_SENT, store.now().stage)
+    }
 }

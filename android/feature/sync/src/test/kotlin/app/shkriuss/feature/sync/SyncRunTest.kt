@@ -778,4 +778,24 @@ class SyncRunTest {
         assertEquals("no status after the streams", 1, water.calls.count { it == "status" })
         assertTrue(store.now().app("water").work)
     }
+
+    @Test
+    fun aStreamWhosePipeFailsWhileItIsFetchedLeavesTheApp() {
+        joined()
+        run()
+        val bytes = ByteArray(5_000) { (it % 7).toByte() }
+        val fileId = id(0x42)
+        val hash = sha256(bytes)
+        server.chunks["water/${hex(fileId)}/${hex(hash)}/0"] = bytes
+        water.streams = listOf(ListedStream(StreamWork.FETCH, uuid(fileId), hash, bytes.size.toLong(), 0, 0))
+        water.failWrites = true
+        val goodAt = store.now().app("water").goodAt
+        clock.advanceBy(60_000)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        water.calls.clear()
+        run()
+        assertEquals(emptyList<String>(), water.finished)
+        assertEquals("not recorded as served", goodAt, store.now().app("water").goodAt)
+        assertEquals("no status after the streams", 1, water.calls.count { it == "status" })
+    }
 }

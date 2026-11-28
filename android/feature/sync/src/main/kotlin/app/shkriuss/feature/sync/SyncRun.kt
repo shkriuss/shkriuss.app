@@ -661,6 +661,8 @@ class SyncRun(
                         true
                     }
                 } catch (_: IOException) {
+                    // The app's pipe failed: a failed courier call leaves the app for this run.
+                    appLeft = true
                     false
                 }
                 if (!whole || here != stream.length) return false

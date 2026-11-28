@@ -394,6 +394,9 @@ internal class FakeDataApp(val name: String) {
     /** How many bytes of its stored streams were read through `readStream`. */
     var bytesRead = 0L
 
+    /** True when the pipes that `writeStream` gives fail, as when the app's process ends. */
+    var failWrites = false
+
     /** The `readStream` call, counted from 1, whose stream ends at half its bytes, as when the app's process ends; 0 for none. */
     var cutRead = 0
     var reads = 0
@@ -518,7 +521,15 @@ internal class FakeCouriers(vararg apps: FakeDataApp) : Couriers {
         answer(app, "streamSent") { sent += hex(fileId) to fits }
 
     override fun writeStream(app: CourierApp, context: CourierContext, fileId: ByteArray, bytesHere: Long): CourierAnswer<OutputStream?> =
-        answer(app, "writeStream") { written.getOrPut(hex(fileId)) { ByteArrayOutputStream() } }
+        answer(app, "writeStream") {
+            if (failWrites) {
+                object : OutputStream() {
+                    override fun write(b: Int) = throw java.io.IOException("The pipe is closed")
+                }
+            } else {
+                written.getOrPut(hex(fileId)) { ByteArrayOutputStream() }
+            }
+        }
 
     override fun finishStream(app: CourierApp, context: CourierContext, fileId: ByteArray) =
         answer(app, "finishStream") { finished += hex(fileId); StreamFinish.STORED }
