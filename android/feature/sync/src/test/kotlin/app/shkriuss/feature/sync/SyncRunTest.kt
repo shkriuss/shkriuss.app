@@ -623,4 +623,45 @@ class SyncRunTest {
         run()
         assertEquals(0, water.toSend.size)
     }
+
+    @Test
+    fun anAppWhoseListOfStreamsGivesNoAnswerIsNotRecordedAsServed() {
+        joined()
+        run()
+        val servedAt = store.now().app("water").goodAt
+        clock.advanceBy(60_000)
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(id(0x75)), ByteArray(32) { 1 }, 10, 0, 0))
+        water.failCalls += "streams"
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals("left for this run", servedAt, store.now().app("water").goodAt)
+        assertTrue(store.now().app("water").work)
+    }
+
+    @Test
+    fun aStreamThatCouldNotBeReadIsNotReportedAsDamaged() {
+        joined()
+        run()
+        val fileId = id(0x76)
+        water.stored[hex(fileId)] = ByteArray(10) { 1 }
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(ByteArray(10) { 1 }), 10, 0, 0))
+        water.failCalls += "readStream"
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        run()
+        assertEquals("nothing said about the stream", emptyList<Pair<String, Boolean>>(), water.sent)
+        assertFalse("/v1/files/send" in server.paths())
+    }
+
+    @Test
+    fun aRunStoppedWhileTheAppExportsSendsNoBatch() {
+        joined()
+        run()
+        water.toSend += id(1) to blob(server.keyId, 1)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        var stopped = false
+        water.onExport = { stopped = true }
+        server.requests.clear()
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { stopped } })
+        assertFalse("/v1/changes" in server.paths())
+    }
 }

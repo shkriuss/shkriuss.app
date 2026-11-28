@@ -220,13 +220,25 @@ class SyncDevices(
  * server**: `stage` 0 and the server's values go in one write, then the
  * works are cancelled and the device key and the name key are deleted.
  * The setting, the addresses whose setup code waits to be deleted, and an
- * unread close stay.
+ * unread close stay. Only a state that [onlyIf] takes is forgotten; false
+ * when it did not take it, and nothing changed.
  */
-internal fun forgetServer(store: SyncStateStore, keys: SyncKeys, scheduler: Scheduler) {
-    val alias = store.now().deviceAlias
-    store.update { SyncState(closing = it.closing, deleteSetupCode = it.deleteSetupCode, filesOnMobile = it.filesOnMobile) }
+internal fun forgetServer(store: SyncStateStore, keys: SyncKeys, scheduler: Scheduler, onlyIf: (SyncState) -> Boolean = { true }): Boolean {
+    var alias: Int? = null
+    var forgot = false
+    store.update {
+        if (!onlyIf(it)) {
+            it
+        } else {
+            alias = it.deviceAlias
+            forgot = true
+            SyncState(closing = it.closing, deleteSetupCode = it.deleteSetupCode, filesOnMobile = it.filesOnMobile)
+        }
+    }
+    if (!forgot) return false
     scheduler.cancel()
     deleteKeys(keys, alias)
+    return true
 }
 
 /** Deletes the device key under [alias] and the name key. One that cannot go now goes at the next start. */

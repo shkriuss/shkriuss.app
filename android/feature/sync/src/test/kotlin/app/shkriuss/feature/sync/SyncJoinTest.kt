@@ -265,4 +265,34 @@ class SyncJoinTest {
         assertEquals(Stage.ENROL_SENT, store.now().stage)
         assertNotNull(keys.sync.crypto.sync.deviceKey(alias))
     }
+
+    @Test
+    fun anAnswerOfEnrolAfterTheJoinWasCancelledChangesNothing() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val request = requestFor()
+        server.onRequest = { path -> if (path == "/v1/enrol") join.cancel() }
+        assertEquals(EnrolStep.Changed, join.takeSignedJoin(keys.sign(request, clock.nowMillis), request, "ABCD2345"))
+        assertEquals(Stage.NOT_JOINED, store.now().stage)
+        assertNull(store.now().epoch)
+        assertEquals(0, scheduler.periodic)
+    }
+
+    @Test
+    fun theCheckOfASentEnrolAfterANewJoinChangesNothing() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val request = requestFor()
+        server.unreachable = true
+        join.takeSignedJoin(keys.sign(request, clock.nowMillis), request, "ABCD2345")
+        server.unreachable = false
+        // While heads is on its way, the user goes back and starts the join anew with another key.
+        server.onRequest = { path ->
+            if (path == "/v1/heads") {
+                store.update { it.copy(stage = Stage.JOINING, deviceAlias = null, deviceId = null) }
+            }
+        }
+        assertEquals(EnrolStep.Changed, join.checkSentEnrol())
+        assertEquals(Stage.JOINING, store.now().stage)
+    }
 }

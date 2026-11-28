@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 8 test classes with 105 tests. They use real keys
+- `feature/sync` has 8 test classes with 110 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -851,13 +851,17 @@ second build must write the same mapping file, or the release stops. See
     chunks the server lacks, the order of ordinary and comparison
     batches, no batch after a `05` for each app that got one, a full
     server that takes no chunks either, an app whose transfer failed and
-    is served at the next run, a run stopped by Android, and a Leave while
-    a run goes, which the run does not overwrite.
+    is served at the next run, an app whose courier call fails, which is
+    left and not recorded as served, a stream that could not be read,
+    which is not called damaged, a run stopped by Android, also during a
+    courier call, and a Leave while a run goes, which the run does not
+    overwrite.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
     the headers of a signed request, a `04` sent once more, Cloudflare's
     answers, a page, the devices and the file calls.
   - `SyncJoinTest`, `SyncDevicesTest` and `SyncServicesTest`: each join
-    step and each answer of `enrol`, the actions of Devices and **Close
+    step and each answer of `enrol`, also one that comes after the join
+    was cancelled or started anew, the actions of Devices and **Close
     the server**, the order of the rows of Devices, the checks at each
     start, `poke` and `state`, the problems in their order, and answers
     that come after a Leave, which write nothing.

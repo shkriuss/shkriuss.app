@@ -384,6 +384,12 @@ internal class FakeDataApp(val name: String) {
 
     /** Runs once, at the next `status`, before the answer: a test makes the user act while a run goes. */
     var onStatus: () -> Unit = {}
+
+    /** Runs once, at the next `export`, before the answer. */
+    var onExport: () -> Unit = {}
+
+    /** The calls this app gives no answer to. */
+    val failCalls = mutableSetOf<String>()
     private var token = 0L
     private var lastBatch: List<Pair<ByteArray, ByteArray>> = emptyList()
     private var lastComparison = false
@@ -465,7 +471,7 @@ internal class FakeCouriers(vararg apps: FakeDataApp) : Couriers {
     private fun <T> answer(app: CourierApp, call: String, value: FakeDataApp.() -> T): CourierAnswer<T> {
         val fake = of(app)
         fake.calls += call
-        if (!fake.answers) return CourierAnswer.NoAnswer
+        if (!fake.answers || call in fake.failCalls) return CourierAnswer.NoAnswer
         if (!fake.on && call != "status") return CourierAnswer.Refused(Refusal.OFF)
         return CourierAnswer.Done(fake.value())
     }
@@ -477,7 +483,12 @@ internal class FakeCouriers(vararg apps: FakeDataApp) : Couriers {
     override fun compare(app: CourierApp, context: CourierContext) = answer(app, "compare") { comparison = ComparisonState.FETCHING }
 
     override fun export(app: CourierApp, context: CourierContext, comparison: Boolean, mostRecords: Int, mostBytes: Int) =
-        answer(app, "export") { export(context, comparison, mostRecords, mostBytes) }
+        answer(app, "export") {
+            val hook = onExport
+            onExport = {}
+            hook()
+            export(context, comparison, mostRecords, mostBytes)
+        }
 
     override fun exported(app: CourierApp, context: CourierContext, token: Long, answer: ByteArray) = answer(app, "exported") { exported(token, answer) }
 

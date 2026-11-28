@@ -168,6 +168,9 @@ class SyncRun(
         /** True after a lack of CPU time or a `0C` on a file request: the files wait for the next run, with less in each request. */
         private var filesStopped = false
 
+        /** A courier call of the app being served failed: it is left for this run, and nothing records it as served well. */
+        private var appLeft = false
+
         /** The apps that got a result `05`: they get no further batch in this run. */
         private val noMoreBatchesFor = mutableSetOf<String>()
 
@@ -262,6 +265,7 @@ class SyncRun(
         private fun serveOnce(app: CourierApp) {
             val name = app.name.value
             write { state -> state.withApp(name) { it.copy(poked = false) } }
+            appLeft = false
             val context = courierContext()
             val status = statusOf(app, context) ?: return
             // What the app has to do is kept before any transfer, so that a run that fails part way serves it again.
@@ -273,7 +277,7 @@ class SyncRun(
                 status.comparison == ComparisonState.FETCHING || status.wantsFetch
             if (needsFetch && !fetchAll(app, context, status)) return
             if (!sendBatches(app, context, comparison = false)) return
-            val streamsSent = moveStreams(app, context)
+            val streamsSent = moveStreams(app, context) ?: return
             if (streamsSent && !sendBatches(app, context, comparison = false)) return
             if (!sendBatches(app, context, comparison = true)) return
             val after = statusOf(app, context) ?: return
@@ -353,6 +357,7 @@ class SyncRun(
                     is CourierAnswer.Done -> answer.value ?: return true
                     else -> return false
                 }
+                checkStop()
                 when (val answer = server.send(session, name, batch)) {
                     is ServerAnswer.Done -> {
                         passed()
@@ -406,20 +411,25 @@ class SyncRun(
             return state.dayWait != null && state.dayWaitUntil != null && clock.nowMillis() < state.dayWaitUntil
         }
 
-        /** Deletes, sends and fetches the streams the app lists. True if a stream is now on the server. */
-        private fun moveStreams(app: CourierApp, context: CourierContext): Boolean {
+        /**
+         * Deletes, sends and fetches the streams the app lists. True if a
+         * stream is now on the server; null when a courier call failed, so
+         * that the app is left for this run.
+         */
+        private fun moveStreams(app: CourierApp, context: CourierContext): Boolean? {
             val list = when (val answer = couriers.streams(app, context)) {
                 is CourierAnswer.Done -> answer.value
-                else -> return false
+                else -> return null
             }
             deleteStreams(app, context, list.filter { it.work == StreamWork.DELETE })
+            if (appLeft) return null
             // Asking which chunks the server has moves no chunk, so it goes on any network: only files/send and files/fetch wait.
             val sends = list.filter { it.work == StreamWork.SEND }
             // A full server takes no chunks either: sending is tried once a day, and on Try again.
             val sent = if (sends.isNotEmpty() && !filesStopped && sendingAllowed()) StreamSender(app, context).send(sends) else false
             val fetches = list.filter { it.work == StreamWork.FETCH }
-            if (fetches.isNotEmpty() && !filesStopped && filesMayMove()) StreamFetcher(app, context).fetch(fetches)
-            return sent
+            if (fetches.isNotEmpty() && !filesStopped && filesMayMove() && !appLeft) StreamFetcher(app, context).fetch(fetches)
+            return if (appLeft) null else sent
         }
 
         private fun deleteStreams(app: CourierApp, context: CourierContext, deletes: List<ListedStream>) {
@@ -430,8 +440,11 @@ class SyncRun(
                 val results = fileValue(server.filesDelete(session, app.name.value, files)) ?: return
                 passed()
                 group.zip(results).forEach { (stream, result) ->
-                    // After NOT_NOW, or with no answer, the next run asks again.
-                    if (result != DeleteResult.NOT_NOW && couriers.streamDeleted(app, context, stream.fileIdBytes) !is CourierAnswer.Done) return
+                    // After NOT_NOW the next run asks again. With no answer from the app, it is left for this run.
+                    if (result != DeleteResult.NOT_NOW && couriers.streamDeleted(app, context, stream.fileIdBytes) !is CourierAnswer.Done) {
+                        appLeft = true
+                        return
+                    }
                 }
             }
         }
@@ -468,30 +481,40 @@ class SyncRun(
                         sent(stream)
                         return@forEach
                     }
-                    if (stopped || filesStopped || !filesMayMove()) return@forEach
-                    // Damaged bytes never go to the server under the name of the good stream.
-                    if (!fitsItsHash(stream)) {
-                        couriers.streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false)
-                        return@forEach
+                    if (appLeft || stopped || filesStopped || !filesMayMove()) return@forEach
+                    // Damaged bytes never go to the server under the name of the good stream. A stream that could not
+                    // be read at all is no proof of that: the app is left for this run, and nothing is said about it.
+                    when (hashOf(stream)) {
+                        HashCheck.FITS -> queue(stream, first, chunks)
+                        HashCheck.DOES_NOT_FIT -> if (couriers.streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false) !is CourierAnswer.Done) appLeft = true
+                        HashCheck.UNREADABLE -> appLeft = true
                     }
-                    queue(stream, first, chunks)
                 }
                 flush()
                 return anySent
             }
 
-            private fun fitsItsHash(stream: ListedStream): Boolean {
-                val input = (couriers.readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value ?: return false
+            /** Whether the stored stream, read to its end, fits the hash and the length that `streams` named. */
+            private fun hashOf(stream: ListedStream): HashCheck {
+                val input = (couriers.readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value ?: return HashCheck.UNREADABLE
                 return try {
-                    input.use { val counting = CountingInput(it); StreamHash.of(counting).contentEquals(stream.hash) && counting.count == stream.length }
+                    input.use {
+                        val counting = CountingInput(it)
+                        val fits = StreamHash.of(counting).contentEquals(stream.hash) && counting.count == stream.length
+                        if (fits) HashCheck.FITS else HashCheck.DOES_NOT_FIT
+                    }
                 } catch (_: IOException) {
-                    false
+                    HashCheck.UNREADABLE
                 }
             }
 
             private fun queue(stream: ListedStream, first: Int, chunks: Int) {
                 val key = stream.fileId
-                val input = (couriers.readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value ?: return
+                val input = (couriers.readStream(app, context, stream.fileIdBytes) as? CourierAnswer.Done)?.value
+                if (input == null) {
+                    appLeft = true
+                    return
+                }
                 byId[key] = stream
                 left[key] = chunks - first
                 try {
@@ -538,7 +561,7 @@ class SyncRun(
             }
 
             private fun sent(stream: ListedStream) {
-                if (couriers.streamSent(app, context, stream.fileIdBytes, stream.hash, fits = true) is CourierAnswer.Done) anySent = true
+                if (couriers.streamSent(app, context, stream.fileIdBytes, stream.hash, fits = true) is CourierAnswer.Done) anySent = true else appLeft = true
             }
 
             private fun show() {
@@ -555,13 +578,20 @@ class SyncRun(
                 total = streams.sumOf { it.length }
                 done = streams.sumOf { it.bytesHere }
                 streams.forEach { stream ->
-                    if (filesStopped || !filesMayMove()) return
+                    if (appLeft || filesStopped || !filesMayMove()) return
                     if (!fetchOne(stream)) return@forEach
                 }
             }
 
             private fun fetchOne(stream: ListedStream): Boolean {
-                val out = (couriers.writeStream(app, context, stream.fileIdBytes, stream.bytesHere) as? CourierAnswer.Done)?.value ?: return false
+                val out = when (val answer = couriers.writeStream(app, context, stream.fileIdBytes, stream.bytesHere)) {
+                    // The app does not want this stream now.
+                    is CourierAnswer.Done -> answer.value ?: return false
+                    else -> {
+                        appLeft = true
+                        return false
+                    }
+                }
                 val chunks = chunkCount(stream.length)
                 var here = stream.bytesHere
                 val whole = try {
@@ -596,7 +626,7 @@ class SyncRun(
                     false
                 }
                 if (!whole || here != stream.length) return false
-                couriers.finishStream(app, context, stream.fileIdBytes)
+                if (couriers.finishStream(app, context, stream.fileIdBytes) !is CourierAnswer.Done) appLeft = true
                 return true
             }
 
@@ -639,6 +669,7 @@ class SyncRun(
         private fun <T> retrying(call: () -> ServerAnswer<T>): ServerAnswer<T> {
             var tries = 0
             while (true) {
+                checkStop()
                 val answer = call()
                 val again = when (answer) {
                     ServerAnswer.OutOfCpuTime -> halve()
@@ -670,6 +701,15 @@ class SyncRun(
 
     /** Thrown inside a run when the server names another epoch: the app is served again with it. */
     private class EpochMoved(val epoch: SyncId) : Exception("Another epoch")
+
+    /** What reading a stream to its end showed. */
+    private enum class HashCheck {
+        FITS,
+        DOES_NOT_FIT,
+
+        /** It could not be read: no answer, no stream, or a pipe that failed. That proves nothing about its bytes. */
+        UNREADABLE,
+    }
 
     /** Thrown inside a run when Android stopped its job. Nothing is written for it. */
     private class RunStopped : Exception("The run was stopped")

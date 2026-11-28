@@ -101,6 +101,9 @@ sealed interface EnrolStep {
     /** The data app's answer is not for what was asked. */
     data object NotForThisJoin : EnrolStep
 
+    /** The join was cancelled or started anew while the request was on its way: its answer changed nothing. */
+    data object Changed : EnrolStep
+
     /** `05`, `01` or an answer that breaks its layout: the line of step 2 that [line] names. */
     data class Line(val line: AddressStep) : EnrolStep
 
@@ -242,29 +245,31 @@ class SyncJoin(
 
     private fun enrol(signed: SignedJoin, code: String): EnrolStep {
         val state = store.now()
+        if (state.stage != Stage.ENROL_SENT) return EnrolStep.NotSaved
+        val mark = JoinMark.of(state)
         val kind = state.codeKind ?: return EnrolStep.NotSaved
         val session = try {
             sessionOrNull(state)
         } catch (_: BlobException) {
             // The Keystore cannot be used now: the key is not gone.
             return EnrolStep.NotSaved
-        } ?: return keyRemoved()
-        val deviceId = state.deviceId ?: return keyRemoved()
+        } ?: return keyRemoved(mark)
+        val deviceId = state.deviceId ?: return keyRemoved(mark)
         val name = state.name ?: firstName()
         val answer = try {
-            val sealed = keys.sealName(DeviceId.ofBytes(deviceId.toBytes()) ?: return keyRemoved(), name)
+            val sealed = keys.sealName(DeviceId.ofBytes(deviceId.toBytes()) ?: return keyRemoved(mark), name)
             server.enrol(session, kind, code, signed, sealed)
         } catch (_: DeviceKeyGoneException) {
-            return keyRemoved()
+            return keyRemoved(mark)
         } catch (_: BlobException) {
             return EnrolStep.NotSaved
         }
         return when (answer) {
-            is ServerAnswer.Done -> joined(answer.value, signed.keyId)
-            ServerAnswer.WrongCode -> back(EnrolStep.WrongCode)
-            is ServerAnswer.OtherAccount -> back(EnrolStep.OtherAccount(answer.keyId))
-            ServerAnswer.Removed -> keyRemoved()
-            ServerAnswer.Closed -> cancelled(EnrolStep.Closed)
+            is ServerAnswer.Done -> joined(mark, answer.value, signed.keyId)
+            ServerAnswer.WrongCode -> back(mark, EnrolStep.WrongCode)
+            is ServerAnswer.OtherAccount -> back(mark, EnrolStep.OtherAccount(answer.keyId))
+            ServerAnswer.Removed -> keyRemoved(mark)
+            ServerAnswer.Closed -> cancelled(mark, EnrolStep.Closed)
             ServerAnswer.DoesNotCheck -> EnrolStep.Refused
             ServerAnswer.Unreachable -> EnrolStep.Unreachable
             ServerAnswer.UntrustedCertificate -> EnrolStep.Line(AddressStep.Untrusted)
@@ -282,24 +287,25 @@ class SyncJoin(
     fun checkSentEnrol(): EnrolStep {
         val state = store.now()
         if (state.stage != Stage.ENROL_SENT) return EnrolStep.NotSaved
+        val mark = JoinMark.of(state)
         val session = try {
             sessionOrNull(state)
         } catch (_: BlobException) {
             return EnrolStep.NotSaved
-        } ?: return keyRemoved()
+        } ?: return keyRemoved(mark)
         val answer = try {
             server.heads(session)
         } catch (_: DeviceKeyGoneException) {
-            return keyRemoved()
+            return keyRemoved(mark)
         } catch (_: BlobException) {
             return EnrolStep.NotSaved
         }
         return when (answer) {
-            is ServerAnswer.Done -> joined(answer.value.epoch, answer.value.keyId, heads = answer.value)
+            is ServerAnswer.Done -> joined(mark, answer.value.epoch, answer.value.keyId, heads = answer.value)
             // The server did not take it: back to the step before stage 2.
-            ServerAnswer.NotADevice -> back(EnrolStep.NotTaken)
-            ServerAnswer.Removed -> keyRemoved()
-            ServerAnswer.Closed -> cancelled(EnrolStep.Closed)
+            ServerAnswer.NotADevice -> back(mark, EnrolStep.NotTaken)
+            ServerAnswer.Removed -> keyRemoved(mark)
+            ServerAnswer.Closed -> cancelled(mark, EnrolStep.Closed)
             is ServerAnswer.Clock -> EnrolStep.Line(AddressStep.ClockOff(answer.serverTime - clock.nowMillis()))
             else -> EnrolStep.Unreachable
         }
@@ -312,42 +318,81 @@ class SyncJoin(
      */
     fun cancel(): Boolean = saved { forgetServer(store, keys, scheduler) }
 
-    private fun joined(epoch: SyncId, keyId: KeyId, heads: Heads? = null): EnrolStep {
+    private fun joined(mark: JoinMark, epoch: SyncId, keyId: KeyId, heads: Heads? = null): EnrolStep {
         val showed = store.now().codeKind == CodeKind.SETUP_CODE
-        val saved = saved {
-            store.update {
-                it.copy(
-                    stage = Stage.JOINED,
-                    epoch = epoch,
-                    keyId = keyId,
-                    revision = heads?.revision ?: it.revision,
-                    joinedAt = null,
-                    codeKind = null,
-                    setupCode = null,
-                )
-            }
-        }
-        if (!saved) return EnrolStep.NotSaved
+        val applied = applyTo(mark) {
+            it.copy(
+                stage = Stage.JOINED,
+                epoch = epoch,
+                keyId = keyId,
+                revision = heads?.revision ?: it.revision,
+                joinedAt = null,
+                codeKind = null,
+                setupCode = null,
+            )
+        } ?: return EnrolStep.NotSaved
+        if (!applied) return EnrolStep.Changed
         scheduler.schedulePeriodic()
         return EnrolStep.Joined(showedSetupCode = showed)
     }
 
     /** Back to the step before `stage` 2. */
-    private fun back(step: EnrolStep): EnrolStep = if (saved { store.update { it.copy(stage = Stage.JOINING) } }) step else EnrolStep.NotSaved
+    private fun back(mark: JoinMark, step: EnrolStep): EnrolStep = when (applyTo(mark) { it.copy(stage = Stage.JOINING) }) {
+        true -> step
+        false -> EnrolStep.Changed
+        null -> EnrolStep.NotSaved
+    }
 
     /** `03`: the key is deleted, and the join goes back to step 6 with a new key. */
-    private fun keyRemoved(): EnrolStep {
-        val alias = store.now().deviceAlias
-        if (!saved { store.update { it.copy(stage = Stage.JOINING, deviceAlias = null, deviceId = null) } }) return EnrolStep.NotSaved
+    private fun keyRemoved(mark: JoinMark): EnrolStep {
+        when (applyTo(mark) { it.copy(stage = Stage.JOINING, deviceAlias = null, deviceId = null) }) {
+            null -> return EnrolStep.NotSaved
+            false -> return EnrolStep.Changed
+            true -> Unit
+        }
         try {
-            alias?.let(keys::deleteDeviceKey)
+            mark.alias?.let(keys::deleteDeviceKey)
         } catch (_: BlobException) {
             // The next start deletes it: no state names it.
         }
         return EnrolStep.KeyRemoved
     }
 
-    private fun cancelled(step: EnrolStep): EnrolStep = if (cancel()) step else EnrolStep.NotSaved
+    private fun cancelled(mark: JoinMark, step: EnrolStep): EnrolStep = try {
+        if (forgetServer(store, keys, scheduler) { mark.isOf(it) }) step else EnrolStep.Changed
+    } catch (_: CouldNotSaveException) {
+        EnrolStep.NotSaved
+    }
+
+    /**
+     * Writes [change] only while the state is still the join of [mark]:
+     * true when it did, false when the join changed meanwhile, null when
+     * Sync could not save.
+     */
+    private fun applyTo(mark: JoinMark, change: (SyncState) -> SyncState): Boolean? {
+        var applied = false
+        val saved = saved {
+            store.update {
+                if (mark.isOf(it)) {
+                    applied = true
+                    change(it)
+                } else {
+                    it
+                }
+            }
+        }
+        return if (saved) applied else null
+    }
+
+    /** Which join a request was sent for: an answer that comes later counts only for the same join. */
+    private class JoinMark(val serverId: SyncId?, val address: String?, val alias: Int?, val deviceId: SyncId?) {
+        fun isOf(state: SyncState): Boolean = state.stage == Stage.ENROL_SENT && state.serverId == serverId &&
+            state.address == address && state.deviceAlias == alias && state.deviceId == deviceId
+
+        companion object {
+            fun of(state: SyncState): JoinMark = JoinMark(state.serverId, state.address, state.deviceAlias, state.deviceId)
+        }
+    }
 
     /** The join's session, or null when its key is gone. Throws [BlobException] when the Keystore cannot be used now. */
     private fun sessionOrNull(state: SyncState): Session? {
