@@ -15,8 +15,10 @@ follows this page.
 - Sealing file keys again in the database is built with Notes, the
   first app that stores files
   ([Notes' spec](../apps/notes/spec.md#before-the-recovery-key-the-file-key-move)).
-- Not built yet on the phones: the keys of sync
-  ([Sync keys](#sync-keys)) and a new recovery key
+- The keys of sync ([Sync keys](#sync-keys)) are in
+  `android/core/crypto`, and the mode "Sign a device" of the handover is
+  in `android/core/security`. The Sync app that uses them is not built
+  yet, nor is a new recovery key
   ([A new recovery key](#a-new-recovery-key)). The sync server checks
   both signatures of sync, in `backend/`.
 - The code is `android/core/crypto`. It must follow this page exactly.
@@ -53,7 +55,7 @@ The page ends with every [assumption](#assumptions), the
 | Files | One random key per file. The file is encrypted once. |
 | Hardware keys | Four AES-256-GCM keys per app in the Android Keystore, StrongBox where the phone has it |
 | App lock | Optional. One system prompt unlocks the file keys. Sync and reminders go on while locked. |
-| Sync identity | Not built yet. One signing key for each device, in the Sync app's Keystore. One account key that comes from the recovery key and signs who may join. |
+| Sync identity | One signing key for each device, in the Sync app's Keystore. One account key that comes from the recovery key and signs who may join. |
 | Database rows | Not encrypted by the app. Android's file-based encryption protects them ([ADR 0004](../adr/0004-room-on-system-sqlite-no-sqlcipher.md)). |
 | Every blob | Starts with `SHK`, a version byte and a kind byte |
 
@@ -148,14 +150,16 @@ Not protected, by decision or by nature:
    The owner accepted the four as they come.
 4. Tink features that are used: the AEAD, Streaming AEAD, PRF and key
    derivation primitives, the binary keyset format
-   (`TinkProtoKeysetFormat`) and the Keystore helper
-   (`integration.android.AndroidKeystore`).
+   (`TinkProtoKeysetFormat`), the Keystore helper
+   (`integration.android.AndroidKeystore`), and for sync its Ed25519
+   signature (`Ed25519Sign`, `Ed25519Verify`, without a prefix) for the
+   account key and its check that a point is on the curve P-256
+   (`EllipticCurves.pointDecode`) for a device's public key.
 5. Tink features that are not used: JSON keysets, JWT, hybrid encryption,
    MAC, deterministic AEAD, `AndroidKeysetManager`, shared
    preferences, any key management service client, and FIPS mode.
-6. Not built yet: Tink's signature primitive, with Ed25519, for the
-   account key of sync ([Sync keys](#sync-keys)). Until then no code
-   calls it.
+6. Signatures with a device key are made by the Android Keystore, not
+   by Tink ([Where Android does the work, not Tink](#where-android-does-the-work-not-tink)).
 
 ### No Play services provider
 
@@ -186,8 +190,7 @@ exist. Two checks make sure it stays so:
 A hardware key cannot leave the Keystore, so the Keystore itself must do
 every operation with it. Tink has a helper for that,
 `AndroidKeystore`. `core/crypto` uses the helper where it can, and calls
-Android directly in six places, and in two more for sync that are not
-built yet:
+Android directly in these places:
 
 | Task | How |
 |---|---|
@@ -199,9 +202,9 @@ built yet:
 | Use a hardware key that needs the system prompt | Direct: `javax.crypto.Cipher`, `AES/GCM/NoPadding`, on the key from the `AndroidKeyStore` key store. The prompt must be given the cipher object, and Tink's helper keeps its cipher to itself. |
 | Read whether a key is in StrongBox | Direct: `SecretKeyFactory` and `KeyInfo` |
 | The checksum of the recovery words | Direct: `java.security.MessageDigest`, SHA-256. Tink has no public plain hash. It is a checksum, not a secret. |
-| For sync, not built yet: make the device key and sign with it | Direct: `KeyPairGenerator` and `Signature` on the `AndroidKeyStore` key store. Tink's helper has no signatures. |
+| For sync: make the device key, read its public key, sign with it and delete it | Direct: `KeyPairGenerator`, `KeyStore.getCertificate`, `Signature` (`SHA256withECDSA`) and `KeyStore.deleteEntry` on the `AndroidKeyStore` key store. Tink's helper makes only AES keys and has no signatures. |
 | For sync: the hash of a stream (`StreamHash`) | Direct: `MessageDigest`, SHA-256, as for the words. It is not a secret. |
-| For sync, not built yet: the hash of a request and of a public key | Direct: `MessageDigest`, SHA-256, as for the words. Neither is a secret. |
+| For sync: the hash of a request and of a public key | Direct: `MessageDigest`, SHA-256, as for the words. Neither is a secret. |
 
 The direct cipher call makes exactly the bytes that Tink's helper makes:
 a 12-byte IV chosen by the Keystore, the ciphertext, and a 16-byte tag.
@@ -438,6 +441,12 @@ destroying it.
      hardware key, so the key that wrapped it is deleted like any key
      that no keyset file names. The Keystore refused that blob, so the
      key could never open it again.
+   - The Sync app's device keys, `shk.device.<number>`, are not counted
+     here: no keyset file names them. The Sync app deletes them itself
+     at its start, after this rule ran: every device key that the
+     Keystore's list shows, but the one its state names
+     (`SyncKeys.deleteOtherDeviceKeys`). Only keys that the list shows,
+     so a list that failed deletes nothing.
 
 #### Why four keys
 
@@ -706,9 +715,10 @@ When the app gets its recovery-key-derived keys:
 
 ## Sync keys
 
-Not built yet on the phones. The server checks both signatures
-(`backend/src/signatures.ts`). What each key is for, how a device joins
-and what the server checks are in
+`core/crypto` makes, uses and stores them (`SyncKeys`, `DeviceJoin.kt`,
+`KeySetup.beginSignDevice` and `KeySetup.signDeviceWithWords`). The
+server checks both signatures (`backend/src/signatures.ts`). What each
+key is for, how a device joins and what the server checks are in
 [sync-protocol.md](../architecture/sync-protocol.md#keys-and-identity).
 This section fixes the keys themselves. Decision:
 [ADR 0009](../adr/0009-sync-protocol-and-server.md), points 14 to 18.
@@ -737,8 +747,12 @@ the Sync app has one.
    the phone is locked. StrongBox must support this curve.
 2. Its alias is `shk.device.<number>`. The rules for making, replacing
    and losing a hardware key apply
-   ([Hardware keys](#hardware-keys)): the next number, never an alias
-   that exists, StrongBox first and then without it.
+   ([Hardware keys](#hardware-keys)): the next number, counted over the
+   device keys that the Keystore lists, never an alias that exists,
+   StrongBox first and then without it. The Sync app stores the number
+   first and then makes the key, so a stop in between makes the key
+   under the same number at the next try. A device key is gone only as
+   rule 1 says.
 3. A device key belongs to one server. The Sync app makes a new one
    each time it starts to join, and deletes the key when the device
    leaves or was removed.
@@ -746,8 +760,13 @@ the Sync app has one.
    ID** is the first 16 bytes of the SHA-256 of those 65 bytes.
 5. The Keystore signs with `SHA256withECDSA` and gives the signature in
    its DER form. `core/crypto` turns it into 64 bytes, r and then s,
-   each 32 bytes, which is what the server checks.
-6. A lost device key loses nothing. The device joins again with a new
+   each 32 bytes, which is what the server checks. It takes only a
+   well-formed sequence of two positive integers that fit in 32 bytes.
+6. `core/crypto` puts the signed bytes of a request together itself,
+   with type `10`, so that a device key signs nothing else. Before each
+   signature it checks that the key under the alias still has the
+   public key the caller names.
+7. A lost device key loses nothing. The device joins again with a new
    one.
 
 ### The account key
@@ -787,9 +806,18 @@ the Sync app has one.
 2. The Sync app stores it as `record` in its own `shk-keys/`, wrapped
    by its own Background key.
 3. It seals one thing: the name of a device, as a sealed record
-   (kind 1) under the device ID.
+   (kind 1) under the device ID: its 16 bytes are the record ID in the
+   associated data. The plaintext is `01` and the name in UTF-8. A name
+   has 1 to 40 code points, at most 160 bytes, no control character, no
+   line or paragraph separator, and no space at either end. A sealed
+   name that holds anything else is "damaged or changed".
 4. It is not a data key. No record of any app opens with it, because
-   every app's `record` key comes from that app's own label.
+   every app's `record` key comes from that app's own label. Only the
+   Sync app stores it: `core/crypto` refuses to store a name key in any
+   other app, where it would take the place of that app's own `record`.
+5. A new name key takes the place of the old one. A damaged one is
+   first copied to the set-aside folder. When the phone leaves or
+   stops, the name key and its Background key are deleted.
 
 ### The handover format, version 2
 
@@ -805,7 +833,11 @@ stay as they are, with the changes below.
 | New keys | A data app that has keys of an older recovery key of this keeper | The three keysets, with the new key as the primary |
 
 1. The Sync app passes the caller check only for the first two modes.
-   In every other mode it is refused, as before.
+   In every other mode it is refused, as before. No other app may ask in
+   them. The Sync app passes when it is `app.shkriuss.sync`, with
+   `.preview` exactly when the data app is a preview, and has exactly
+   one signer whose certificate bytes are the data app's own current
+   certificate.
 2. In the two modes of the Sync app the request carries the server's
    ID and address, and the keeper's screen names the server. In "Sign
    a device" the request also carries the device's public key.
@@ -813,15 +845,90 @@ stay as they are, with the changes below.
    its own current key, the same ID and the same key, as a key that is
    not the primary. Else it refuses them, as it refuses the keys of
    another recovery key in version 1.
-4. A reader of version 2 still reads version 1.
-5. The names of the request and of the result are fixed when the code
-   is written, on this page first.
+4. A reader of version 2 still reads version 1. An asking app writes a
+   request in the first version that has its mode: version 1 for the
+   keys and the check of four words, so that a keeper of an older
+   version still answers them, and version 2 for "Sign a device".
+5. Only "Sign a device" is built. The other two come with
+   [a new recovery key](../architecture/sync-protocol.md#a-new-recovery-key).
 
-Test vectors for the device ID, the account key, a statement and a
-signed request are in
+The request of "Sign a device", in the extras of the intent that opens
+the data app's handover screen:
+
+| Name | Type | Content |
+|---|---|---|
+| `app.shkriuss.handover.REQUEST_VERSION` | int | `2` |
+| `app.shkriuss.handover.MODE` | string | `SIGN_DEVICE` |
+| `app.shkriuss.handover.SERVER_ID` | bytes | The server ID, 16 bytes |
+| `app.shkriuss.handover.SERVER_ADDRESS` | string | The address, as a statement holds it |
+| `app.shkriuss.handover.DEVICE_PUBLIC_KEY` | bytes | 65 bytes, a point of P-256 |
+| `app.shkriuss.handover.KEY_ID` | int, only if there | The key ID of the recovery key to sign with. Missing: the current one. |
+
+A request with a value that a statement cannot hold is refused as
+`REFUSED`: a server ID that is not 16 bytes, an address that is not
+`https://`, a lower-case host name and a port other than 443 if any, 9
+to 255 characters, or a host of digits and dots only, or a public key
+that is not on the curve.
+
+The result, with `RESULT_OK`:
+
+| Name | Type | Content |
+|---|---|---|
+| `app.shkriuss.handover.VERSION` | int | `2` |
+| `app.shkriuss.handover.STATEMENT` | bytes | The join statement |
+| `app.shkriuss.handover.SIGNATURE` | bytes | Its Ed25519 signature, 64 bytes |
+| `app.shkriuss.handover.ACCOUNT_PUBLIC_KEY` | bytes | 32 bytes |
+| `app.shkriuss.handover.NAME_KEY` | bytes | Tink's binary keyset of the name key: one key, under the statement's key ID |
+
+The Sync app takes it only if all of it fits: the version, a join
+statement of the protocol's layout, the signature of that account key on
+it, and the name key under the statement's key ID. It then checks that
+the statement names the server, the address, the device key and, if it
+asked for one, the key ID of its request. A higher version is "update
+both apps"; anything else is "unreadable".
+
+Without keys, the result is cancelled, and `app.shkriuss.handover.REFUSAL`
+says why, as in version 1: `REFUSED`, `UPDATE`, `NOT_KEEPER` (the app
+has no keys, or its kept copy is gone or damaged), or, in version 2
+only, `OTHER_KEY`: the request named a key ID that this app has no keys
+of. The app says so before it shows anything else.
+
+How a data app signs:
+
+1. **A keeper.** It names the Sync app, the server and the short name
+   of the key. **Allow** opens the system prompt of the Recovery guard.
+   Inside the prompt step it opens the kept `recovery` keyset, takes
+   the recovery key that the request names or the current one, makes
+   the account key, signs the join statement with the time of that
+   moment, derives the name key, and drops the recovery key and the
+   account key. The account key's private bytes are wiped; the copies
+   that Tink's objects hold go with them, as for every key in memory.
+2. **An app that has its keys but does not keep the recovery key.** It
+   shows the same question. **Allow** opens the screen of all 24 words,
+   as when the words are entered. It takes the words only if their key
+   ID is the one the request names, or its own current one, and its
+   `record` keyset holds the key they derive. Else: "These words are
+   for another recovery key." Then it signs as a keeper does, with no
+   system prompt. Nothing is stored, and the app does not become a
+   keeper. Decided by the owner.
+3. **An app with no keys** signs nothing: `NOT_KEEPER`.
+
+The status provider of ADR 0041, point 13, also answers the Sync app.
+Its answer is still version 1. It names the key ID of the app's keys
+whenever it has them, and says separately whether it keeps the key. So
+the Sync app lists keepers, and, with none, the apps that have keys, for
+the words. A data app of an older version does not know the Sync app as
+a caller: its status provider gives Sync no answer, and its handover
+screen answers `REFUSED`. Sync lists such an app, and one that Android
+holds stopped, as one that gave no answer, with "Update Water, or open
+it once" ([Sync's specification](../apps/sync/spec.md#the-join-steps),
+decided by the owner).
+
+Test vectors for the device ID, the account key, a statement, a signed
+request, the name key and a sealed name are in
 [Test vectors](#sync-the-account-key-a-statement-and-a-signed-request).
-The server's tests check them. The vector of a sealed name, and Tink's
-computation of the others, come with the code of `core/crypto`.
+The server's tests check the first four, and `SyncVectorsTest` in
+`core/crypto` checks all of them with Tink.
 
 ## Nonces and key IDs
 
@@ -2060,8 +2167,8 @@ Computed with Python's `cryptography` package, 50.0.1, and again by the
 server's tests in Node.js
 ([`backend/test/vectors.test.mjs`](../../backend/test/vectors.test.mjs)).
 The Worker's Web Crypto checks both signatures, and refuses the request
-signature with one changed byte. Tink's computation comes with
-`core/crypto`.
+signature with one changed byte. `SyncVectorsTest` in `core/crypto`
+makes the same bytes with Tink, and the same Ed25519 signature.
 
 The recovery key and its key ID are the ones of
 [Recovery key, words, key ID](#recovery-key-words-key-id). The device
@@ -2105,7 +2212,21 @@ bytes, 93 bytes
 its ECDSA signature, r then s
 2d55454e770f3f27f5cb83e3869fcb76acb563a7f86e0dbcecf2cef843825bf9
 b75946bff6aebbcb477595a46515b46e56580bf4b60b8ad9fdb5d31550b58f72
+
+name key         HKDF-SHA256(recovery key, salt empty,
+                 "shkriuss.app/v1/sync/record", 32), one key b19d376f
+                 645600ae76271c4ebf4d5255e3b2348f90c05207da737b49b7c570c27c3ba9a4
+
+sealed name      "Pixel 9 Pro" of the device b18b86ce1389e46de87aa4a5131ce83c,
+                 kind 1, 62 bytes
+53484b010101b19d376f0a06008d2574b58f5bca24e039f577a59182f8e48f82
+9495ba56270ac7f093080a0e1b47e21c4251f5283d2ea71c18c10a28ef52
 ```
+
+The sealed name was made by `core/crypto`, and opened again with
+Python's `cryptography` package: HChaCha20 on the first 16 bytes of the
+nonce, then ChaCha20-Poly1305, with the associated data `53484b0101`
+and the 16 bytes of the device ID. Its plaintext is `01` and the name.
 
 ## What the tests must cover
 

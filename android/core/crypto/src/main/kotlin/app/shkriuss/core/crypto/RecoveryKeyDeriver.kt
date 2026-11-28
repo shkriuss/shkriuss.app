@@ -21,6 +21,9 @@ internal class DerivedKeysets(val record: KeysetHandle, val backup: KeysetHandle
 internal object RecoveryKeyDeriver {
     private const val LABEL_PREFIX = "shkriuss.app/v1/"
 
+    /** The app name of the Sync app, whose only derived keyset is its name key. */
+    val SYNC: AppName = AppName.of("sync")
+
     /** The `recovery` keyset for these recovery keys, with [primary] as the one new blobs use. */
     fun recoveryKeyset(keys: List<RecoveryKey>, primary: RecoveryKey): KeysetHandle {
         TinkSetup.ready()
@@ -52,6 +55,15 @@ internal object RecoveryKeyDeriver {
             fileKey = derive(recovery, KeysetType.SEALING, label(app, KeysetName.FILE_KEY)),
         )
     }
+
+    /**
+     * The name key of the Sync app (crypto-design.md, "The name key"): the
+     * `record` keyset that [recoveryKey] derives for the app name `sync`,
+     * one key under its key ID. It seals only the names of devices. No
+     * data app's record opens with it, because each app's label differs.
+     */
+    fun nameKey(recoveryKey: RecoveryKey): KeysetHandle =
+        derive(recoveryKeyset(listOf(recoveryKey), recoveryKey), KeysetType.SEALING, label(SYNC, KeysetName.RECORD))
 
     /** The label of a derived keyset, for example `shkriuss.app/v1/water/record`. */
     private fun label(app: AppName, name: KeysetName): String = "$LABEL_PREFIX${app.value}/${name.text}"

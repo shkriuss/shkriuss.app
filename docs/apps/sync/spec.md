@@ -119,8 +119,13 @@ use it." Only its **Done** takes the address out.
    lists them: **Continue in Water**, with "Key b19d376f" under it. With
    no keeper: "No app on this phone keeps your recovery key. Enter the
    words in one of your apps.", and **Enter the words in Water** for each
-   data app. With no data app: "Install an app of shkriuss.app and set
-   up its recovery key first."
+   data app that has its keys from a recovery key. That app takes only
+   the 24 words of its own key: "These words are for another recovery
+   key." For each data app that gave no answer, a version older than
+   this step or one that Android holds stopped, a line with no button:
+   "Water did not answer. Update Water, or open it once, then try
+   again." With no data app that has keys: "Install an app of
+   shkriuss.app and set up its recovery key first."
 
    A button opens that app's handover screen in the mode "Sign a device"
    ([crypto-design.md](../../security/crypto-design.md#the-handover-format-version-2)).
@@ -128,7 +133,9 @@ use it." Only its **Done** takes the address out.
    `REFUSED`: "Sync cannot use Water: one of the two is signed otherwise
    or not up to date. Update both apps." `UPDATE`: "Update both apps,
    Water and Sync." `NOT_KEEPER`: "Water does not keep the recovery key
-   now.", and the buttons are listed again.
+   now.", and the buttons are listed again. `OTHER_KEY`, after a request
+   that named an older key: the line of `0A` for any other key at step
+   7.
 7. **Joining.** "Joining the server", while Sync sends
    [`enrol`](../../architecture/sync-protocol.md#enrol):
 
@@ -533,7 +540,7 @@ new phone joins as a new device.
    eight screens, the status provider and the two
    permissions of `core/security`. Kept: its `<queries>` for the
    handover ([permissions.md](../../security/permissions.md#the-handover-between-apps),
-   point 7).
+   point 8).
 3. Exported: `SyncActivity`; Sync's courier provider,
    `app.shkriuss.sync.courier`, with no permission, which checks the
    caller before anything else; and WorkManager's `SystemJobService`,
@@ -565,7 +572,7 @@ As in Water, and:
 
 | Module | Change |
 |---|---|
-| `core/crypto` | The device key, the name key and a sealed name ([Sync keys](../../security/crypto-design.md#sync-keys)). Random setup codes. The cleanup at start ([Hardware keys](../../security/crypto-design.md#hardware-keys), rule 8) keeps the `shk.device.*` key that Sync's state names, though no keyset file names it, and deletes any other. crypto-design.md says so with the code. |
+| `core/crypto` | The device key, the name key and a sealed name ([Sync keys](../../security/crypto-design.md#sync-keys)). Random setup codes. The cleanup at start ([Hardware keys](../../security/crypto-design.md#hardware-keys), rule 8) leaves every `shk.device.*` key alone. At each start, after it, Sync calls `deleteOtherDeviceKeys` with the number `deviceAlias` holds, which deletes every other device key. |
 | `core/security` | Handover format version 2, mode "Sign a device", with Sync the only caller that passes for it. The asking side (`SuiteApps`, `keepers`, `KeeperCall`) works for Sync. |
 | `core/sync-client` | Each data app's courier provider, and its calls to `poke` and `state`, when that app syncs |
 | `core/design`, `core/notify` | Nothing |
@@ -589,7 +596,7 @@ networks, long transfers and notification. The owner asked this page to
 say, for every value and action, its limits and what happens when Sync
 stops between two writes, a write fails, a press comes twice or late,
 and the clock or the time zone changes
-([When things go wrong](#when-things-go-wrong)). And five answers:
+([When things go wrong](#when-things-go-wrong)). And seven answers:
 
 1. Records go on any network. File chunks only on an unmetered network,
    unless **Files on mobile data** is on. It is off at first. So a
@@ -606,6 +613,11 @@ and the clock or the time zone changes
    it shows until the join ends or is cancelled.
 5. No `HIDE_OVERLAY_WINDOWS`. The code screens and the buttons that
    remove, leave or close ignore a tap through another app's window.
+6. A data app that does not keep the recovery key signs a join only
+   with the 24 words of its own keys, and Sync offers only the data
+   apps that have keys.
+7. A data app that gives Sync no answer is listed at join step 6 with
+   "Update Water, or open it once, then try again."
 
 The rest is in
 [sync-protocol.md](../../architecture/sync-protocol.md#decided-by-the-owner).
@@ -648,26 +660,22 @@ Choices this page made without a decision by the owner on that point.
    locators), whether **Sync now** can be expedited work, its own use
    of Android's alarms to notice a force stop, and what it adds to the
    manifest. Then the owner's sentence for the allow list.
-3. **A data app that is not a keeper** and gets "Sign a device": how it
-   takes the request and asks for the 24 words is fixed on
-   [crypto-design.md](../../security/crypto-design.md#the-handover-format-version-2)
-   and security-screens.md before the code.
-4. **`status` byte 54** is `01` while every record in **To send** is
+3. **`status` byte 54** is `01` while every record in **To send** is
    held back, so Sync would wake that app at every run. The protocol
    page says so, or `status` counts only what `export` would give now.
    Decided with the courier provider.
-5. **A new recovery key**: its screens and Sync's two steps
+4. **A new recovery key**: its screens and Sync's two steps
    ([sync-protocol.md](../../architecture/sync-protocol.md#open-questions),
    question 2).
-6. **A lost or damaged name key**: version 1 joins again.
-7. **A notification when sync stops**, later, with a part of
+5. **A lost or damaged name key**: version 1 joins again.
+6. **A notification when sync stops**, later, with a part of
    `core/notify` that shows one without alarms.
-8. **How often Android runs Sync** when it is rarely opened, on
+7. **How often Android runs Sync** when it is rarely opened, on
    GrapheneOS. Seen on phones.
-9. **Cloudflare's two answers**, for the day's requests and for CPU
+8. **Cloudflare's two answers**, for the day's requests and for CPU
    time, told apart on the first deployed server, and **a data app that
    was force-stopped or never opened**
    ([sync-protocol.md](../../architecture/sync-protocol.md#assumptions),
    points 8 and 1).
-10. **The pages for users**: permissions.md, data-inventory.md, a user
-    guide for Sync and the self-hosting guide, when the app is built.
+9. **The pages for users**: permissions.md, data-inventory.md, a user
+   guide for Sync and the self-hosting guide, when the app is built.

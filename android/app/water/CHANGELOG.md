@@ -18,6 +18,12 @@ get reminders during the hours you choose. Its specification is
 - Two changes in Settings made one right after the other are written in
   the order you made them. On a busy phone the older of two changes of
   the same setting could be the one that stayed.
+- Ready for the Sync app, which is not released yet: when Sync asks,
+  Water can sign that this phone may join your sync server. Water shows
+  the server and asks you to allow it. If Water keeps your recovery key,
+  you confirm with your fingerprint or screen lock; if not, you enter
+  the 24 words of its own key. Sync gets no keys of Water and never the
+  words.
 
 ## 1.0.2 (2026-11-22)
 

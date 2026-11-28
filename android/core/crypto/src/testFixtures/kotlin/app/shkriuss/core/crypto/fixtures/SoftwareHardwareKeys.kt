@@ -2,6 +2,7 @@ package app.shkriuss.core.crypto.fixtures
 
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import app.shkriuss.core.crypto.CannotMakeHardwareKeyException
+import app.shkriuss.core.crypto.DeviceKeyRef
 import app.shkriuss.core.crypto.HardwareBlobRefused
 import app.shkriuss.core.crypto.HardwareKeyGone
 import app.shkriuss.core.crypto.HardwareKeyKind
@@ -9,11 +10,17 @@ import app.shkriuss.core.crypto.HardwareKeyNotUsable
 import app.shkriuss.core.crypto.HardwareKeyRef
 import app.shkriuss.core.crypto.HardwareKeys
 import app.shkriuss.core.crypto.SecurityLevel
+import java.math.BigInteger
 import java.security.AlgorithmParameters
 import java.security.Key
+import java.security.KeyPair
+import java.security.KeyPairGenerator
 import java.security.Provider
 import java.security.SecureRandom
+import java.security.Signature
+import java.security.interfaces.ECPublicKey
 import java.security.spec.AlgorithmParameterSpec
+import java.security.spec.ECGenParameterSpec
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.CipherSpi
@@ -69,8 +76,17 @@ internal class SoftwareHardwareKeys : HardwareKeys {
     /** Every key that was deleted, in order. */
     val deleted = mutableListOf<HardwareKeyRef>()
 
+    /** The Sync app's device keys: EC key pairs of the curve P-256, by alias. */
+    private val deviceKeys = LinkedHashMap<String, KeyPair>()
+
+    /** The numbers of every device key that was made, in order. */
+    val madeDeviceKeys = mutableListOf<Int>()
+
+    /** The numbers of every device key that was deleted, in order. */
+    val deletedDeviceKeys = mutableListOf<Int>()
+
     /** The aliases that really exist, whatever the list says. */
-    fun existing(): Set<String> = keys.keys.toSet()
+    fun existing(): Set<String> = keys.keys + deviceKeys.keys
 
     /** Puts a key with known bytes under an alias, for the vectors. */
     fun put(key: HardwareKeyRef, bytes: ByteArray) {
@@ -91,7 +107,7 @@ internal class SoftwareHardwareKeys : HardwareKeys {
     override fun hasScreenLock(): Boolean = screenLock
 
     override fun aliases(): Set<String> =
-        if (keystoreFails || listFails) emptySet() else keys.keys - leftOutOfList
+        if (keystoreFails || listFails) emptySet() else keys.keys + deviceKeys.keys - leftOutOfList
 
     override fun exists(key: HardwareKeyRef): Boolean {
         if (keystoreFails) throw HardwareKeyNotUsable()
@@ -151,6 +167,62 @@ internal class SoftwareHardwareKeys : HardwareKeys {
             cipher.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, iv))
         }
         return cipher
+    }
+
+    override fun exists(key: DeviceKeyRef): Boolean {
+        if (keystoreFails) throw HardwareKeyNotUsable()
+        return key.alias in deviceKeys
+    }
+
+    override fun make(key: DeviceKeyRef) {
+        if (keystoreFails) throw HardwareKeyNotUsable()
+        if (cannotMake) throw CannotMakeHardwareKeyException(null)
+        check(key.alias !in deviceKeys && key.alias !in keys) { "A key is never made under an alias that exists: ${key.alias}" }
+        val generator = KeyPairGenerator.getInstance("EC")
+        generator.initialize(ECGenParameterSpec("secp256r1"), random)
+        deviceKeys[key.alias] = generator.generateKeyPair()
+        madeDeviceKeys += key.number
+    }
+
+    override fun publicKey(key: DeviceKeyRef): ByteArray {
+        val pair = usableDeviceKey(key)
+        val point = (pair.public as ECPublicKey).w
+        return byteArrayOf(4) + fixed(point.affineX) + fixed(point.affineY)
+    }
+
+    override fun sign(key: DeviceKeyRef, data: ByteArray): ByteArray {
+        val pair = usableDeviceKey(key)
+        return Signature.getInstance("SHA256withECDSA").run {
+            initSign(pair.private)
+            update(data)
+            sign()
+        }
+    }
+
+    override fun delete(key: DeviceKeyRef) {
+        if (keystoreFails) throw HardwareKeyNotUsable()
+        if (deviceKeys.remove(key.alias) != null) deletedDeviceKeys += key.number
+    }
+
+    /** Puts a device key with a known key pair under the number [number], for the vectors. */
+    fun putDeviceKey(number: Int, pair: KeyPair) {
+        deviceKeys[DeviceKeyRef(number).alias] = pair
+    }
+
+    /** Loses the device key [number], as if Android had deleted it. */
+    fun loseDeviceKey(number: Int) {
+        deviceKeys.remove(DeviceKeyRef(number).alias)
+    }
+
+    private fun usableDeviceKey(key: DeviceKeyRef): KeyPair {
+        if (keystoreFails) throw HardwareKeyNotUsable()
+        if (key.alias in invalidated) throw HardwareKeyGone()
+        return deviceKeys[key.alias] ?: throw HardwareKeyGone()
+    }
+
+    private fun fixed(value: BigInteger): ByteArray {
+        val bytes = value.toByteArray().let { if (it.size > 32 && it[0] == 0.toByte()) it.copyOfRange(1, it.size) else it }
+        return ByteArray(32 - bytes.size) + bytes
     }
 
     private fun usable(key: HardwareKeyRef): SecretKey {

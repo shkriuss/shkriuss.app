@@ -9,7 +9,7 @@ import org.junit.runners.Suite
  * not listed here would not run. `./gradlew check` fails for such a class
  * (`checkInstrumentedTestSuite`).
  *
- * The first four are in `src/sharedTest/` and also run on the JVM. The
+ * The first five are in `src/sharedTest/` and also run on the JVM. The
  * others need the real Android Keystore.
  *
  * The order matters in one place: [UnlockedKeyTest] locks the emulator,
@@ -22,6 +22,7 @@ import org.junit.runners.Suite
     PublishedVectorsTest::class,
     RecoveryWordsTest::class,
     KeysetFilesTest::class,
+    SyncVectorsTest::class,
     TinkOnAndroidTest::class,
     HardwareKeysTest::class,
     UnlockedKeyTest::class,

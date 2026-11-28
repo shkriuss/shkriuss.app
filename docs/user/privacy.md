@@ -179,14 +179,21 @@ title.
 - The apps put nothing on the clipboard themselves. A text field, such
   as a reminder's title, offers the usual copy and paste: what you copy
   goes to the clipboard.
-- The apps share nothing with other apps, with one exception. An app of
-  the suite that keeps your recovery key can give another app of the
-  suite on the same phone that app's own keys, after you tap **Allow**
-  and answer the system prompt. It never gives the 24 words. It also
-  tells such an app whether it keeps a recovery key, and that key's
-  short name. It answers only apps of the suite signed exactly like
-  itself, and gives any other app nothing
-  ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
+- The apps share nothing with other apps, with two exceptions, both
+  only for apps of the suite signed exactly like themselves. Any other
+  app gets nothing.
+  - An app of the suite that keeps your recovery key can give another
+    app of the suite on the same phone that app's own keys, after you
+    tap **Allow** and answer the system prompt. It never gives the 24
+    words
+    ([Get the keys from another app](recovery-key.md#get-the-keys-from-another-app)).
+  - When the Sync app asks, an app can sign that this phone may join
+    your sync server, after you tap **Allow** and answer the system
+    prompt or enter your 24 words. Sync gets that signature and a key
+    that only seals the names of your devices, never the words and
+    never the app's own keys.
+  - An app tells these apps whether it keeps a recovery key, and the
+    short name of the key its keys come from.
 - The apps write no logs of what you enter.
 
 ## Sync, later

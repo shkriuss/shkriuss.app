@@ -8,7 +8,11 @@ import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import com.google.crypto.tink.integration.android.AndroidKeystore
 import java.security.GeneralSecurityException
+import java.security.KeyPairGenerator
 import java.security.KeyStore
+import java.security.PrivateKey
+import java.security.Signature
+import java.security.interfaces.ECPublicKey
 import javax.crypto.BadPaddingException
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
@@ -25,6 +29,8 @@ import javax.crypto.spec.GCMParameterSpec
  * - listing the app's keys (`KeyStore.aliases`),
  * - asking whether one key exists (`KeyStore.getKey`). Tink's `hasKey`
  *   also answers "no" when the Keystore only failed for a moment.
+ * - everything of the Sync app's device key, which signs: Tink's helper
+ *   makes only AES keys.
  *
  * No Keystore exists where unit tests run. This class meets a real
  * Keystore only in the emulator tests. It is kept thin for that
@@ -110,6 +116,73 @@ internal class AndroidHardwareKeys(private val context: Context) : HardwareKeys 
         }
     }
 
+    override fun exists(key: DeviceKeyRef): Boolean = try {
+        keyStore().getKey(key.alias, null) != null
+    } catch (_: Exception) {
+        throw HardwareKeyNotUsable()
+    }
+
+    override fun make(key: DeviceKeyRef) {
+        var failure: Exception? = null
+        if (context.packageManager.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE)) {
+            failure = tryToMake(key, strongBox = true) ?: return
+            // A key is never made under an alias that exists.
+            if (exists(key)) throw CannotMakeHardwareKeyException(failure)
+        }
+        failure = tryToMake(key, strongBox = false) ?: return
+        throw CannotMakeHardwareKeyException(failure)
+    }
+
+    private fun tryToMake(key: DeviceKeyRef, strongBox: Boolean): Exception? = try {
+        KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, KEYSTORE).apply {
+            initialize(HardwareKeySpecs.spec(key, strongBox))
+            generateKeyPair()
+        }
+        null
+    } catch (failed: Exception) {
+        failed
+    }
+
+    override fun publicKey(key: DeviceKeyRef): ByteArray {
+        val certificate = try {
+            keyStore().getCertificate(key.alias)
+        } catch (_: Exception) {
+            throw HardwareKeyNotUsable()
+        }
+        if (certificate == null) throw if (exists(key)) HardwareKeyNotUsable() else HardwareKeyGone()
+        val point = (certificate.publicKey as? ECPublicKey)?.w ?: throw HardwareKeyNotUsable()
+        return P256.encode(point.affineX, point.affineY)
+    }
+
+    override fun sign(key: DeviceKeyRef, data: ByteArray): ByteArray {
+        val privateKey = try {
+            keyStore().getKey(key.alias, null)
+        } catch (_: Exception) {
+            throw HardwareKeyNotUsable()
+        } ?: throw HardwareKeyGone()
+        try {
+            return Signature.getInstance(SIGNATURE).run {
+                initSign(privateKey as PrivateKey)
+                update(data)
+                sign()
+            }
+        } catch (_: KeyPermanentlyInvalidatedException) {
+            throw HardwareKeyGone()
+        } catch (_: GeneralSecurityException) {
+            throw if (exists(key)) HardwareKeyNotUsable() else HardwareKeyGone()
+        } catch (_: RuntimeException) {
+            throw if (exists(key)) HardwareKeyNotUsable() else HardwareKeyGone()
+        }
+    }
+
+    override fun delete(key: DeviceKeyRef) {
+        try {
+            keyStore().deleteEntry(key.alias)
+        } catch (_: Exception) {
+            throw HardwareKeyNotUsable()
+        }
+    }
+
     /**
      * Runs one operation of a key that needs no prompt, and sorts its
      * failure: a refused tag, a key that is gone, or not usable now.
@@ -144,5 +217,6 @@ internal class AndroidHardwareKeys(private val context: Context) : HardwareKeys 
         const val KEYSTORE = "AndroidKeyStore"
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val TAG_BITS = 128
+        const val SIGNATURE = "SHA256withECDSA"
     }
 }

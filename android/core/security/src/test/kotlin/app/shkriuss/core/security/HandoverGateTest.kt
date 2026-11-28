@@ -22,7 +22,9 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModelProvider
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.crypto.DeviceJoinRequest
 import app.shkriuss.core.crypto.KeyId
+import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import java.io.File
 import java.time.Duration
 import org.junit.Assert.assertEquals
@@ -184,7 +186,7 @@ class HandoverGateTest {
             assertTrue("$why: no screen", showsNothing(screen))
         }
 
-        val newer = startHandover("app.shkriuss.reminders", request(version = Handover.VERSION + 1))
+        val newer = startHandover("app.shkriuss.reminders", request(version = Handover.NEWEST_VERSION + 1))
         assertEquals("a newer version", HandoverRefusal.UPDATE.name, refusalOf(newer))
         assertTrue(showsNothing(newer))
     }
@@ -208,12 +210,12 @@ class HandoverGateTest {
         val valid = HandoverRequest.Valid(reminders, "app.shkriuss.reminders", HandoverMode.KEYS)
         val suite = AndroidSuiteApps(app)
 
-        val (code, data) = handoverResult("app.shkriuss.reminders", valid, suite, keys)
+        val (code, data) = handoverResult("app.shkriuss.reminders", valid, suite, HandoverGift.Keys(keys))
         assertEquals(Activity.RESULT_OK, code)
         assertNotNull(data!!.getByteArrayExtra("app.shkriuss.handover.RECORD"))
 
         fun refused(caller: String?, why: String) {
-            val (refusedCode, refusedData) = handoverResult(caller, valid, suite, keys)
+            val (refusedCode, refusedData) = handoverResult(caller, valid, suite, HandoverGift.Keys(keys))
             assertEquals(why, Activity.RESULT_CANCELED, refusedCode)
             assertEquals(why, HandoverRefusal.REFUSED.name, refusedData?.getStringExtra(Handover.EXTRA_REFUSAL))
             assertNull("$why: no keys", refusedData?.getByteArrayExtra("app.shkriuss.handover.RECORD"))
@@ -305,9 +307,9 @@ class HandoverGateTest {
         install("app.shkriuss.notes", current = listOf(suiteCertificate))
         install("app.shkriuss.thief", current = listOf(otherCertificate))
         listOf("app.shkriuss.reminders", "app.shkriuss.notes", "app.shkriuss.thief").forEach(::offerHandoverScreen)
-        answerStatus("app.shkriuss.reminders", KeeperStatus.bundleOf(id))
-        answerStatus("app.shkriuss.notes", KeeperStatus.bundleOf(null))
-        answerStatus("app.shkriuss.thief", KeeperStatus.bundleOf(id))
+        answerStatus("app.shkriuss.reminders", KeeperStatus.bundleOf(keeps = true, keyId = id))
+        answerStatus("app.shkriuss.notes", KeeperStatus.bundleOf(keeps = false, keyId = null))
+        answerStatus("app.shkriuss.thief", KeeperStatus.bundleOf(keeps = true, keyId = id))
 
         val keepers = AndroidSuiteApps(app).keepers()
         assertEquals(listOf("app.shkriuss.reminders"), keepers.map { it.packageName })
@@ -503,5 +505,125 @@ class HandoverGateTest {
     private companion object {
         /** Where AndroidX's result registry saves the results that no callback took yet. */
         const val PENDING_RESULTS = "KEY_COMPONENT_ACTIVITY_PENDING_RESULT"
+    }
+
+    /** A valid request of "Sign a device", with a device key made by a stand-in Sync app. */
+    private fun joinRequest(): DeviceJoinRequest {
+        val sync = SoftwareKeysApp(File(temporary.newFolder(), "shk-keys"), AppName.of("sync"))
+        val device = sync.crypto.sync.makeDeviceKey(1)
+        return DeviceJoinRequest.of(ByteArray(16), "https://sync.example.workers.dev", device.publicKey)!!
+    }
+
+    private fun signRequest(join: DeviceJoinRequest = joinRequest()) = Bundle().apply {
+        putInt(Handover.EXTRA_VERSION, 2)
+        putString(Handover.EXTRA_MODE, HandoverMode.SIGN_DEVICE.name)
+        join.writeTo(this)
+    }
+
+    @Test
+    fun theSyncAppSeesTheScreenOnlyToSignAndOnlyWhenSignedLikeThisApp() {
+        install("app.shkriuss.sync", current = listOf(suiteCertificate))
+        assertTrue("it passes as the Sync app", AndroidSuiteApps(app).isSyncApp("app.shkriuss.sync"))
+        val screen = startHandover("app.shkriuss.sync", signRequest())
+        assertTrue("the screen stays", !screen.isFinishing)
+        assertTrue("it shows the screen", !showsNothing(screen))
+
+        val keys = startHandover("app.shkriuss.sync", request())
+        assertEquals("Sync asking for keys", HandoverRefusal.REFUSED.name, refusalOf(keys))
+        assertTrue(showsNothing(keys))
+
+        install("app.shkriuss.sync.preview", current = listOf(suiteCertificate))
+        val preview = startHandover("app.shkriuss.sync.preview", signRequest())
+        assertEquals("a preview of Sync asking a real app", HandoverRefusal.REFUSED.name, refusalOf(preview))
+
+        install("app.shkriuss.reminders", current = listOf(suiteCertificate))
+        val dataApp = startHandover("app.shkriuss.reminders", signRequest())
+        assertEquals("a data app asking to sign", HandoverRefusal.REFUSED.name, refusalOf(dataApp))
+
+        install("app.shkriuss.sync", current = listOf(otherCertificate))
+        assertTrue(!AndroidSuiteApps(app).isSyncApp("app.shkriuss.sync"))
+        val other = startHandover("app.shkriuss.sync", signRequest())
+        assertEquals("Sync signed otherwise", HandoverRefusal.REFUSED.name, refusalOf(other))
+        assertTrue(showsNothing(other))
+    }
+
+    @Test
+    fun theStatusProviderAnswersTheRealSyncAppAndNoOtherSync() {
+        val host = app as TestHostApp
+        val key = host.keys.crypto.setup.createRecoveryKey()
+        host.keys.crypto.setup.storeDerivedKeys(key)
+        install("app.shkriuss.sync", current = listOf(suiteCertificate))
+        val answer = KeeperStatusProvider.statusFor("app.shkriuss.sync", AndroidSuiteApps(app), host)
+        assertEquals(false to key.keyId.toString(), KeeperStatus.of(answer!!))
+
+        install("app.shkriuss.sync", current = listOf(otherCertificate))
+        assertNull(KeeperStatusProvider.statusFor("app.shkriuss.sync", AndroidSuiteApps(app), host))
+    }
+
+    @Test
+    fun theSyncAppListsCheckedAppsThatHaveKeysAndThoseThatGaveNoAnswer() {
+        val id = KeyId(0x0a0b0c0d)
+        listOf("app.shkriuss.reminders", "app.shkriuss.notes", "app.shkriuss.tasks", "app.shkriuss.water").forEach {
+            install(it, current = listOf(suiteCertificate))
+        }
+        install("app.shkriuss.thief", current = listOf(otherCertificate))
+        listOf("app.shkriuss.reminders", "app.shkriuss.notes", "app.shkriuss.tasks", "app.shkriuss.water", "app.shkriuss.thief")
+            .forEach(::offerHandoverScreen)
+        answerStatus("app.shkriuss.reminders", KeeperStatus.bundleOf(keeps = true, keyId = id))
+        answerStatus("app.shkriuss.notes", KeeperStatus.bundleOf(keeps = false, keyId = id))
+        answerStatus("app.shkriuss.tasks", KeeperStatus.bundleOf(keeps = false, keyId = null))
+        // An app of an older version answers the Sync app nothing.
+        answerStatus("app.shkriuss.water", null)
+        answerStatus("app.shkriuss.thief", KeeperStatus.bundleOf(keeps = true, keyId = id))
+
+        val signing = AndroidSuiteApps(app).signingApps()
+        val apps = signing.withKeys.sortedBy { it.packageName }
+        assertEquals(listOf("app.shkriuss.notes", "app.shkriuss.reminders"), apps.map { it.packageName })
+        assertEquals("the older app, not the thief", listOf("app.shkriuss.water"), signing.silent.map { it.packageName })
+        assertEquals(listOf(false, true), apps.map { it.keeps })
+        assertTrue(apps.all { it.keyId == "0a0b0c0d" })
+        val join = joinRequest()
+        val intent = AndroidSuiteApps(app).handoverIntent("app.shkriuss.notes", HandoverMode.SIGN_DEVICE, join)!!
+        assertEquals(2, intent.getIntExtra(Handover.EXTRA_VERSION, 0))
+        assertEquals(join.address, DeviceJoinRequest.readFrom(intent.extras!!)!!.address)
+    }
+
+    /** The Sync app's screen of join step 6, with a [SignDeviceCall] made in `onCreate`, as [AskingScreen] has a [KeeperCall]. */
+    internal class SigningScreen : ComponentActivity() {
+        val answers = mutableListOf<Pair<String, SignDeviceAnswer>>()
+        var toAsk: String? = "app.shkriuss.water"
+        lateinit var call: SignDeviceCall
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            if (savedInstanceState != null) toAsk = null
+            val suite = FakeSuiteApps(peers = mapOf("app.shkriuss.water" to AppName.of("water")))
+            call = SignDeviceCall(this, suite, app = { toAsk }, onAnswer = { asked, answer -> answers += asked to answer })
+        }
+    }
+
+    @Test
+    fun aSignedJoinAfterAndroidMadeTheSyncScreenAnewIsStillReadAsOne() {
+        val join = joinRequest()
+        val keeper = SoftwareKeysApp(File(temporary.newFolder(), "shk-keys"), AppName.of("water"))
+        val key = keeper.crypto.setup.createRecoveryKey()
+        keeper.crypto.setup.storeDerivedKeys(key)
+        keeper.crypto.setup.beginKeepRecoveryKey(key)!!.finish()
+        val signed = keeper.crypto.setup.beginSignDevice(join).finish()
+
+        val first = Robolectric.buildActivity(SigningScreen::class.java).setup()
+        first.get().call.ask(join)
+        val asked = shadowOf(first.get()).peekNextStartedActivityForResult()
+        assertEquals(HandoverMode.SIGN_DEVICE.name, asked.intent.getStringExtra(Handover.EXTRA_MODE))
+        first.pause().stop()
+        val saved = Bundle()
+        first.saveInstanceState(saved)
+        assertTrue(pendingResults(saved).isEmpty())
+
+        val second = Robolectric.buildActivity(SigningScreen::class.java).create(saved).start()
+        assertTrue(second.get().activityResultRegistry.dispatchResult(asked.requestCode, Activity.RESULT_OK, signedResult(signed)))
+        val (app, answer) = second.get().answers.single()
+        assertEquals("app.shkriuss.water", app)
+        assertTrue("read as a signed join, not as keys", (answer as SignDeviceAnswer.Signed).signed.isFor(join))
     }
 }

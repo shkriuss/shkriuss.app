@@ -2,6 +2,7 @@ package app.shkriuss.core.crypto
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import java.security.spec.ECGenParameterSpec
 
 /**
  * The settings of each kind of hardware key, as given to
@@ -36,4 +37,19 @@ internal object HardwareKeySpecs {
         }
         return builder.build()
     }
+
+    /**
+     * The spec of the Sync app's device key [key] (crypto-design.md, "The
+     * device key"): EC on `secp256r1`, sign only, SHA-256. Like a
+     * Background key it needs neither an unlocked phone nor the prompt.
+     */
+    fun spec(key: DeviceKeyRef, strongBox: Boolean): KeyGenParameterSpec {
+        val builder = KeyGenParameterSpec.Builder(key.alias, KeyProperties.PURPOSE_SIGN)
+            .setAlgorithmParameterSpec(ECGenParameterSpec(CURVE))
+            .setDigests(KeyProperties.DIGEST_SHA256)
+        if (strongBox) builder.setIsStrongBoxBacked(true)
+        return builder.build()
+    }
+
+    private const val CURVE = "secp256r1"
 }

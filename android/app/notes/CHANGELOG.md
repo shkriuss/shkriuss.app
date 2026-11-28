@@ -7,6 +7,13 @@ again with search. Its specification is
 
 ## Unreleased
 
+- Ready for the Sync app, which is not released yet: when Sync asks,
+  Notes can sign that this phone may join your sync server. Notes shows
+  the server and asks you to allow it. If Notes keeps your recovery key,
+  you confirm with your fingerprint or screen lock; if not, you enter
+  the 24 words of its own key. Sync gets no keys of Notes and never the
+  words.
+
 ## 1.0.0 (2026-11-26)
 
 Released as `notes-v1.0.0`.

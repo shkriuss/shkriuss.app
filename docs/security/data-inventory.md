@@ -139,9 +139,22 @@ Android also keeps some things for Water, outside Water's folders:
    - When another app turns its app lock on, you can let Water check
      four of your words instead. Water then gives that app its keys in
      the same way, marked "words checked". It stores nothing.
-   - Water's status provider tells such an app, when it asks, whether
-     Water keeps the recovery key now, and its short name. Nothing else,
-     and nothing to any other app.
+   - For the Sync app only, in the mode "Sign a device": Water signs
+     that this phone may join the sync server that Sync names. Only
+     when you allow it on Water's screen, which names the server, and
+     answer the system prompt, or, when Water does not keep the key,
+     enter the 24 words of Water's own key. What goes: the join
+     statement (the server's ID and address, this phone's device key,
+     the key's short name and the time), its signature, the account
+     public key, and the name key, which seals only the names of
+     devices. Never the recovery key, Water's own keys or a record. To
+     whom: only the Sync app of the suite signed with exactly Water's
+     own current certificate, in the answer of the handover screen
+     ([crypto-design.md](crypto-design.md#the-handover-format-version-2)).
+   - Water's status provider tells such an app, or the Sync app, when
+     it asks, whether Water keeps the recovery key now, and the short
+     name of the key its keys come from. Nothing else, and nothing to
+     any other app.
    - Water also takes its own keys from another app that keeps the
      recovery key, the same way, when you tap **Get the keys from** that
      app.
@@ -274,9 +287,11 @@ phone:
    keysets, made from the recovery key Reminders keeps, and only to a
    data app of the suite signed with exactly Reminders' own current
    certificate ([ADR 0041](../adr/0041-the-handover-between-apps.md)).
-   The check of four words works as in Water. Its status provider says
-   only whether Reminders keeps the recovery key now, and its short
-   name. Reminders takes its own keys from a keeper the same way.
+   The check of four words, and the signature for the Sync app, work as
+   in Water. Its status provider says only whether Reminders keeps the
+   recovery key now, and the short name of the key its keys come from,
+   to such an app and to the Sync app. Reminders takes its own keys
+   from a keeper the same way.
 
 Reminders has no network permission. Android backup and device transfer
 are off. It writes no file outside its storage but the backup you make,
@@ -400,9 +415,11 @@ Three more things leave Tasks' storage. They stay inside the phone:
    keysets, made from the recovery key Tasks keeps, and only to a data
    app of the suite signed with exactly Tasks' own current certificate
    ([ADR 0041](../adr/0041-the-handover-between-apps.md)). The check of
-   four words works as in Water. Its status provider says only whether
-   Tasks keeps the recovery key now, and its short name. Tasks takes its
-   own keys from a keeper the same way.
+   four words, and the signature for the Sync app, work as in Water.
+   Its status provider says only whether Tasks keeps the recovery key
+   now, and the short name of the key its keys come from, to such an
+   app and to the Sync app. Tasks takes its own keys from a keeper the
+   same way.
 
 Tasks has no network permission. Android backup and device transfer
 are off. It writes no file outside its storage but the backup you make,
@@ -522,9 +539,11 @@ app. Notes asks it not to learn them
    Notes' screen and answer the system prompt, only that app's own
    keysets, made from the recovery key Notes keeps, and only to a data
    app of the suite signed with exactly Notes' own current certificate
-   ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Its status
-   provider says only whether Notes keeps the recovery key now, and its
-   short name. Notes takes its own keys from a keeper the same way.
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)). The
+   signature for the Sync app works as in Water. Its status provider
+   says only whether Notes keeps the recovery key now, and the short
+   name of the key its keys come from, to such an app and to the Sync
+   app. Notes takes its own keys from a keeper the same way.
 
 Notes has no network permission and shows no notification. Android
 backup and device transfer are off. It writes no file outside its

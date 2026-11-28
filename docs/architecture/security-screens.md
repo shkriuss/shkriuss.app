@@ -193,15 +193,45 @@ The keeper's side, `HandoverActivity` and `HandoverViewModel`:
 7. **Do not allow**, or leaving the screen, gives a cancelled result
    with no reason.
 
+The same screen in the mode "Sign a device", for the Sync app only
+([crypto-design.md](../security/crypto-design.md#the-handover-format-version-2)):
+
+1. `HandoverRequest.of` takes the Sync app as the caller only in this
+   mode (`SuiteApps.isSyncApp`), and this mode from no other caller. The
+   request must carry a `DeviceJoinRequest` that passes its checks.
+   Then it is read in version 2; the other modes are read in version 1
+   or 2.
+2. The screen's title is "Add this phone to sync". It asks "Add this
+   phone to your sync server at sync.example.workers.dev?", names the
+   Sync app and this app, and shows the short name of the recovery key
+   that signs.
+3. In a keeper, **Allow** shows the system prompt of the Recovery guard,
+   and `core/crypto` signs inside the prompt step.
+4. In an app that has its keys but does not keep the recovery key,
+   **Allow** opens the screen of all 24 words, as when the words are
+   entered (`HandoverAllWords`). Words of another recovery key: "These
+   words are for another recovery key." Words being typed stay when the
+   screen stops.
+5. An app with no keys says so (`HandoverNoKeys`) and gives
+   `NOT_KEEPER`. So does a keeper whose kept key is gone when **Allow**
+   is tapped, with the advice to enter the words in that app. When the
+   request names a key ID that the app has no keys of, the screen says
+   so at once (`HandoverOtherKey`) and gives `OTHER_KEY`. Keys that
+   cannot be read now: "try again in a moment", and no reason.
+6. The signed join waits in the model until the screen takes it, and
+   leaves memory when the screen stops, as the keys do. The screen
+   checks the caller once more (`handoverResult`): it must still be the
+   Sync app that asked.
+
 The keeper's status provider, `KeeperStatusProvider`:
 
 1. Exported with no permission. Its `call` checks Android's calling
    package with `peerName` first, and gives a caller that fails no
-   answer.
+   answer. The Sync app passes too (`isSyncApp`).
 2. Its one call, `status`, says whether the app keeps the recovery key
-   now, and the key ID of its current key (`KeeperStatus`). It reads the
-   keys on each call, so the answer is live. A key that cannot be read
-   now counts as not kept.
+   now, and the key ID of the key its keys come from, whenever it has
+   keys (`KeeperStatus`). It reads the keys on each call, so the answer
+   is live. A key that cannot be read now counts as not kept.
 3. It answers no query, opens no file and changes nothing.
 
 The asking app's side, `GetKeysActivity`, `GetKeysViewModel` and
@@ -229,6 +259,18 @@ The asking app's side, `GetKeysActivity`, `GetKeysViewModel` and
 4. The turn-on screen uses the same `KeeperCall` for **Check the words
    in Water**, which it offers only for keepers of its own key ID, and
    takes the keys as its proof with `checkWordsAtKeeper`.
+
+The Sync app's side is `SignDeviceCall` and `signingApps`, made for
+Sync's join step 6:
+
+1. `signingApps` lists the data apps that pass the check and have keys,
+   each with its key ID and whether it keeps the key, and apart from
+   them the ones that gave no answer: an older version, which does not
+   know the Sync app, or an app that Android holds stopped.
+2. `SignDeviceCall` opens one data app's handover screen with a
+   `DeviceJoinRequest`, through `KeeperCall`, and reads the answer as a
+   `SignDeviceAnswer`: the signed join, or why there is none. The saved
+   state holds the app that was asked and the mode, and nothing else.
 
 Keepers on the other screens:
 
@@ -775,7 +817,9 @@ file says that.
   with the caller that Android names, not one that the call names.
   Which apps are listed as keepers. The result callback gets an answer
   while the screen is stopped and leaves nothing of it in the saved
-  state.
+  state. For the Sync app: the screen, the status provider and the list
+  of apps with keys as Android answers them, every Sync that is refused,
+  and a signed join read after Android made Sync's screen anew.
 - `HandoverRulesTest`: who may take part in a handover, every refused
   app, how a keeper reads a request, how an asking app reads every
   answer and checks the keeper again, and what the status provider says
@@ -787,6 +831,12 @@ file says that.
   asking app's side, an app lock that was reset, "keep it here too",
   the check of the words for the app lock, and the security screen's
   keepers.
+- `SignDeviceTest`: the mode "Sign a device": only the Sync app passes,
+  and only in it; a reader of version 2 reads version 1; a keeper signs
+  after the prompt; an app that does not keep the key signs with the
+  words of its own key only; another key ID, no keys, a stop before or
+  after the signature; the second check of the caller; what the Sync
+  app reads from every answer; and the status provider's answer to it.
 - `SecurityContentTest` and `FirstNeedTest`: the choices to get the keys
   from a keeper, on the security screen and in the dialog, and the
   screen they open.

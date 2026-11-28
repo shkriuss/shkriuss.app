@@ -262,8 +262,9 @@ The Sync app never sees the words.
 5. The keeper returns the statement, its signature, the account
    public key and the name key. The Sync app checks the keeper as a
    data app does (ADR 0041, point 11).
-6. On a phone with no screen lock no app is a keeper. A data app then
-   asks for all 24 words on its own screen, and does steps 4 and 5.
+6. On a phone with no screen lock no app is a keeper. A data app that
+   has its keys then asks for all 24 words on its own screen, takes only
+   the words of its own keys, and does steps 4 and 5.
 7. The Sync app never asks for, and a keeper never gives it, a
    `record`, `backup` or `file-key` keyset of a data app. A request of
    the Sync app in any other mode is refused.
@@ -274,9 +275,8 @@ The Sync app never sees the words.
    [new recovery key](#a-new-recovery-key) and the moment the server
    takes it.
 
-The exact names of the request and the result go into
-[crypto-design.md](../security/crypto-design.md#the-handover-format-version-2)
-with the code.
+The exact names of the request and the result are in
+[crypto-design.md](../security/crypto-design.md#the-handover-format-version-2).
 
 ### Joining
 

@@ -4,7 +4,11 @@
   [0009](0009-sync-protocol-and-server.md), point 17: the Sync app may
   open a keeper's handover screen to have its device key signed and to
   get the key for the names of devices. It never gets a key that opens
-  data. How the apps on a phone take a new recovery key, left open in
+  data. Point 13 amended by the same: the status provider also answers
+  the Sync app, and names the key ID of an app that has keys but does
+  not keep the recovery key
+  ([crypto-design.md](../security/crypto-design.md#the-handover-format-version-2)).
+  How the apps on a phone take a new recovery key, left open in
   point 14, is decided in
   [sync-protocol.md](../architecture/sync-protocol.md#a-new-recovery-key).
 - Date: 2026-11-21

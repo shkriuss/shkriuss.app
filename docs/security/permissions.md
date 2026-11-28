@@ -495,8 +495,11 @@ What they do not allow:
 
 A keeper, an app that keeps the recovery key, gives another app of the
 suite on the same phone that app's own keys, never the recovery key
-([ADR 0041](../adr/0041-the-handover-between-apps.md)). The parts below
-come with `core/security`, in every data app.
+([ADR 0041](../adr/0041-the-handover-between-apps.md)). For the Sync
+app, a data app signs that this phone may join a sync server, and gives
+no data key
+([crypto-design.md](crypto-design.md#the-handover-format-version-2)).
+The parts below come with `core/security`, in every data app.
 
 1. No permission. The suite defines none for the handover, and no app
    asks for one. A permission that every data app defines would break
@@ -509,8 +512,8 @@ come with `core/security`, in every data app.
 
    | Part | What it does | A caller that fails the check gets |
    |---|---|---|
-   | `HandoverActivity`, the handover screen, with an intent filter for `app.shkriuss.action.HANDOVER` and no category | A keeper gives the calling app its own keys, after the user taps **Allow** and answers the system prompt. Or it checks four of the words for the calling app's app lock. | A cancelled result that says `REFUSED`. The screen closes at once and shows nothing. |
-   | `KeeperStatusProvider`, authority `<application ID>.keeper` | One call: whether the app keeps the recovery key now, and the short name of that key. No data, no files, no query, no other call. | No answer. |
+   | `HandoverActivity`, the handover screen, with an intent filter for `app.shkriuss.action.HANDOVER` and no category | A keeper gives the calling app its own keys, after the user taps **Allow** and answers the system prompt. Or it checks four of the words for the calling app's app lock. For the Sync app only, in the mode "Sign a device": it signs a join statement, after **Allow** and the system prompt, or in an app that does not keep the key, after all 24 words of its own key. | A cancelled result that says `REFUSED`. The screen closes at once and shows nothing. |
+   | `KeeperStatusProvider`, authority `<application ID>.keeper` | One call: whether the app keeps the recovery key now, and the short name of the key its keys come from. No data, no files, no query, no other call. | No answer. |
 
 3. The check: the calling app, as Android names it, is not this app. Its
    package name is `app.shkriuss.<name>`, with `.preview` exactly when
@@ -519,16 +522,23 @@ come with `core/security`, in every data app.
    certificate's bytes are the same as this app's own current
    certificate. The lineage is not compared (ADR 0041, points 9 and
    10).
-4. The handover screen checks the caller once more just before it gives
-   the keys. The asking app checks the keeper the same way before it
-   opens its screen, and again when the keys come back.
-5. `<queries>` for the action `app.shkriuss.action.HANDOVER`: the app
+4. The one exception: the Sync app, `app.shkriuss.sync` with `.preview`
+   exactly when this app is a preview, signed as in point 3, passes for
+   the mode "Sign a device" and the status provider, and for nothing
+   else. No other app may ask in that mode.
+5. The handover screen checks the caller once more just before it gives
+   the keys or the signed statement. The asking app checks the keeper the
+   same way before it opens its screen, and again when the answer comes
+   back.
+6. `<queries>` for the action `app.shkriuss.action.HANDOVER`: the app
    sees the other apps with a handover screen, and no other app. No
    `QUERY_ALL_PACKAGES`.
-6. Neither part gives any data by itself. The keys come only after the
+7. Neither part gives any data by itself. The keys come only after the
    user allowed it on the keeper's screen and answered the system
-   prompt. They are only the calling app's own keys.
-7. Catalog removes both parts and the `<queries>`. Sync, which is not
+   prompt. They are only the calling app's own keys. The Sync app gets
+   only the signed statement, the account public key and the key that
+   seals the names of devices.
+8. Catalog removes both parts and the `<queries>`. Sync, which is not
    built yet, will remove both parts and keep the `<queries>`: it is
    never a keeper, but it must see the data apps, to ask a keeper for
    its statement and to find the apps it carries for

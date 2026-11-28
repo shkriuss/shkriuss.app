@@ -24,6 +24,9 @@ class ShkCrypto internal constructor(private val vault: KeyVault) {
     /** The optional app lock. */
     val appLock: AppLock = AppLock(vault)
 
+    /** The device key, the name key and setup codes, in the Sync app only. */
+    val sync: SyncKeys = SyncKeys(vault)
+
     /**
      * Call once when the app starts, before anything else here. It removes
      * what a stopped change left behind and deletes hardware keys that no

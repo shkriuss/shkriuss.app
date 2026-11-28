@@ -1,5 +1,6 @@
 package app.shkriuss.core.crypto
 
+import app.shkriuss.core.crypto.fixtures.SoftwareHardwareKeys
 import com.google.crypto.tink.InsecureSecretKeyAccess
 import com.google.crypto.tink.KeysetHandle
 import com.google.crypto.tink.aead.XChaCha20Poly1305Key
@@ -8,6 +9,8 @@ import com.google.crypto.tink.streamingaead.AesGcmHkdfStreamingParameters
 import com.google.crypto.tink.util.SecretBytes
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.nio.file.Files
 import java.security.MessageDigest
 
 /** Values and small helpers that many tests of this module share. */
@@ -17,6 +20,12 @@ internal object TestKeys {
 
     /** The recovery key of the vectors in crypto-design.md: the bytes 00 to 1f. */
     fun vectorRecoveryKey(): RecoveryKey = RecoveryKey.ofBytes(ByteArray(32) { it.toByte() })
+
+    /** The Sync app, started, with its keyset files in a new temporary folder and the hardware keys [hardware]. */
+    fun syncApp(hardware: SoftwareHardwareKeys = SoftwareHardwareKeys()): ShkCrypto {
+        val folder = Files.createTempDirectory("shk-sync").toFile().apply { deleteOnExit() }
+        return ShkCrypto(KeyVault(RecoveryKeyDeriver.SYNC, KeysetFiles(File(folder, "shk-keys")), hardware)).also { it.start() }
+    }
 
     /** A `recovery` keyset with one recovery key. */
     fun recoveryKeyset(key: RecoveryKey): KeysetHandle = RecoveryKeyDeriver.recoveryKeyset(listOf(key), key)

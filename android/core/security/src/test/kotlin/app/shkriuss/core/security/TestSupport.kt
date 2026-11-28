@@ -9,7 +9,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import app.shkriuss.core.crypto.AppName
+import app.shkriuss.core.crypto.DeviceJoinRequest
+import app.shkriuss.core.crypto.HandedOverKeys
 import app.shkriuss.core.crypto.ShkCrypto
+import app.shkriuss.core.crypto.SignedJoin
 import app.shkriuss.core.crypto.fixtures.SoftwareKeysApp
 import java.io.File
 import java.util.concurrent.Executor
@@ -124,6 +127,10 @@ private fun View.everyView(): List<View> =
 internal class FakeSuiteApps(
     var keepers: List<KeeperApp> = emptyList(),
     var peers: Map<String, AppName> = keepers.associate { it.packageName to AppName.fromApplicationId(it.packageName) },
+    /** The package that passes as the Sync app, if any. */
+    var syncApp: String? = null,
+    /** What [signingApps] lists. */
+    var signing: SigningApps = SigningApps(emptyList(), emptyList()),
 ) : SuiteApps {
     /** How often [keepers] was asked. */
     var asked = 0
@@ -132,14 +139,20 @@ internal class FakeSuiteApps(
 
     override fun keepers(): List<KeeperApp> = keepers.also { asked++ }
 
+    override fun isSyncApp(packageName: String): Boolean = packageName == syncApp
+
+    override fun signingApps(): SigningApps = signing
+
     override fun labelOf(packageName: String): String = keepers.firstOrNull { it.packageName == packageName }?.label ?: packageName
 
-    override fun handoverIntent(packageName: String, mode: HandoverMode): Intent? =
-        if (packageName in peers) {
-            Intent().setClassName(packageName, HandoverActivity::class.java.name).putExtra(Handover.EXTRA_MODE, mode.name)
-        } else {
-            null
-        }
+    override fun handoverIntent(packageName: String, mode: HandoverMode, join: DeviceJoinRequest?): Intent? =
+        if (packageName in peers) handoverRequest(packageName, HandoverActivity::class.java.name, mode, join) else null
 
     override fun launchIntent(packageName: String): Intent? = null
 }
+
+/** The keys the keeper's model made, if it made keys, taken once as the screen takes them. */
+internal fun HandoverViewModel.takeKeys(): HandedOverKeys? = (takeGift() as? HandoverGift.Keys)?.keys
+
+/** The signed join the keeper's model made, if it made one, taken once as the screen takes it. */
+internal fun HandoverViewModel.takeSigned(): SignedJoin? = (takeGift() as? HandoverGift.Signed)?.signed
