@@ -92,9 +92,9 @@ How a record may be edited or replaced is in point 7 of
 |---|---|---|
 | 0001 | [Record architecture decisions](0001-record-architecture-decisions.md) | Accepted |
 | 0002 | [GrapheneOS first, minimum Android 13](0002-grapheneos-first-minimum-android-13.md) | Accepted; point 4 extended by 0025, then superseded by 0039; point 2 superseded by 0040 |
-| 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031; Navigation 3 not used by Water (step 2.3) |
+| 0003 | [Kotlin, Compose, Material 3, Navigation 3](0003-kotlin-compose-material-3-navigation-3.md) | Accepted; the adaptive libraries superseded by 0024, AndroidX Biometric by 0031, WorkManager by 0045; Navigation 3 not used by Water (step 2.3) |
 | 0004 | [Room on system SQLite, no SQLCipher](0004-room-on-system-sqlite-no-sqlcipher.md) | Accepted; detail in 0026 and 0027; point 4 superseded by 0036 |
-| 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted; detail in sync-protocol.md |
+| 0005 | [No network permission in data apps, separate Sync app](0005-no-network-permission-in-data-apps.md) | Accepted; detail in sync-protocol.md; WorkManager in point 14 superseded by 0045 |
 | 0006 | [Tink and the key hierarchy](0006-tink-and-key-hierarchy.md) | Accepted; detail in crypto-design.md; its sentence on Android 13 and 14 superseded by 0040 |
 | 0007 | [Recovery key instead of passwords](0007-recovery-key-instead-of-passwords.md) | Accepted; detail in crypto-design.md; "signature-protected" in point 12 superseded by 0041 |
 | 0008 | [Backup file format](0008-backup-file-format.md) | Accepted; detail in backup-format.md |
@@ -134,3 +134,4 @@ How a record may be edited or replaced is in point 7 of
 | 0042 | [Wiping the content of deleted records](0042-wiping-the-content-of-deleted-records.md) | Accepted |
 | 0043 | [The sync server's tools, tests and deploy](0043-backend-tools-tests-and-deploy.md) | Accepted |
 | 0044 | [Sync's own tables in each data app](0044-sync-tables-in-each-data-app.md) | Accepted |
+| 0045 | [The Sync app runs through JobScheduler](0045-sync-runs-through-jobscheduler.md) | Accepted |

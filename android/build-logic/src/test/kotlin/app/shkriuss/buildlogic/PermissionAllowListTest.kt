@@ -16,7 +16,8 @@ import org.w3c.dom.Document
  * the list, one of another app's list, and one declared rather than
  * requested. The owner asked for the per-app allow list in step 2.4, with
  * the three permissions of core/notify for Water, and in step 2.5 for the
- * two of core/security.
+ * two of core/security, and for Sync, with the network and the two
+ * permissions that JobScheduler needs.
  */
 class PermissionAllowListTest {
     /** Water's allow list. Written out here, so a longer list in the check fails a test. */
@@ -38,6 +39,13 @@ class PermissionAllowListTest {
     private val notes = listOf(
         "android.permission.USE_BIOMETRIC",
         "android.permission.HIDE_OVERLAY_WINDOWS",
+    )
+
+    /** Sync's allow list: the network, and the two that JobScheduler needs (docs/apps/sync/spec.md, "Permissions"). */
+    private val sync = listOf(
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
     )
 
     /** A merged manifest with one element per entry of [tags]: the tag and its `android:name`. */
@@ -65,9 +73,15 @@ class PermissionAllowListTest {
     }
 
     @Test
-    fun theCheckKnowsTheAllowListsOfWaterRemindersTasksAndNotesAndNoOther() {
+    fun theCheckKnowsTheAllowListsOfWaterRemindersTasksNotesAndSyncAndNoOther() {
         assertEquals(
-            mapOf("water" to water.toSet(), "reminders" to reminders.toSet(), "tasks" to tasks.toSet(), "notes" to notes.toSet()),
+            mapOf(
+                "water" to water.toSet(),
+                "reminders" to reminders.toSet(),
+                "tasks" to tasks.toSet(),
+                "notes" to notes.toSet(),
+                "sync" to sync.toSet(),
+            ),
             CheckApkRulesTask.ALLOWED_PERMISSIONS,
         )
     }
@@ -115,6 +129,28 @@ class PermissionAllowListTest {
             assertOneProblem(
                 "$name in the manifest (rule 4: not on the allow list of notes)",
                 CheckApkRulesTask.permissionProblems(requests(*(notes + name).toTypedArray()), "notes"),
+            )
+        }
+    }
+
+    @Test
+    fun syncsThreePermissionsPass() {
+        assertEquals(emptyList<String>(), CheckApkRulesTask.permissionProblems(requests(*sync.toTypedArray()), "sync"))
+    }
+
+    @Test
+    fun thePermissionsOfTheDataAppsAWakeLockAndForegroundWorkFailInSync() {
+        listOf(
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.USE_EXACT_ALARM",
+            "android.permission.USE_BIOMETRIC",
+            "android.permission.HIDE_OVERLAY_WINDOWS",
+            "android.permission.WAKE_LOCK",
+            "android.permission.FOREGROUND_SERVICE",
+        ).forEach { name ->
+            assertOneProblem(
+                "$name in the manifest (rule 4: not on the allow list of sync)",
+                CheckApkRulesTask.permissionProblems(requests(*(sync + name).toTypedArray()), "sync"),
             )
         }
     }

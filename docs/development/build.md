@@ -425,9 +425,11 @@ second build must write the same mapping file, or the release stops. See
   - `RoundTripTest` also checks the counts of records that are not
     deleted, per type name: the same when a backup is written and when
     it is checked.
-- `core/sync-client` has 11 test classes with 88 tests. They are the
+- `core/sync-client` has 12 test classes with 93 tests. They are the
   items for `core/sync-client` of "What the tests must cover" in
-  [sync-protocol.md](../architecture/sync-protocol.md#what-the-tests-must-cover).
+  [sync-protocol.md](../architecture/sync-protocol.md#what-the-tests-must-cover),
+  and the layouts that the Sync app reads from a data app and a data app
+  from the Sync app (`CourierLayoutsTest`).
   - They use real keys: `SoftwareKeysApp` from the
     [test fixtures](#test-fixtures) of `core/crypto`. A made-up app,
     Lists, keeps items and files in a Room database on the system SQLite
@@ -488,8 +490,10 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has 25 test classes with 240 tests
+- `core/security` has 26 test classes with 243 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
+  `CourierPeersTest` checks how the Sync app finds the data apps and
+  checks a caller of its courier provider.
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the
     test's own thread, so each state shows right after each call. The
@@ -831,6 +835,101 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
+- `feature/sync` has 9 test classes with 199 tests. They use real keys
+  from `SoftwareKeysApp`, also for a data app that signs a join with its
+  own words, a server in memory behind Sync's `Transport`
+  (`FakeServer`), and data apps in memory behind `Couriers`
+  (`FakeDataApp`):
+  - `SyncRunTest`: a quiet run, a first status of the day that failed or
+    named another version, which is asked again, the fetch of every
+    page, a poke, also one whose status does not come or whose run stops
+    first, which stays as work, an app that cannot be called in the
+    first run of a day, which gets the day's check once it can be, a
+    refusal `01` and the fetch before the
+    next batch, a full server, the day's limits, every answer that stops
+    sync, the fault and the clock, which `info` and each file request
+    clear too, a stored time later than now, which counts as long ago,
+    and waits too far ahead, which are over, three failed runs and the
+    4-hour wait, halving for CPU
+    time, also on a file request, also when one record is the limit,
+    eight times to take 256 file items down to one, but not for
+    `heads`, and
+    its undoing a day later, another epoch, also one that a run took to
+    no app, which every app gets at the next run, also one that Sync
+    could not call then, a new key ID of the server, which every app
+    gets too, also after a run that ended at the list of devices, `0C`,
+    which asks for less of what the refused request carries, a page that
+    moves nothing, or holds more records than asked or more bytes than
+    `info` names, a put-back server with a removed device in again,
+    whose line waits for a list read after it was found, lost keys, an app that gives no answer, or answers `import` with another
+    cursor, more chunks on the server than a stream has, streams sent,
+    fetched, deleted and kept off a metered network, only the chunks the
+    server lacks, the order of ordinary and comparison batches, no batch
+    after a `05` for each app that got one, a full server that takes no
+    chunks either, also when a file request finds it full, and fetching
+    goes on, and stays full until a record is stored, a batch of the
+    other kind than asked, or for another epoch, a status of another
+    epoch, which keeps the work Sync knew, also the last one, which does
+    not count as served, and one after a changed cursor, which fetches
+    nothing, as one that cannot sync does, an app whose transfer failed
+    and is served at the next run, an app whose courier call fails,
+    which is left and not recorded as served, and gets no more chunks
+    sent, a stream that could not be read, or ended early, also on its second read, which is not called
+    damaged, a stream longer than listed, whose check reads one byte
+    past its length, or longer than its chunks can be numbered, a stream
+    that changed after its check, also in a chunk the server has, or
+    grew, which sends no chunk and does not fit, a pipe that fails while
+    a stream is fetched, a fetched stream whose bytes are all here,
+    which is finished without a fetch, a file request refused for CPU
+    time, which stops the reading of a large stream, a run stopped by
+    Android, also during a courier call, a file request, the check of a
+    stream, the skip to its first missing chunk, the read of a chunk or
+    the write of a fetched one, or before `info` after a `0C`, a `04`
+    sent again or the list of devices, a Leave while a run goes, also
+    just after the run first looked, which the run does not overwrite,
+    and a new join meanwhile, whose IDs no app gets from the run, and an
+    app that pokes each time it is served, whose job runs again.
+  - `RunningJobsTest`: each job of the job service stops only its own
+    run, also when Android starts a job again under the same ID.
+  - `SyncServerTest`: every refusal with its own layout, broken answers,
+    the headers of a signed request, a `04` sent once more, Cloudflare's
+    answers, a certificate for another name, times and versions outside
+    their limits, a page, also a cut one, which ends at its last record,
+    the head after a batch, the devices, also their times, the file
+    calls, and the deadline that cuts a request that takes too long.
+  - `SyncJoinTest`, `SyncDevicesTest` and `SyncServicesTest`: each join
+    step and each answer of `info`, of the keeper and of `enrol`, also
+    one that comes after the join was cancelled or started anew, a
+    version refusal, a refusal twice or an answer not of a sync server
+    at the check of a sent `enrol`, a **Try again** of an earlier join,
+    a key made while the join was cancelled, the actions of Devices and
+    **Close the server**, a device request that clears the fault and the
+    clock, also when a removal after the list fails, and each removal
+    that passes, also when a later one fails, also on a phone
+    that is not joined, a Remove with every removed ID that Sync keeps,
+    a Remove after a Leave, which marks and sends nothing,
+    an action that answers a lower revision, which keeps the higher one,
+    the order of the rows of Devices, the checks at each start, also a
+    day-old join that a new one replaced meanwhile, which stays, the
+    name key of an earlier server at a new join, a version check that
+    passes, which clears the fault and the clock, a version stop whose
+    device key is gone, which becomes the stop for lost keys, the key of
+    a removed
+    phone and lost keys found before a Leave, `poke` and `state`, the
+    problems in their order, and answers that come after a Leave, also
+    of a second Leave, which write nothing.
+  - `SyncStateStoreTest` and `ServerAddressTest`: every stored value and
+    its limits, one write for one step, a write that fails after Android
+    took it into its map, and the address rules.
+  - `SyncAndroidPartsTest`, under Robolectric: the courier provider's
+    check of its caller, JobScheduler's two jobs, courier calls as
+    bundles and pipes, a stop of the job between two reads of a pipe,
+    and a courier authority that another app holds.
+- `app/sync` has two test classes: `SyncManifestTest` names everything
+  Sync's merged manifest lets another app reach, its three permissions,
+  the removals, and the only three checks that Sync's manifests tell
+  lint to ignore; `SyncPlaceholderScreenshotTest` draws the screen
+  that stands in for Sync's screens.
 
 ### Instrumented tests
 
@@ -1305,7 +1404,7 @@ does not. The owner asked for them.
 | `BackupRulesTest` | Catalog's settings pass. Each way to turn backup or transfer on fails and is named: `allowBackup` true, missing or from a resource, a backup agent, no rules, a rules file that is missing, an `<include>`, each of the nine domains missing in each section, `<cross-platform-transfer>`, a missing or doubled section, a wrong root, and a wrong second copy. |
 | `WebViewAndCodeLoadingRulesTest` | Each WebView class and each class loader fails as a class and as text. Each of the four calls fails. What today's APKs hold passes: `MimeTypeMap`, `URLUtil`, `loadLibrary`, D8's stub. Every dex file of an APK is read. An APK without a dex file, or with one the reader cannot read, fails. In a compiled XML file, an element named `WebView` or after each WebView class fails, so does a `class` attribute with such a name, and an `android:name` with one. A layout without them passes. Every compiled XML file of an APK is found by its content, also under a short name, and one the reader cannot read fails. Each WebView class as a value in `resources.arsc` fails, and so does a `<fragment>` that names `android.webkit.WebViewFragment` through a string resource. Values without one pass. A resource table the reader cannot read fails. |
 | `DaoRulesSqlTest` | The DAO rules check reads comments and quoted text in one pass. A marked purge whose `OR` hides behind `--` or `/*` inside `'...'`, `"..."`, `` `...` `` or `[...]` fails, and so does one behind a quote inside a comment, or behind an escaped quote. A `DELETE` behind `'--'` in a read fails. A purge of deleted rows passes, with quoted names, comments and text. |
-| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water, of Reminders and of Tasks pass, and the two of Notes. `INTERNET` fails in all four, the three of `core/notify` fail in Notes, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
+| `PermissionAllowListTest` | Rule 2 of the APK rules check, the per-app allow list (owner's request). The five permissions of Water, of Reminders and of Tasks pass, the two of Notes, and the three of Sync. `INTERNET` fails in all four data apps, the three of `core/notify` fail in Notes, the permissions of the data apps, `WAKE_LOCK` and `FOREGROUND_SERVICE` fail in Sync, any other permission fails in Water, and every permission fails in an app with no list. An allowed name fails when it is declared, or requested through `<uses-permission-sdk-23>`. The list is written out in the test. |
 | `SecurityScreensRuleTest` | Rule 10 of the APK rules check (owner's request). The eight screens of `core/security` with both permissions pass. An app with no screen needs neither. The screens without one permission fail and name it and ADR 0033; without both they fail once for each. Each of the eight screens alone needs both, and so does a new screen of the module: the rule matches every screen by the start of its name. A permission that is declared, or requested any other way, does not count. A screen of another package with a like name does not count. The names of the screens and of the permissions are written out in the test. |
 
 The tests catch a weaker check. They fail when `allowBackup` true is
@@ -1322,11 +1421,15 @@ each catches.
 ## Lint
 
 1. Android Lint runs in `check`. Warnings are errors.
-2. Lint findings are fixed, not hidden. Three single places are
+2. Lint findings are fixed, not hidden. These single places are
    suppressed, each with its reason next to it:
-   - `MissingClass` on `androidx.startup.InitializationProvider` in
-     Catalog's manifest. The class comes from a library Compose uses only
-     at run time, so lint cannot see it. It is in the APK.
+   - `MissingClass` on two parts that the apps' manifests change or
+     remove: `androidx.startup.InitializationProvider` in every app, and
+     the receiver of `androidx.profileinstaller` in every app but
+     Catalog. Their classes come from libraries Compose uses only at run
+     time, so lint cannot see them. They are in the APK. The manifest
+     tests of the four data apps and of Sync check in the merged
+     manifest that the receiver is gone.
    - `MissingPermission` on the one function that sets an exact alarm,
      `AlarmManagerScheduler.set` in `core/notify`. Lint 32.5.1 does not
      know the permission `USE_EXACT_ALARM`, which the module's manifest
@@ -1344,6 +1447,12 @@ each catches.
      answer is a public short name. The owner decided this.
      `ManifestTest` checks the provider's attributes, and that nothing
      else in that manifest is ignored.
+   - `ExportedContentProvider` on `SyncCourierProvider` in Sync's
+     manifest, for the same reason: every courier provider is exported
+     with no permission, and its own check of the caller is the gate
+     ([sync-protocol.md](../architecture/sync-protocol.md#no-permission-of-our-own)).
+     The owner decided this. `SyncManifestTest` checks the provider's
+     attributes, and that Sync's manifests ignore nothing else.
 3. Compose and Activity ask for Lifecycle 2.9. Its built-in lint checks no
    longer load in this version of lint ("Library lint checks reference
    invalid APIs"). A version constraint lifts Lifecycle to 2.11.0, whose

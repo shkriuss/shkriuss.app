@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon foreground: two arrows that point at each other's start, for carrying both ways, inside the safe zone of an adaptive icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M36,41 L62,41 L62,34 L74,44 L62,54 L62,47 L36,47 Z M72,61 L46,61 L46,54 L34,64 L46,74 L46,67 L72,67 Z" />
+</vector>

@@ -24,5 +24,5 @@ How sync works:
 - The server: `backend/` ([backend.md](../../development/backend.md)).
   What each data app does for sync: `android/core/sync-client`.
 
-The app itself, `android/app/sync` with `android/feature/sync`, is not
-built yet.
+The app itself is `android/app/sync`, with everything but its screens
+in `android/feature/sync`. Its screens are not built yet.

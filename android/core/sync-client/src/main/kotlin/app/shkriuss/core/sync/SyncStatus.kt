@@ -127,6 +127,9 @@ class ListedStream(
     val bytesHere: Long,
     val deletedNumber: Long,
 ) {
+    /** The file ID as the 16 bytes that travel. */
+    val fileIdBytes: ByteArray get() = RecordIds.toBytes(fileId)
+
     override fun toString(): String = "ListedStream($work, $length)"
 }
 

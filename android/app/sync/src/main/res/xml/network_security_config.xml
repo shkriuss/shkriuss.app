@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Sync talks only to the server the user typed, over HTTPS
+    (docs/architecture/sync-protocol.md, "The connection"): no cleartext,
+    only the certificate authorities built into Android and none that a
+    user added, no pin, and certificate transparency where Android checks
+    it.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+        <certificateTransparency enabled="true" />
+    </base-config>
+</network-security-config>

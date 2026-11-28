@@ -1,0 +1,323 @@
+package app.shkriuss.feature.sync
+
+import app.shkriuss.core.crypto.BlobException
+import app.shkriuss.core.crypto.DeviceId
+import app.shkriuss.core.crypto.DeviceKeyGoneException
+import app.shkriuss.core.crypto.DeviceNames
+import app.shkriuss.core.crypto.SyncKeys
+import app.shkriuss.core.data.Clock
+import app.shkriuss.core.sync.SyncId
+import java.text.Collator
+
+/**
+ * Reads the list of devices and keeps the removed ones removed
+ * (docs/architecture/sync-protocol.md, `heads`, points 4 to 6): every
+ * device this phone knows was removed and that is in again is removed
+ * again, which means the server was put back. Devices the list shows as
+ * removed join the IDs this phone remembers, up to 10,000.
+ */
+internal class DeviceList(private val store: SyncStateStore, private val server: SyncServer, private val clock: Clock) {
+    /**
+     * The list. [revision] is the one `heads` named, or null when the list
+     * is read without it. [beforeRequest] runs before each request: a run
+     * ends there when Android stopped its job. Throws [EndRun] for an
+     * answer that ends it.
+     */
+    fun read(session: Session, revision: Long?, beforeRequest: () -> Unit = {}): List<ListedDevice> {
+        beforeRequest()
+        val devices = SyncRun.valueOf(server.devices(session))
+        passed(session)
+        val state = store.now()
+        val thisPhone = state.deviceId?.hex
+        val inAgain = devices.filter { !it.removed && it.id.hex in state.removed }
+        var latest = revision ?: state.revision
+        inAgain.forEach {
+            beforeRequest()
+            latest = SyncRun.valueOf(server.removeDevice(session, it.id))
+            passed(session)
+        }
+        val newlyRemoved = devices.filter { it.removed && it.id.hex != thisPhone }.map { it.id.hex }
+        if ((state.removed + newlyRemoved).size > SyncState.MOST_REMOVED) throw EndRun(Reason.Fault)
+        store.update {
+            // From the state as it is now: an ID that Remove added meanwhile stays.
+            val removed = it.removed + newlyRemoved
+            if (!it.isJoinedWith(session) || removed.size > SyncState.MOST_REMOVED) {
+                it
+            } else {
+                it.copy(removed = removed, revision = latest, devicesAt = clock.nowMillis(), putBack = it.putBack || inAgain.isNotEmpty())
+            }
+        }
+        return devices.map { device -> if (device.id in inAgain.map { it.id }) device.asRemoved() else device }
+    }
+
+    /**
+     * A request passed: the fault and the clock no longer hold (spec,
+     * Problems), also when a later removal fails, and also when another
+     * action found them while this list was read.
+     */
+    private fun passed(session: Session) {
+        if (store.now().let { it.fault || it.clockOff != null }) {
+            store.update { if (it.isJoinedWith(session) && (it.fault || it.clockOff != null)) it.copy(fault = false, clockOff = null) else it }
+        }
+    }
+
+    private fun ListedDevice.asRemoved() = ListedDevice(id, publicKey, removed = true, addedAt, seenDay, sealedName)
+}
+
+/** One device of the list as Devices shows it. [name] is null for a name this phone cannot open. */
+data class DeviceRow(val id: SyncId, val name: String?, val thisPhone: Boolean, val addedAt: Long, val seenDay: Long)
+
+/** The answer of an action of Devices or of **Close the server** that talks to the server. */
+sealed interface DeviceAnswer<out T> {
+    data class Done<T>(val value: T) : DeviceAnswer<T>
+
+    /** The server could not be reached. Nothing changed but what the action keeps by itself. */
+    data object Unreachable : DeviceAnswer<Nothing>
+
+    /** Any other answer: the problem it means is written, and Apps shows it. */
+    data object Problem : DeviceAnswer<Nothing>
+
+    /** Sync could not save, or the keys cannot be used now. Nothing changed. */
+    data object NotSaved : DeviceAnswer<Nothing>
+}
+
+/**
+ * The actions of Devices and of **Close the server** (docs/apps/sync/
+ * spec.md, "Devices" and "Settings"), each with the writes of "Stopped
+ * between two writes" in their order.
+ */
+class SyncDevices(
+    private val store: SyncStateStore,
+    private val server: SyncServer,
+    private val keys: SyncKeys,
+    private val scheduler: Scheduler,
+    private val problems: ProblemWriter,
+    private val clock: Clock,
+) {
+    /**
+     * The devices that are in, in the order of Devices (docs/apps/sync/
+     * spec.md, "Devices", point 2): this phone first, then the others by
+     * name in the phone's language order, ties by when added, then device
+     * ID. A name that does not open counts as [unreadableName], the text
+     * the screen shows for it. Also keeps the removed ones removed.
+     */
+    fun list(unreadableName: String): DeviceAnswer<List<DeviceRow>> = withSession { session ->
+        val devices = DeviceList(store, server, clock).read(session, revision = null)
+        val thisPhone = store.now().deviceId
+        val rows = devices.filter { !it.removed }.map { device ->
+            val name = try {
+                DeviceId.ofBytes(device.id.toBytes())?.let { keys.openName(it, device.sealedName) }
+            } catch (_: BlobException) {
+                null
+            }
+            DeviceRow(device.id, name, device.id == thisPhone, device.addedAt, device.seenDay)
+        }
+        val collator = Collator.getInstance()
+        rows.sortedWith(
+            compareByDescending<DeviceRow> { it.thisPhone }
+                .thenComparator { first, second -> collator.compare(first.name ?: unreadableName, second.name ?: unreadableName) }
+                .thenBy { it.addedAt }
+                .thenBy { it.id.hex },
+        )
+    }
+
+    /** **Rename**: seals [name], sends `devices/name`, then stores the name and the revision. */
+    fun rename(name: String): DeviceAnswer<Unit> {
+        require(DeviceNames.isValid(name)) { "Not a name a device can have" }
+        return withSession { session ->
+            val sealed = keys.sealName(session.key.deviceId, name)
+            val revision = SyncRun.valueOf(server.renameDevice(session, sealed))
+            store.update { if (it.isJoinedWith(session)) it.copy(name = name, revision = keptRevision(it, revision)) else it }
+        }
+    }
+
+    /**
+     * **Remove** another device: its ID goes into `removed` before the
+     * request, so a request that did not arrive is made again. The ID and
+     * the request are for the join this Remove was made in: after a Leave
+     * or a new join, nothing is marked and nothing is sent.
+     */
+    fun remove(id: SyncId): DeviceAnswer<Unit> {
+        val state = store.now()
+        if (id == state.deviceId) return DeviceAnswer.Problem
+        return try {
+            withSession<Unit>(madeIn = state) { session ->
+                // The limit is checked in the write itself, so that an ID that another write added meanwhile counts too.
+                var full = false
+                val marked = store.update {
+                    when {
+                        !it.isJoinedWith(session) || id.hex in it.removed -> it
+                        // More removed devices than Sync keeps: a fault, as for a list that shows more (spec, Problems).
+                        it.removed.size >= SyncState.MOST_REMOVED -> it.also { full = true }
+                        else -> it.copy(removed = it.removed + id.hex)
+                    }
+                }
+                if (full) throw EndRun(Reason.Fault)
+                if (!marked.isJoinedWith(session)) throw JoinChanged()
+                val revision = SyncRun.valueOf(server.removeDevice(session, id))
+                store.update { if (it.isJoinedWith(session)) it.copy(revision = keptRevision(it, revision)) else it }
+            }
+        } catch (_: JoinChanged) {
+            DeviceAnswer.Problem
+        }
+    }
+
+    /** A Leave or a new join came while an action went: it stops there. */
+    private class JoinChanged : Exception("The join changed")
+
+    /** **Show the code**: a new device code, which voids the one before. */
+    fun deviceCode(): DeviceAnswer<DeviceCode> = withSession { session -> SyncRun.valueOf(server.enrolCode(session)) }
+
+    /**
+     * **Leave the server**: `devices/remove` of this phone, then the
+     * server's values go, then the keys. With [anyway], after "Could not
+     * reach the server", the request is not made.
+     */
+    fun leave(anyway: Boolean): DeviceAnswer<Unit> {
+        val before = store.now()
+        if (!anyway) {
+            val removed = withSession { session -> SyncRun.valueOf(server.removeDevice(session, session.key.deviceId.toSyncId())) }
+            if (removed is DeviceAnswer.Unreachable || removed is DeviceAnswer.NotSaved) return removed
+        }
+        return try {
+            // Only the server and key this Leave was for: a join that started meanwhile, after another Leave, is kept.
+            forgetServer(store, keys, scheduler) { it.isSameServerAndKeyAs(before) }
+            DeviceAnswer.Done(Unit)
+        } catch (_: CouldNotSaveException) {
+            DeviceAnswer.NotSaved
+        }
+    }
+
+    private fun SyncState.isSameServerAndKeyAs(other: SyncState): Boolean = address == other.address &&
+        serverId == other.serverId && deviceAlias == other.deviceAlias && deviceId == other.deviceId
+
+    /**
+     * **Close the server**: `closing` first, then `account/delete`. The
+     * answer `00`, or a `06` while `closing` is set, ends the close: Sync
+     * stops for good with this server, and `closing` stays until the user
+     * has read its dialog ([closeRead]).
+     */
+    fun close(): DeviceAnswer<Unit> = withSession { session ->
+        // `closing` and `account/delete` are both for the server of this one session, read once.
+        var marked = false
+        store.update {
+            if (it.isJoinedWith(session)) {
+                marked = true
+                it.copy(closing = true)
+            } else {
+                it
+            }
+        }
+        if (marked) {
+            when (val answer = server.deleteAccount(session)) {
+                is ServerAnswer.Done, ServerAnswer.Closed -> problems.stop(Stop.CLOSED, session)
+                else -> SyncRun.fail(answer)
+            }
+        }
+    }
+
+    /** **OK** in the dialog of a close. */
+    fun closeRead() {
+        store.update { it.copy(closing = false) }
+    }
+
+    /**
+     * Devices shows a list read after the put-back was found: its line no
+     * longer waits. A run that finds a put-back clears `devicesAt`, so a
+     * list read before it does not count.
+     */
+    fun putBackSeen() {
+        val state = store.now()
+        if (state.putBack && state.devicesAt != null) store.update { it.copy(putBack = false) }
+    }
+
+    /**
+     * The revision to keep after an action that answered [revision]. A lower
+     * one than Sync knows means the server was put back: the higher one is
+     * kept, so that the next `heads` finds the put-back and the removed
+     * devices are removed again (sync-protocol.md, `heads`, point 5).
+     */
+    private fun keptRevision(state: SyncState, revision: Long): Long = maxOf(state.revision, revision)
+
+    /**
+     * [action] with the session of a joined phone, and only of the join
+     * [madeIn] when it is given. Lost keys stop sync, and any answer that
+     * ends it writes its problem.
+     */
+    private fun <T> withSession(madeIn: SyncState? = null, action: (Session) -> T): DeviceAnswer<T> {
+        val state = store.now()
+        if (state.stage != Stage.JOINED) return DeviceAnswer.Problem
+        if (madeIn != null && !state.isSameDeviceAs(madeIn)) return DeviceAnswer.Problem
+        val session = try {
+            SyncRun.sessionOf(state, keys)
+        } catch (_: BlobException) {
+            return DeviceAnswer.NotSaved
+        } catch (_: CouldNotSaveException) {
+            return DeviceAnswer.NotSaved
+        }
+        return try {
+            if (session == null) {
+                problems.stop(Stop.KEYS_GONE, onlyIf = { it.isSameDeviceAs(state) })
+                return DeviceAnswer.Problem
+            }
+            val done = action(session)
+            // A request passed: the fault and the clock no longer hold (spec, Problems).
+            store.update { if (it.isJoinedWith(session) && (it.fault || it.clockOff != null)) it.copy(fault = false, clockOff = null) else it }
+            DeviceAnswer.Done(done)
+        } catch (end: EndRun) {
+            if (end.reason == Reason.Unreachable) return DeviceAnswer.Unreachable
+            try {
+                problems.write(end.reason, countsAsFailedRun = false, session = session)
+            } catch (_: CouldNotSaveException) {
+                // Apps shows the problem at the next request.
+            }
+            DeviceAnswer.Problem
+        } catch (_: DeviceKeyGoneException) {
+            problems.stop(Stop.KEYS_GONE, session)
+            DeviceAnswer.Problem
+        } catch (_: BlobException) {
+            DeviceAnswer.NotSaved
+        } catch (_: CouldNotSaveException) {
+            DeviceAnswer.NotSaved
+        }
+    }
+}
+
+/**
+ * Forgets the server, for **Leave**, **Join again** and **Join another
+ * server**: `stage` 0 and the server's values go in one write, then the
+ * works are cancelled and the device key and the name key are deleted.
+ * The setting, the addresses whose setup code waits to be deleted, and an
+ * unread close stay. Only a state that [onlyIf] takes is forgotten; false
+ * when it did not take it, and nothing changed.
+ */
+internal fun forgetServer(store: SyncStateStore, keys: SyncKeys, scheduler: Scheduler, onlyIf: (SyncState) -> Boolean = { true }): Boolean {
+    var alias: Int? = null
+    var forgot = false
+    store.update {
+        if (!onlyIf(it)) {
+            it
+        } else {
+            alias = it.deviceAlias
+            forgot = true
+            SyncState(closing = it.closing, deleteSetupCode = it.deleteSetupCode, filesOnMobile = it.filesOnMobile)
+        }
+    }
+    if (!forgot) return false
+    scheduler.cancel()
+    deleteKeys(keys, alias)
+    return true
+}
+
+/** Deletes the device key under [alias] and the name key. One that cannot go now goes at the next start. */
+internal fun deleteKeys(keys: SyncKeys, alias: Int?) {
+    try {
+        alias?.let(keys::deleteDeviceKey)
+        keys.deleteNameKey()
+    } catch (_: BlobException) {
+        // At the next start, a state that names no key deletes what is left.
+    }
+}
+
+/** The same 16 bytes as a [SyncId]. */
+internal fun DeviceId.toSyncId(): SyncId = SyncId(toBytes())

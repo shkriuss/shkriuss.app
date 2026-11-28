@@ -53,7 +53,7 @@ If a task seems to need it, stop and say so in the PR description.
   the files you touch.
 
 `backend/` is the sync server. `core/sync-client` is sync in each data
-app. `app/sync` comes with Sync. It does not exist yet.
+app. `app/sync` is the Sync app, with its logic in `feature/sync`.
 
 ## Commands
 

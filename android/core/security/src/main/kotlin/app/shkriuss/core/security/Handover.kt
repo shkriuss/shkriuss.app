@@ -255,6 +255,20 @@ internal object SuitePeers {
         return ownCertificate.contentEquals(otherCertificate)
     }
 
+    /**
+     * The app name of [other] if it would pass [peerName] but for the
+     * certificates: one side has more than one signer, or the two
+     * certificates differ. The Sync app lists such an app with "Update
+     * both apps" and never calls it (Sync's specification, "Apps", point
+     * 4). Null for an app that passes, and for any other app.
+     */
+    fun signedOtherwise(own: SignedApp, other: SignedApp): AppName? {
+        if (other.packageName == own.packageName || peerName(own, other) != null) return null
+        val preview = own.packageName.endsWith(PREVIEW_SUFFIX)
+        val name = nameOf(other.packageName, preview) ?: return null
+        return if (name.holdsDataKeys && name != nameOf(own.packageName, preview)) name else null
+    }
+
     private const val SYNC = "sync"
 
     /** The app name of [packageName] if it is exactly `app.shkriuss.<name>`, plus `.preview` when [preview]. */
@@ -360,6 +374,23 @@ internal class AndroidSuiteApps(private val context: Context) : SuiteApps {
     }
 
     override fun launchIntent(packageName: String): Intent? = packages.getLaunchIntentForPackage(packageName)
+
+    /**
+     * The data apps with a handover screen, as the Sync app finds them for
+     * the courier interface: those that pass [peerName], and those that
+     * fail only the comparison of certificates.
+     */
+    fun courierApps(): CourierApps {
+        val own = signedApp(context.packageName) ?: return CourierApps(emptyList(), emptyList())
+        val passed = mutableListOf<CourierApp>()
+        val otherwise = mutableListOf<CourierApp>()
+        handoverScreens(Intent(Handover.ACTION)).map { it.activityInfo.packageName }.distinct().forEach { packageName ->
+            val other = signedApp(packageName) ?: return@forEach
+            SuitePeers.peerName(own, other)?.let { passed += CourierApp(packageName, labelOf(packageName), it) }
+            SuitePeers.signedOtherwise(own, other)?.let { otherwise += CourierApp(packageName, labelOf(packageName), it) }
+        }
+        return CourierApps(passed, otherwise)
+    }
 
     /** The other apps of the suite with a handover screen that pass [peerName]. */
     private fun candidates(): List<String> = handoverScreens(Intent(Handover.ACTION))

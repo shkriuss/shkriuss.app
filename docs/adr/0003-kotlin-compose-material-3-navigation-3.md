@@ -2,7 +2,9 @@
 
 - Status: Accepted. Point 2's "adaptive libraries" superseded by
   [0024](0024-own-adaptive-layouts.md). Point 2's open question on
-  Navigation 3 decided for Water in step 2.3.
+  Navigation 3 decided for Water in step 2.3. WorkManager in point 4
+  superseded by [0045](0045-sync-runs-through-jobscheduler.md): the
+  Sync app runs through Android's JobScheduler.
 - Date: 2026-11-10
 - Source: [plan](../plan/PLAN.md) sections 1, 2 (decision 2), 3, 4 and 17,
   and the owner's review of

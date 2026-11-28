@@ -15,10 +15,11 @@ does not. It ends with the OWASP MASVS controls and every open question.
   core modules ([modules.md](../architecture/modules.md)). Water is the
   first data app, Reminders the second, Tasks the third and Notes the
   fourth. The sync server is built, in `backend/`, and so is what each
-  data app does for sync, in `core/sync-client`. There is no Sync app
-  yet, so no app syncs. Where this page speaks of the Sync app and the
+  data app does for sync, in `core/sync-client`. The Sync app is built
+  but for its screens, and is not released. No data app has its content
+  provider for sync yet, so no app syncs. Where this page speaks of the
   content provider of each data app, it describes what is decided for
-  them, not what is built. The handover between apps is built. What each app stores is in the
+  it, not what is built. The handover between apps is built. What each app stores is in the
   [data inventory](data-inventory.md).
 
 ## At a glance
@@ -26,7 +27,7 @@ does not. It ends with the OWASP MASVS controls and every open question.
 | Attacker | What stops it | What does not |
 |---|---|---|
 | [A lost or stolen phone](#a-lost-or-stolen-phone) | Android's file-based encryption, keys in the phone's hardware, the optional app lock | All of it rests on the screen lock. Notification text on the lock screen while the app lock is off. |
-| [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported but the launcher and the two parts of the handover, which check the caller first, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
+| [Other apps on the phone](#other-apps-on-the-phone) | The app sandbox, nothing exported but the launcher, the two parts of the handover and Sync's courier provider, which check the caller first, and Sync's job service, which only Android can bind, keys per app, other apps' windows hidden over the security screens | A malicious keyboard or accessibility service (out of scope) |
 | [A network attacker](#a-network-attacker) | Data apps have no network permission. Everything synced is sealed. | Traffic analysis (out of scope). Someone with a false certificate for the sync server sees what the server sees. |
 | [A compromised or curious sync server](#a-compromised-or-curious-sync-server) | It holds only ciphertext. A changed blob does not open. | Sizes, counts, timing, the key ID and which apps sync. It can hold records back, or show an older state. |
 | [Malicious dependencies or CI actions](#malicious-dependencies-or-ci-actions) | Dependency verification, pinned GitHub actions, secrets in one step, reproducible builds, Dependabot alerts for the libraries that ship | Trust on first use. A harmful release signed by its real publisher. Known vulnerabilities in the build tools and test libraries. |
@@ -103,8 +104,8 @@ same: "Whoever has the words can read your backups and your synced data"
    no-backup folder ([crypto-design.md](crypto-design.md#where-keys-are-stored)).
 3. For sync, each device gets a signing key that cannot leave it, in
    the Sync app ([crypto-design.md](crypto-design.md#sync-keys)).
-   `core/crypto` makes and uses it; the Sync app itself is not built
-   yet.
+   `core/crypto` makes it, and the Sync app signs each request with it
+   (`android/feature/sync`). The Sync app is not released yet.
 
 ### The signing key
 
@@ -236,10 +237,13 @@ What stops it:
 2. Each app has its own hardware keys, and its own keys derived from the
    recovery key. One app cannot compute the keys of another
    ([crypto-design.md](crypto-design.md#deriving-keys)).
-3. Nothing is exported except each app's launcher screen and the two
-   parts of the handover between apps. Any app may reach those two, but
-   each checks the caller first and gives a refused caller nothing
-   (point 8). The alarm receivers and the other security screens are not
+3. Nothing is exported except each app's launcher screen, the two
+   parts of the handover between apps and, in the Sync app, its courier
+   provider and its job service. Any app may reach the two parts of the
+   handover and Sync's courier provider, but each checks the caller
+   first and gives a refused caller nothing (point 8). Sync's job
+   service asks for `BIND_JOB_SERVICE`, which only Android holds. The
+   alarm receivers and the other security screens are not
    exported. The screen-off
    receiver is registered as not exported. A tap on a notification opens
    only the same app, through an explicit, immutable intent
@@ -261,15 +265,25 @@ What stops it:
    - One exception, in Catalog only: the receiver of
      `androidx.profileinstaller` is exported to callers with
      `android.permission.DUMP`, which only the system and the developer
-     shell hold. Water, Reminders, Tasks and Notes remove it (owner's
-     decision).
+     shell hold. Water, Reminders, Tasks, Notes and Sync remove it
+     (owner's decision).
      Open, for the next change to Catalog: remove it there too
      ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
-4. There is one content provider of our own, the status provider of the
-   handover. It answers one call, whether the app keeps the recovery key
-   now and the short name of the key its keys come from, and only to a
-   caller that passes the keeper's check, or to the Sync app (point 8).
-   It holds no data, opens no file and answers no query. There is no
+4. There are two content providers of our own:
+   - The status provider of the handover, in each data app. It answers
+     one call, whether the app keeps the recovery key now and the short
+     name of the key its keys come from, and only to a caller that
+     passes the keeper's check, or to the Sync app (point 8).
+   - Sync's courier provider. It answers two calls, and only to a data
+     app of the suite that passes the check of
+     [No permission of our own](../architecture/sync-protocol.md#no-permission-of-our-own),
+     point 4. `poke` marks that app for a run soon. `state` gives what
+     Sync knows of that app and of the server, in the layout of
+     [What `state` gives](../architecture/sync-protocol.md#what-state-gives).
+     Before the check it reads nothing of the call. After it, only the
+     call's name and its version.
+
+   Neither holds data, opens a file or answers a query. There is no
    file provider and no deep link.
 5. Files enter and leave only through the system pickers. No app of the
    suite has a storage permission
@@ -286,9 +300,10 @@ What stops it:
    ([security-screens.md](../architecture/security-screens.md#overlays-and-accessibility-services)).
 8. Apps of the suite share keys and data only with apps signed with the
    suite key: through the handover between apps
-   ([ADR 0041](../adr/0041-the-handover-between-apps.md)) and, once it
-   is built, the courier interface of sync
-   ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)).
+   ([ADR 0041](../adr/0041-the-handover-between-apps.md)) and the
+   courier interface of sync
+   ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)),
+   whose side in the Sync app is built.
    The handover:
    - The suite defines no permission for it. Its screen and its status
      provider are exported to every app
@@ -422,9 +437,9 @@ What does not:
 2. A user who installs from somewhere else and skips the check with
    AppVerifier.
 
-Decided, and not built yet: the Sync app uses HTTPS only, trusts only
-the certificate authorities built into Android, and does not pin the
-server. Everything it sends is sealed and every request is signed, so a
+Decided, and built in the Sync app, which is not released yet: it uses
+HTTPS only, trusts only the certificate authorities built into Android,
+follows no redirect, and does not pin the server. Everything it sends is sealed and every request is signed, so a
 false certificate gives an attacker what the server has, and no more
 ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)). See [Network](#network)
 under MASVS.
@@ -1172,9 +1187,12 @@ Status: **Met for what is built.**
   which is ciphertext already.
 - MASWE-0009, MACs: met. There is no MAC of our own. The AEADs check
   every blob.
-- MASWE-0010 and 0011, signatures: nothing signs yet. The two signing
-  keys of sync are designed and not built
-  ([crypto-design.md](crypto-design.md#sync-keys)).
+- MASWE-0010 and 0011, signatures: met for what is built. The two
+  signing keys of sync are in `core/crypto`
+  ([crypto-design.md](crypto-design.md#sync-keys)): the device key, in
+  the Keystore, signs each request of the Sync app, and the account key
+  signs a join inside a data app. No app that uses them is released
+  yet.
 - MASWE-0012, random numbers: met. Every key, nonce and salt comes from
   Tink or the Keystore.
 - MASWE-0047, standard APIs: met. Tink and the Android Keystore only,
@@ -1215,16 +1233,20 @@ Status: **Partly met.**
 protocols and follows the relevant best practices.**
 Status: **Met for what is built.**
 
-- No app talks to a server yet, so there is no remote login. The
-  design: every request is signed by a key that cannot leave the
-  device, and a device joins only with a statement signed by a key
-  from the recovery key, and a one-time code
-  ([sync-protocol.md](../architecture/sync-protocol.md#keys-and-identity)). It is not built, so it
-  is Open.
+- No released app talks to a server yet, so there is no remote login.
+  The Sync app's requests and its join are built, without its screens:
+  every request is signed by a key that cannot leave the device, and a
+  device joins only with a statement signed by a key from the recovery
+  key, and a one-time code
+  ([sync-protocol.md](../architecture/sync-protocol.md#keys-and-identity)).
+  Open until the Sync app is released.
 - MASWE-0018, components: met for what is built. Nothing is exported
   except the launcher screen and the two parts of the handover. Those
   two have no permission: each checks the caller's certificate first,
-  and gives a refused caller nothing. Open: Catalog still exports the receiver of
+  and gives a refused caller nothing. The Sync app exports its screen,
+  its courier provider, which checks its caller in the same way, and
+  its job service, which only Android can bind
+  ([permissions.md](permissions.md#sync-appshkriusssync)). Open: Catalog still exports the receiver of
   `androidx.profileinstaller` to callers with `android.permission.DUMP`,
   until its next change. Water, Reminders, Tasks and Notes remove it
   ([permissions.md](permissions.md#catalog-appshkriusscatalog)).
@@ -1280,16 +1302,19 @@ Status: **Partly met.**
 
 **MASVS-NETWORK-1: The app secures all network traffic according to the
 current best practices.**
-Status: **Does not apply to data apps. Decided for the Sync app, which
-is not built.**
+Status: **Does not apply to data apps. Decided and built for the Sync
+app, which is not released.**
 
 - Data apps have no network permission
   ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). They
   have no traffic, so MASWE-0026 and 0027 do not apply to them.
-- The Sync app does not exist yet. The owner decided its settings:
-  HTTPS only, no cleartext, only the certificate authorities built
-  into Android and none that a user added, and no redirect to another
-  host ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)).
+- The Sync app has the settings the owner decided: HTTPS only, no
+  cleartext, only the certificate authorities built into Android and
+  none that a user added, and no redirect to another host
+  ([sync-protocol.md](../architecture/sync-protocol.md#the-connection)).
+  Its network security configuration and Android's own HTTP client do
+  it. Open: the tests on the emulators that a cleartext request, an
+  authority a user added and a redirect are refused.
 
 **MASVS-NETWORK-2: The app performs identity pinning for all remote
 endpoints under the developer's control.**
@@ -1309,12 +1334,16 @@ Status: **Does not apply. The Sync app does not pin, by decision.**
 Status: **Met for what is built.**
 
 - MASWE-0018 and 0032, components and intents: met. Only the launcher
-  screen and the two parts of the handover are exported. The handover
-  screen and the status provider have no permission. They check the
-  caller's certificate first, take the asking app's name only from
-  Android, and read nothing from the request but its version and mode,
+  screen, the two parts of the handover and, in the Sync app, its
+  courier provider and its job service are exported. The handover
+  screen, the status provider and Sync's courier provider have no
+  permission. They check the caller's certificate first, take the
+  asking app's name only from Android, and read nothing from the
+  request but its version and mode, or its call's name and version,
   after the check and inside a catch
-  ([ADR 0041](../adr/0041-the-handover-between-apps.md)). Of the intent
+  ([ADR 0041](../adr/0041-the-handover-between-apps.md),
+  [sync-protocol.md](../architecture/sync-protocol.md#no-permission-of-our-own)).
+  Sync's job service asks for `BIND_JOB_SERVICE`. Of the intent
   that starts the launcher screen, only Reminders and Tasks read
   anything: its identifier, the ID of a reminder or of a task. Receivers are not exported
   and ignore actions they do not expect. A notification opens only the
@@ -1334,11 +1363,16 @@ Status: **Met for what is built.**
   that passed the checks (MASWE-0032). They are never in a broadcast, a
   file, the clipboard, a notification, a screen's saved state or a log
   ([ADR 0041](../adr/0041-the-handover-between-apps.md), point 20).
-- Open: the courier interface
-  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)). It
-  will carry data. How it lets in only apps of the suite is for the sync
-  design: a permission that every app defines would meet the faults that
-  ADR 0041 found (point 6).
+- The courier interface
+  ([ADR 0005](../adr/0005-no-network-permission-in-data-apps.md)) lets
+  in only apps of the suite as the handover does, with no permission:
+  each side checks the other's package name and certificate first
+  ([sync-protocol.md](../architecture/sync-protocol.md#no-permission-of-our-own)).
+  A permission that every app defines would meet the faults that ADR
+  0041 found (point 6). The Sync app calls a data app's provider only if
+  that app itself declares it. Batches, pages and streams pass through
+  pipes, as file descriptors in a call's arguments or answer, never in a
+  file another app can read. Not built yet: each data app's provider, which carries data.
 
 **MASVS-PLATFORM-2: The app uses WebViews securely.**
 Status: **Does not apply.**
@@ -1540,7 +1574,15 @@ Status: **Met for what is built.**
   a file is kept only if its length and its hash are the ones its
   sealed record names
   ([sync-protocol.md](../architecture/sync-protocol.md#what-a-reader-checks)).
-  Not built yet: what the Sync app takes in.
+- What the Sync app takes in:
+  - Every answer of the server is read against its own layout, the
+    limits of `info` and the limits of the
+    [specification](../apps/sync/spec.md). An answer that breaks one is
+    a fault. A request follows no redirect, reads at most a set size of
+    answer, and is cut after five minutes.
+  - Every answer of a data app is read against its layout. One that
+    breaks it leaves that app for the run. A data app's name is taken
+    only from Android's package name.
 
 ### Privacy
 
@@ -1736,8 +1778,9 @@ The handover between apps:
 Sync:
 
 10. The protocol. The server is built, and so is what each data app
-    does (`core/sync-client`). No app uses it yet. The Sync app and the
-    content provider of each data app are designed and not built
+    does (`core/sync-client`), and the Sync app without its screens. No
+    data app uses it yet: the content provider of each data app is
+    designed and not built
     ([sync-protocol.md](../architecture/sync-protocol.md),
     [ADR 0009](../adr/0009-sync-protocol-and-server.md)). Open there:
     a proof that the server held nothing back, and the other points

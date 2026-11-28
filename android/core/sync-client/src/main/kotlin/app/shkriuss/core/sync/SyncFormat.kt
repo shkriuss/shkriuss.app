@@ -35,7 +35,7 @@ object SyncFormat {
      */
     const val MOST_PAGE_BYTES: Int = 524_288
 
-    /** The ASCII letters `SHKSYNC`, the first bytes of a batch, a status and a list of streams. */
+    /** The ASCII letters `SHKSYNC`, the first bytes of a batch, a status, a list of streams and a state. */
     internal val MAGIC = "SHKSYNC".toByteArray(Charsets.US_ASCII)
 
     /** The version of the layouts that start with [MAGIC]. */
@@ -44,6 +44,7 @@ object SyncFormat {
     internal const val TYPE_BATCH = 0x20
     internal const val TYPE_STATUS = 0x21
     internal const val TYPE_STREAMS = 0x22
+    internal const val TYPE_STATE = 0x23
 
     /** Bytes 6 to 9 of a sealed record name its key ID. */
     internal const val KEY_ID_OFFSET = 6
