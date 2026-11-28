@@ -232,6 +232,7 @@ class SyncRun(
 
         /** `info`, and its limits. A version other than 1 stops sync; a closed server too. */
         fun readInfo() {
+            checkStop()
             val info = valueOf(server.info(session.address))
             when {
                 info.state == ServerState.CLOSED -> throw EndRun(Reason.Stopped(Stop.CLOSED))
@@ -299,14 +300,15 @@ class SyncRun(
             appLeft = false
             val context = courierContext()
             val status = statusOf(app, context) ?: return
-            // What the app has to do is kept before any transfer, so that a run that fails part way serves it again.
-            record(name, status, goodNow = false)
-            if (!status.isOn || !status.canSyncNow) return
-            // An app that syncs answers with the epoch it was given: another one breaks the courier contract.
-            if (status.epoch != context.epoch) {
+            // An app that syncs answers with the epoch it was given: another one breaks the courier contract,
+            // and nothing of that status is kept.
+            if (status.isOn && status.canSyncNow && status.epoch != context.epoch) {
                 everyStatus = false
                 return
             }
+            // What the app has to do is kept before any transfer, so that a run that fails part way serves it again.
+            record(name, status, goodNow = false)
+            if (!status.isOn || !status.canSyncNow) return
             val heads = this.heads ?: return
             val head = heads.of(name)
             val needsFetch = status.cursor != head.head || head.told < status.known ||
@@ -492,6 +494,8 @@ class SyncRun(
                 is CourierAnswer.Done -> answer.value
                 else -> return null
             }
+            // A stream longer than its chunks can be numbered breaks the courier contract: the app is left for this run.
+            if (list.any { it.length > MOST_STREAM_BYTES }) return null
             deleteStreams(app, context, list.filter { it.work == StreamWork.DELETE })
             if (appLeft) return null
             // Asking which chunks the server has moves no chunk, so it goes on any network: only files/send and files/fetch wait.
@@ -613,7 +617,7 @@ class SyncRun(
                 left[key] = chunks - first
                 try {
                     input.use {
-                        skipFully(it, first.toLong() * CHUNK_BYTES)
+                        skipFully(it, first.toLong() * CHUNK_BYTES, ::checkStop)
                         for (number in first until chunks) {
                             val length = chunkLength(stream.length, number)
                             // A stream that ends early on this second read is a failed courier call too.
@@ -836,6 +840,9 @@ class SyncRun(
         /** A stream is cut into chunks of 4 MiB, and one request carries at most that much. */
         const val CHUNK_BYTES: Int = 4_194_304
 
+        /** The longest stream whose chunks [chunkCount] can number. */
+        const val MOST_STREAM_BYTES: Long = 2_147_483_647L * CHUNK_BYTES
+
         /** After three failed runs, one every 4 hours. */
         const val RETRY_WAIT_MILLIS: Long = 4 * 60 * 60 * 1000L
 
@@ -910,10 +917,12 @@ class SyncRun(
         /** The length of chunk [number] of a stream of [length] bytes. */
         fun chunkLength(length: Long, number: Int): Int = minOf(CHUNK_BYTES.toLong(), length - number.toLong() * CHUNK_BYTES).toInt()
 
-        private fun skipFully(input: InputStream, count: Long) {
+        /** Reads past [count] bytes of [input], with [beforeRead] before each read, so that a stop of the job ends it too. */
+        private fun skipFully(input: InputStream, count: Long, beforeRead: () -> Unit) {
             var left = count
             val buffer = ByteArray(65_536)
             while (left > 0) {
+                beforeRead()
                 val read = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
                 if (read < 0) throw IOException("The stream ended early")
                 left -= read

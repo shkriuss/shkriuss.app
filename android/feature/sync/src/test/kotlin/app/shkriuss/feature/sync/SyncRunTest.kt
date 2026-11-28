@@ -1113,4 +1113,60 @@ class SyncRunTest {
         assertTrue("the read ended at the stop", water.bytesRead < bytes.size)
         assertFalse("/v1/files/send" in server.paths())
     }
+
+    @Test
+    fun aStatusOfAnotherEpochKeepsTheWorkThatSyncKnew() {
+        joined()
+        run()
+        store.update { state -> state.withApp("water") { it.copy(work = true) } }
+        water.statusEpoch = syncId(9)
+        run()
+        assertTrue("the app is served again", store.now().app("water").work)
+    }
+
+    @Test
+    fun aRunStoppedWhileAStreamIsSkippedToItsFirstMissingChunkReadsNoMoreOfIt() {
+        joined()
+        run()
+        val bytes = ByteArray(3 * SyncRun.CHUNK_BYTES) { (it % 5).toByte() }
+        val fileId = id(0x4c)
+        val hash = sha256(bytes)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), hash, bytes.size.toLong(), 0, 0))
+        repeat(2) { number -> server.chunks["water/${hex(fileId)}/${hex(hash)}/$number"] = ByteArray(SyncRun.CHUNK_BYTES) }
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        // The check reads the stream once; the stop comes with the first bytes of the second read.
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { water.bytesRead > bytes.size } })
+        assertTrue("the skip ended at the stop", water.bytesRead < bytes.size + 2L * SyncRun.CHUNK_BYTES)
+        assertFalse("/v1/files/send" in server.paths())
+    }
+
+    @Test
+    fun aRunStoppedAfterA0CReadsNoInfo() {
+        joined()
+        run()
+        storeOnServer("water", 1)
+        server.refuseNext("/v1/changes", 0x0c)
+        var stopped = false
+        server.onRequest = { path -> if (path == "/v1/changes") stopped = true }
+        server.requests.clear()
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { stopped } })
+        assertFalse("/v1/info" in server.paths())
+    }
+
+    @Test
+    fun aStreamLongerThanItsChunksCanBeNumberedLeavesTheApp() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 1 }
+        val fileId = id(0x4d)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), Long.MAX_VALUE, 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertFalse("/v1/files/have" in server.paths())
+        assertTrue("nothing is said about the stream", water.sent.isEmpty())
+    }
 }
