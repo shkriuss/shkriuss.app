@@ -17,6 +17,7 @@ import app.shkriuss.core.sync.StreamWork
 import app.shkriuss.core.sync.SyncId
 import app.shkriuss.core.sync.SyncStatus
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -500,6 +501,9 @@ class SyncRun(
             private val left = mutableMapOf<String, Int>()
             private val failed = mutableSetOf<String>()
             private val byId = mutableMapOf<String, ListedStream>()
+
+            /** The hash of each chunk of a stream as the check read it: the read that sends is held to them. */
+            private val chunkHashes = mutableMapOf<String, List<ByteArray>>()
             private var total = 0L
             private var done = 0L
             private var stopped = false
@@ -554,11 +558,14 @@ class SyncRun(
                 }
                 return try {
                     input.use {
-                        val counting = CountingInput(it)
+                        val counting = ChunkHashingInput(it)
                         val hash = StreamHash.of(counting)
                         when {
                             counting.count < stream.length -> HashCheck.UNREADABLE
-                            counting.count == stream.length && hash.contentEquals(stream.hash) -> HashCheck.FITS
+                            counting.count == stream.length && hash.contentEquals(stream.hash) -> {
+                                chunkHashes[stream.fileId] = counting.chunkHashes()
+                                HashCheck.FITS
+                            }
                             else -> HashCheck.DOES_NOT_FIT
                         }
                     }
@@ -590,7 +597,14 @@ class SyncRun(
                             // A request that ran out of CPU time, a metered network or a failed courier call stops the
                             // reading too, so that no more chunks of a large file wait in memory.
                             if (stopped || filesStopped || appLeft || key in failed) return
-                            pending += key to OutgoingChunk(stream.fileIdBytes, stream.hash, number, bytes, StreamHash.of(ByteArrayInputStream(bytes)))
+                            val chunkHash = StreamHash.of(ByteArrayInputStream(bytes))
+                            if (!chunkHash.contentEquals(chunkHashes[key]?.getOrNull(number))) {
+                                // The stored file changed after the check: none of these bytes go under the stream's name.
+                                failed += key
+                                if (courier().streamSent(app, context, stream.fileIdBytes, stream.hash, fits = false) !is CourierAnswer.Done) appLeft = true
+                                return
+                            }
+                            pending += key to OutgoingChunk(stream.fileIdBytes, stream.hash, number, bytes, chunkHash)
                         }
                     }
                 } catch (_: IOException) {
@@ -912,14 +926,46 @@ internal fun SyncState.isJoinedWith(session: Session): Boolean = stage == Stage.
 internal fun SyncState.isSameDeviceAs(other: SyncState): Boolean = stage == other.stage && address == other.address &&
     serverId == other.serverId && deviceAlias == other.deviceAlias && deviceId == other.deviceId
 
-/** Counts the bytes it passes on. */
-private class CountingInput(private val input: InputStream) : InputStream() {
+/**
+ * Counts the bytes it passes on, and hashes them chunk by chunk
+ * (sync-protocol.md, "Chunks"), so that the read that sends can be held to
+ * the bytes that the check read.
+ */
+private class ChunkHashingInput(private val input: InputStream) : InputStream() {
     var count = 0L
         private set
 
-    override fun read(): Int = input.read().also { if (it >= 0) count++ }
+    private val hashes = mutableListOf<ByteArray>()
+    private val chunk = ByteArrayOutputStream()
 
-    override fun read(buffer: ByteArray, offset: Int, length: Int): Int = input.read(buffer, offset, length).also { if (it > 0) count += it }
+    override fun read(): Int = input.read().also { if (it >= 0) take(byteArrayOf(it.toByte()), 0, 1) }
+
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int = input.read(buffer, offset, length).also { if (it > 0) take(buffer, offset, it) }
+
+    /** The hash of each chunk read, the last one too. Call it once the stream has ended. */
+    fun chunkHashes(): List<ByteArray> {
+        endChunk()
+        return hashes.toList()
+    }
+
+    private fun take(bytes: ByteArray, offset: Int, length: Int) {
+        var from = offset
+        var rest = length
+        while (rest > 0) {
+            val part = minOf(rest, SyncRun.CHUNK_BYTES - chunk.size())
+            chunk.write(bytes, from, part)
+            from += part
+            rest -= part
+            count += part
+            if (chunk.size() == SyncRun.CHUNK_BYTES) endChunk()
+        }
+    }
+
+    private fun endChunk() {
+        if (chunk.size() == 0) return
+        hashes += StreamHash.of(ByteArrayInputStream(chunk.toByteArray()))
+        chunk.reset()
+    }
 }
 
 /** This state with the waits that are over taken out (docs/apps/sync/spec.md, "The clock or the time zone changes"). */

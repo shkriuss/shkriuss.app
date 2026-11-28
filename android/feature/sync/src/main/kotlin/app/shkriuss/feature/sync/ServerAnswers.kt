@@ -164,7 +164,8 @@ internal object ServerLayouts {
         return try {
             val answer: ServerAnswer<T> = when (bytes[0].toInt() and 0xff) {
                 DONE -> done(reader)?.let { ServerAnswer.Done(it) } ?: ServerAnswer.Broken
-                0x01 -> ServerAnswer.Version(reader.u8(), reader.u8())
+                // The lowest version is never above the highest.
+                0x01 -> ServerAnswer.Version(reader.u8(), reader.u8()).takeIf { it.lowest <= it.highest } ?: return ServerAnswer.Broken
                 0x02 -> ServerAnswer.NotADevice
                 0x03 -> ServerAnswer.Removed
                 0x04 -> ServerAnswer.DoesNotCheck
@@ -191,6 +192,7 @@ internal object ServerLayouts {
     fun info(reader: Reader): ServerInfo? {
         val lowest = reader.u8()
         val highest = reader.u8()
+        if (lowest > highest) return null
         val serverId = SyncId(reader.bytes(ID_BYTES))
         val clock = reader.i64()
         if (!isTime(clock)) return null

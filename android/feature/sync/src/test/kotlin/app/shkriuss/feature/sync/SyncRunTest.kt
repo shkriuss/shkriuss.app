@@ -917,4 +917,21 @@ class SyncRunTest {
         run()
         assertTrue("water is asked again", "status" in water.calls)
     }
+
+    @Test
+    fun aStreamThatChangedAfterItsCheckSendsNoChunkAndDoesNotFit() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 8 }
+        val fileId = id(0x45)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        // The check reads the good bytes; the read that sends gets others.
+        water.changedRead = 2
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertFalse("no chunk went", "/v1/files/send" in server.paths())
+        assertEquals(listOf(hex(fileId) to false), water.sent)
+    }
 }

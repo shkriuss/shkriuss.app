@@ -44,7 +44,13 @@ class SyncStateStore(private val preferences: SharedPreferences) {
         if (after == before) return after
         val editor = preferences.edit()
         write(before, after, editor)
-        if (!editor.commit()) throw CouldNotSaveException()
+        if (!editor.commit()) {
+            // Android puts an edit into its map before it writes the file, also when the write fails. Putting the
+            // state before back into the map, at once, keeps the map and this state the same, so a later write
+            // cannot save this one. The file already holds the state before.
+            preferences.edit().also { write(after, before, it) }.apply()
+            throw CouldNotSaveException()
+        }
         current.value = after
         after
     }

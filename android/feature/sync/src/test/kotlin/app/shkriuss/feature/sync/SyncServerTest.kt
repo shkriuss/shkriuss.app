@@ -61,6 +61,7 @@ class SyncServerTest {
             intArrayOf(),
             intArrayOf(0x0d),
             intArrayOf(0x01, 2),
+            intArrayOf(0x01, 3, 2),
             intArrayOf(0x02, 0),
             intArrayOf(0x05, 1, 2, 3),
             intArrayOf(0x07, 3),
@@ -76,6 +77,8 @@ class SyncServerTest {
         assertEquals("a clock below 0", ServerAnswer.Broken, read(0x05, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff))
         answer(Bytes().u8(0).u8(1).u8(1).bytes(id(1)).i64(-1).u8(1).i32(100).i32(524_288).i32(256).done())
         assertEquals("info's clock below 0", ServerAnswer.Broken, server.info("https://sync.example.workers.dev"))
+        answer(Bytes().u8(0).u8(3).u8(2).bytes(id(1)).i64(99).u8(1).i32(100).i32(524_288).i32(256).done())
+        assertEquals("a lowest version above the highest", ServerAnswer.Broken, server.info("https://sync.example.workers.dev"))
         answer(Bytes().u8(0).bytes("ABCD2345".toByteArray()).i64(clock.nowMillis + 60_000).done())
         assertTrue(server.enrolCode(session) is ServerAnswer.Done)
         answer(Bytes().u8(0).bytes("ABCD2345".toByteArray()).i64(-1).done())

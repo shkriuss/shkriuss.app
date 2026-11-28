@@ -78,6 +78,9 @@ internal class MemoryPreferences : SharedPreferences {
     var commits = 0
     var failWrites = false
 
+    /** True to fail as Android does: the edit is in the map already when the write of the file fails. */
+    var failAfterTheMap = false
+
     /** Runs once, after the next commit, while the store still holds its lock: a test makes another write wait. */
     var afterCommit: (() -> Unit)? = null
 
@@ -127,6 +130,7 @@ internal class MemoryPreferences : SharedPreferences {
             if (failWrites) return false
             removals.forEach { values.remove(it) }
             values.putAll(changes)
+            if (failAfterTheMap) return false
             commits++
             afterCommit?.let { hook ->
                 afterCommit = null
@@ -413,6 +417,9 @@ internal class FakeDataApp(val name: String) {
     /** True when the pipes that `writeStream` gives fail, as when the app's process ends. */
     var failWrites = false
 
+    /** The `readStream` call, counted from 1, whose stream has its first byte changed, as when the stored file changes; 0 for none. */
+    var changedRead = 0
+
     /** The `readStream` call, counted from 1, whose stream ends at half its bytes, as when the app's process ends; 0 for none. */
     var cutRead = 0
     var reads = 0
@@ -526,7 +533,9 @@ internal class FakeCouriers(vararg apps: FakeDataApp) : Couriers {
         answer(app, "readStream") {
             val fake = this
             fake.reads++
-            stored[hex(fileId)]?.let { if (fake.reads == fake.cutRead) it.copyOf(it.size / 2) else it }?.inputStream()?.let { input ->
+            stored[hex(fileId)]?.let { if (fake.reads == fake.cutRead) it.copyOf(it.size / 2) else it }
+                ?.let { if (fake.reads == fake.changedRead) it.copyOf().also { bytes -> bytes[0] = (bytes[0] + 1).toByte() } else it }
+                ?.inputStream()?.let { input ->
                 object : java.io.FilterInputStream(input) {
                     override fun read(buffer: ByteArray, offset: Int, length: Int): Int = super.read(buffer, offset, length).also { if (it > 0) fake.bytesRead += it }
                 }

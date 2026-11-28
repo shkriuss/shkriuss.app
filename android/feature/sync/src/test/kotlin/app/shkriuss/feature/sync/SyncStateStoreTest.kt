@@ -81,6 +81,17 @@ class SyncStateStoreTest {
     }
 
     @Test
+    fun aWriteThatFailsAfterAndroidTookItIntoItsMapIsNotSavedByALaterOne() {
+        val store = SyncStateStore(preferences)
+        preferences.failAfterTheMap = true
+        assertThrows(CouldNotSaveException::class.java) { store.update { full } }
+        preferences.failAfterTheMap = false
+        store.update { it.copy(filesOnMobile = true) }
+        assertEquals(SyncState(filesOnMobile = true), store.now())
+        assertEquals("the file holds what the store holds", SyncState(filesOnMobile = true), SyncStateStore(preferences).now())
+    }
+
+    @Test
     fun valuesOutsideTheirLimitsCountAsMissing() {
         preferences.values.putAll(
             mapOf(

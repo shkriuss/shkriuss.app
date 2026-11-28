@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 146 tests. They use real keys
+- `feature/sync` has 9 test classes with 148 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -859,19 +859,20 @@ second build must write the same mapping file, or the release stops. See
     transfer failed and is served at the next run, an app whose courier
     call fails, which is left and not recorded as served, a stream that
     could not be read, or ended early, also on its second read, which is
-    not called damaged, a pipe that fails while a stream is fetched, a
-    file request refused for CPU time, which stops the reading of a
-    large stream, a run stopped by Android, also during a courier call
-    or a file request, a Leave while a run goes, which the run does not
+    not called damaged, a stream that changed after its check, which
+    sends no chunk, a pipe that fails while a stream is fetched, a file
+    request refused for CPU time, which stops the reading of a large
+    stream, a run stopped by Android, also during a courier call or a
+    file request, a Leave while a run goes, which the run does not
     overwrite, and an app that pokes each time it is served, whose job
     runs again.
   - `RunningJobsTest`: each job of the job service stops only its own
     run, also when Android starts a job again under the same ID.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
     the headers of a signed request, a `04` sent once more, Cloudflare's
-    answers, times outside their limits, a page, also a cut one, which
-    ends at its last record, the head after a batch, the devices, also
-    their times, and the file calls.
+    answers, times and versions outside their limits, a page, also a cut
+    one, which ends at its last record, the head after a batch, the
+    devices, also their times, and the file calls.
   - `SyncJoinTest`, `SyncDevicesTest` and `SyncServicesTest`: each join
     step and each answer of `info`, of the keeper and of `enrol`, also
     one that comes after the join was cancelled or started anew, a
@@ -885,7 +886,8 @@ second build must write the same mapping file, or the release stops. See
     `state`, the problems in their order, and answers that come after a
     Leave, also of a second Leave, which write nothing.
   - `SyncStateStoreTest` and `ServerAddressTest`: every stored value and
-    its limits, one write for one step, and the address rules.
+    its limits, one write for one step, a write that fails after Android
+    took it into its map, and the address rules.
   - `SyncAndroidPartsTest`, under Robolectric: the courier provider's
     check of its caller, JobScheduler's two jobs, courier calls as
     bundles and pipes, and a courier authority that another app holds.
