@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 174 tests. They use real keys
+- `feature/sync` has 9 test classes with 177 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -873,12 +873,12 @@ second build must write the same mapping file, or the release stops. See
     are all here, which is finished without a fetch, a file request
     refused for CPU time, which stops the reading of a large stream, a
     run stopped by Android, also during a courier call, a file request,
-    the check of a stream, the skip to its first missing chunk or the
-    read of a chunk, or before `info` after a `0C`, a `04` sent again or
-    the list of devices, a Leave while a run goes, which the run does
-    not overwrite, and a new join meanwhile, whose IDs no app gets from
-    the run, and an app that pokes each time it is served, whose job
-    runs again.
+    the check of a stream, the skip to its first missing chunk, the read
+    of a chunk or the write of a fetched one, or before `info` after a
+    `0C`, a `04` sent again or the list of devices, a Leave while a run
+    goes, which the run does not overwrite, and a new join meanwhile,
+    whose IDs no app gets from the run, and an app that pokes each time
+    it is served, whose job runs again.
   - `RunningJobsTest`: each job of the job service stops only its own
     run, also when Android starts a job again under the same ID.
   - `SyncServerTest`: every refusal with its own layout, broken answers,
@@ -890,18 +890,19 @@ second build must write the same mapping file, or the release stops. See
   - `SyncJoinTest`, `SyncDevicesTest` and `SyncServicesTest`: each join
     step and each answer of `info`, of the keeper and of `enrol`, also
     one that comes after the join was cancelled or started anew, a
-    version refusal or a refusal twice at the check of a sent `enrol`, a
-    **Try again** of an earlier join, a key made while the join was
-    cancelled, the actions of Devices and **Close the server**, a device
-    request that clears the fault and the clock, also when a removal
-    after the list fails, also on a phone that is not joined, a Remove
-    with every removed ID that Sync keeps, an action that answers a
-    lower revision, which keeps the higher one, the order of the rows of
-    Devices, the checks at each start, also a version check that passes,
-    which clears the fault and the clock, the key of a removed phone and
-    lost keys found before a Leave, `poke` and `state`, the problems in
-    their order, and answers that come after a Leave, also of a second
-    Leave, which write nothing.
+    version refusal, a refusal twice or an answer not of a sync server
+    at the check of a sent `enrol`, a **Try again** of an earlier join,
+    a key made while the join was cancelled, the actions of Devices and
+    **Close the server**, a device request that clears the fault and the
+    clock, also when a removal after the list fails, also on a phone
+    that is not joined, a Remove with every removed ID that Sync keeps,
+    an action that answers a lower revision, which keeps the higher one,
+    the order of the rows of Devices, the checks at each start, also the
+    name key of an earlier server at a new join, a version check that
+    passes, which clears the fault and the clock, the key of a removed
+    phone and lost keys found before a Leave, `poke` and `state`, the
+    problems in their order, and answers that come after a Leave, also
+    of a second Leave, which write nothing.
   - `SyncStateStoreTest` and `ServerAddressTest`: every stored value and
     its limits, one write for one step, a write that fails after Android
     took it into its map, and the address rules.

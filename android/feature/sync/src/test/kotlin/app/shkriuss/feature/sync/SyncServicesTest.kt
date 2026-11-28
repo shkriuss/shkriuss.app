@@ -137,6 +137,16 @@ class SyncServicesTest {
     }
 
     @Test
+    fun aNameKeyOfAnEarlierServerGoesAtTheStartOfANewJoin() {
+        // The name key of the server before, whose deletion failed when another server was chosen.
+        joinedState(keys, server, clock)
+        store.update { SyncState(stage = Stage.JOINING, joinedAt = clock.nowMillis, address = "https://other.example.workers.dev", serverId = syncId(5)) }
+        services.startChecks()
+        assertEquals(NameKeyState.MISSING, keys.sync.crypto.sync.nameKeyState())
+        assertEquals("the join goes on", Stage.JOINING, store.now().stage)
+    }
+
+    @Test
     fun aVersionCheckThatPassesClearsTheFaultAndTheClock() {
         store.update { joinedState(keys, server, clock).copy(stage = Stage.STOPPED, stop = Stop.UPDATE_SERVER, fault = true, clockOff = 7 * 60_000L) }
         services.startChecks()

@@ -1259,4 +1259,20 @@ class SyncRunTest {
         assertTrue("the chunk was not read to its end", water.bytesRead < bytes.size + SyncRun.CHUNK_BYTES)
         assertFalse("/v1/files/send" in server.paths())
     }
+
+    @Test
+    fun aRunStoppedWhileAChunkIsWrittenWritesNoMoreOfIt() {
+        joined()
+        run()
+        val bytes = ByteArray(SyncRun.CHUNK_BYTES) { (it % 7).toByte() }
+        val fileId = id(0x50)
+        val hash = sha256(bytes)
+        server.chunks["water/${hex(fileId)}/${hex(hash)}/0"] = bytes
+        water.streams = listOf(ListedStream(StreamWork.FETCH, uuid(fileId), hash, bytes.size.toLong(), 0, 0))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        // The stop comes with the first bytes the app takes.
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { (water.written[hex(fileId)]?.size() ?: 0) > 0 } })
+        assertTrue("the chunk was not written to its end", water.written.getValue(hex(fileId)).size() < bytes.size)
+        assertTrue("nothing is finished", water.finished.isEmpty())
+    }
 }

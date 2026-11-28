@@ -7,6 +7,7 @@ import app.shkriuss.core.crypto.DeviceJoinRequest
 import app.shkriuss.core.crypto.DeviceKeyGoneException
 import app.shkriuss.core.crypto.DeviceNames
 import app.shkriuss.core.crypto.KeyId
+import app.shkriuss.core.crypto.NameKeyState
 import app.shkriuss.core.crypto.SignedJoin
 import app.shkriuss.core.crypto.SyncKeys
 import app.shkriuss.core.data.Clock
@@ -396,8 +397,27 @@ class SyncJoin(
             // The server answered: the lines of step 2, as for `enrol`.
             is ServerAnswer.Version -> EnrolStep.Line(if (answer.lowest > ServerInfo.VERSION) AddressStep.UpdateSync else AddressStep.UpdateServer)
             ServerAnswer.UntrustedCertificate -> EnrolStep.Line(AddressStep.Untrusted)
+            // An answer that is not the Worker's, or breaks its layout, came from somewhere: as for `enrol`.
+            ServerAnswer.NotTheWorker, ServerAnswer.Broken -> EnrolStep.Line(AddressStep.NotASyncServer)
             ServerAnswer.DoesNotCheck -> EnrolStep.Refused
             else -> EnrolStep.Unreachable
+        }
+    }
+
+    /**
+     * At each start: a join before `stage` 2 has no name key of its own, so
+     * one found then is an earlier server's whose deletion failed, and it
+     * goes now. Under the lock of the keeper's answers, so that the name
+     * key of an answer being taken stays. One that cannot go now goes at
+     * the next start.
+     */
+    internal fun dropEarlierNameKey() {
+        try {
+            synchronized(keeperAnswers) {
+                if (store.now().stage == Stage.JOINING && keys.nameKeyState() != NameKeyState.MISSING) keys.deleteNameKey()
+            }
+        } catch (_: BlobException) {
+            // The next start tries again.
         }
     }
 

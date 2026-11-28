@@ -758,8 +758,15 @@ class SyncRun(
                 return true
             }
 
+            /** Writes [chunk] from [skip] on, in pieces with a check before each, so that a stop of the job ends a slow write too. */
             private fun writeAll(out: OutputStream, chunk: ByteArray, skip: Int) {
-                if (skip < chunk.size) out.write(chunk, skip, chunk.size - skip)
+                var at = skip
+                while (at < chunk.size) {
+                    checkStop()
+                    val piece = minOf(WRITE_PIECE_BYTES, chunk.size - at)
+                    out.write(chunk, at, piece)
+                    at += piece
+                }
             }
         }
 
@@ -853,6 +860,9 @@ class SyncRun(
     internal companion object {
         /** A stream is cut into chunks of 4 MiB, and one request carries at most that much. */
         const val CHUNK_BYTES: Int = 4_194_304
+
+        /** How much of a fetched chunk goes into an app's pipe between two checks for a stop. */
+        private const val WRITE_PIECE_BYTES = 65_536
 
         /** The longest stream whose chunks [chunkCount] can number. */
         const val MOST_STREAM_BYTES: Long = 2_147_483_647L * CHUNK_BYTES

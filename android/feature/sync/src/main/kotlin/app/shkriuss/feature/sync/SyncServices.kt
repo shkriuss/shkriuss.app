@@ -87,7 +87,7 @@ class SyncServices(
             Stage.NOT_JOINED -> Unit
             Stage.JOINING -> {
                 val since = state.joinedAt
-                if (since == null || since > now || now - since >= SyncJoin.JOIN_LIFE_MILLIS) join.cancel()
+                if (since == null || since > now || now - since >= SyncJoin.JOIN_LIFE_MILLIS) join.cancel() else join.dropEarlierNameKey()
             }
             Stage.ENROL_SENT -> join.checkSentEnrol()
             // Only the state that was read: a Leave or a new join meanwhile, which deletes the keys, is kept.

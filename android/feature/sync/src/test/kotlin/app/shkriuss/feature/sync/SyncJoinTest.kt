@@ -389,6 +389,23 @@ class SyncJoinTest {
     }
 
     @Test
+    fun aCheckOfASentEnrolThatGetsAnAnswerNotOfASyncServerSaysSo() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        val request = requestFor()
+        server.unreachable = true
+        join.takeSignedJoin(keys.sign(request, clock.nowMillis), request, "ABCD2345")
+        server.unreachable = false
+        // A redirect, and an answer that breaks its layout: the server answered, as something else.
+        server.answerNext("/v1/heads", HttpResult.Answer(302, ByteArray(0)))
+        assertEquals(EnrolStep.Line(AddressStep.NotASyncServer), join.checkSentEnrol())
+        server.answerNext("/v1/heads", HttpResult.Answer(200, ByteArray(0)))
+        assertEquals(EnrolStep.Line(AddressStep.NotASyncServer), join.checkSentEnrol())
+        server.unreachable = true
+        assertEquals("only no answer at all is no connection", EnrolStep.Unreachable, join.checkSentEnrol())
+    }
+
+    @Test
     fun aCheckOfASentEnrolThatTheServerRefusesTwiceSaysSo() {
         join.enterAddress("sync.example.workers.dev")
         join.chooseCode(CodeKind.DEVICE_CODE)
