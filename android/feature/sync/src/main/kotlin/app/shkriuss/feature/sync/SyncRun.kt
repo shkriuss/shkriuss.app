@@ -279,7 +279,9 @@ class SyncRun(
          */
         private fun takeEpoch(epoch: SyncId, keyId: KeyId? = null) {
             write { state ->
-                apps.fold(state.copy(epoch = epoch, keyId = keyId ?: state.keyId)) { marked, app -> marked.withApp(app.name.value) { it.copy(work = true) } }
+                // Also an app Sync knows but cannot call now, as while it is updated: it is served when it can be.
+                val names = apps.map { it.name.value }.toSet() + state.apps.keys
+                names.fold(state.copy(epoch = epoch, keyId = keyId ?: state.keyId)) { marked, name -> marked.withApp(name) { it.copy(work = true) } }
             }
         }
 
@@ -307,7 +309,8 @@ class SyncRun(
 
         private fun serveOnce(app: CourierApp) {
             val name = app.name.value
-            write { state -> state.withApp(name) { it.copy(poked = false) } }
+            // The poke becomes work: if no status comes, or the job stops, the next run serves the app again.
+            write { state -> state.withApp(name) { it.copy(poked = false, work = it.work || it.poked) } }
             appLeft = false
             val context = courierContext()
             val status = statusOf(app, context) ?: return
@@ -461,7 +464,13 @@ class SyncRun(
                         if (SendResult.CHANGED_AFTER_CURSOR in results) {
                             // The fetch brings the version that was in the way, and the app's merge decides.
                             val status = statusOf(app, context) ?: return false
-                            if (ofAnotherEpoch(status, context) || !fetchAll(app, context, status)) return false
+                            if (ofAnotherEpoch(status, context)) return false
+                            // Sync turned off in the app, or it cannot sync now: no fetch, and the status is kept.
+                            if (!status.isOn || !status.canSyncNow) {
+                                record(name, status, goodNow = false)
+                                return false
+                            }
+                            if (!fetchAll(app, context, status)) return false
                         }
                         if (SendResult.CHUNKS_BEING_DELETED in results) {
                             noMoreBatchesFor += name

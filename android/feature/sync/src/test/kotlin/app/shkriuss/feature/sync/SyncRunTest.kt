@@ -1320,4 +1320,62 @@ class SyncRunTest {
         assertEquals(Stage.NOT_JOINED, store.now().stage)
         assertNull(store.now().stop)
     }
+
+    @Test
+    fun aNewEpochReachesAnAppThatCouldNotBeCalledWhenItCame() {
+        joined()
+        run()
+        // Notes is being updated: Sync cannot call it in the run that finds the new epoch.
+        couriers.apps.remove(notes)
+        server.epoch = syncId(7)
+        run()
+        couriers.apps.add(notes)
+        notes.calls.clear()
+        run()
+        assertTrue("notes is served", "status" in notes.calls)
+        assertEquals(syncId(7), notes.epoch)
+    }
+
+    @Test
+    fun aStatusAfterAChangedCursorThatCannotSyncFetchesNothing() {
+        joined()
+        run()
+        water.toSend += id(7) to blob(server.keyId, 7)
+        var once = true
+        water.onExport = {
+            if (once) {
+                once = false
+                server.records.getOrPut("water") { mutableListOf() } += FakeRecord(id(7), 1, blob(server.keyId, 8))
+                server.heads["water"] = 1
+                // The app cannot sync from now on, as when its keys cannot be used.
+                water.canSync = false
+            }
+        }
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertTrue("the batch was sent", server.requests.any { it.method == RequestMethod.POST && it.url.contains("/v1/changes") })
+        assertFalse("no fetch with that status", server.requests.any { it.method == RequestMethod.GET && it.url.contains("/v1/changes") })
+    }
+
+    @Test
+    fun aPokeWhoseStatusDoesNotComeStaysAsWork() {
+        joined()
+        run()
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        water.failCalls += "status"
+        run()
+        assertFalse(store.now().app("water").poked)
+        assertTrue("the next run serves the app again", store.now().app("water").work)
+    }
+
+    @Test
+    fun aPokeWhoseRunStopsBeforeItsStatusStaysAsWork() {
+        joined()
+        run()
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        // Android stops the job as soon as the serve of the app has begun.
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { !store.now().app("water").poked } })
+        assertTrue("the next run serves the app again", store.now().app("water").work)
+    }
 }

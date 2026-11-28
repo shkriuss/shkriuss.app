@@ -835,35 +835,37 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 180 tests. They use real keys
+- `feature/sync` has 9 test classes with 184 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
   (`FakeDataApp`):
   - `SyncRunTest`: a quiet run, a first status of the day that failed or
     named another version, which is asked again, the fetch of every
-    page, a poke, a refusal `01` and the fetch before the next batch, a
-    full server, the day's limits, every answer that stops sync, the
-    fault and the clock, which `info` clears too, three failed runs and
-    the 4-hour wait, halving for CPU time, also on a file request, also
-    when one record is the limit, but not for `heads`, and its undoing a
-    day later, another epoch, also one that a run took to no app, which
-    every app gets at the next run, a new key ID of the server, which
-    every app gets too, also after a run that ended at the list of
-    devices, `0C`, which asks for less of what the refused request
-    carries, a page that moves nothing, or holds more records than asked
-    or more bytes than `info` names, a put-back server with a removed
-    device in again, lost keys, an app that gives no answer, or answers
-    `import` with another cursor, more chunks on the server than a
-    stream has, streams sent, fetched, deleted and kept off a metered
-    network, only the chunks the server lacks, the order of ordinary and
-    comparison batches, no batch after a `05` for each app that got one,
-    a full server that takes no chunks either, also when a file request
-    finds it full, and fetching goes on, and stays full until a record
-    is stored, a batch of the other kind than asked, or for another
-    epoch, a status of another epoch, which keeps the work Sync knew,
-    also the last one, which does not count as served, and one after a
-    changed cursor, which fetches nothing, an app whose transfer failed
+    page, a poke, also one whose status does not come or whose run stops
+    first, which stays as work, a refusal `01` and the fetch before the
+    next batch, a full server, the day's limits, every answer that stops
+    sync, the fault and the clock, which `info` clears too, three failed
+    runs and the 4-hour wait, halving for CPU time, also on a file
+    request, also when one record is the limit, but not for `heads`, and
+    its undoing a day later, another epoch, also one that a run took to
+    no app, which every app gets at the next run, also one that Sync
+    could not call then, a new key ID of the server, which every app
+    gets too, also after a run that ended at the list of devices, `0C`,
+    which asks for less of what the refused request carries, a page that
+    moves nothing, or holds more records than asked or more bytes than
+    `info` names, a put-back server with a removed device in again, lost
+    keys, an app that gives no answer, or answers `import` with another
+    cursor, more chunks on the server than a stream has, streams sent,
+    fetched, deleted and kept off a metered network, only the chunks the
+    server lacks, the order of ordinary and comparison batches, no batch
+    after a `05` for each app that got one, a full server that takes no
+    chunks either, also when a file request finds it full, and fetching
+    goes on, and stays full until a record is stored, a batch of the
+    other kind than asked, or for another epoch, a status of another
+    epoch, which keeps the work Sync knew, also the last one, which does
+    not count as served, and one after a changed cursor, which fetches
+    nothing, as one that cannot sync does, an app whose transfer failed
     and is served at the next run, an app whose courier call fails,
     which is left and not recorded as served, a stream that could not be
     read, or ended early, also on its second read, which is not called

@@ -91,8 +91,8 @@ data class AppSync(
     val on: Boolean = false,
     /**
      * Its last `status` said that it has something to send, to fetch or to
-     * compare. Also set for every app when the epoch moves, until a
-     * `status` with the new epoch.
+     * compare. Also set for every app when the epoch or the key ID moves,
+     * and when a run starts on a poke of the app, until its next `status`.
      */
     val work: Boolean = false,
     /** It poked, and no run has started on it since. */
