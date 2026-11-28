@@ -340,6 +340,24 @@ class SyncRunTest {
     }
 
     @Test
+    fun anAppThatCannotBeCalledInTheFirstRunOfADayIsServedOnceItCanBe() {
+        joined()
+        run()
+        clock.advanceBy(SyncRun.DAY_MILLIS)
+        // Water is installed but fails the comparison of certificates, as while one of two apps is updated.
+        couriers.apps.remove(water)
+        couriers.signedOtherwise = listOf(water.app)
+        run()
+        assertTrue("the day's check is done", SyncRun.sameUtcDay(store.now().statusAt, clock.nowMillis))
+
+        couriers.apps.add(water)
+        couriers.signedOtherwise = emptyList()
+        water.calls.clear()
+        run()
+        assertTrue("Water gets the day's check once it can be called", "status" in water.calls)
+    }
+
+    @Test
     fun aTimeLaterThanNowCountsAsLongAgo() {
         val now = clock.nowMillis
         assertTrue(SyncRun.sameUtcDay(now, now))

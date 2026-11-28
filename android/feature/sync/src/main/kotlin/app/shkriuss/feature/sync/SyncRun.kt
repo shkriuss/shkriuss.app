@@ -214,7 +214,13 @@ class SyncRun(
             if (start.limits == null || !sameUtcDay(start.infoAt, now)) readInfo()
             val heads = readHeads()
             val firstOfDay = !sameUtcDay(store.now().statusAt, now)
-            apps = courier().find().passed.sortedBy { it.name.value }
+            val found = courier().find()
+            apps = found.passed.sortedBy { it.name.value }
+            // An app that is installed but cannot be called now, as while one of two apps is updated, misses the
+            // day's check: it is marked with work, so that it is served, and its status read, once it can be called.
+            if (firstOfDay && found.signedOtherwise.isNotEmpty()) {
+                write { state -> found.signedOtherwise.fold(state) { marked, app -> marked.withApp(app.name.value) { it.copy(work = true) } } }
+            }
             val epochMoved = start.epoch != heads.epoch
             // Each app learns the server's current key ID from Sync's calls (sync-protocol.md, "A new recovery key"),
             // so a new one reaches every app, as a new epoch does.

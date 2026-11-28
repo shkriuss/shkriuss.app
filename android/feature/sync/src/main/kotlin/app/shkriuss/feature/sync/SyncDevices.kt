@@ -133,13 +133,18 @@ class SyncDevices(
         if (id == state.deviceId) return DeviceAnswer.Problem
         return try {
             withSession<Unit>(madeIn = state) { session ->
-                val now = store.now()
-                if (id.hex !in now.removed) {
-                    // More removed devices than Sync keeps: a fault, as for a list that shows more (spec, Problems).
-                    if (now.removed.size >= SyncState.MOST_REMOVED) throw EndRun(Reason.Fault)
-                    val marked = store.update { if (it.isJoinedWith(session)) it.copy(removed = it.removed + id.hex) else it }
-                    if (!marked.isJoinedWith(session)) throw JoinChanged()
+                // The limit is checked in the write itself, so that an ID that another write added meanwhile counts too.
+                var full = false
+                val marked = store.update {
+                    when {
+                        !it.isJoinedWith(session) || id.hex in it.removed -> it
+                        // More removed devices than Sync keeps: a fault, as for a list that shows more (spec, Problems).
+                        it.removed.size >= SyncState.MOST_REMOVED -> it.also { full = true }
+                        else -> it.copy(removed = it.removed + id.hex)
+                    }
                 }
+                if (full) throw EndRun(Reason.Fault)
+                if (!marked.isJoinedWith(session)) throw JoinChanged()
                 val revision = SyncRun.valueOf(server.removeDevice(session, id))
                 store.update { if (it.isJoinedWith(session)) it.copy(revision = keptRevision(it, revision)) else it }
             }
