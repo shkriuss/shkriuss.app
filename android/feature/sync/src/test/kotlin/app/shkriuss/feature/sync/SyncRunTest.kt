@@ -965,4 +965,46 @@ class SyncRunTest {
         assertEquals(RunEnd.ENDED, run())
         assertEquals("no courier call", emptyList<String>(), water.calls + notes.calls)
     }
+
+    @Test
+    fun aStatusOfAnotherEpochLeavesTheApp() {
+        joined()
+        run()
+        water.toSend += id(7) to blob(server.keyId, 7)
+        water.statusEpoch = syncId(9)
+        val goodAt = store.now().app("water").goodAt
+        clock.advanceBy(60_000)
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        server.requests.clear()
+        run()
+        assertTrue("no batch was sent", server.requests.none { it.method == RequestMethod.POST && it.url.contains("/v1/changes") })
+        assertEquals(goodAt, store.now().app("water").goodAt)
+    }
+
+    @Test
+    fun aRunStoppedWhileHeadsWasOnItsWayReadsNoListOfDevices() {
+        joined()
+        run()
+        server.revision = 1
+        var stopped = false
+        server.onRequest = { path -> if (path == "/v1/heads") stopped = true }
+        server.requests.clear()
+        assertEquals(RunEnd.ENDED, runBlocking { run.run(asked = false) { stopped } })
+        assertFalse("/v1/devices" in server.paths())
+    }
+
+    @Test
+    fun aFileRequestOutOfCpuTimeHalvesItsItemsAlsoWhenOneRecordIsTheLimit() {
+        joined()
+        run()
+        val bytes = ByteArray(10) { 9 }
+        val fileId = id(0x48)
+        water.stored[hex(fileId)] = bytes
+        water.streams = listOf(ListedStream(StreamWork.SEND, uuid(fileId), sha256(bytes), 10, 0, 0))
+        store.update { state -> state.copy(limits = Limits(1, 524_288, 256)).withApp("water") { it.copy(poked = true) } }
+        server.answerNext("/v1/files/have", HttpResult.Answer(SyncServer.CPU_TIME_STATUS, ByteArray(0)))
+        run()
+        assertEquals(1, store.now().halved)
+        assertEquals(0, store.now().failedRuns)
+    }
 }

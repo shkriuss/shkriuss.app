@@ -17,14 +17,23 @@ import java.text.Collator
  * removed join the IDs this phone remembers, up to 10,000.
  */
 internal class DeviceList(private val store: SyncStateStore, private val server: SyncServer, private val clock: Clock) {
-    /** The list. [revision] is the one `heads` named, or null when the list is read without it. Throws [EndRun] for an answer that ends it. */
-    fun read(session: Session, revision: Long?): List<ListedDevice> {
+    /**
+     * The list. [revision] is the one `heads` named, or null when the list
+     * is read without it. [beforeRequest] runs before each request: a run
+     * ends there when Android stopped its job. Throws [EndRun] for an
+     * answer that ends it.
+     */
+    fun read(session: Session, revision: Long?, beforeRequest: () -> Unit = {}): List<ListedDevice> {
+        beforeRequest()
         val devices = SyncRun.valueOf(server.devices(session))
         val state = store.now()
         val thisPhone = state.deviceId?.hex
         val inAgain = devices.filter { !it.removed && it.id.hex in state.removed }
         var latest = revision ?: state.revision
-        inAgain.forEach { latest = SyncRun.valueOf(server.removeDevice(session, it.id)) }
+        inAgain.forEach {
+            beforeRequest()
+            latest = SyncRun.valueOf(server.removeDevice(session, it.id))
+        }
         val newlyRemoved = devices.filter { it.removed && it.id.hex != thisPhone }.map { it.id.hex }
         if ((state.removed + newlyRemoved).size > SyncState.MOST_REMOVED) throw EndRun(Reason.Fault)
         store.update {

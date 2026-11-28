@@ -257,7 +257,7 @@ class SyncRun(
             val putBack = heads.revision < state.revision
             write { it.copy(keyId = heads.keyId, putBack = it.putBack || putBack) }
             if (heads.revision != state.revision || !sameUtcDay(state.devicesAt, clock.nowMillis())) {
-                DeviceList(store, server, clock).read(session, heads.revision)
+                DeviceList(store, server, clock).read(session, heads.revision, ::checkStop)
             }
             return heads
         }
@@ -302,6 +302,11 @@ class SyncRun(
             // What the app has to do is kept before any transfer, so that a run that fails part way serves it again.
             record(name, status, goodNow = false)
             if (!status.isOn || !status.canSyncNow) return
+            // An app that syncs answers with the epoch it was given: another one breaks the courier contract.
+            if (status.epoch != context.epoch) {
+                everyStatus = false
+                return
+            }
             val heads = this.heads ?: return
             val head = heads.of(name)
             val needsFetch = status.cursor != head.head || head.told < status.known ||
@@ -721,10 +726,12 @@ class SyncRun(
         }
 
         /** Halves what one request carries, for a lack of CPU time. False when it is down to one record. */
-        private fun halve(): Boolean {
+        private fun halve(files: Boolean = false): Boolean {
             val state = store.now()
             val limits = state.limits ?: return false
-            if (state.halved >= SyncState.MOST_HALVINGS || (limits.records shr state.halved) <= 1) return false
+            // A request halves what it carries, down to one: records for batches and pages, items for file requests.
+            val carried = if (files) limits.fileItems else limits.records
+            if (state.halved >= SyncState.MOST_HALVINGS || (carried shr state.halved) <= 1) return false
             write { it.copy(halved = it.halved + 1, halvedAt = clock.nowMillis()) }
             return true
         }
@@ -737,17 +744,17 @@ class SyncRun(
          */
         private fun <T> fileValue(answer: ServerAnswer<T>): T? = when (answer) {
             is ServerAnswer.Done -> answer.value
-            ServerAnswer.OutOfCpuTime -> if (halve()) null.also { filesStopped = true } else fail(answer)
-            ServerAnswer.TooMuch -> if (lessAfterTooMuch()) null.also { filesStopped = true } else fail(answer)
+            ServerAnswer.OutOfCpuTime -> if (halve(files = true)) null.also { filesStopped = true } else fail(answer)
+            ServerAnswer.TooMuch -> if (lessAfterTooMuch(files = true)) null.also { filesStopped = true } else fail(answer)
             else -> fail(answer)
         }
 
-        /** After `0C`: `info` again, and if its limits are not lower, a halving. */
-        private fun lessAfterTooMuch(): Boolean {
+        /** After `0C`: `info` again, and if its limits are not lower, a halving of what the request carries. */
+        private fun lessAfterTooMuch(files: Boolean = false): Boolean {
             val before = store.now().limits
             readInfo()
             val after = store.now().limits
-            return if (after != null && before != null && (after.records < before.records || after.bytes < before.bytes || after.fileItems < before.fileItems)) true else halve()
+            return if (after != null && before != null && (after.records < before.records || after.bytes < before.bytes || after.fileItems < before.fileItems)) true else halve(files)
         }
 
         /** [call], made again after a lack of CPU time with half as much, and after `0C` with the limits of a new `info`. */

@@ -408,6 +408,9 @@ internal class FakeDataApp(val name: String) {
     /** The courier version its `status` names. */
     var courierVersion = 1
 
+    /** The epoch `status` names instead of the one it was given, or null for that one. */
+    var statusEpoch: SyncId? = null
+
     /** The epoch `export` writes into its batches instead of its own, or null for its own. */
     var batchEpoch: SyncId? = null
 
@@ -444,7 +447,7 @@ internal class FakeDataApp(val name: String) {
             dataVersion = 1,
             isOn = on,
             canSyncNow = canSync,
-            epoch = epoch,
+            epoch = statusEpoch ?: epoch,
             cursor = cursor,
             known = known,
             keyId = KeyId(0x0a0b0c0d),
