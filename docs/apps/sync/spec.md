@@ -284,7 +284,7 @@ The device line on Apps shows the first that applies, as the protocol's
 | Closed (`06`) | "This server was closed. Nothing on this phone changed." | **Join another server** | The phone joins again |
 | Removed (`03`). The device key is deleted. | "This phone was removed from the server. Its apps keep everything." | **Join again** | The same |
 | Not a device (`02`) | "The server does not know this phone." | **Join again** | The same |
-| The device key or the name key is gone, or Sync's state cannot be read | "Sync lost this phone's keys for the server. Join again, then remove the old entry of this phone on another device." | **Join again** | The same |
+| The device key or the name key is gone, or the stored `stop` cannot be read | "Sync lost this phone's keys for the server. Join again, then remove the old entry of this phone on another device." | **Join again** | The same |
 | Version (`01`): the server's lowest version is above 1 (`stop` 4), or its highest below 1 (`stop` 6) | "Update the Sync app." or "Update your server." | **Try again**, for the server | Sync is updated, or `info` names version 1 |
 | The clock (`05`) | "This phone's clock is off by 7 minutes. Set the time in Android's settings." | **Try again** | A request passes. Each run tries once. |
 | A fault (`04` twice, an answer that breaks its layout or a limit, except `info`'s three limits, or more removed devices than Sync keeps). `fault` is set. | "Sync has a fault: the server refused a request." | **Try again** | A request passes, which clears `fault`. The next run tries. |
@@ -598,7 +598,7 @@ networks, long transfers and notification. The owner asked this page to
 say, for every value and action, its limits and what happens when Sync
 stops between two writes, a write fails, a press comes twice or late,
 and the clock or the time zone changes
-([When things go wrong](#when-things-go-wrong)). And nine answers:
+([When things go wrong](#when-things-go-wrong)). And ten answers:
 
 1. Records go on any network. File chunks only on an unmetered network,
    unless **Files on mobile data** is on. It is off at first. So a
@@ -625,6 +625,11 @@ and the clock or the time zone changes
    ([ADR 0045](../../adr/0045-sync-runs-through-jobscheduler.md)).
 9. Requests are halved at most eight times, so a file request that
    `info` allows 256 items comes down to one item.
+10. Sync says it lost this phone's keys when the stored `stop` cannot be
+    read. A state that cannot be read otherwise counts as a phone that
+    has not joined, since Sync cannot tell it from a new phone. The join
+    steps then open, and the old entry stays on the server until
+    another device removes it.
 
 The rest is in
 [sync-protocol.md](../../architecture/sync-protocol.md#decided-by-the-owner).

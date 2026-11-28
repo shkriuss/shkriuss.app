@@ -835,7 +835,7 @@ second build must write the same mapping file, or the release stops. See
     services of the test's app do their work in `HoldableWork`, which a
     test can hold: so the image view is captured while its image is
     still decoded.
-- `feature/sync` has 9 test classes with 194 tests. They use real keys
+- `feature/sync` has 9 test classes with 197 tests. They use real keys
   from `SoftwareKeysApp`, also for a data app that signs a join with its
   own words, a server in memory behind Sync's `Transport`
   (`FakeServer`), and data apps in memory behind `Couriers`
@@ -846,7 +846,9 @@ second build must write the same mapping file, or the release stops. See
     first, which stays as work, a refusal `01` and the fetch before the
     next batch, a full server, the day's limits, every answer that stops
     sync, the fault and the clock, which `info` and each file request
-    clear too, three failed runs and the 4-hour wait, halving for CPU
+    clear too, a stored time later than now, which counts as long ago,
+    and waits too far ahead, which are over, three failed runs and the
+    4-hour wait, halving for CPU
     time, also on a file request, also when one record is the limit,
     eight times to take 256 file items down to one, but not for
     `heads`, and
@@ -907,7 +909,9 @@ second build must write the same mapping file, or the release stops. See
     the order of the rows of Devices, the checks at each start, also a
     day-old join that a new one replaced meanwhile, which stays, the
     name key of an earlier server at a new join, a version check that
-    passes, which clears the fault and the clock, the key of a removed
+    passes, which clears the fault and the clock, a version stop whose
+    device key is gone, which becomes the stop for lost keys, the key of
+    a removed
     phone and lost keys found before a Leave, `poke` and `state`, the
     problems in their order, and answers that come after a Leave, also
     of a second Leave, which write nothing.
@@ -919,8 +923,9 @@ second build must write the same mapping file, or the release stops. See
     bundles and pipes, a stop of the job between two reads of a pipe,
     and a courier authority that another app holds.
 - `app/sync` has two test classes: `SyncManifestTest` names everything
-  Sync's merged manifest lets another app reach, its three permissions
-  and the removals; `SyncPlaceholderScreenshotTest` draws the screen
+  Sync's merged manifest lets another app reach, its three permissions,
+  the removals, and the only three checks that Sync's manifests tell
+  lint to ignore; `SyncPlaceholderScreenshotTest` draws the screen
   that stands in for Sync's screens.
 
 ### Instrumented tests
@@ -1413,11 +1418,15 @@ each catches.
 ## Lint
 
 1. Android Lint runs in `check`. Warnings are errors.
-2. Lint findings are fixed, not hidden. Three single places are
+2. Lint findings are fixed, not hidden. These single places are
    suppressed, each with its reason next to it:
-   - `MissingClass` on `androidx.startup.InitializationProvider` in
-     Catalog's manifest. The class comes from a library Compose uses only
-     at run time, so lint cannot see it. It is in the APK.
+   - `MissingClass` on two parts that the apps' manifests change or
+     remove: `androidx.startup.InitializationProvider` in every app, and
+     the receiver of `androidx.profileinstaller` in every app but
+     Catalog. Their classes come from libraries Compose uses only at run
+     time, so lint cannot see them. They are in the APK. The manifest
+     tests of the four data apps and of Sync check in the merged
+     manifest that the receiver is gone.
    - `MissingPermission` on the one function that sets an exact alarm,
      `AlarmManagerScheduler.set` in `core/notify`. Lint 32.5.1 does not
      know the permission `USE_EXACT_ALARM`, which the module's manifest
@@ -1435,6 +1444,12 @@ each catches.
      answer is a public short name. The owner decided this.
      `ManifestTest` checks the provider's attributes, and that nothing
      else in that manifest is ignored.
+   - `ExportedContentProvider` on `SyncCourierProvider` in Sync's
+     manifest, for the same reason: every courier provider is exported
+     with no permission, and its own check of the caller is the gate
+     ([sync-protocol.md](../architecture/sync-protocol.md#no-permission-of-our-own)).
+     The owner decided this. `SyncManifestTest` checks the provider's
+     attributes, and that Sync's manifests ignore nothing else.
 3. Compose and Activity ask for Lifecycle 2.9. Its built-in lint checks no
    longer load in this version of lint ("Library lint checks reference
    invalid APIs"). A version constraint lifts Lifecycle to 2.11.0, whose

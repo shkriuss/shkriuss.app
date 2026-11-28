@@ -340,6 +340,39 @@ class SyncRunTest {
     }
 
     @Test
+    fun aTimeLaterThanNowCountsAsLongAgo() {
+        val now = clock.nowMillis
+        assertTrue(SyncRun.sameUtcDay(now, now))
+        assertFalse("a clock set back", SyncRun.sameUtcDay(now + 1, now))
+        assertFalse(SyncRun.sameUtcDay(null, now))
+        assertFalse(SyncRun.sameUtcDay(now - SyncRun.DAY_MILLIS, now))
+    }
+
+    @Test
+    fun waitsTooFarAheadAreOverAndAHalvingMadeInTheFutureIsUndone() {
+        val now = clock.nowMillis
+        val waiting = SyncState(
+            dayWait = DayWait.EVERYTHING,
+            dayWaitUntil = SyncRun.nextUtcMidnight(now),
+            retryAt = now + SyncRun.RETRY_WAIT_MILLIS,
+            halved = 2,
+            halvedAt = now,
+        )
+        assertEquals("waits within their length stay", waiting, waiting.withWaitsOver(now))
+
+        val ahead = waiting.copy(
+            dayWaitUntil = now + SyncRun.DAY_MILLIS + 1,
+            retryAt = now + SyncRun.RETRY_WAIT_MILLIS + 1,
+            halvedAt = now + 1,
+        ).withWaitsOver(now)
+        assertNull(ahead.dayWait)
+        assertNull(ahead.dayWaitUntil)
+        assertNull(ahead.retryAt)
+        assertEquals(1, ahead.halved)
+        assertEquals(now, ahead.halvedAt)
+    }
+
+    @Test
     fun thePutBackLineWaitsForAListReadAfterThePutBackWasFound() {
         joined()
         server.revision = 5

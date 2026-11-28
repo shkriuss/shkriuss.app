@@ -169,6 +169,19 @@ class SyncServicesTest {
     }
 
     @Test
+    fun aPhoneStoppedForAVersionWhoseDeviceKeyIsGoneStopsForItsKeysAtStart() {
+        for (stop in listOf(Stop.UPDATE_SYNC, Stop.UPDATE_SERVER)) {
+            val joined = joinedState(keys, server, clock).copy(stage = Stage.STOPPED, stop = stop)
+            store.update { joined }
+            keys.sync.crypto.sync.deleteDeviceKey(joined.deviceAlias!!)
+            server.requests.clear()
+            services.startChecks()
+            assertEquals(Stop.KEYS_GONE, store.now().stop)
+            assertTrue("no info is asked for keys that are gone", server.requests.isEmpty())
+        }
+    }
+
+    @Test
     fun aVersionCheckThatPassesClearsTheFaultAndTheClock() {
         store.update { joinedState(keys, server, clock).copy(stage = Stage.STOPPED, stop = Stop.UPDATE_SERVER, fault = true, clockOff = 7 * 60_000L) }
         services.startChecks()

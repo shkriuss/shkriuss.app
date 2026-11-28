@@ -198,7 +198,8 @@ title.
 
 ## Sync, later
 
-The sync server is built. The Sync app is not, so nothing syncs yet.
+The sync server is built. The Sync app is not released, so nothing
+syncs yet.
 This is what is decided:
 
 1. Only the Sync app will use the network. The data apps will hand it

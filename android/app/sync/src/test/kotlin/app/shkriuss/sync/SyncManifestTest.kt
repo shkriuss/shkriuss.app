@@ -94,8 +94,35 @@ class SyncManifestTest {
         assertEquals("@xml/network_security_config", application.android("networkSecurityConfig"))
     }
 
+    @Test
+    fun lintIsToldToIgnoreOnlyTheCourierProviderAndTheTwoPartsOfLibrariesThatAreRemovedOrChanged() {
+        // docs/development/build.md, "Lint": the provider is exported with no permission, as every courier provider
+        // (sync-protocol.md, "No permission of our own"), and lint cannot see the two library classes.
+        val androidFolder = generateSequence(File("").absoluteFile) { it.parentFile }
+            .first { File(it, "settings.gradle.kts").isFile && File(it, "build-logic").isDirectory }
+        val ignoring = listOf("app/sync", "feature/sync").flatMap { module ->
+            val source = DocumentBuilderFactory.newInstance().apply {
+                isNamespaceAware = true
+                setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+                setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            }.newDocumentBuilder().parse(File(androidFolder, "$module/src/main/AndroidManifest.xml")).documentElement
+            source.getElementsByTagName("*").let { nodes -> List(nodes.length) { nodes.item(it) as Element } }
+                .filter { it.hasAttributeNS(TOOLS, "ignore") }
+                .map { "${it.android("name")} ${it.getAttributeNS(TOOLS, "ignore")}" }
+        }
+        assertEquals(
+            listOf(
+                "androidx.profileinstaller.ProfileInstallReceiver MissingClass",
+                "androidx.startup.InitializationProvider MissingClass",
+                "$COURIER_PROVIDER ExportedContentProvider",
+            ),
+            ignoring.sorted(),
+        )
+    }
+
     private companion object {
         const val ANDROID = "http://schemas.android.com/apk/res/android"
+        const val TOOLS = "http://schemas.android.com/tools"
         const val COURIER_PROVIDER = "app.shkriuss.feature.sync.SyncCourierProvider"
         const val JOB_SERVICE = "app.shkriuss.feature.sync.SyncJobService"
     }
