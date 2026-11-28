@@ -2,6 +2,10 @@ package app.shkriuss.core.crypto
 
 import android.os.Bundle
 import app.shkriuss.core.crypto.fixtures.SoftwareHardwareKeys
+import com.google.crypto.tink.KeysetHandle
+import com.google.crypto.tink.aead.XChaCha20Poly1305Key
+import com.google.crypto.tink.aead.XChaCha20Poly1305Parameters
+import com.google.crypto.tink.util.SecretBytes
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -85,6 +89,48 @@ class SignDeviceTest {
         assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { app.open().setup.beginSignDevice(unknown).finish() })
     }
 
+    /** Keeps [recovery] in [app] behind a new Recovery guard, as a keeper keeps its copy. */
+    private fun keep(app: TestApp, recovery: KeysetHandle) = app.vault.locked {
+        val guard = app.vault.newKey(HardwareKeyKind.RECOVERY_GUARD)
+        app.vault.storeWithPrompt(KeysetName.RECOVERY, recovery, guard, PromptCipher(app.vault.startCipher(guard, null), true))
+    }
+
+    @Test
+    fun aKeeperSignsWithTheCurrentKeyOfItsOwnKeysTheOneItsScreenNames() {
+        val app = TestApp(temporary.newFolder())
+        assertEquals(KeySetupResult.STORED, app.open().setup.storeDerived(RecoveryKeyDeriver.recoveryKeyset(listOf(key, otherKey), otherKey)))
+        // The kept copy has the other key as its primary: the request names no key, so the screen named the app's current one.
+        keep(app, RecoveryKeyDeriver.recoveryKeyset(listOf(key, otherKey), key))
+        assertEquals(otherKey.keyId, app.open().status().keyId)
+        assertEquals(otherKey.keyId, app.open().setup.beginSignDevice(request).finish().keyId)
+
+        // A kept copy without that key signs with no other one.
+        keep(app, RecoveryKeyDeriver.recoveryKeyset(listOf(key), key))
+        assertEquals(BlobAnswer.DAMAGED_OR_CHANGED, TestKeys.answerOf { app.open().setup.beginSignDevice(request).finish() })
+    }
+
+    @Test
+    fun aKeeperWhoseOwnKeysCannotBeReadWhenItSignsSignsNothing() {
+        val water = water()
+        val step = water.open().setup.beginSignDevice(request)
+        // Its record cannot be read in the moment after the prompt: the key the screen named cannot be checked.
+        water.store.unreadable = setOf(KeysetName.RECORD)
+        assertEquals(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW, TestKeys.answerOf { step.finish() })
+        assertTrue("nothing is lost", water.open().setup.keepsRecoveryKey())
+    }
+
+    @Test
+    fun onlyAKeptCopyThatIsGoneForCertainCountsAsNotKept() {
+        assertTrue("no copy", water(keeps = false).open().setup.keepsNoRecoveryKey())
+        val keeper = water()
+        assertFalse(keeper.open().setup.keepsNoRecoveryKey())
+        keeper.hardware.keystoreFails = true
+        assertFalse("the Keystore cannot say now", keeper.open().setup.keepsNoRecoveryKey())
+        keeper.hardware.keystoreFails = false
+        keeper.hardware.removeScreenLock()
+        assertTrue("the Recovery guard went with the screen lock", keeper.open().setup.keepsNoRecoveryKey())
+    }
+
     @Test
     fun anAppThatIsNotAKeeperSignsWithTheWordsOfItsOwnKey() {
         val water = water(keeps = false)
@@ -105,6 +151,18 @@ class SignDeviceTest {
         assertNull("only the app's own keys", water.open().setup.signDeviceWithWords(otherKey, asksForOther))
         val asksForOwnButOther = DeviceJoinRequest.of(serverId, address, device.publicKey, KeyId(0x01020304))!!
         assertNull(water.open().setup.signDeviceWithWords(key, asksForOwnButOther))
+    }
+
+    @Test
+    fun wordsWhoseKeyIdIsTheAppsButWhoseKeyIsNotAreRefused() {
+        val app = TestApp(temporary.newFolder())
+        app.open()
+        // A record whose one key has the key ID of these words, but other key bytes.
+        val other = XChaCha20Poly1305Key.create(XChaCha20Poly1305Parameters.Variant.TINK, SecretBytes.randomBytes(32), key.keyId.value)
+        val record = KeysetHandle.newBuilder().addEntry(KeysetHandle.importKey(other).withFixedId(key.keyId.value).makePrimary()).build()
+        app.vault.locked { app.vault.wrapAndStore(KeysetName.RECORD, record, app.vault.keyFor(HardwareKeyKind.BACKGROUND)) }
+        assertEquals(key.keyId, app.open().status().keyId)
+        assertNull(app.open().setup.signDeviceWithWords(key, request))
     }
 
     @Test

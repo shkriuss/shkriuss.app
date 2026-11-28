@@ -308,6 +308,19 @@ class KeySetup internal constructor(private val vault: KeyVault) {
     fun keepsRecoveryKey(): Boolean = vault.locked { vault.look(KeysetName.RECOVERY) is Stored.NeedsPrompt }
 
     /**
+     * True only if it is certain that this app does not keep the recovery
+     * key now: no kept copy is stored, or its Recovery guard is gone. False
+     * when the Keystore cannot say now, so that a handover screen asks to
+     * try again instead of saying that the key is not kept.
+     */
+    fun keepsNoRecoveryKey(): Boolean = vault.locked {
+        when (vault.look(KeysetName.RECOVERY)) {
+            is Stored.Missing, is Stored.KeyGone -> true
+            else -> false
+        }
+    }
+
+    /**
      * Starts keeping [recoveryKey] on the phone: makes a Recovery guard,
      * which needs the system prompt for every use, and returns the step to
      * show the prompt for. `finish()` stores the key.
@@ -475,15 +488,17 @@ class KeySetup internal constructor(private val vault: KeyVault) {
      * app, from the recovery key this app keeps (the mode "Sign a device"
      * of crypto-design.md, "The handover format, version 2"). One prompt
      * of the Recovery guard, one signature. `finish()` makes the account
-     * key of the recovery key that [request] names, or of the current one,
-     * signs the join statement with the time [clock] gives at that moment,
-     * derives the name key, and drops the recovery key and the account key
-     * at once. The screen code never sees either.
+     * key of the recovery key that [request] names, or else of the current
+     * key of this app's `record`, the one its screen names. It signs the
+     * join statement with the time [clock] gives at that moment, derives
+     * the name key, and drops the recovery key and the account key at once.
+     * The screen code never sees either.
      *
      * Throws [BlobException] as [beginShowRecoveryKey] does when this app
      * does not keep the key now. `finish()` throws [BlobException] "damaged
-     * or changed" if the kept keys do not hold the key that [request]
-     * names: check with [hasKeysOf] first.
+     * or changed" if the kept keys do not hold that key: check with
+     * [hasKeysOf] first. It throws "needs keys this app does not have now"
+     * if `record` cannot be read now.
      */
     fun beginSignDevice(request: DeviceJoinRequest, clock: () -> Long = System::currentTimeMillis): PromptStep<SignedJoin> =
         vault.locked {
@@ -495,8 +510,8 @@ class KeySetup internal constructor(private val vault: KeyVault) {
                 onFinish = {
                     vault.locked {
                         val keys = RecoveryKeyDeriver.recoveryKeys(vault.openWithPrompt(KeysetName.RECOVERY, stored, cipher))
-                        val signer = request.keyId?.let { wanted -> keys.firstOrNull { it.keyId == wanted } } ?: keys.first()
-                        if (request.keyId != null && signer.keyId != request.keyId) throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
+                        val wanted = request.keyId ?: currentRecordKeyId()
+                        val signer = keys.firstOrNull { it.keyId == wanted } ?: throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
                         SignedJoin.sign(signer, request, clock())
                     }
                 },
@@ -538,6 +553,19 @@ class KeySetup internal constructor(private val vault: KeyVault) {
 
     private fun requireAnotherDataApp(asker: AppName) {
         require(asker.holdsDataKeys && asker != vault.app) { "Keys are handed over only to another data app" }
+    }
+
+    /**
+     * The key ID of the current key of this app's `record`: the key whose
+     * short name a keeper's screen shows when it signs a join. Throws
+     * [BlobException] "damaged or changed" for a damaged file, and "needs
+     * keys this app does not have now" when it cannot be read now or there
+     * is none.
+     */
+    private fun currentRecordKeyId(): KeyId = when (val record = judged(KeysetName.RECORD)) {
+        is Stored.Open -> KeysetCodec.primaryId(record.keyset)
+        is Stored.Damaged -> throw BlobException(BlobAnswer.DAMAGED_OR_CHANGED)
+        else -> throw BlobException(BlobAnswer.NEEDS_KEYS_NOT_HERE_NOW)
     }
 
     /** The kept `recovery` keyset, behind its Recovery guard. Throws as [beginShowRecoveryKey] does. */

@@ -266,6 +266,30 @@ class SignDeviceTest {
     }
 
     @Test
+    fun aKeystoreThatFailsForAMomentAtAllowAsksToTryAgainAndGivesNoReason() {
+        val (water, _) = water(keeps = true)
+        val model = signing(water)
+        assertTrue(model.state.value is HandoverAsk)
+        water.keystoreFails = true
+        model.onAllow()
+        assertEquals(HandoverFailed(damaged = false), model.state.value)
+        assertNull("Sync does not offer the words", closingRefusal(model.state.value))
+    }
+
+    @Test
+    fun keysThatCannotBeReadAfterTheWordsAskToTryAgainAndSignNothing() {
+        val (water, key) = water(keeps = false)
+        val model = signing(water)
+        model.onAllow()
+        key.words().forEach { model.onWord(it) }
+        water.keystoreFails = true
+        model.onCheckAll()
+        assertEquals(HandoverFailed(damaged = false), model.state.value)
+        assertNull(model.takeGift())
+        assertNull(closingRefusal(model.state.value))
+    }
+
+    @Test
     fun aStopDropsASignedJoinThatWasNotHandedOver() {
         val (water, key) = water(keeps = true)
         val model = signing(water)

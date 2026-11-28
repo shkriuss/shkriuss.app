@@ -898,11 +898,14 @@ How a data app signs:
 1. **A keeper.** It names the Sync app, the server and the short name
    of the key. **Allow** opens the system prompt of the Recovery guard.
    Inside the prompt step it opens the kept `recovery` keyset, takes
-   the recovery key that the request names or the current one, makes
-   the account key, signs the join statement with the time of that
-   moment, derives the name key, and drops the recovery key and the
-   account key. The account key's private bytes are wiped; the copies
-   that Tink's objects hold go with them, as for every key in memory.
+   the recovery key that the request names, or else the current key of
+   its own `record`, the one its screen named, makes the account key,
+   signs the join statement with the time of that moment, derives the
+   name key, and drops the recovery key and the account key. If the
+   kept keyset does not hold that key, it signs nothing and its keys
+   count as damaged. The account key's private bytes are wiped; the
+   copies that Tink's objects hold go with them, as for every key in
+   memory.
 2. **An app that has its keys but does not keep the recovery key.** It
    shows the same question. **Allow** opens the screen of all 24 words,
    as when the words are entered. It takes the words only if their key

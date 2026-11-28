@@ -15,6 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import app.shkriuss.core.crypto.AppLockState
 import app.shkriuss.core.crypto.HardwareKeyKind
 import app.shkriuss.core.crypto.SecurityLevel
@@ -270,10 +273,18 @@ internal fun FlowScaffold(
     }
 }
 
-/** One paragraph of text. [error] draws it in the error colour. */
+/**
+ * One paragraph of text. [error] draws it in the error colour. [announce]
+ * makes TalkBack read it when it appears, for a line that answers what the
+ * user just did (WCAG 2.2, success criterion 4.1.3).
+ */
 @Composable
-internal fun Paragraph(text: String, error: Boolean = false) {
-    ShkText(text = text, color = if (error) ShkTheme.colors.error else ShkTheme.colors.text)
+internal fun Paragraph(text: String, error: Boolean = false, announce: Boolean = false) {
+    ShkText(
+        text = text,
+        modifier = if (announce) Modifier.semantics { liveRegion = LiveRegionMode.Polite } else Modifier,
+        color = if (error) ShkTheme.colors.error else ShkTheme.colors.text,
+    )
 }
 
 /** Buttons, one under the other. */

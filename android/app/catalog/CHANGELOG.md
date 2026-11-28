@@ -9,7 +9,8 @@ development.
   Sync app asks it to sign that this phone may join a sync server: in a
   keeper, in an app that takes the 24 words, with the words of another
   recovery key, when the server uses another recovery key, in an app
-  with no recovery key, and when the kept key is gone.
+  with no recovery key, when the kept key is gone, when a key file is
+  damaged, and when the keys cannot be read now.
 - **Recovery key screens** show the handover between apps, with the
   sample names Water and Reminders: a keeper's screen when another app
   asks for its keys or to check four words, after the prompt was

@@ -82,7 +82,7 @@ fun HandoverContent(
                 ConfirmWordsFields(screen.positions, screen.answers, actions.onAnswerChange, actions.onCheck)
             }
             is HandoverAllWords -> {
-                if (screen.notThisApp) Paragraph(stringResource(R.string.sec_sign_not_this_key), error = true)
+                if (screen.notThisApp) Paragraph(stringResource(R.string.sec_sign_not_this_key), error = true, announce = true)
                 EnterWordsContent(screen.entry, actions.words)
             }
             is HandoverOtherKey -> ShkErrorState(

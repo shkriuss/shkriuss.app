@@ -321,7 +321,7 @@ second build must write the same mapping file, or the release stops. See
   `core/testing` also has `MergedManifestTest`, for how the app lock
   check reads a merged manifest
   ([Shared test helpers](#shared-test-helpers)).
-- `core/crypto` has 27 test classes with 256 tests. They are the items 1
+- `core/crypto` has 27 test classes with 260 tests. They are the items 1
   to 8 and 10 to 13 of "What the tests must cover" in
   [crypto-design.md](../security/crypto-design.md#what-the-tests-must-cover),
   the rules for hardware keys, and the example file of the backup format
@@ -488,7 +488,7 @@ second build must write the same mapping file, or the release stops. See
     imports `android.app.*` or `androidx.core.app.*` with a star, or
     names `ALARM_SERVICE` or `NOTIFICATION_SERVICE`. It has the limits
     of `CryptoBoundaryTest` above.
-- `core/security` has 24 test classes with 234 tests
+- `core/security` has 25 test classes with 238 tests
   ([security-screens.md](../architecture/security-screens.md#tests)).
   - `FlowViewModelsTest` runs every flow of the recovery key through its
     ViewModel, with real keys from `SoftwareKeysApp`. Work runs on the

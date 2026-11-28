@@ -187,7 +187,10 @@ The keeper's side, `HandoverActivity` and `HandoverViewModel`:
 6. A keeper that does not keep the key now says so, with **Close**, and
    gives `NOT_KEEPER`. So does a kept copy that is damaged when the
    prompt runs (`closingRefusal`). The screen sets that result as soon
-   as it shows, so Back gives it too. The asking app then says so: "Get
+   as it shows, so Back gives it too. "Does not keep the key" needs
+   certainty (`KeySetup.keepsNoRecoveryKey`): no kept copy, or its
+   Recovery guard is gone. When the Keystore cannot say at **Allow**,
+   the screen says "try again in a moment" and gives no reason. The asking app then says so: "Get
    the keys" tells the user to enter the words instead, and the check of
    the words for the app lock asks for all 24.
 7. **Do not allow**, or leaving the screen, gives a cancelled result
@@ -204,20 +207,22 @@ The same screen in the mode "Sign a device", for the Sync app only
 2. The screen's title is "Add this phone to sync". It asks "Add this
    phone to your sync server at sync.example.workers.dev?", names the
    Sync app and this app, and shows the short name of the recovery key
-   that signs.
+   that signs: the one the request names, or else the current key of
+   this app's keys. A keeper signs with exactly that key.
 3. In a keeper, **Allow** shows the system prompt of the Recovery guard,
    and `core/crypto` signs inside the prompt step.
 4. In an app that has its keys but does not keep the recovery key,
    **Allow** opens the screen of all 24 words, as when the words are
    entered (`HandoverAllWords`). Words of another recovery key: "These
-   words are for another recovery key." Words being typed stay when the
-   screen stops.
+   words are for another recovery key.", which TalkBack reads when it
+   appears. Words being typed stay when the screen stops.
 5. An app with no keys says so (`HandoverNoKeys`) and gives
    `NOT_KEEPER`. So does a keeper whose kept key is gone when **Allow**
    is tapped, with the advice to enter the words in that app. When the
    request names a key ID that the app has no keys of, the screen says
    so at once (`HandoverOtherKey`) and gives `OTHER_KEY`. Keys that
-   cannot be read now: "try again in a moment", and no reason.
+   cannot be read now, on the first screen, at **Allow** or after the
+   words: "try again in a moment", and no reason.
 6. The signed join waits in the model until the screen takes it, and
    leaves memory when the screen stops, as the keys do. The screen
    checks the caller once more (`handoverResult`): it must still be the
@@ -826,17 +831,20 @@ file says that.
   to whom.
 - `HandoverViewModelsTest`: both sides of the handover with real
   cryptography on the stand-in: Allow and the prompt, a closed prompt,
-  a keeper that does not keep the key, keys and the kept key dropped
-  when the screen stops, the check of four words, every outcome on the
-  asking app's side, an app lock that was reset, "keep it here too",
-  the check of the words for the app lock, and the security screen's
-  keepers.
+  a keeper that does not keep the key, a Keystore that fails for a
+  moment at **Allow**, keys and the kept key dropped when the screen
+  stops, the check of four words, every outcome on the asking app's
+  side, an app lock that was reset, "keep it here too", the check of
+  the words for the app lock, and the security screen's keepers.
 - `SignDeviceTest`: the mode "Sign a device": only the Sync app passes,
   and only in it; a reader of version 2 reads version 1; a keeper signs
   after the prompt; an app that does not keep the key signs with the
-  words of its own key only; another key ID, no keys, a stop before or
-  after the signature; the second check of the caller; what the Sync
-  app reads from every answer; and the status provider's answer to it.
+  words of its own key only; another key ID, no keys, keys that cannot
+  be read at **Allow** or after the words, a stop before or after the
+  signature; the second check of the caller; what the Sync app reads
+  from every answer; and the status provider's answer to it.
+- `HandoverContentTest`: TalkBack reads "These words are for another
+  recovery key." when it appears, and not the text around it.
 - `SecurityContentTest` and `FirstNeedTest`: the choices to get the keys
   from a keeper, on the security screen and in the dialog, and the
   screen they open.

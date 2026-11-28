@@ -125,7 +125,12 @@ class HandoverViewModel internal constructor(
                     HandoverMode.SIGN_DEVICE -> crypto.setup.beginSignDevice(checkNotNull(join))
                 }
             } catch (failed: BlobException) {
-                screen.value = if (failed.answer == BlobAnswer.DAMAGED_OR_CHANGED) HandoverFailed(damaged = true) else HandoverNotKept
+                // "Not kept" only when the kept copy is gone for certain. A Keystore that cannot say now asks to try again.
+                screen.value = when {
+                    failed.answer == BlobAnswer.DAMAGED_OR_CHANGED -> HandoverFailed(damaged = true)
+                    crypto.setup.keepsNoRecoveryKey() -> HandoverNotKept
+                    else -> HandoverFailed(damaged = false)
+                }
                 return@work
             }
             screen.value = ask.copy(prompt = PromptRequest(++requests, step, asked), note = null)
