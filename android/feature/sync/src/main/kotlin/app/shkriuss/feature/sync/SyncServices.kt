@@ -78,7 +78,9 @@ class SyncServices(
 
     internal fun startChecks() {
         val state = store.now()
-        keys.deleteOtherDeviceKeys(state.deviceAlias.takeIf { state.stage != Stage.NOT_JOINED })
+        // A removed phone keeps no key: one whose deletion failed after the `03` goes here.
+        val removed = state.stage == Stage.STOPPED && state.stop == Stop.REMOVED
+        keys.deleteOtherDeviceKeys(state.deviceAlias.takeIf { state.stage != Stage.NOT_JOINED && !removed })
         if (state.stage == Stage.NOT_JOINED && keys.nameKeyState() != NameKeyState.MISSING) keys.deleteNameKey()
         val now = clock.nowMillis()
         when (state.stage) {

@@ -72,6 +72,25 @@ class SyncServicesTest {
     }
 
     @Test
+    fun aRemovedPhoneWhoseKeyStayedLosesItAtTheNextStart() {
+        // The deletion after the `03` failed: the state still names the key.
+        val state = joinedState(keys, server, clock).copy(stage = Stage.STOPPED, stop = Stop.REMOVED)
+        store.update { state }
+        services.startChecks()
+        assertNull(keys.sync.crypto.sync.deviceKey(state.deviceAlias!!))
+        assertEquals(Stop.REMOVED, store.now().stop)
+    }
+
+    @Test
+    fun aPhoneStoppedForAVersionKeepsItsKey() {
+        val state = joinedState(keys, server, clock).copy(stage = Stage.STOPPED, stop = Stop.UPDATE_SERVER)
+        store.update { state }
+        server.highest = 0
+        services.startChecks()
+        assertTrue(keys.sync.crypto.sync.deviceKey(state.deviceAlias!!) != null)
+    }
+
+    @Test
     fun aPhoneThatHasNotJoinedKeepsNoKey() {
         val state = joinedState(keys, server, clock)
         services.startChecks()

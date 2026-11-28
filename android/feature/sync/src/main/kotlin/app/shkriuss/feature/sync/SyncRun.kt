@@ -163,6 +163,7 @@ class SyncRun(
     /** The work of one run, with the session it signs with. */
     private inner class OneRun(private val session: Session, private val asked: Boolean, private val stopped: () -> Boolean) {
         private var heads: Heads? = null
+        private var apps: List<CourierApp> = emptyList()
         private var sendingStopped = false
 
         /** True after a lack of CPU time or a `0C` on a file request: the files wait for the next run, with less in each request. */
@@ -194,8 +195,9 @@ class SyncRun(
             if (start.limits == null || !sameUtcDay(start.infoAt, now)) readInfo()
             val heads = readHeads()
             val firstOfDay = !sameUtcDay(store.now().statusAt, now)
-            val apps = couriers.find().passed.sortedBy { it.name.value }
+            apps = couriers.find().passed.sortedBy { it.name.value }
             val epochMoved = start.epoch != heads.epoch
+            if (epochMoved) takeEpoch(heads.epoch)
             var toServe = apps.filter { firstOfDay || epochMoved || needs(it.name.value, heads) }
             repeat(PASSES) {
                 toServe.forEach {
@@ -203,6 +205,7 @@ class SyncRun(
                     serve(it)
                 }
                 // A poke that came while the run served its app marks it again: it is served again before the run ends.
+                // One left after the last pass makes the job run again (runsAgain).
                 toServe = apps.filter { store.now().app(it.name.value).poked }
                 if (toServe.isEmpty()) return@repeat
             }
@@ -226,18 +229,31 @@ class SyncRun(
             write { it.copy(limits = info.limits, infoAt = clock.nowMillis()) }
         }
 
-        /** `heads`: the epoch, the key ID and the revision, and the list of devices when it is due. */
+        /**
+         * `heads`: the key ID and the revision, and the list of devices when
+         * it is due. The epoch is taken after, by [takeEpoch]: a run that
+         * ends at the list of devices leaves it for the next run.
+         */
         private fun readHeads(): Heads {
             val heads = valueOf(retrying { server.heads(session) })
             passed()
             this.heads = heads
             val state = store.now()
             val putBack = heads.revision < state.revision
-            write { it.copy(epoch = heads.epoch, keyId = heads.keyId, putBack = it.putBack || putBack) }
+            write { it.copy(keyId = heads.keyId, putBack = it.putBack || putBack) }
             if (heads.revision != state.revision || !sameUtcDay(state.devicesAt, clock.nowMillis())) {
                 DeviceList(store, server, clock).read(session, heads.revision)
             }
             return heads
+        }
+
+        /**
+         * A new epoch, and in the same write every app marked with work:
+         * an app this run does not reach is served at the next run, whose
+         * courier calls carry the new epoch, so that it compares everything.
+         */
+        private fun takeEpoch(epoch: SyncId) {
+            write { state -> apps.fold(state.copy(epoch = epoch)) { marked, app -> marked.withApp(app.name.value) { it.copy(work = true) } } }
         }
 
         /** A request passed: the clock and the fault no longer hold. */
@@ -254,7 +270,7 @@ class SyncRun(
                     return
                 } catch (moved: EpochMoved) {
                     // Every app compares everything: each courier call from now on carries the new epoch.
-                    write { it.copy(epoch = moved.epoch) }
+                    takeEpoch(moved.epoch)
                     if (++epochs >= MOST_EPOCHS) throw EndRun(Reason.Fault)
                 } finally {
                     progress.value = null

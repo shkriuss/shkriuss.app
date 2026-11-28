@@ -295,4 +295,33 @@ class SyncJoinTest {
         assertEquals(EnrolStep.Changed, join.checkSentEnrol())
         assertEquals(Stage.JOINING, store.now().stage)
     }
+
+    @Test
+    fun anInfoAnswerAfterBackChangesNothing() {
+        // The first join of this phone: Back writes the same empty state that was there.
+        server.onRequest = { path -> if (path == "/v1/info") join.cancel() }
+        assertEquals(AddressStep.Changed, join.enterAddress("sync.example.workers.dev"))
+        assertEquals(SyncState(), store.now())
+    }
+
+    @Test
+    fun anInfoAnswerAfterAnotherAddressChangesNothing() {
+        join.enterAddress("sync.example.workers.dev")
+        join.chooseCode(CodeKind.DEVICE_CODE)
+        requestFor()
+        val alias = store.now().deviceAlias!!
+        var newer: SyncState? = null
+        // While the answer for the first address is on its way, the user goes back and enters it again.
+        server.onRequest = { path ->
+            if (path == "/v1/info" && newer == null) {
+                newer = SyncState()
+                join.enterAddress("sync.example.workers.dev")
+                newer = store.now()
+                clock.advanceBy(1000)
+            }
+        }
+        assertEquals(AddressStep.Changed, join.enterAddress("sync.example.workers.dev"))
+        assertEquals(newer, store.now())
+        assertNotNull("the newer join keeps its key", keys.sync.crypto.sync.deviceKey(alias))
+    }
 }

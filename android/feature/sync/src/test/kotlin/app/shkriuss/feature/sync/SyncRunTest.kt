@@ -697,4 +697,65 @@ class SyncRunTest {
         run()
         assertEquals("only the stream the app does not have", listOf(hex(missing) to false), water.sent)
     }
+
+    @Test
+    fun aNewEpochIsHandedToEveryAppAfterARunThatEndedAtTheListOfDevices() {
+        joined()
+        run()
+        server.epoch = syncId(7)
+        server.revision = 1
+        server.answerNext("/v1/devices", HttpResult.NoAnswer)
+        assertEquals(RunEnd.ENDED, run())
+        assertEquals("the epoch waits for the next run", syncId(2), store.now().epoch)
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals(syncId(7), store.now().epoch)
+        assertEquals(syncId(7), water.epoch)
+        assertEquals(syncId(7), notes.epoch)
+    }
+
+    @Test
+    fun aNewEpochIsHandedAtTheNextRunToTheAppsThatARunDidNotReach() {
+        joined()
+        run()
+        storeOnServer("notes", 1)
+        server.epoch = syncId(7)
+        // Notes comes first. Its fetch gets no answer, and the run ends before Water.
+        server.answerNext("/v1/changes", HttpResult.NoAnswer)
+        assertEquals(RunEnd.ENDED, run())
+        assertEquals(syncId(2), water.epoch)
+        assertTrue("Water waits with work", store.now().app("water").work)
+        assertEquals(RunEnd.WORKED, run())
+        assertEquals(syncId(7), water.epoch)
+        assertFalse(store.now().app("water").work)
+    }
+
+    @Test
+    fun anAppThatPokesEachTimeItIsServedMakesItsJobRunAgain() {
+        joined()
+        run()
+        lateinit var pokeAgain: () -> Unit
+        pokeAgain = {
+            store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+            water.onStatus = pokeAgain
+        }
+        water.onStatus = pokeAgain
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        water.calls.clear()
+        val end = run()
+        assertEquals(RunEnd.WORKED, end)
+        assertTrue("the poke is left", store.now().app("water").poked)
+        assertEquals("three passes", 3, water.calls.count { it == "streams" })
+        assertTrue(runsAgain(end, store.now()))
+    }
+
+    @Test
+    fun aRunWithNoPokeLeftOrThatEndedEarlyDoesNotRunAgain() {
+        joined()
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        val end = run()
+        assertEquals(RunEnd.WORKED, end)
+        assertFalse(runsAgain(end, store.now()))
+        store.update { state -> state.withApp("water") { it.copy(poked = true) } }
+        assertFalse("a run that ended early waits for the next job", runsAgain(RunEnd.ENDED, store.now()))
+    }
 }

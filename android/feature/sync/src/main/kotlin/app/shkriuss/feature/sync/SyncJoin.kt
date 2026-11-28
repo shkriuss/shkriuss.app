@@ -11,6 +11,7 @@ import app.shkriuss.core.crypto.SignedJoin
 import app.shkriuss.core.crypto.SyncKeys
 import app.shkriuss.core.data.Clock
 import app.shkriuss.core.sync.SyncId
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 
 /** What the server address step found (docs/apps/sync/spec.md, join step 2). */
@@ -44,6 +45,9 @@ sealed interface AddressStep {
 
     /** "Sync could not save. Try again." */
     data object NotSaved : AddressStep
+
+    /** **Back**, or another address, while `info` was on its way: its answer changed nothing. */
+    data object Changed : AddressStep
 }
 
 /** What the setup code step gives. */
@@ -126,10 +130,19 @@ class SyncJoin(
     /** Android's model name, the first name of this phone. */
     private val model: String,
 ) {
-    /** Step 2: checks the address, asks for `info`, and starts the join with it. */
+    /** Counts each address entered and each cancel, so that an `info` answer counts only for the newest one. */
+    private val attempts = AtomicLong()
+
+    /**
+     * Step 2: checks the address, asks for `info`, and starts the join with
+     * it. An answer that comes after **Back**, a cancel or another address
+     * changes nothing.
+     */
     fun enterAddress(typed: String): AddressStep {
+        val attempt = attempts.incrementAndGet()
+        val before = store.now()
         // A joined phone leaves its server, or joins again, before it joins another.
-        if (store.now().stage == Stage.JOINED || store.now().stage == Stage.STOPPED) return AddressStep.NotSaved
+        if (before.stage == Stage.JOINED || before.stage == Stage.STOPPED) return AddressStep.NotSaved
         val address = ServerAddress.of(typed) ?: return AddressStep.NotAnAddress
         val info = when (val answer = server.info(address)) {
             is ServerAnswer.Done -> answer.value
@@ -146,11 +159,15 @@ class SyncJoin(
         }
         val offset = info.clock - clock.nowMillis()
         if (abs(offset) > CLOCK_MARGIN_MILLIS) return AddressStep.ClockOff(offset)
-        val before = store.now()
         val joining = before.stage == Stage.JOINING || before.stage == Stage.ENROL_SENT
         val sameServer = joining && before.serverId == info.serverId && before.address == address
+        var changed = false
         try {
             store.update { state ->
+                if (attempts.get() != attempt || !state.sameJoinAs(before)) {
+                    changed = true
+                    return@update state
+                }
                 val kept = if (sameServer) state else SyncState(closing = state.closing, deleteSetupCode = state.deleteSetupCode, filesOnMobile = state.filesOnMobile)
                 kept.copy(
                     stage = Stage.JOINING,
@@ -165,6 +182,7 @@ class SyncJoin(
         } catch (_: CouldNotSaveException) {
             return AddressStep.NotSaved
         }
+        if (changed) return AddressStep.Changed
         // Another server ID drops the old key and the setup code.
         if (!sameServer) deleteKeys(keys, before.deviceAlias)
         return AddressStep.Ready(hasAccount = info.state == ServerState.IN_USE)
@@ -316,7 +334,14 @@ class SyncJoin(
      * then the device key and the name key. The addresses whose setup code
      * waits to be deleted stay.
      */
-    fun cancel(): Boolean = saved { forgetServer(store, keys, scheduler) }
+    fun cancel(): Boolean {
+        attempts.incrementAndGet()
+        return saved { forgetServer(store, keys, scheduler) }
+    }
+
+    /** The same join, or the same lack of one, as [other]: nothing cancelled, started or sent meanwhile. */
+    private fun SyncState.sameJoinAs(other: SyncState): Boolean = stage == other.stage && address == other.address &&
+        serverId == other.serverId && joinedAt == other.joinedAt && deviceAlias == other.deviceAlias && deviceId == other.deviceId
 
     private fun joined(mark: JoinMark, epoch: SyncId, keyId: KeyId, heads: Heads? = null): EnrolStep {
         val showed = store.now().codeKind == CodeKind.SETUP_CODE

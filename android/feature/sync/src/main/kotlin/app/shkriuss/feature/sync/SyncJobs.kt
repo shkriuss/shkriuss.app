@@ -90,11 +90,14 @@ class SyncJobService : JobService() {
         val asked = params.extras.getBoolean(JobSchedulerScheduler.ASKED, false)
         val entry = running.begin(params.jobId)
         val job = sync.scope.launch(start = CoroutineStart.LAZY) {
+            var again = false
             try {
-                sync.run.run(asked) { entry.stopped.get() }
+                val end = sync.run.run(asked) { entry.stopped.get() }
+                again = runsAgain(end, sync.store.now())
             } finally {
                 running.end(params.jobId, entry)
-                if (!entry.stopped.get()) jobFinished(params, false)
+                // A poke left after the run asks Android to run this job again, after its backoff.
+                if (!entry.stopped.get()) jobFinished(params, again)
             }
         }
         entry.job = job
@@ -112,6 +115,14 @@ class SyncJobService : JobService() {
         return false
     }
 }
+
+/**
+ * True when a run that worked left an app poked: one that poked again each
+ * time the run served it, or after the run served it. Its job runs again
+ * soon, so that the poke does not wait for the periodic job.
+ */
+internal fun runsAgain(end: RunEnd, state: SyncState): Boolean =
+    end == RunEnd.WORKED && state.stage == Stage.JOINED && state.apps.values.any { it.poked }
 
 /**
  * The runs of the jobs that Android started, one for each job ID. A job

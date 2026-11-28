@@ -89,7 +89,11 @@ data class AppSync(
     val goodAt: Long? = null,
     /** Its last `status` said that sync is on in it. */
     val on: Boolean = false,
-    /** Its last `status` said that it has something to send, to fetch or to compare. */
+    /**
+     * Its last `status` said that it has something to send, to fetch or to
+     * compare. Also set for every app when the epoch moves, until a
+     * `status` with the new epoch.
+     */
     val work: Boolean = false,
     /** It poked, and no run has started on it since. */
     val poked: Boolean = false,
